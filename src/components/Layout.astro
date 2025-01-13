@@ -1,25 +1,48 @@
 ---
-import Header from "./Header.astro"
-import { config } from '../config.ts'
+import Header from "./Header.astro";
+import { config } from "../config.ts";
 ---
+
 <html lang="en" class="h-full">
-	<head>
-		<meta charset="UTF-8" />
-		<link rel="icon" type="image/svg+xml" href="/vite.svg" />
-		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-		<title></title>
-	</head>
-	<body class="h-full bg-slate-100 text-slate-900 dark:text-slate-100 dark:bg-slate-900">
-		<div class="prose h-screen max-w-none p-8 lg:p-16 dark:prose-invert">
-			<div class="mx-auto max-w-2xl rounded-xl bg-slate-50 p-8 shadow-xl dark:bg-slate-800 dark:shadow-black/20">
-				<Header/>
-				<slot/>
-				<ul class="flex flex-row justify-between items-end font">
-					<li><a class="underline hover:no-underline" href={config.calendar}>book a lesson</a></li>
-					<li><a class="underline hover:no-underline" href={"tel:${config.tel}"}>call/text</a></li>
-					<li><a class="underline hover:no-underline" href={"mailto:${config.email}"}>email</a></li>
-				</ul>
-			</div>
-		</div>
-	</body>
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, user-scalable=no"
+    />
+    <title></title>
+  </head>
+  <body
+    class="h-full bg-slate-100 text-slate-900 dark:bg-slate-900 dark:text-slate-100"
+  >
+    <div class="h-screen max-w-none p-8 lg:p-16">
+      <div
+        class="mx-auto max-w-2xl rounded-xl bg-slate-50 p-8 shadow-xl dark:bg-slate-800 dark:shadow-black/20"
+      >
+        <Header />
+        <slot />
+        <ul class="flex flex-row items-end justify-between">
+          <li>
+            <a class="underline hover:no-underline" href={config.calendar}>
+              book a lesson
+            </a>
+          </li>
+          <li>
+            <a class="underline hover:no-underline" href={`tel:${config.tel}`}>
+              call/text
+            </a>
+          </li>
+          <li>
+            <a
+              class="underline hover:no-underline"
+              href={`mailto:${config.email}`}
+            >
+              email
+            </a>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </body>
 </html>
