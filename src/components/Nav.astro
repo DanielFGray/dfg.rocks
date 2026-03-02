@@ -1,0 +1,65 @@
+---
+import { site, nav } from "../config";
+
+const [logoBefore, logoAfter] = site.logo.split(site.logoDot);
+---
+
+<nav>
+  <div class="logo">
+    {logoBefore}<span>{site.logoDot}</span>{logoAfter}
+  </div>
+  <ul>
+    {nav.links.map((link) => (
+      <li><a href={link.href}>{link.label}</a></li>
+    ))}
+  </ul>
+</nav>
+
+<style>
+  nav {
+    position: fixed;
+    top: 0;
+    width: 100%;
+    padding: 1rem 2rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: rgba(14, 14, 14, 0.9);
+    backdrop-filter: blur(12px);
+    z-index: 100;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  }
+
+  .logo {
+    font-weight: 700;
+    font-size: 1.25rem;
+    letter-spacing: -0.02em;
+  }
+
+  .logo span {
+    color: var(--accent);
+  }
+
+  ul {
+    list-style: none;
+    display: flex;
+    gap: 2rem;
+  }
+
+  a {
+    color: var(--text-muted);
+    text-decoration: none;
+    font-size: 0.95rem;
+    transition: color 0.2s;
+  }
+
+  a:hover {
+    color: var(--text);
+  }
+
+  @media (max-width: 768px) {
+    ul {
+      display: none;
+    }
+  }
+</style>

@@ -1,0 +1,60 @@
+---
+import { hero } from "../config";
+---
+
+<section class="hero">
+  <div class="eyebrow">{hero.eyebrow}</div>
+  <h1>{hero.headline}</h1>
+  <p>{hero.subtitle}</p>
+  <div class="cta-group">
+    {hero.cta.map((c) => (
+      <a href={c.href} class:list={["btn", { "btn-outline": c.outline }]}>{c.label}</a>
+    ))}
+  </div>
+</section>
+
+<style>
+  .hero {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding-top: 5rem;
+  }
+
+  .eyebrow {
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    font-size: 0.85rem;
+    color: var(--accent);
+    margin-bottom: 1rem;
+    font-weight: 600;
+  }
+
+  h1 {
+    font-size: clamp(2.5rem, 6vw, 4.5rem);
+    font-weight: 700;
+    line-height: 1.1;
+    letter-spacing: -0.03em;
+    margin-bottom: 1.5rem;
+  }
+
+  p {
+    font-size: 1.2rem;
+    color: var(--text-muted);
+    max-width: 540px;
+    margin-bottom: 2.5rem;
+  }
+
+  @media (max-width: 768px) {
+    .hero {
+      min-height: 85vh;
+    }
+
+    .cta-group {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+    }
+  }
+</style>

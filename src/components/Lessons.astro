@@ -1,0 +1,79 @@
+---
+import { lessons } from "../config";
+---
+
+<section id="lessons">
+  <div class="section-label">{lessons.sectionLabel}</div>
+  <h2>{lessons.heading}</h2>
+  <div class="lessons-grid">
+    {
+      lessons.items.map((lesson) => (
+        <div class="lesson-card">
+          <div class="icon">{lesson.icon}</div>
+          <h3>{lesson.title}</h3>
+          <p>{lesson.description}</p>
+          <div class="format-badges">
+            {lesson.formats.map((f) => (
+              <span class="badge">{f}</span>
+            ))}
+          </div>
+        </div>
+      ))
+    }
+  </div>
+</section>
+
+<style>
+  .lessons-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 1.5rem;
+    margin-top: 2.5rem;
+  }
+
+  .lesson-card {
+    background: var(--bg-card);
+    border-radius: var(--radius);
+    padding: 2rem;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    transition:
+      border-color 0.2s,
+      transform 0.2s;
+  }
+
+  .lesson-card:hover {
+    border-color: rgba(224, 138, 60, 0.3);
+    transform: translateY(-2px);
+  }
+
+  .icon {
+    font-size: 2rem;
+    margin-bottom: 1rem;
+  }
+
+  h3 {
+    font-size: 1.25rem;
+    margin-bottom: 0.5rem;
+    font-weight: 600;
+  }
+
+  p {
+    color: var(--text-muted);
+    font-size: 0.95rem;
+  }
+
+  .format-badges {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 1rem;
+  }
+
+  .badge {
+    font-size: 0.75rem;
+    padding: 0.3rem 0.75rem;
+    border-radius: 100px;
+    background: rgba(224, 138, 60, 0.12);
+    color: var(--accent);
+    font-weight: 600;
+  }
+</style>

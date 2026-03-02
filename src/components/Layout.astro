@@ -1,48 +1,174 @@
 ---
-import Header from "./Header.astro";
-import { config } from "../config.ts";
+import { site } from "../config";
+import Nav from "./Nav.astro";
+import Footer from "./Footer.astro";
+
+interface Props {
+  title?: string;
+  description?: string;
+}
+
+const {
+  title = `${site.business} | Drums, Guitar & More in ${site.city}`,
+  description = `Private music lessons with ${site.name}. Drums, guitar, piano and more. In-person and online lessons in ${site.city}.`,
+} = Astro.props;
 ---
 
-<html lang="en" class="h-full">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
-    <meta
-      name="viewport"
-      content="width=device-width, initial-scale=1.0, user-scalable=no"
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,600;0,9..40,700;1,9..40,400&display=swap"
+      rel="stylesheet"
     />
-    <title></title>
+
+    <!-- Structured data for Google -->
+    <script
+      is:inline
+      type="application/ld+json"
+      set:html={JSON.stringify({
+        "@context": "https://schema.org",
+        "@type": "LocalBusiness",
+        name: site.business,
+        description: `Private music lessons — drums, guitar, piano and more. In-person and online.`,
+        url: Astro.url.origin,
+        telephone: site.phone,
+        address: {
+          "@type": "PostalAddress",
+          addressLocality: site.city,
+          addressRegion: site.state,
+        },
+        priceRange: "$$",
+        openingHours: "Mo-Sa 09:00-20:00",
+        sameAs: [],
+      })}
+    />
   </head>
-  <body
-    class="h-full bg-slate-100 text-slate-900 dark:bg-slate-900 dark:text-slate-100"
-  >
-    <div class="h-screen max-w-none p-8 lg:p-16">
-      <div
-        class="mx-auto max-w-2xl rounded-xl bg-slate-50 p-8 shadow-xl dark:bg-slate-800 dark:shadow-black/20"
-      >
-        <Header />
-        <slot />
-        <ul class="flex flex-row items-end justify-between">
-          <li>
-            <a class="underline hover:no-underline" href={config.calendar}>
-              book a lesson
-            </a>
-          </li>
-          <li>
-            <a class="underline hover:no-underline" href={`tel:${config.tel}`}>
-              call/text
-            </a>
-          </li>
-          <li>
-            <a
-              class="underline hover:no-underline"
-              href={`mailto:${config.email}`}
-            >
-              email
-            </a>
-          </li>
-        </ul>
-      </div>
-    </div>
+  <body>
+    <Nav />
+    <slot />
+    <Footer />
   </body>
 </html>
+
+<style is:global>
+  /* =========================================================
+     COLORS — Change these to restyle the whole site.
+
+     Dark & bold (current):
+       --accent: #e08a3c;  --accent-hover: #c97530;
+
+     Cool blue:
+       --accent: #3b82f6;  --accent-hover: #2563eb;
+
+     Teal:
+       --accent: #14b8a6;  --accent-hover: #0d9488;
+
+     Red/crimson:
+       --accent: #dc2626;  --accent-hover: #b91c1c;
+
+     Purple:
+       --accent: #8b5cf6;  --accent-hover: #7c3aed;
+     ========================================================= */
+  :root {
+    --bg: #0e0e0e;
+    --bg-card: #1a1a1a;
+    --text: #f0f0f0;
+    --text-muted: #a0a0a0;
+    --accent: #e08a3c;
+    --accent-hover: #c97530;
+    --radius: 12px;
+  }
+
+  *,
+  *::before,
+  *::after {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    font-family: "DM Sans", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    font-size: 18px;
+  }
+
+  section {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 6rem 2rem;
+  }
+
+  .section-label {
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    font-size: 0.8rem;
+    color: var(--accent);
+    margin-bottom: 0.75rem;
+    font-weight: 600;
+  }
+
+  h2 {
+    font-size: 2.25rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    margin-bottom: 1.25rem;
+    line-height: 1.15;
+  }
+
+  .btn {
+    display: inline-block;
+    background: var(--accent);
+    color: #fff;
+    padding: 1rem 2.25rem;
+    border-radius: var(--radius);
+    text-decoration: none;
+    font-weight: 600;
+    font-size: 1rem;
+    transition:
+      background 0.2s,
+      transform 0.2s;
+    border: none;
+    cursor: pointer;
+  }
+
+  .btn:hover {
+    background: var(--accent-hover);
+    transform: translateY(-1px);
+  }
+
+  .btn-outline {
+    background: transparent;
+    border: 2px solid rgba(255, 255, 255, 0.15);
+    margin-left: 1rem;
+  }
+
+  .btn-outline:hover {
+    border-color: rgba(255, 255, 255, 0.4);
+    background: rgba(255, 255, 255, 0.05);
+  }
+
+  @media (max-width: 768px) {
+    section {
+      padding: 4rem 1.25rem;
+    }
+
+    .btn-outline {
+      margin-left: 0;
+      margin-top: 0.75rem;
+    }
+  }
+</style>
