@@ -4,62 +4,13 @@ import { site, nav } from "../config";
 const [logoBefore, logoAfter] = site.logo.split(site.logoDot);
 ---
 
-<nav>
-  <div class="logo">
-    {logoBefore}<span>{site.logoDot}</span>{logoAfter}
+<nav class="fixed top-0 w-full px-8 py-4 flex justify-between items-center bg-surface/90 backdrop-blur-md z-[100] border-b border-white/5">
+  <div class="font-bold text-xl tracking-tight">
+    {logoBefore}<span class="text-accent">{site.logoDot}</span>{logoAfter}
   </div>
-  <ul>
+  <ul class="hidden md:flex list-none gap-8">
     {nav.links.map((link) => (
-      <li><a href={link.href}>{link.label}</a></li>
+      <li><a class="text-muted no-underline text-[0.95rem] transition-colors hover:text-primary" href={link.href}>{link.label}</a></li>
     ))}
   </ul>
 </nav>
-
-<style>
-  nav {
-    position: fixed;
-    top: 0;
-    width: 100%;
-    padding: 1rem 2rem;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    background: rgba(14, 14, 14, 0.9);
-    backdrop-filter: blur(12px);
-    z-index: 100;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-  }
-
-  .logo {
-    font-weight: 700;
-    font-size: 1.25rem;
-    letter-spacing: -0.02em;
-  }
-
-  .logo span {
-    color: var(--accent);
-  }
-
-  ul {
-    list-style: none;
-    display: flex;
-    gap: 2rem;
-  }
-
-  a {
-    color: var(--text-muted);
-    text-decoration: none;
-    font-size: 0.95rem;
-    transition: color 0.2s;
-  }
-
-  a:hover {
-    color: var(--text);
-  }
-
-  @media (max-width: 768px) {
-    ul {
-      display: none;
-    }
-  }
-</style>

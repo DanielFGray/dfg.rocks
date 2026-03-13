@@ -2,59 +2,18 @@
 import { hero } from "../config";
 ---
 
-<section class="hero">
-  <div class="eyebrow">{hero.eyebrow}</div>
-  <h1>{hero.headline}</h1>
-  <p>{hero.subtitle}</p>
-  <div class="cta-group">
+<section class="max-w-[1100px] mx-auto px-5 md:px-8 pb-16 md:pb-24 pt-20 min-h-[85vh] md:min-h-screen flex flex-col justify-center">
+  <div class="uppercase tracking-[0.15em] text-[0.85rem] text-accent mb-4 font-semibold">{hero.eyebrow}</div>
+  <h1 class="text-[clamp(2.5rem,6vw,4.5rem)] font-bold leading-[1.1] tracking-tight mb-6">{hero.headline}</h1>
+  <p class="text-[1.2rem] text-muted max-w-[540px] mb-10">{hero.subtitle}</p>
+  <div class="flex flex-col items-start gap-3 md:flex-row md:items-center md:gap-4">
     {hero.cta.map((c) => (
-      <a href={c.href} class:list={["btn", { "btn-outline": c.outline }]}>{c.label}</a>
+      <a href={c.href} class:list={[
+        "inline-block rounded-xl no-underline font-semibold text-base transition-all cursor-pointer px-9 py-4",
+        c.outline
+          ? "bg-transparent border-2 border-white/15 hover:border-white/40 hover:bg-white/5"
+          : "bg-accent text-white hover:bg-accent-hover hover:-translate-y-px"
+      ]}>{c.label}</a>
     ))}
   </div>
 </section>
-
-<style>
-  .hero {
-    min-height: 100vh;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    padding-top: 5rem;
-  }
-
-  .eyebrow {
-    text-transform: uppercase;
-    letter-spacing: 0.15em;
-    font-size: 0.85rem;
-    color: var(--accent);
-    margin-bottom: 1rem;
-    font-weight: 600;
-  }
-
-  h1 {
-    font-size: clamp(2.5rem, 6vw, 4.5rem);
-    font-weight: 700;
-    line-height: 1.1;
-    letter-spacing: -0.03em;
-    margin-bottom: 1.5rem;
-  }
-
-  p {
-    font-size: 1.2rem;
-    color: var(--text-muted);
-    max-width: 540px;
-    margin-bottom: 2.5rem;
-  }
-
-  @media (max-width: 768px) {
-    .hero {
-      min-height: 85vh;
-    }
-
-    .cta-group {
-      display: flex;
-      flex-direction: column;
-      align-items: flex-start;
-    }
-  }
-</style>

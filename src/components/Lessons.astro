@@ -2,78 +2,21 @@
 import { lessons } from "../config";
 ---
 
-<section id="lessons">
-  <div class="section-label">{lessons.sectionLabel}</div>
-  <h2>{lessons.heading}</h2>
-  <div class="lessons-grid">
-    {
-      lessons.items.map((lesson) => (
-        <div class="lesson-card">
-          <div class="icon">{lesson.icon}</div>
-          <h3>{lesson.title}</h3>
-          <p>{lesson.description}</p>
-          <div class="format-badges">
-            {lesson.formats.map((f) => (
-              <span class="badge">{f}</span>
-            ))}
-          </div>
+<section id="lessons" class="max-w-[1100px] mx-auto px-5 md:px-8 py-16 md:py-24">
+  <div class="uppercase tracking-[0.15em] text-[0.8rem] text-accent mb-3 font-semibold">{lessons.sectionLabel}</div>
+  <h2 class="text-4xl font-bold tracking-tight mb-5 leading-[1.15]">{lessons.heading}</h2>
+  <div class="grid grid-cols-[repeat(auto-fit,minmax(280px,1fr))] gap-6 mt-10">
+    {lessons.items.map((lesson) => (
+      <div class="bg-card rounded-xl p-8 border border-white/[0.06] transition-all duration-200 hover:border-accent/30 hover:-translate-y-0.5">
+        <div class="text-[2rem] mb-4">{lesson.icon}</div>
+        <h3 class="text-xl font-semibold mb-2">{lesson.title}</h3>
+        <p class="text-muted text-[0.95rem]">{lesson.description}</p>
+        <div class="flex gap-2 mt-4">
+          {lesson.formats.map((f) => (
+            <span class="text-xs px-3 py-1 rounded-full bg-accent/[0.12] text-accent font-semibold">{f}</span>
+          ))}
         </div>
-      ))
-    }
+      </div>
+    ))}
   </div>
 </section>
-
-<style>
-  .lessons-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-    gap: 1.5rem;
-    margin-top: 2.5rem;
-  }
-
-  .lesson-card {
-    background: var(--bg-card);
-    border-radius: var(--radius);
-    padding: 2rem;
-    border: 1px solid rgba(255, 255, 255, 0.06);
-    transition:
-      border-color 0.2s,
-      transform 0.2s;
-  }
-
-  .lesson-card:hover {
-    border-color: rgba(224, 138, 60, 0.3);
-    transform: translateY(-2px);
-  }
-
-  .icon {
-    font-size: 2rem;
-    margin-bottom: 1rem;
-  }
-
-  h3 {
-    font-size: 1.25rem;
-    margin-bottom: 0.5rem;
-    font-weight: 600;
-  }
-
-  p {
-    color: var(--text-muted);
-    font-size: 0.95rem;
-  }
-
-  .format-badges {
-    display: flex;
-    gap: 0.5rem;
-    margin-top: 1rem;
-  }
-
-  .badge {
-    font-size: 0.75rem;
-    padding: 0.3rem 0.75rem;
-    border-radius: 100px;
-    background: rgba(224, 138, 60, 0.12);
-    color: var(--accent);
-    font-weight: 600;
-  }
-</style>

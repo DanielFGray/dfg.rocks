@@ -55,7 +55,7 @@ export const lessons = {
     },
     {
       icon: "🎸",
-      title: "Guitar",
+      title: "Guitar and Bass",
       description:
         "Acoustic and electric. Chords, strumming, fingerpicking, lead playing, and songs you actually want to learn.",
       formats: ["In-Person", "Online"],
