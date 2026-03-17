@@ -1,0 +1,18 @@
+import { site, about } from "../config.js";
+
+export const About = () => (
+  <section id="about" class="max-w-[1100px] mx-auto px-5 md:px-8 py-16 md:py-24">
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-10 md:gap-16 items-center">
+      <div class="w-full max-h-[50vh] rounded-xl overflow-hidden">
+        <img class="w-full h-full object-cover block" src={site.gravatar} alt={site.name} />
+      </div>
+      <div>
+        <div class="uppercase tracking-[0.15em] text-[0.8rem] text-accent mb-3 font-semibold">{about.sectionLabel}</div>
+        <h2 class="text-4xl font-bold tracking-tight mb-5 leading-[1.15]">{about.heading}</h2>
+        {about.paragraphs.map((p) => (
+          <p class="text-muted mb-4">{p}</p>
+        ))}
+      </div>
+    </div>
+  </section>
+);

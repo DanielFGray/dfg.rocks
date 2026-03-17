@@ -1,0 +1,19 @@
+dfg.rocks {
+	# Static frontend assets
+	handle /assets/* {
+		root * /srv/dist
+		file_server
+	}
+
+	# API requests to backend
+	handle /api/* {
+		reverse_proxy app:3001
+	}
+
+	# SPA fallback — serve index.html for all other routes
+	handle {
+		root * /srv/dist
+		try_files {path} /index.html
+		file_server
+	}
+}

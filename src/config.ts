@@ -1,6 +1,6 @@
 export const site = {
   name: "Daniel",
-  business: "DanielFGray",
+  business: "Daniel Gray",
   logo: "dfg.rocks",
   logoDot: ".",
   city: "Galveston",
@@ -27,7 +27,7 @@ export const hero = {
   headline: "Music lessons that rock.",
   subtitle: `Private lessons for all ages and levels. In-person in ${site.city} or online from anywhere. First lesson is on me.`,
   cta: [
-    { label: "Book a Free Trial", href: "#contact" },
+    { label: "Book a Free Lesson", href: "#contact" },
     { label: "See What I Teach", href: "#lessons", outline: true },
   ],
 };
@@ -50,8 +50,8 @@ export const lessons = {
       icon: "🥁",
       title: "Drums & Percussion",
       description:
-        "Kit, snare, hand drums, rudiments, grooves, reading, and playing in a band context. All styles.",
-      formats: ["In-Person", "Online"],
+        "Drum kit, snare, rudiments, polyrhythms, playing in a band context. All styles.",
+      formats: ["In-Person"],
     },
     {
       icon: "🎸",
@@ -65,6 +65,13 @@ export const lessons = {
       title: "Piano / Keys",
       description:
         "Beginner to intermediate. Reading, chords, improvisation, and classical or contemporary — your call.",
+      formats: ["In-Person", "Online"],
+    },
+    {
+      icon: "🎼🎵🎶",
+      title: "Music Theory",
+      description:
+        "Learn the theory behind the music you play so you can understand, create, and improvise with confidence.",
       formats: ["In-Person", "Online"],
     },
   ],
@@ -94,9 +101,9 @@ export const testimonials = {
 
 export const contact = {
   sectionLabel: "Get Started",
-  heading: "Book your free trial lesson",
+  heading: "Let's make some music together!",
   description:
-    "Send me a message and I'll get back to you within 24 hours. No commitment, no pressure — just come play.",
+    "Send me a message and I'll get back to you within 24 hours. No commitment, no pressure.",
   instruments: [
     { value: "drums", label: "Drums / Percussion" },
     { value: "guitar", label: "Guitar" },

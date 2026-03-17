@@ -17,6 +17,16 @@ pnpm-debug.log*
 .env
 .env.production
 
+# generated
+generated/
+
+# file storage
+data/
+uploads/
+
+# worker ethereal email cache
+worker/.ethereal
+
 # macOS-specific files
 .DS_Store
 

@@ -1,0 +1,11 @@
+{
+  "outFile": "generated/db.ts",
+  "typeMapping": {
+    "int8": "number"
+  },
+  "overrides": {
+    "columns": {
+      "app_public.practice_logs.status": "ColumnType<'practiced' | 'completed', 'practiced' | 'completed', 'practiced' | 'completed'>"
+    }
+  }
+}

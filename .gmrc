@@ -1,0 +1,13 @@
+{
+  "pgSettings": {
+    "search_path": "app_public,app_private,public"
+  },
+  "placeholders": {
+    ":DATABASE_AUTHENTICATOR": "!ENV",
+    ":DATABASE_VISITOR": "!ENV"
+  },
+  "afterReset": ["afterReset.sql"],
+  "afterAllMigrations": [
+    { "_": "command", "command": "bun db:types" }
+  ]
+}
