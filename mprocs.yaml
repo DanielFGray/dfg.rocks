@@ -1,17 +1,11 @@
 procs:
-  server:
-    cmd: ["bun", "--watch", "server/index.ts"]
-    env:
-      FORCE_COLOR: "1"
   app:
     env:
       HOST: 0.0.0.0
-    cmd: ["bunx", "fibrae", "dev"]
+    cmd: ["bunx", "vite", "dev"]
   typecheck:
     cmd: ["bunx", "tsgo", "--noEmit", "--watch", "-p", "tsconfig.app.json"]
   worker:
     cmd: ["bun", "run", "worker"]
     env:
       FORCE_COLOR: "1"
-  devtui:
-    cmd: ["bunx", "effect-devtui"]

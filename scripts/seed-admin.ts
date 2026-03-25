@@ -5,13 +5,10 @@
  *
  * Reads ADMIN_USERNAME, ADMIN_EMAIL, ADMIN_NAME, ADMIN_PASSWORD from env.
  */
-import { Effect } from "effect";
 import { sql } from "kysely";
-import { PgRootDB } from "../server/db.js";
+import { rootDb } from "../server/db.js";
 
-const seedAdmin = Effect.gen(function* () {
-  const db = yield* PgRootDB;
-
+async function seedAdmin() {
   const username = process.env.ADMIN_USERNAME;
   const email = process.env.ADMIN_EMAIL;
   const name = process.env.ADMIN_NAME ?? "Admin";
@@ -22,23 +19,18 @@ const seedAdmin = Effect.gen(function* () {
     process.exit(1);
   }
 
-  // Check if admin already exists
-  const existing = yield* db
+  const existing = await rootDb
     .selectFrom("app_public.users")
     .select("id")
     .where("username", "=", username)
-    .pipe(
-      Effect.head,
-      Effect.catchTag("NoSuchElementException", () => Effect.succeed(null)),
-    );
+    .executeTakeFirst();
 
   if (existing) {
     console.log(`Admin user '${username}' already exists, skipping.`);
     return;
   }
 
-  // Create user
-  const user = yield* db
+  const user = await rootDb
     .selectFrom(
       sql<{ id: string }>`
         app_private.create_user(
@@ -50,18 +42,14 @@ const seedAdmin = Effect.gen(function* () {
       `.as("u"),
     )
     .select("id")
-    .pipe(Effect.head, Effect.orDie);
+    .executeTakeFirstOrThrow();
 
-  // Set password
-  yield* db.selectNoFrom([
-    sql`app_private.set_password(${user.id}::uuid, ${password})`.as("_"),
-  ]);
+  await sql`select app_private.set_password(${user.id}::uuid, ${password})`.execute(rootDb);
 
   console.log(`Created admin user '${username}' (${email})`);
-});
+}
 
-seedAdmin.pipe(
-  Effect.provide(PgRootDB.Live),
-  Effect.orDie,
-  Effect.runPromise,
-);
+seedAdmin().catch((e) => {
+  console.error("seed-admin failed:", e);
+  process.exit(1);
+});

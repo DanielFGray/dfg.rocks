@@ -6,10 +6,8 @@
  * Derived fields (URLs) are rebuilt from their component values.
  */
 import crypto from "crypto";
+import fs from "fs";
 import path from "path";
-import { Effect, pipe, Record as R } from "effect";
-import { NodeContext, NodeRuntime } from "@effect/platform-node";
-import { FileSystem } from "@effect/platform";
 
 const genPassword = (len = 32) => crypto.randomBytes(len).toString("base64url");
 const genSecret = (len = 64) => crypto.randomBytes(len).toString("hex");
@@ -55,7 +53,7 @@ const fields: [string, FieldDef][] = [
       `postgres://${c.DATABASE_NAME}_shadow:${c.SHADOW_DATABASE_PASSWORD}@${c.DATABASE_HOST}:${c.DATABASE_PORT}/${c.DATABASE_NAME}_shadow`,
   }],
 
-  ["PORT", { default: "3001" }],
+  ["PORT", { default: "3000" }],
   ["VITE_ROOT_URL", { derive: (c) => `http://localhost:${c.PORT}` }],
   ["SECRET", { generate: genSecret }],
   ["VALKEY_URL", { derive: (c) => `redis://${c.DATABASE_HOST}:6380` }],
@@ -78,35 +76,26 @@ const resolveField = (key: string, def: FieldDef, existing: Ctx, resolved: Ctx):
   return def.default ?? "";
 };
 
-const program = Effect.gen(function* () {
-  const fs = yield* FileSystem.FileSystem;
+let existing: Ctx = {};
+try {
+  existing = parseDotenv(fs.readFileSync(DOTENV_PATH, "utf-8"));
+} catch {}
 
-  const existing = yield* pipe(
-    fs.readFileString(DOTENV_PATH),
-    Effect.map(parseDotenv),
-    Effect.orElseSucceed((): Ctx => ({})),
-  );
+const resolved = fields.reduce<Ctx>(
+  (ctx, [key, def]) => ({ ...ctx, [key]: resolveField(key, def, existing, ctx) }),
+  {},
+);
 
-  // Resolve fields in order, preserving existing values
-  const resolved = fields.reduce<Ctx>(
-    (ctx, [key, def]) => ({ ...ctx, [key]: resolveField(key, def, existing, ctx) }),
-    {},
-  );
+// Preserve extra user-added keys
+const knownKeys = new Set(fields.map(([k]) => k));
+const extras = Object.fromEntries(Object.entries(existing).filter(([k]) => !knownKeys.has(k)));
+const merged = { ...resolved, ...extras };
 
-  // Preserve extra user-added keys
-  const knownKeys = new Set(fields.map(([k]) => k));
-  const extras = R.filter(existing, (_, k) => !knownKeys.has(k));
-  const merged = { ...resolved, ...extras };
+const content = Object.entries(merged)
+  .map(([k, v]) => `${k}=${v}`)
+  .join("\n")
+  .concat("\n");
 
-  const content = Object.entries(merged)
-    .map(([k, v]) => `${k}=${v}`)
-    .join("\n")
-    .concat("\n");
-
-  yield* fs.writeFileString(DOTENV_PATH, content);
-
-  const action = Object.keys(existing).length > 0 ? "Updated" : "Wrote";
-  yield* Effect.log(`${action} .env`);
-});
-
-program.pipe(Effect.provide(NodeContext.layer), NodeRuntime.runMain);
+fs.writeFileSync(DOTENV_PATH, content);
+const action = Object.keys(existing).length > 0 ? "Updated" : "Wrote";
+console.log(`${action} .env`);

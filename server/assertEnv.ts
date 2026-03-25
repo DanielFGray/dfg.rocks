@@ -13,7 +13,9 @@ type EnvKey =
   | "RESEND_API_KEY"
   | "VITE_ROOT_URL"
   | "DATABASE_VISITOR"
-  | "UPLOADS_DIR";
+  | "UPLOADS_DIR"
+  | "GOOGLE_CALENDAR_CLIENT_ID"
+  | "GOOGLE_CALENDAR_CLIENT_SECRET";
 
 function getEnv(): Record<EnvKey, string> {
   const missing = required.filter((k) => !process.env[k]);

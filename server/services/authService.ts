@@ -1,244 +1,114 @@
-import { Effect, Schema as S } from "effect";
 import { sql } from "kysely";
-import crypto from "crypto";
-import { PgRootDB } from "../db.js";
-import { SessionService } from "./sessionService.js";
-import { EmailService } from "./emailService.js";
-import { env } from "../assertEnv.js";
+import { rootDb } from "../db.js";
+import { HttpError, mapPgError } from "../pgErrors.js";
+import { sessionService } from "./sessionService.js";
 
-export class InvalidCredentialsError extends S.TaggedError<InvalidCredentialsError>()(
-  "InvalidCredentials",
-  { message: S.String },
-) {}
+export class InvalidCredentialsError extends HttpError {
+  constructor() {
+    super(401, "Invalid credentials");
+  }
+}
 
-export class InvalidTokenError extends S.TaggedError<InvalidTokenError>()(
-  "InvalidToken",
-  { message: S.String },
-) {}
+export class InvalidTokenError extends HttpError {
+  constructor() {
+    super(400, "Invalid or expired token");
+  }
+}
 
-export class DuplicateAccountError extends S.TaggedError<DuplicateAccountError>()(
-  "DuplicateAccount",
-  { message: S.String },
-) {}
+export class AccountLockedError extends HttpError {
+  constructor(message: string) {
+    super(423, message);
+  }
+}
 
-export class AccountLockedError extends S.TaggedError<AccountLockedError>()(
-  "AccountLockedError",
-  { message: S.String },
-) {}
+export const authService = {
+  async login({ id, password }: { id: string; password: string }) {
+    let session: { id: string; user_id: string; created_at: Date; expires_at: Date };
+    try {
+      const row = await rootDb
+        .selectFrom((eb) =>
+          eb
+            .fn<{
+              id: string;
+              user_id: string;
+              created_at: Date;
+              expires_at: Date;
+            }>("app_private.login", [sql`${id}::citext`, eb.val(password)])
+            .as("s"),
+        )
+        .selectAll()
+        .where("s.user_id", "is not", null)
+        .executeTakeFirst();
 
-export class AuthService extends Effect.Service<AuthService>()("AuthService", {
-  effect: Effect.gen(function* () {
-    const rootDb = yield* PgRootDB;
-    const sessionService = yield* SessionService;
-    const emailService = yield* EmailService;
+      if (!row) throw new InvalidCredentialsError();
+      session = row;
+    } catch (err) {
+      if (err instanceof HttpError) throw err;
+      mapPgError(err);
+    }
 
-    return {
-      login: ({ id, password }: { id: string; password: string }) =>
-        Effect.gen(function* () {
-          const user = yield* rootDb
-            .selectFrom((eb) =>
-              eb
-                .fn<{
-                  id: string;
-                  username: string;
-                  role: string;
-                  email: string;
-                  name: string;
-                }>("app_private.login", [sql`${id}::citext`, eb.val(password)])
-                .as("u"),
-            )
-            .selectAll()
-            .where("u.id", "is not", null)
-            .pipe(
-              Effect.head,
-              Effect.catchTag("SqlError", (e) =>
-                (e.cause as any)?.code === "LOCKD"
-                  ? Effect.fail(new AccountLockedError({ message: (e.cause as any)?.message ?? "Account locked" }))
-                  : Effect.die(e),
-              ),
-              Effect.catchTag("NoSuchElementException", () =>
-                Effect.fail(
-                  new InvalidCredentialsError({ message: "Invalid credentials" }),
-                ),
-              ),
-            );
+    const user = await rootDb
+      .selectFrom("app_public.users")
+      .select(["id", "username", "role", "name", "is_verified"])
+      .where("id", "=", session.user_id)
+      .executeTakeFirst();
 
-          const { token, expiresAt } = yield* sessionService.createSession(
-            user.id,
-          );
-          return { user, token, expiresAt };
-        }),
+    if (!user) throw new InvalidCredentialsError();
 
-      logout: (cookieId: string | undefined) =>
-        Effect.gen(function* () {
-          if (cookieId) yield* sessionService.deleteSession(cookieId);
-          return { success: true as const };
-        }),
+    const { token, expiresAt } = await sessionService.createSession(user.id);
+    return { user, token, expiresAt };
+  },
 
-      createStudent: (opts: {
-        username: string;
-        email: string;
-        name: string;
-      }) =>
-        Effect.gen(function* () {
-          const user = yield* rootDb
-            .selectFrom(
-              sql<{
-                id: string;
-                username: string;
-                email: string;
-                name: string;
-                role: string;
-              }>`
-                app_private.create_user(
-                  ${opts.username}::citext,
-                  ${opts.email}::citext,
-                  ${opts.name},
-                  'student'::app_public.user_role
-                )
-              `.as("u"),
-            )
-            .selectAll()
-            .pipe(
-              Effect.head,
-              Effect.catchTag("NoSuchElementException", () =>
-                Effect.die(new Error("create_user returned no rows")),
-              ),
-            );
+  async logout(cookieId?: string): Promise<void> {
+    if (cookieId) await sessionService.deleteSession(cookieId);
+  },
 
-          const inviteToken = crypto.randomBytes(32).toString("hex");
-          const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+  async forgotPassword({ email }: { email: string }): Promise<void> {
+    await sql`select app_public.forgot_password(${email}::citext)`.execute(rootDb);
+  },
 
-          yield* rootDb
-            .updateTable("app_private.user_secrets")
-            .set({
-              invite_token: inviteToken,
-              invite_token_expires_at: expiresAt,
-            })
-            .where("user_id", "=", user.id);
+  async resetPassword({ token, password }: { token: string; password: string }) {
+    const secrets = await rootDb
+      .selectFrom("app_private.user_secrets")
+      .select("user_id")
+      .where("reset_password_token", "=", token)
+      .executeTakeFirst();
 
-          const inviteUrl = `${env.VITE_ROOT_URL}/set-password?token=${inviteToken}`;
-          yield* emailService.send({
-            to: opts.email,
-            subject: "Welcome to DFG Portal",
-            html: `<p>Hi ${opts.name},</p><p>You've been invited to the DFG student portal. <a href="${inviteUrl}">Click here to set your password</a>.</p><p>This link expires in 7 days.</p>`,
-          });
+    if (!secrets) throw new InvalidTokenError();
 
-          return user;
-        }),
+    let session: { id: string; user_id: string; created_at: Date; expires_at: Date };
+    try {
+      const row = await rootDb
+        .selectFrom((eb) =>
+          eb
+            .fn<{
+              id: string;
+              user_id: string;
+              created_at: Date;
+              expires_at: Date;
+            }>("app_private.reset_password", [
+              sql`${secrets.user_id}::uuid`,
+              eb.val(token),
+              eb.val(password),
+            ])
+            .as("s"),
+        )
+        .selectAll()
+        .where("s.user_id", "is not", null)
+        .executeTakeFirst();
 
-      setPassword: ({ token, password }: { token: string; password: string }) =>
-        Effect.gen(function* () {
-          const secrets = yield* rootDb
-            .selectFrom("app_private.user_secrets")
-            .select(["user_id", "invite_token_expires_at"])
-            .where("invite_token", "=", token)
-            .pipe(
-              Effect.head,
-              Effect.catchTag("NoSuchElementException", () =>
-                Effect.fail(
-                  new InvalidTokenError({ message: "Invalid or expired token" }),
-                ),
-              ),
-            );
+      if (!row) throw new InvalidTokenError();
+      session = row;
+    } catch (err) {
+      if (err instanceof HttpError) throw err;
+      mapPgError(err);
+    }
 
-          if (
-            !secrets.invite_token_expires_at ||
-            secrets.invite_token_expires_at < new Date()
-          ) {
-            return yield* Effect.fail(
-              new InvalidTokenError({ message: "Token expired" }),
-            );
-          }
+    // Evict all Valkey sessions (PG sessions already deleted by SQL function)
+    await sessionService.deleteAllUserSessionsFromCache(session.user_id);
 
-          yield* rootDb.selectNoFrom([
-            sql`app_private.set_password(${secrets.user_id}::uuid, ${password})`.as("_"),
-          ]);
-
-          yield* rootDb
-            .updateTable("app_private.user_secrets")
-            .set({ invite_token: null, invite_token_expires_at: null })
-            .where("user_id", "=", secrets.user_id);
-
-          const { token: sessionToken, expiresAt } =
-            yield* sessionService.createSession(secrets.user_id);
-          return { token: sessionToken, expiresAt };
-        }),
-
-      forgotPassword: ({ email }: { email: string }) =>
-        Effect.gen(function* () {
-          const user = yield* rootDb
-            .selectFrom("app_public.users")
-            .select(["id", "email", "name"])
-            .where("email", "=", email)
-            .pipe(
-              Effect.head,
-              Effect.catchTag("NoSuchElementException", () => Effect.void),
-            );
-
-          if (!user) return;
-
-          const resetToken = crypto.randomBytes(32).toString("hex");
-          const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
-
-          yield* rootDb
-            .updateTable("app_private.user_secrets")
-            .set({
-              reset_password_token: resetToken,
-              reset_password_token_expires_at: expiresAt,
-            })
-            .where("user_id", "=", user.id);
-
-          const resetUrl = `${env.VITE_ROOT_URL}/reset-password?token=${resetToken}`;
-          yield* emailService.send({
-            to: user.email,
-            subject: "Reset your password",
-            html: `<p>Hi ${user.name},</p><p><a href="${resetUrl}">Click here to reset your password</a>.</p><p>This link expires in 1 hour.</p>`,
-          });
-        }),
-
-      resetPassword: ({ token, password }: { token: string; password: string }) =>
-        Effect.gen(function* () {
-          const secrets = yield* rootDb
-            .selectFrom("app_private.user_secrets")
-            .select(["user_id", "reset_password_token_expires_at"])
-            .where("reset_password_token", "=", token)
-            .pipe(
-              Effect.head,
-              Effect.catchTag("NoSuchElementException", () =>
-                Effect.fail(
-                  new InvalidTokenError({ message: "Invalid or expired token" }),
-                ),
-              ),
-            );
-
-          if (
-            !secrets.reset_password_token_expires_at ||
-            secrets.reset_password_token_expires_at < new Date()
-          ) {
-            return yield* Effect.fail(
-              new InvalidTokenError({ message: "Token expired" }),
-            );
-          }
-
-          yield* rootDb.selectNoFrom([
-            sql`app_private.set_password(${secrets.user_id}::uuid, ${password})`.as("_"),
-          ]);
-
-          yield* rootDb
-            .updateTable("app_private.user_secrets")
-            .set({
-              reset_password_token: null,
-              reset_password_token_expires_at: null,
-            })
-            .where("user_id", "=", secrets.user_id);
-
-          const { token: sessionToken, expiresAt } =
-            yield* sessionService.createSession(secrets.user_id);
-          return { token: sessionToken, expiresAt };
-        }),
-    } as const;
-  }),
-  dependencies: [PgRootDB.Live, SessionService.Default, EmailService.Default],
-  accessors: true,
-}) {}
+    // Create fresh Valkey-backed session for the user
+    const { token: sessionToken, expiresAt } = await sessionService.createSession(session.user_id);
+    return { token: sessionToken, expiresAt };
+  },
+} as const;

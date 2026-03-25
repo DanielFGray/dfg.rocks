@@ -1,32 +1,15 @@
 import { defineConfig } from "vite";
-import { fibrae } from "fibrae/vite";
+import { tanstackStart } from "@tanstack/react-start/plugin/vite";
+import react from "@vitejs/plugin-react";
 
 export default defineConfig({
-  plugins: [
-    fibrae({
-      entry: "./src/app.tsx",
-      client: "./src/client.tsx",
-      title: "Daniel Gray | Music Lessons in Galveston, TX",
-    }),
-  ],
   server: {
     host: process.env.HOST || "localhost",
-    port: 5174,
-    proxy: {
-      "/api": "http://localhost:3001",
-    },
+    port: parseInt(process.env.VITE_PORT || "5174"),
   },
-  esbuild: {
-    jsx: "transform",
-    jsxDev: false,
-    jsxFactory: "jsx",
-    jsxFragment: "Fragment",
-    jsxInject: `import { jsx, Fragment } from 'fibrae/jsx-runtime'`,
+  oxc: {
+    jsxRuntime: "automatic",
+    jsxImportSource: "react",
   },
-  optimizeDeps: {
-    include: ["@effect-atom/atom", "effect", "@effect/platform", "@effect/platform-browser"],
-  },
-  resolve: {
-    dedupe: ["effect"],
-  },
+  plugins: [tanstackStart({ srcDirectory: "app" }), react()],
 });

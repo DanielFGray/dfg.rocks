@@ -12,13 +12,14 @@
     "forceConsistentCasingInFileNames": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
+    "preserveSymlinks": true,
     "allowJs": true,
     "jsx": "react-jsx",
-    "jsxImportSource": "fibrae",
+    "jsxImportSource": "react",
     "plugins": [
       { "name": "@effect/language-service" }
     ]
   },
-  "include": ["src", "server", "shared", "scripts", "e2e"],
+  "include": ["app", "server", "shared", "scripts", "e2e"],
   "exclude": ["node_modules", "dist"]
 }

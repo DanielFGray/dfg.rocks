@@ -3,15 +3,15 @@
     "target": "ES2022",
     "module": "ESNext",
     "moduleResolution": "bundler",
-    "jsx": "preserve",
+    "jsx": "react-jsx",
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
-    "types": ["vite/client", "fibrae/jsx-runtime"],
+    "types": ["vite/client"],
     "plugins": [
       { "name": "@effect/language-service" }
     ]
   },
-  "include": ["src/**/*.ts", "src/**/*.tsx"],
-  "exclude": ["src/pages", "src/components/*.astro", "src/env.d.ts"]
+  "include": ["app/**/*.ts", "app/**/*.tsx", "shared/**/*.ts"],
+  "exclude": ["app/routeTree.gen.ts"]
 }

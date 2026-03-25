@@ -1,13 +1,12 @@
 # dfg.rocks
 
-Music lessons business site + student/admin portal. Fibrae SPA frontend, Effect HttpApi backend, PostgreSQL with RLS enforcement.
+Music lessons business site + student/admin portal. React + TanStack Start frontend, Elysia API backend (in-process), PostgreSQL with RLS enforcement.
 
 ## Commands
 
 ```bash
-bun run dev              # Start all services (mprocs: server, app, typecheck, worker, devtui)
-bun run dev:app          # Vite dev server (port 5174)
-bun run dev:server       # Backend server (port 3001)
+bun run dev              # Start all services (mprocs: app, typecheck, worker)
+bun run dev:app          # Vite + TanStack Start dev server (port 5174)
 bun run typecheck        # tsgo --noEmit -p tsconfig.app.json
 bun run db:setup         # Full DB setup (docker + init + reset + migrate)
 bun run db:reset         # Drop and recreate DB, reapply all migrations
@@ -19,64 +18,72 @@ bun run test:e2e         # Playwright E2E tests (18 specs)
 
 ## Architecture
 
-### Three Layers
+### Single-process: TanStack Start + Elysia
 
 ```
-src/           Client (Fibrae SPA, Vite, TailwindCSS)
-shared/        Shared types (HttpApi contract, middleware tags, schemas)
-server/        Server (Effect HttpApi, Bun runtime, PostgreSQL)
+TanStack Start (Vite)
+  ├── app/routes/          React pages (file-based routing, SSR)
+  └── app/routes/api.$.ts  Catch-all server route → Elysia
+        └── server/app.ts  Elysia app with /api/* routes
+              ├── server/routes/public.ts
+              ├── server/routes/auth.ts
+              ├── server/routes/authenticated.ts
+              ├── server/routes/admin.ts
+              └── server/routes/testing.ts (non-production)
 ```
 
-### Shared Contract Pattern
+No separate API server process. Elysia runs in-process via TanStack Start's server route handlers.
 
-The HttpApi contract lives in `shared/contract.ts` — imported by both server (for handler implementation) and client (for `AtomHttpApi.Tag` auto-generated client). Middleware type declarations live in `shared/middleware.ts` (no server deps). Only middleware *implementations* live in `server/`.
+### Client: Typed Fetch API
 
-### Client: DfgApi (AtomHttpApi.Tag)
-
-All API access goes through `DfgApi` in `src/portal/api.ts`:
+All API access goes through `app/lib/api.ts`:
 
 ```typescript
-import { DfgApi } from "./api.js";
+import { api } from "../lib/api.js";
 
-// In Effect component:
-const api = yield* DfgApi;
-const courses = yield* api.authenticated.courses({});
-const detail = yield* api.authenticated.courseDetail({ path: { id } });
-const result = yield* api.admin.createCourse({ payload: { title, instrument } });
+// In React component with TanStack Query:
+const { data: courses } = useSuspenseQuery({ queryKey: ["courses"], queryFn: api.authenticated.courses });
+
+// Mutations:
+const mutation = useMutation({ mutationFn: (p) => api.admin.createCourse(p) });
 ```
 
 **Endpoint groups**: `api.public.*`, `api.auth.*`, `api.authenticated.*`, `api.admin.*`
 
-**Calling convention**: Single options object with `path`, `payload`, `urlParams` as needed:
-- `api.authenticated.courses({})` — no params
-- `api.authenticated.courseDetail({ path: { id } })` — path params
-- `api.authenticated.library({ urlParams: { limit: 10 } })` — url params
-- `api.admin.createCourse({ payload: { title, instrument } })` — body payload
+### Routing: TanStack Start (file-based)
 
-**File upload** is a standalone function (multipart, can't go through HttpApiClient):
+Routes live in `app/routes/`. Auth-guarded routes under `app/routes/_authed/` (layout route with `beforeLoad`, `ssr: false`).
+
+### State Management
+
+- **Server state**: TanStack Query (`useQuery`, `useSuspenseQuery`, `useMutation`)
+- **Local UI state**: `useState` (modals, form inputs, toggles)
+- **Auth**: `useAuth()` hook backed by `useQuery(["me"])` — returns `{ user, isAdmin }`
+- **Data refresh**: `queryClient.invalidateQueries({ queryKey: [...] })`
+
+### Server: Elysia + Kysely + RLS
+
+Backend uses Elysia for routing/middleware, Kysely for type-safe SQL, and PostgreSQL RLS for row-level security.
+
+**DB connections** (`server/db.ts`):
+- `authDb` + `withAuthContext(sessionId, fn)` — authenticated queries (RLS enforced via `set_config`)
+- `rootDb` — auth functions (`app_private.*`), admin DML, cross-user lookups (bypasses RLS)
+
 ```typescript
-import { uploadMaterial } from "./api.js";
+// Authenticated handler with RLS:
+.get("/courses", ({ auth }) =>
+  withAuthContext(auth.session.id, (db) =>
+    db.selectFrom("app_public.courses").select([...]).execute()
+  )
+)
 ```
 
-### Server: RLS Enforcement
+**Don't filter by user_id in TypeScript** — RLS handles it.
 
-Authenticated handlers use `PgAuthDB` + `withAuthContext()` for database-level row security:
-
-```typescript
-const { user } = yield* CurrentUser;
-const db = yield* PgAuthDB;
-return yield* withAuthContext(db, user.id, user.role,
-  db.selectFrom("app_public.courses")
-    .select(["id", "title", "description", "instrument"])
-    .pipe(Effect.orDie),
-);
-```
-
-`withAuthContext` sets transaction-local PostgreSQL settings (`role`, `my.user_id`, `my.user_role`) so RLS policies enforce access. **Don't filter by user_id in TypeScript** — RLS handles it.
-
-**When to use which DB connection:**
-- `PgAuthDB` + `withAuthContext` — authenticated handlers (RLS enforced)
-- `PgRootDB` — auth functions (`app_private.*`), admin DML, public inserts (bypasses RLS)
+**Elysia middleware** (derive/guard):
+- Session validation via `sessionService.validateSessionToken(cookie)`
+- Auth guard throws `HttpError(401)` if no session
+- Admin guard checks role + CSRF header (`x-requested-with`)
 
 ### Database Schema
 
@@ -84,42 +91,50 @@ Three-schema separation:
 - `app_public` — user-facing tables with RLS policies
 - `app_private` — secrets, sessions, auth functions (SECURITY DEFINER)
 
-RLS policies use `current_setting('my.user_id', true)` and `current_setting('my.user_role', true)`.
+RLS policies derive user context from `current_setting('my.session_id')` joined through `app_private.sessions`.
 
 **Adding a new table**: Create in `migrations/current/`, add RLS policies and GRANT to `:DATABASE_VISITOR`, run `graphile-migrate watch --once` to apply.
 
-### Account Lockout
-
-`app_private.login()` tracks failed attempts. 3+ failures within 5 minutes raises `LOCKD` errcode, caught as `AccountLockedError` in authService, surfaced as HTTP 423 Locked.
-
 ### Testing
 
-- `RateLimiter.Disabled` is provided in the testing API layer (no rate limits during E2E)
+- Rate limiting disabled via `disableRateLimiting()` in test setup
 - Testing API (`/api/testing/*`) creates users, seeds data, clears state — only loaded when `NODE_ENV !== "production"`
 - Playwright fixtures: `testing.login()`, `testing.clear()`, `testing.seedCourse()`, `testing.enroll()`
 
 ## Style
 
-- Idiomatic Effect: pipe, Effect.gen, Schema.TaggedError, Context.Tag, Layer
-- `Schema.TaggedError` for all errors — never `throw new Error`
-- JSX components return `Effect<VElement>` — use `Suspense` for async data
-- Event handlers can return Effects (forked by fibrae runtime)
-- Atom state: `Atom.make()` at module scope, `registry.get/set` in components
-- TailwindCSS for styling, `data-cy` attributes for E2E selectors
+### Server
+- Plain async/await, Kysely queries, throw `HttpError` for errors
+- Elysia route groups with derive/guard middleware
+- `mapPgError()` for mapping PostgreSQL errcodes to HTTP errors
+
+### Client
+- React function components with hooks
+- TanStack Query for server state, useState for local UI state
+- TanStack Router file-based routing with typed routes
+- TailwindCSS for styling, `data-pwid` attributes for E2E selectors
 
 ## Key Files
 
 | File | Purpose |
 |------|---------|
-| `shared/contract.ts` | HttpApi definition (groups, endpoints, errors) |
-| `shared/middleware.ts` | Middleware Tags (SessionMiddleware, AuthMiddleware, AdminMiddleware) |
 | `shared/schemas.ts` | Response schemas (UserResponse, CourseResponse, etc.) |
-| `src/portal/api.ts` | `DfgApi` AtomHttpApi.Tag + type aliases |
-| `src/app.tsx` | Router, handlers, App component |
-| `src/client.tsx` | Browser entry point (render + layer composition) |
-| `server/httpapi/server.ts` | All endpoint handler implementations |
-| `server/db.ts` | PgRootDB, PgAuthDB, withAuthContext |
-| `server/services/authService.ts` | Login, register, password management |
-| `server/services/sessionService.ts` | Session creation/validation (Valkey + PG) |
-| `server/services/sessionMiddleware.ts` | Middleware Live implementations |
+| `app/lib/api.ts` | Typed fetch client (all endpoint wrappers) |
+| `app/lib/types.ts` | Type aliases derived from shared schemas |
+| `app/lib/hooks/useAuth.ts` | Auth hook (useQuery + isAdmin) |
+| `app/routes/__root.tsx` | Root layout (html, head, providers) |
+| `app/routes/_authed.tsx` | Auth guard layout route (ssr: false) |
+| `app/routes/api.$.ts` | Catch-all route mounting Elysia |
+| `app/config.ts` | Site metadata (name, city, testimonials, etc.) |
+| `server/app.ts` | Elysia app composition |
+| `server/db.ts` | rootDb, authDb, withAuthContext |
+| `server/routes/public.ts` | Public endpoints (health, contact, OAuth) |
+| `server/routes/auth.ts` | Auth endpoints (login, logout, me, password) |
+| `server/routes/authenticated.ts` | Authed endpoints (courses, messages, lessons) |
+| `server/routes/admin.ts` | Admin endpoints (CRUD, gcal, settings) |
+| `server/routes/testing.ts` | Test data seeding (non-production) |
+| `server/services/sessionService.ts` | Session CRUD (Valkey + PG) |
+| `server/services/authService.ts` | Login, password reset |
+| `server/services/googleCalendarService.ts` | Google Calendar integration |
+| `server/pgErrors.ts` | HttpError class, PG errcode mapping |
 | `migrations/current/` | SQL schema (graphile-migrate) |

@@ -1,7 +1,7 @@
 import { test as base, expect, type Page } from "@playwright/test";
 import type { UserRole } from "../shared/schemas.js";
 
-const api_url = "http://localhost:3001";
+const api_url = process.env.API_URL || "http://localhost:3000";
 
 type TestUser = {
   id: string;
@@ -24,6 +24,18 @@ type TestCourse = {
   }>;
 };
 
+type TestLesson = {
+  id: string;
+  student_id: string;
+  scheduled_at: string;
+  status: string;
+};
+
+type TestInvitation = {
+  code: string;
+  invitation_id: string;
+};
+
 type TestingApi = {
   login(opts?: {
     username?: string;
@@ -44,18 +56,26 @@ type TestingApi = {
     }>;
   }): Promise<TestCourse>;
   enroll(student_id: string, course_id: string): Promise<void>;
+  seedInvitation(data: { email: string }): Promise<TestInvitation>;
+  seedLesson(data: {
+    student_id: string;
+    scheduled_at?: string;
+    duration_minutes?: number;
+    location_type?: string;
+    status?: string;
+  }): Promise<TestLesson>;
 };
 
-/** Playwright equivalent of getCy — finds elements by data-cy attribute */
-const getCy = (page: Page, name: string) => page.locator(`[data-cy=${name}]`);
+/** Find elements by data-pwid attribute */
+const getPw = (page: Page, name: string) => page.locator(`[data-pwid=${name}]`);
 
 /** Login through the UI (client-side routing) */
 const loginViaUi = async (page: Page, username: string, password: string) => {
   await page.goto("/login");
-  await getCy(page, "login-id").fill(username);
-  await getCy(page, "login-password").fill(password);
-  await getCy(page, "login-submit").click();
-  await expect(getCy(page, "dashboard")).toBeVisible();
+  await getPw(page, "login-id").fill(username);
+  await getPw(page, "login-password").fill(password);
+  await getPw(page, "login-submit").click();
+  await expect(getPw(page, "dashboard")).toBeVisible();
 };
 
 export const test = base.extend<{ testing: TestingApi }>({
@@ -92,6 +112,18 @@ export const test = base.extend<{ testing: TestingApi }>({
         });
         expect(res.ok(), `testing/enroll failed: ${await res.text()}`).toBe(true);
       },
+
+      async seedInvitation(data) {
+        const res = await page.request.post(`${api_url}/api/testing/seed-invitation`, { data });
+        expect(res.ok(), `testing/seed-invitation failed: ${await res.text()}`).toBe(true);
+        return res.json();
+      },
+
+      async seedLesson(data) {
+        const res = await page.request.post(`${api_url}/api/testing/seed-lesson`, { data });
+        expect(res.ok(), `testing/seed-lesson failed: ${await res.text()}`).toBe(true);
+        return res.json();
+      },
     };
 
     await testing.clear();
@@ -99,4 +131,4 @@ export const test = base.extend<{ testing: TestingApi }>({
   },
 });
 
-export { expect, getCy, loginViaUi };
+export { expect, getPw, loginViaUi };

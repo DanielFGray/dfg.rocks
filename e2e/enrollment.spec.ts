@@ -1,4 +1,4 @@
-import { test, expect, getCy, loginViaUi } from "./helpers.js";
+import { test, expect, getPw, loginViaUi } from "./helpers.js";
 
 test.describe("enrollment management", () => {
   test("course detail shows enrolled students section", async ({
@@ -45,9 +45,9 @@ test.describe("enrollment management", () => {
     });
 
     await loginViaUi(page, "test_admin", "testpassword123");
-    await getCy(page, "nav-students").click();
+    await getPw(page, "nav-students").click();
     await page.getByText("Enroll Target").first().click();
-    await expect(getCy(page, "student-detail")).toBeVisible();
+    await expect(getPw(page, "student-detail")).toBeVisible();
 
     // Should see empty enrolled courses
     await expect(page.getByText("Not enrolled in any courses")).toBeVisible();
@@ -58,7 +58,7 @@ test.describe("enrollment management", () => {
     await enrollAction.click();
 
     // Wait for the modal form to appear
-    const enrollForm = getCy(page, "enroll-form");
+    const enrollForm = getPw(page, "enroll-form");
     await expect(enrollForm).toBeVisible({ timeout: 10_000 });
     await enrollForm
       .locator('select[name="course_id"]')

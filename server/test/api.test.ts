@@ -1,6 +1,4 @@
-import { describe, beforeAll, afterAll, expect } from "vitest";
-import { it } from "@effect/vitest";
-import { Effect } from "effect";
+import { describe, beforeAll, afterAll, expect, it } from "vitest";
 import pg from "pg";
 import { execSync } from "child_process";
 import { mkdirSync } from "fs";
@@ -13,9 +11,8 @@ import {
   type StartedTestContainer,
 } from "testcontainers";
 
-// ── Shared state ──────────────────────────────────────────────────────
+// -- Shared state --
 let handler: (request: Request) => Promise<Response>;
-let disposeHandler: () => Promise<void>;
 let testDb: pg.Client;
 let pgContainer: StartedPostgreSqlContainer;
 let valkeyContainer: StartedTestContainer;
@@ -24,14 +21,14 @@ let adminCookie: string;
 let studentCookie: string;
 let studentId: string;
 
-// ── Helpers ───────────────────────────────────────────────────────────
+// -- Helpers --
 function req(
   method: string,
   path: string,
   opts: { body?: unknown; cookie?: string } = {},
 ): Promise<Response> {
   const headers: Record<string, string> = {
-    "X-Requested-With": "fibrae",
+    "X-Requested-With": "dfg",
   };
   if (opts.body !== undefined) headers["Content-Type"] = "application/json";
   if (opts.cookie) headers["Cookie"] = `session=${opts.cookie}`;
@@ -51,11 +48,7 @@ function getCookie(res: Response): string | null {
   return match?.[1] ?? null;
 }
 
-async function json(res: Response) {
-  return res.json();
-}
-
-// ── Setup / Teardown ──────────────────────────────────────────────────
+// -- Setup / Teardown --
 describe("DFG Portal API", () => {
   beforeAll(async () => {
     // 1. Start containers in parallel
@@ -84,7 +77,7 @@ describe("DFG Portal API", () => {
     const dbUrl = `postgres://dfg_portal:${ownerPass}@${pgHost}:${pgPort}/dfg_portal`;
     const shadowUrl = `postgres://dfg_portal_shadow:${shadowPass}@${pgHost}:${pgPort}/dfg_portal_shadow`;
 
-    // 2. Env for child processes (dbSetup + graphile-migrate)
+    // 2. Env for child processes
     const childEnv: Record<string, string> = {
       ...(process.env as Record<string, string>),
       ROOT_DATABASE_URL: rootUrl,
@@ -107,12 +100,16 @@ describe("DFG Portal API", () => {
       cwd: process.cwd(),
     });
 
-    // Ensure generated/ dir exists (kysely-codegen writes here via afterAllMigrations)
     mkdirSync("generated", { recursive: true });
 
-    // 4. Apply migrations (reset applies committed, watch --once applies current)
+    // 4. Apply migrations (worker:schema creates graphile_worker schema needed by migrations)
     execSync("bun -b graphile-migrate reset --erase", {
       env: childEnv,
+      stdio: "pipe",
+      cwd: process.cwd(),
+    });
+    execSync("cd worker && bun -b graphile-worker --schema-only", {
+      env: { ...childEnv, DATABASE_URL: dbUrl },
       stdio: "pipe",
       cwd: process.cwd(),
     });
@@ -122,7 +119,7 @@ describe("DFG Portal API", () => {
       cwd: process.cwd(),
     });
 
-    // 5. Set env vars for server modules (BEFORE dynamic import)
+    // 5. Set env vars for server modules
     Object.assign(process.env, {
       DATABASE_URL: dbUrl,
       AUTH_DATABASE_URL: `postgres://dfg_portal_authenticator:${authPass}@${pgHost}:${pgPort}/dfg_portal`,
@@ -138,24 +135,18 @@ describe("DFG Portal API", () => {
     // 6. Seed admin user via SQL
     testDb = new pg.Client({ connectionString: dbUrl });
     await testDb.connect();
+    const adminResult = await testDb.query(
+      `select * from app_private.really_create_user($1::citext, $2, null, true, $3::citext, $4)`,
+      ["admin", "Test Admin", "admin@test.com", "admin123"],
+    );
     await testDb.query(
-      `select app_private.create_user($1::citext, $2::citext, $3, 'admin'::app_public.user_role, $4)`,
-      ["admin", "admin@test.com", "Test Admin", "admin123"],
+      `update app_public.users set role = 'admin' where id = $1`,
+      [adminResult.rows[0].id],
     );
 
-    // 7. Dynamic import server (all assertEnv/valkey/db modules load here)
-    const { HttpApiLive } = await import("../httpapi/server.js");
-    const { HttpApiBuilder, HttpMiddleware, HttpServer } = await import(
-      "@effect/platform"
-    );
-    const { Layer } = await import("effect");
-
-    const webHandler = HttpApiBuilder.toWebHandler(
-      Layer.mergeAll(HttpApiLive, HttpServer.layerContext),
-      { middleware: HttpMiddleware.logger },
-    );
-    handler = webHandler.handler;
-    disposeHandler = webHandler.dispose;
+    // 7. Dynamic import Elysia app
+    const { app } = await import("../app.js");
+    handler = (request: Request) => app.fetch(request);
 
     // 8. Login as admin
     const loginRes = await req("POST", "/api/login", {
@@ -169,7 +160,12 @@ describe("DFG Portal API", () => {
   }, 120_000);
 
   afterAll(async () => {
-    await disposeHandler?.();
+    // Close DB pools before stopping containers to avoid connection-reset errors
+    try {
+      const db = await import("../db.js");
+      await db.rootDb.destroy();
+      await db.authDb.destroy();
+    } catch {}
     try {
       const { valkey } = await import("../valkey.js");
       valkey.disconnect();
@@ -179,421 +175,244 @@ describe("DFG Portal API", () => {
     await pgContainer?.stop();
   }, 30_000);
 
-  // ── Test 1: Public endpoints ────────────────────────────────────────
-  it.effect("public: health check and contact form", () =>
-    Effect.gen(function* () {
-      // GET /api/health
-      const health = yield* Effect.promise(() => req("GET", "/api/health"));
-      expect(health.status).toBe(200);
-      expect(yield* Effect.promise(() => json(health))).toEqual({
-        success: true,
-      });
+  // -- Test 1: Public endpoints --
+  it("public: health check and contact form", async () => {
+    const health = await req("GET", "/api/health");
+    expect(health.status).toBe(200);
+    expect(await health.json()).toEqual({ success: true });
 
-      // POST /api/contact — valid
-      const contact = yield* Effect.promise(() =>
-        req("POST", "/api/contact", {
-          body: {
-            name: "Jane Doe",
-            email: "jane@example.com",
-            instrument: "piano",
-            format: "in-person",
-            message: "Looking for lessons",
-          },
-        }),
-      );
-      expect(contact.status).toBe(200);
-      expect(yield* Effect.promise(() => json(contact))).toEqual({
-        success: true,
-      });
+    const contact = await req("POST", "/api/contact", {
+      body: {
+        name: "Jane Doe",
+        email: "jane@example.com",
+        instrument: "piano",
+        format: "in-person",
+        message: "Looking for lessons",
+      },
+    });
+    expect(contact.status).toBe(200);
+    expect(await contact.json()).toEqual({ success: true });
 
-      // POST /api/contact — honeypot triggers rejection
-      const spam = yield* Effect.promise(() =>
-        req("POST", "/api/contact", {
-          body: {
-            name: "Bot",
-            email: "bot@spam.com",
-            instrument: "guitar",
-            format: "online",
-            website: "http://spam.com",
-          },
-        }),
-      );
-      expect(spam.status).toBe(400);
-    }),
-  );
+    const spam = await req("POST", "/api/contact", {
+      body: {
+        name: "Bot",
+        email: "bot@spam.com",
+        instrument: "guitar",
+        format: "online",
+        website: "http://spam.com",
+      },
+    });
+    expect(spam.status).toBe(400);
+  });
 
-  // ── Test 2: Auth lifecycle ──────────────────────────────────────────
-  it.effect("auth: student creation, invite, login, password flows", () =>
-    Effect.gen(function* () {
-      // Admin creates student → invite email sent (stubbed)
-      const createRes = yield* Effect.promise(() =>
-        req("POST", "/api/admin/students", {
-          body: {
-            username: "student1",
-            email: "student1@test.com",
-            name: "Test Student",
-          },
-          cookie: adminCookie,
-        }),
-      );
-      expect(createRes.status).toBe(200);
-      const student = yield* Effect.promise(() => json(createRes));
-      expect(student.username).toBe("student1");
-      studentId = student.id;
+  // -- Test 2: Auth lifecycle --
+  it("auth: login, password flows", async () => {
+    // Create student via SQL
+    const studentResult = await testDb.query(
+      `select * from app_private.really_create_user($1::citext, $2, null, true, $3::citext, $4)`,
+      ["student1", "Test Student", "student1@test.com", "student123"],
+    );
+    studentId = studentResult.rows[0].id;
 
-      // Read invite token from DB
-      const secrets = yield* Effect.promise(async () => {
-        const { rows } = await testDb.query(
-          "select invite_token from app_private.user_secrets where user_id = $1",
-          [studentId],
-        );
-        return rows[0];
-      });
-      expect(secrets.invite_token).toBeTruthy();
+    // Login with password
+    const loginRes = await req("POST", "/api/login", {
+      body: { id: "student1", password: "student123" },
+    });
+    expect(loginRes.status).toBe(200);
+    studentCookie = getCookie(loginRes)!;
+    expect(studentCookie).toBeTruthy();
 
-      // Set password with invite token → auto-login
-      const setPassRes = yield* Effect.promise(() =>
-        req("POST", "/api/set-password", {
-          body: { token: secrets.invite_token, password: "student123" },
-        }),
-      );
-      expect(setPassRes.status).toBe(200);
-      const setPassCookie = getCookie(setPassRes);
-      expect(setPassCookie).toBeTruthy();
+    // GET /me
+    const me = await req("GET", "/api/me", { cookie: studentCookie });
+    expect(me.status).toBe(200);
+    const meBody = await me.json();
+    expect(meBody.user.username).toBe("student1");
 
-      // GET /me — authenticated
-      const me1 = yield* Effect.promise(() =>
-        req("GET", "/api/me", { cookie: setPassCookie! }),
-      );
-      expect(me1.status).toBe(200);
-      const me1Body = yield* Effect.promise(() => json(me1));
-      expect(me1Body.user.username).toBe("student1");
+    // Logout
+    const logout = await req("POST", "/api/logout", { cookie: studentCookie });
+    expect(logout.status).toBe(200);
 
-      // Logout
-      const logout = yield* Effect.promise(() =>
-        req("POST", "/api/logout", { cookie: setPassCookie! }),
-      );
-      expect(logout.status).toBe(200);
+    // Re-login
+    const login2 = await req("POST", "/api/login", {
+      body: { id: "student1", password: "student123" },
+    });
+    studentCookie = getCookie(login2)!;
 
-      // Login with password
-      const loginRes = yield* Effect.promise(() =>
-        req("POST", "/api/login", {
-          body: { id: "student1", password: "student123" },
-        }),
-      );
-      expect(loginRes.status).toBe(200);
-      studentCookie = getCookie(loginRes)!;
-      expect(studentCookie).toBeTruthy();
+    // Forgot password
+    const forgotRes = await req("POST", "/api/forgot-password", {
+      body: { email: "student1@test.com" },
+    });
+    expect(forgotRes.status).toBe(200);
 
-      // Forgot password → reset token generated
-      const forgotRes = yield* Effect.promise(() =>
-        req("POST", "/api/forgot-password", {
-          body: { email: "student1@test.com" },
-        }),
-      );
-      expect(forgotRes.status).toBe(200);
+    // Read reset token from DB
+    const { rows } = await testDb.query(
+      "select reset_password_token from app_private.user_secrets where user_id = $1",
+      [studentId],
+    );
+    expect(rows[0].reset_password_token).toBeTruthy();
 
-      // Read reset token from DB
-      const resetSecrets = yield* Effect.promise(async () => {
-        const { rows } = await testDb.query(
-          "select reset_password_token from app_private.user_secrets where user_id = $1",
-          [studentId],
-        );
-        return rows[0];
-      });
-      expect(resetSecrets.reset_password_token).toBeTruthy();
+    // Reset password
+    const resetRes = await req("POST", "/api/reset-password", {
+      body: { token: rows[0].reset_password_token, password: "newpass123" },
+    });
+    expect(resetRes.status).toBe(200);
+    studentCookie = getCookie(resetRes)!;
+    expect(studentCookie).toBeTruthy();
 
-      // Reset password → auto-login
-      const resetRes = yield* Effect.promise(() =>
-        req("POST", "/api/reset-password", {
-          body: {
-            token: resetSecrets.reset_password_token,
-            password: "newpass123",
-          },
-        }),
-      );
-      expect(resetRes.status).toBe(200);
-      studentCookie = getCookie(resetRes)!;
-      expect(studentCookie).toBeTruthy();
+    // Verify new session
+    const me2 = await req("GET", "/api/me", { cookie: studentCookie });
+    expect(me2.status).toBe(200);
+    expect((await me2.json()).user.username).toBe("student1");
+  });
 
-      // Verify new session
-      const me2 = yield* Effect.promise(() =>
-        req("GET", "/api/me", { cookie: studentCookie }),
-      );
-      expect(me2.status).toBe(200);
-      expect(
-        (yield* Effect.promise(() => json(me2))).user.username,
-      ).toBe("student1");
-    }),
-  );
+  // -- Test 3: Curriculum CRUD + student access --
+  it("curriculum: admin CRUD, enrollment, student views", async () => {
+    // Create course
+    const createCourse = await req("POST", "/api/admin/courses", {
+      body: { title: "Guitar 101", instrument: "guitar", description: "Beginner guitar" },
+      cookie: adminCookie,
+    });
+    expect(createCourse.status).toBe(200);
+    const course = await createCourse.json();
+    const courseId = course.id;
+    expect(course.title).toBe("Guitar 101");
 
-  // ── Test 3: Curriculum CRUD + student access ────────────────────────
-  it.effect("curriculum: admin CRUD, enrollment, student views", () =>
-    Effect.gen(function* () {
-      // Create course
-      const createCourse = yield* Effect.promise(() =>
-        req("POST", "/api/admin/courses", {
-          body: {
-            title: "Guitar 101",
-            instrument: "guitar",
-            description: "Beginner guitar",
-          },
-          cookie: adminCookie,
-        }),
-      );
-      expect(createCourse.status).toBe(200);
-      const course = yield* Effect.promise(() => json(createCourse));
-      const courseId = course.id;
-      expect(course.title).toBe("Guitar 101");
+    // Update course
+    const updateCourse = await req("PATCH", `/api/admin/courses/${courseId}`, {
+      body: { description: "Updated beginner guitar" },
+      cookie: adminCookie,
+    });
+    expect(updateCourse.status).toBe(200);
+    expect((await updateCourse.json()).description).toBe("Updated beginner guitar");
 
-      // Update course
-      const updateCourse = yield* Effect.promise(() =>
-        req("PATCH", `/api/admin/courses/${courseId}`, {
-          body: { description: "Updated beginner guitar" },
-          cookie: adminCookie,
-        }),
-      );
-      expect(updateCourse.status).toBe(200);
-      expect(
-        (yield* Effect.promise(() => json(updateCourse))).description,
-      ).toBe("Updated beginner guitar");
+    // Create module
+    const createMod = await req("POST", `/api/admin/courses/${courseId}/modules`, {
+      body: { title: "Week 1: Basics", sort_order: 1 },
+      cookie: adminCookie,
+    });
+    expect(createMod.status).toBe(200);
+    const mod = await createMod.json();
+    const moduleId = mod.id;
 
-      // Create module
-      const createMod = yield* Effect.promise(() =>
-        req("POST", `/api/admin/courses/${courseId}/modules`, {
-          body: { title: "Week 1: Basics", sort_order: 1 },
-          cookie: adminCookie,
-        }),
-      );
-      expect(createMod.status).toBe(200);
-      const mod = yield* Effect.promise(() => json(createMod));
-      const moduleId = mod.id;
+    // Update module
+    const updateMod = await req("PATCH", `/api/admin/modules/${moduleId}`, {
+      body: { description: "Fundamentals" },
+      cookie: adminCookie,
+    });
+    expect(updateMod.status).toBe(200);
 
-      // Update module
-      const updateMod = yield* Effect.promise(() =>
-        req("PATCH", `/api/admin/modules/${moduleId}`, {
-          body: { description: "Fundamentals" },
-          cookie: adminCookie,
-        }),
-      );
-      expect(updateMod.status).toBe(200);
+    // Seed materials via DB
+    const globalMat = (await testDb.query(
+      `insert into app_public.materials (title, original_filename, file_path, mime_type, file_size, is_global)
+       values ($1, $2, $3, $4, $5, $6) returning id`,
+      ["Chord Chart", "chords.pdf", "/data/chords.pdf", "application/pdf", 12345, true],
+    )).rows[0];
 
-      // Seed materials via DB (no upload endpoint yet)
-      const globalMat = yield* Effect.promise(async () => {
-        const { rows } = await testDb.query(
-          `insert into app_public.materials (title, original_filename, file_path, mime_type, file_size, is_global)
-           values ($1, $2, $3, $4, $5, $6) returning id`,
-          [
-            "Chord Chart",
-            "chords.pdf",
-            "/data/chords.pdf",
-            "application/pdf",
-            12345,
-            true,
-          ],
-        );
-        return rows[0];
-      });
-      const privateMat = yield* Effect.promise(async () => {
-        const { rows } = await testDb.query(
-          `insert into app_public.materials (title, original_filename, file_path, mime_type, file_size, is_global)
-           values ($1, $2, $3, $4, $5, $6) returning id`,
-          [
-            "Private Notes",
-            "notes.pdf",
-            "/data/notes.pdf",
-            "application/pdf",
-            5432,
-            false,
-          ],
-        );
-        return rows[0];
-      });
+    const privateMat = (await testDb.query(
+      `insert into app_public.materials (title, original_filename, file_path, mime_type, file_size, is_global)
+       values ($1, $2, $3, $4, $5, $6) returning id`,
+      ["Private Notes", "notes.pdf", "/data/notes.pdf", "application/pdf", 5432, false],
+    )).rows[0];
 
-      // Attach global material to module
-      const attach = yield* Effect.promise(() =>
-        req("POST", `/api/admin/modules/${moduleId}/materials`, {
-          body: { material_id: globalMat.id, sort_order: 1 },
-          cookie: adminCookie,
-        }),
-      );
-      expect(attach.status).toBe(200);
+    // Attach global material to module
+    const attach = await req("POST", `/api/admin/modules/${moduleId}/materials`, {
+      body: { material_id: globalMat.id, sort_order: 1 },
+      cookie: adminCookie,
+    });
+    expect(attach.status).toBe(200);
 
-      // Enroll student in course
-      const enroll = yield* Effect.promise(() =>
-        req("POST", `/api/admin/students/${studentId}/enroll`, {
-          body: { course_id: courseId },
-          cookie: adminCookie,
-        }),
-      );
-      expect(enroll.status).toBe(200);
+    // Enroll student
+    const enroll = await req("POST", `/api/admin/students/${studentId}/enroll`, {
+      body: { course_id: courseId },
+      cookie: adminCookie,
+    });
+    expect(enroll.status).toBe(200);
 
-      // Assign private material to student
-      const assign = yield* Effect.promise(() =>
-        req("POST", `/api/admin/students/${studentId}/assign`, {
-          body: { material_id: privateMat.id },
-          cookie: adminCookie,
-        }),
-      );
-      expect(assign.status).toBe(200);
+    // Assign private material
+    const assign = await req("POST", `/api/admin/students/${studentId}/assign`, {
+      body: { material_id: privateMat.id },
+      cookie: adminCookie,
+    });
+    expect(assign.status).toBe(200);
 
-      // Admin lists courses
-      const adminCourses = yield* Effect.promise(() =>
-        req("GET", "/api/admin/courses", { cookie: adminCookie }),
-      );
-      expect(adminCourses.status).toBe(200);
-      expect(
-        (yield* Effect.promise(() => json(adminCourses))).length,
-      ).toBeGreaterThanOrEqual(1);
+    // Admin lists courses
+    const adminCourses = await req("GET", "/api/admin/courses", { cookie: adminCookie });
+    expect(adminCourses.status).toBe(200);
+    expect((await adminCourses.json()).length).toBeGreaterThanOrEqual(1);
 
-      // ── Student views ──
-      // Student courses (enrolled)
-      const courses = yield* Effect.promise(() =>
-        req("GET", "/api/courses", { cookie: studentCookie }),
-      );
-      expect(courses.status).toBe(200);
-      const courseList = yield* Effect.promise(() => json(courses));
-      expect(courseList).toHaveLength(1);
-      expect(courseList[0].title).toBe("Guitar 101");
+    // Student courses (enrolled)
+    const courses = await req("GET", "/api/courses", { cookie: studentCookie });
+    expect(courses.status).toBe(200);
+    const courseList = await courses.json();
+    expect(courseList).toHaveLength(1);
+    expect(courseList[0].title).toBe("Guitar 101");
 
-      // Course detail with modules + materials
-      const detail = yield* Effect.promise(() =>
-        req("GET", `/api/courses/${courseId}`, { cookie: studentCookie }),
-      );
-      expect(detail.status).toBe(200);
-      const courseDetail = yield* Effect.promise(() => json(detail));
-      expect(courseDetail.modules).toHaveLength(1);
-      expect(courseDetail.modules[0].materials).toHaveLength(1);
-      expect(courseDetail.modules[0].materials[0].title).toBe("Chord Chart");
+    // Course detail with modules + materials
+    const detail = await req("GET", `/api/courses/${courseId}`, { cookie: studentCookie });
+    expect(detail.status).toBe(200);
+    const courseDetail = await detail.json();
+    expect(courseDetail.modules).toHaveLength(1);
+    expect(courseDetail.modules[0].materials).toHaveLength(1);
+    expect(courseDetail.modules[0].materials[0].title).toBe("Chord Chart");
 
-      // Library (global materials)
-      const library = yield* Effect.promise(() =>
-        req("GET", "/api/library", { cookie: studentCookie }),
-      );
-      expect(library.status).toBe(200);
-      const libraryList = yield* Effect.promise(() => json(library));
-      expect(
-        libraryList.some((m: any) => m.title === "Chord Chart"),
-      ).toBe(true);
+    // Library (global materials)
+    const library = await req("GET", "/api/library", { cookie: studentCookie });
+    expect(library.status).toBe(200);
+    const libraryList = await library.json();
+    expect(libraryList.some((m: any) => m.title === "Chord Chart")).toBe(true);
 
-      // Assignments (student-specific materials)
-      const assignments = yield* Effect.promise(() =>
-        req("GET", "/api/assignments", { cookie: studentCookie }),
-      );
-      expect(assignments.status).toBe(200);
-      const assignList = yield* Effect.promise(() => json(assignments));
-      expect(
-        assignList.some((m: any) => m.title === "Private Notes"),
-      ).toBe(true);
+    // Assignments
+    const assignments = await req("GET", "/api/assignments", { cookie: studentCookie });
+    expect(assignments.status).toBe(200);
+    const assignList = await assignments.json();
+    expect(assignList.some((m: any) => m.title === "Private Notes")).toBe(true);
 
-      // ── Cleanup (exercises detach, unassign, unenroll, delete) ──
-      const detach = yield* Effect.promise(() =>
-        req(
-          "DELETE",
-          `/api/admin/modules/${moduleId}/materials/${globalMat.id}`,
-          { cookie: adminCookie },
-        ),
-      );
-      expect(detach.status).toBe(200);
+    // Cleanup
+    expect((await req("DELETE", `/api/admin/modules/${moduleId}/materials/${globalMat.id}`, { cookie: adminCookie })).status).toBe(200);
+    expect((await req("DELETE", `/api/admin/students/${studentId}/assign/${privateMat.id}`, { cookie: adminCookie })).status).toBe(200);
+    expect((await req("DELETE", `/api/admin/students/${studentId}/enroll/${courseId}`, { cookie: adminCookie })).status).toBe(200);
 
-      const unassign = yield* Effect.promise(() =>
-        req(
-          "DELETE",
-          `/api/admin/students/${studentId}/assign/${privateMat.id}`,
-          { cookie: adminCookie },
-        ),
-      );
-      expect(unassign.status).toBe(200);
+    const empty = await req("GET", "/api/courses", { cookie: studentCookie });
+    expect(empty.status).toBe(200);
+    expect(await empty.json()).toHaveLength(0);
 
-      const unenroll = yield* Effect.promise(() =>
-        req(
-          "DELETE",
-          `/api/admin/students/${studentId}/enroll/${courseId}`,
-          { cookie: adminCookie },
-        ),
-      );
-      expect(unenroll.status).toBe(200);
+    expect((await req("DELETE", `/api/admin/modules/${moduleId}`, { cookie: adminCookie })).status).toBe(200);
+    expect((await req("DELETE", `/api/admin/courses/${courseId}`, { cookie: adminCookie })).status).toBe(200);
+  });
 
-      // Verify student no longer sees courses
-      const empty = yield* Effect.promise(() =>
-        req("GET", "/api/courses", { cookie: studentCookie }),
-      );
-      expect(empty.status).toBe(200);
-      expect(yield* Effect.promise(() => json(empty))).toHaveLength(0);
+  // -- Test 4: Admin dashboard --
+  it("admin: submissions and student list", async () => {
+    const subs = await req("GET", "/api/admin/submissions", { cookie: adminCookie });
+    expect(subs.status).toBe(200);
+    const subList = await subs.json();
+    expect(subList.length).toBeGreaterThanOrEqual(1);
+    const sub = subList.find((s: any) => s.email === "jane@example.com");
+    expect(sub).toBeTruthy();
+    expect(sub.is_read).toBe(false);
 
-      // Delete module
-      const delMod = yield* Effect.promise(() =>
-        req("DELETE", `/api/admin/modules/${moduleId}`, {
-          cookie: adminCookie,
-        }),
-      );
-      expect(delMod.status).toBe(200);
+    const patch = await req("PATCH", `/api/admin/submissions/${sub.id}`, {
+      body: { is_read: true },
+      cookie: adminCookie,
+    });
+    expect(patch.status).toBe(200);
 
-      // Delete course
-      const delCourse = yield* Effect.promise(() =>
-        req("DELETE", `/api/admin/courses/${courseId}`, {
-          cookie: adminCookie,
-        }),
-      );
-      expect(delCourse.status).toBe(200);
-    }),
-  );
+    const students = await req("GET", "/api/admin/students", { cookie: adminCookie });
+    expect(students.status).toBe(200);
+    const studentList = await students.json();
+    expect(studentList.some((s: any) => s.username === "student1")).toBe(true);
+  });
 
-  // ── Test 4: Admin dashboard ─────────────────────────────────────────
-  it.effect("admin: submissions and student list", () =>
-    Effect.gen(function* () {
-      // Submissions includes the contact form from test 1
-      const subs = yield* Effect.promise(() =>
-        req("GET", "/api/admin/submissions", { cookie: adminCookie }),
-      );
-      expect(subs.status).toBe(200);
-      const subList = yield* Effect.promise(() => json(subs));
-      expect(subList.length).toBeGreaterThanOrEqual(1);
-      const sub = subList.find(
-        (s: any) => s.email === "jane@example.com",
-      );
-      expect(sub).toBeTruthy();
-      expect(sub.is_read).toBe(false);
+  // -- Test 5: Authorization --
+  it("authorization: access control", async () => {
+    const unauth = await req("GET", "/api/courses");
+    expect(unauth.status).toBe(401);
 
-      // Mark as read
-      const patch = yield* Effect.promise(() =>
-        req("PATCH", `/api/admin/submissions/${sub.id}`, {
-          body: { is_read: true },
-          cookie: adminCookie,
-        }),
-      );
-      expect(patch.status).toBe(200);
+    const studentAdmin = await req("GET", "/api/admin/courses", { cookie: studentCookie });
+    expect(studentAdmin.status).toBe(403);
 
-      // Student list includes created student
-      const students = yield* Effect.promise(() =>
-        req("GET", "/api/admin/students", { cookie: adminCookie }),
-      );
-      expect(students.status).toBe(200);
-      const studentList = yield* Effect.promise(() => json(students));
-      expect(
-        studentList.some((s: any) => s.username === "student1"),
-      ).toBe(true);
-    }),
-  );
-
-  // ── Test 5: Authorization ───────────────────────────────────────────
-  it.effect("authorization: access control", () =>
-    Effect.gen(function* () {
-      // Unauthenticated → protected endpoint rejects
-      const unauth = yield* Effect.promise(() => req("GET", "/api/courses"));
-      expect(unauth.status).toBe(401);
-
-      // Student → admin endpoint rejects (403 Forbidden, not 401)
-      const studentAdmin = yield* Effect.promise(() =>
-        req("GET", "/api/admin/courses", { cookie: studentCookie }),
-      );
-      expect(studentAdmin.status).toBe(403);
-
-      // /me without auth → 200 with null user (not 401)
-      const meNoAuth = yield* Effect.promise(() => req("GET", "/api/me"));
-      expect(meNoAuth.status).toBe(200);
-      const meBody = yield* Effect.promise(() => json(meNoAuth));
-      expect(meBody.user).toBeNull();
-    }),
-  );
+    const meNoAuth = await req("GET", "/api/me");
+    expect(meNoAuth.status).toBe(200);
+    const meBody = await meNoAuth.json();
+    expect(meBody.user).toBeNull();
+  });
 });

@@ -32,3 +32,4 @@ worker/.ethereal
 
 # jetbrains setting folder
 .idea/
+.claude/

@@ -1,98 +1,187 @@
-/**
- * Shared response schemas — single source of truth for both server contract
- * and client-side API types. Uses Effect Schema for runtime validation on
- * the server; client derives TypeScript types via Schema.Schema.Type.
- */
-import { Schema as S } from "effect";
+export type UserRole = "admin" | "student" | "parent" | "teacher";
 
-export const UserRole = S.Literal("admin", "student", "parent");
-export type UserRole = typeof UserRole.Type;
+export type User = {
+  id: string;
+  username: string;
+  name: string;
+  email: string;
+  role: UserRole;
+  is_verified: boolean;
+};
 
-export const UserResponse = S.Struct({
-  id: S.String,
-  username: S.String,
-  name: S.String,
-  email: S.String,
-  role: UserRole,
-});
+export type Course = {
+  id: string;
+  title: string;
+  description: string;
+  instrument: string;
+};
 
-export const CourseResponse = S.Struct({
-  id: S.String,
-  title: S.String,
-  description: S.String,
-  instrument: S.String,
-});
+export type Module = {
+  id: string;
+  course_id: string;
+  title: string;
+  description: string | null;
+  sort_order: number;
+};
 
-export const ModuleResponse = S.Struct({
-  id: S.String,
-  course_id: S.String,
-  title: S.String,
-  description: S.NullOr(S.String),
-  sort_order: S.Number,
-});
+export type Material = {
+  id: string;
+  title: string;
+  original_filename: string;
+  mime_type: string;
+  file_size: number;
+  is_global: boolean;
+};
 
-export const MaterialResponse = S.Struct({
-  id: S.String,
-  title: S.String,
-  original_filename: S.String,
-  mime_type: S.String,
-  file_size: S.Number,
-  is_global: S.Boolean,
-});
+export type CourseDetail = Course & {
+  modules: (Module & { materials: Material[] })[];
+};
 
-export const CourseDetailResponse = S.Struct({
-  ...CourseResponse.fields,
-  modules: S.Array(
-    S.Struct({
-      ...ModuleResponse.fields,
-      materials: S.Array(MaterialResponse),
-    }),
-  ),
-});
+export type StudentDetail = User & {
+  enrolled_courses: { id: string; title: string; instrument: string }[];
+  assigned_materials: Material[];
+};
 
-export const StudentDetailResponse = S.Struct({
-  ...UserResponse.fields,
-  enrolled_courses: S.Array(
-    S.Struct({ id: S.String, title: S.String, instrument: S.String }),
-  ),
-  assigned_materials: S.Array(MaterialResponse),
-});
+export type Submission = {
+  id: string;
+  name: string;
+  email: string;
+  phone: string | null;
+  instrument: string;
+  format: string;
+  message: string;
+  is_read: boolean;
+  created_at: string;
+};
 
-export const SubmissionResponse = S.Struct({
-  id: S.String,
-  name: S.String,
-  email: S.String,
-  phone: S.NullOr(S.String),
-  instrument: S.String,
-  format: S.String,
-  message: S.String,
-  is_read: S.Boolean,
-  created_at: S.String,
-});
+export type PracticeLog = {
+  id: string;
+  student_id: string;
+  material_id: string;
+  status: "practiced" | "completed";
+  notes: string | null;
+  logged_at: string;
+};
 
-export const PracticeLogResponse = S.Struct({
-  id: S.String,
-  student_id: S.String,
-  material_id: S.String,
-  status: S.Literal("practiced", "completed"),
-  notes: S.NullOr(S.String),
-  logged_at: S.String,
-});
+export type AssignmentNote = {
+  id: string;
+  student_id: string;
+  material_id: string;
+  body: string;
+  created_at: string;
+  updated_at: string;
+};
 
-export const AssignmentNoteResponse = S.Struct({
-  id: S.String,
-  student_id: S.String,
-  material_id: S.String,
-  body: S.String,
-  created_at: S.String,
-  updated_at: S.String,
-});
+export type Message = {
+  id: string;
+  sender_id: string;
+  recipient_id: string;
+  body: string;
+  is_read: boolean;
+  created_at: string;
+};
 
-export const MessageResponse = S.Struct({
-  id: S.String,
-  sender_id: S.String,
-  recipient_id: S.String,
-  body: S.String,
-  is_read: S.Boolean,
-  created_at: S.String,
-});
+export type Family = {
+  id: string;
+  slug: string;
+  name: string;
+  description: string | null;
+  created_at: string;
+};
+
+export type FamilyInvitation = {
+  id: string;
+  family_id: string;
+  family_name: string;
+  code: string | null;
+  user_id: string | null;
+  email: string | null;
+};
+
+export type LocationType =
+  | "in_person_teacher_travels"
+  | "in_person_student_travels"
+  | "studio"
+  | "online";
+
+export type LessonStatus = "scheduled" | "completed" | "cancelled" | "no_show";
+
+export type DepositStatus = "held" | "refunded" | "captured";
+
+export type Lesson = {
+  id: string;
+  student_id: string;
+  gcal_event_id: string | null;
+  scheduled_at: string;
+  duration_minutes: number;
+  location_type: LocationType;
+  status: LessonStatus;
+  cancellation_reason: string | null;
+  cancelled_at: string | null;
+  completed_at: string | null;
+  created_at: string;
+};
+
+export type StudentRate = {
+  id: string;
+  student_id: string;
+  rate_cents: number;
+  lesson_duration_minutes: number;
+  location_type: LocationType;
+  notes: string | null;
+  created_at: string;
+};
+
+export type LessonDeposit = {
+  id: string;
+  lesson_id: string;
+  amount_cents: number;
+  status: DepositStatus;
+  created_at: string;
+};
+
+export type UserEmail = {
+  id: string;
+  email: string;
+  is_verified: boolean;
+  is_primary: boolean;
+  created_at: string;
+};
+
+export type LessonNote = {
+  id: string;
+  lesson_id: string;
+  topics_covered: string | null;
+  homework: string | null;
+  progress_observations: string | null;
+  notes: string | null;
+  material_ids: string[] | null;
+  draft: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+export type TimeSlot = {
+  start: string;
+  end: string;
+};
+
+export type WorkingHoursDay = {
+  start: string;
+  end: string;
+};
+
+export type WorkingHours = {
+  0: WorkingHoursDay | null;
+  1: WorkingHoursDay | null;
+  2: WorkingHoursDay | null;
+  3: WorkingHoursDay | null;
+  4: WorkingHoursDay | null;
+  5: WorkingHoursDay | null;
+  6: WorkingHoursDay | null;
+};
+
+export type GcalStatus = {
+  connected: boolean;
+  calendar_id: string | null;
+};

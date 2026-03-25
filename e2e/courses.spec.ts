@@ -1,4 +1,4 @@
-import { test, expect, getCy, loginViaUi } from "./helpers.js";
+import { test, expect, getPw, loginViaUi } from "./helpers.js";
 
 test.describe("courses", () => {
   test("admin sees seeded course", async ({ page, testing }) => {
