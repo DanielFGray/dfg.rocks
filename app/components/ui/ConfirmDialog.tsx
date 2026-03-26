@@ -1,5 +1,10 @@
-import { Modal } from "./Modal";
-import { Button } from "./Button";
+import {
+  ModalOverlay,
+  Modal,
+  Dialog,
+  Heading,
+} from "react-aria-components";
+import { Button } from "./Button.js";
 
 type ConfirmDialogProps = {
   open: boolean;
@@ -20,24 +25,30 @@ export const ConfirmDialog = ({
   confirmLabel = "Confirm",
   variant = "default",
 }: ConfirmDialogProps) => (
-  <Modal open={open} onClose={onCancel} title={title}>
-    <p className="mb-6 text-muted">{message}</p>
-    <div className="flex justify-end gap-3">
-      <Button variant="ghost" onClick={onCancel}>
-        Cancel
-      </Button>
-      <button
-        type="button"
-        onClick={onConfirm}
-        className={[
-          "inline-flex items-center justify-center gap-2 rounded-xl px-6 py-3 text-sm font-semibold transition-all cursor-pointer",
-          variant === "danger"
-            ? "bg-red-600 text-white hover:bg-red-500 hover:-translate-y-px"
-            : "bg-accent text-white hover:bg-accent-hover hover:-translate-y-px",
-        ].join(" ")}
-      >
-        {confirmLabel}
-      </button>
-    </div>
-  </Modal>
+  <ModalOverlay
+    isOpen={open}
+    onOpenChange={(isOpen) => { if (!isOpen) onCancel(); }}
+    isDismissable={false}
+    className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm data-[entering]:animate-in data-[entering]:fade-in data-[exiting]:animate-out data-[exiting]:fade-out"
+  >
+    <Modal className="w-full max-w-lg outline-none">
+      <Dialog role="alertdialog" className="relative rounded-xl border border-white/[0.06] bg-card p-6 shadow-2xl outline-none">
+        <Heading slot="title" className="text-lg font-semibold text-primary mb-4">
+          {title}
+        </Heading>
+        <p className="mb-6 text-muted">{message}</p>
+        <div className="flex justify-end gap-3">
+          <Button variant="ghost" onClick={onCancel}>
+            Cancel
+          </Button>
+          <Button
+            variant={variant === "danger" ? "danger" : "primary"}
+            onClick={onConfirm}
+          >
+            {confirmLabel}
+          </Button>
+        </div>
+      </Dialog>
+    </Modal>
+  </ModalOverlay>
 );

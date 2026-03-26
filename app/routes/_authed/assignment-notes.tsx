@@ -2,6 +2,7 @@ import { useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "../../lib/api.js";
+import { unwrap } from "../../lib/queries.js";
 import { Button } from "../../components/ui/Button.js";
 
 export const Route = createFileRoute("/_authed/assignment-notes")({
@@ -21,19 +22,11 @@ export function AssignmentNotesPanel({ materialId }: { materialId: string }) {
 
   const { data: note } = useQuery({
     queryKey: ["assignment-note", materialId],
-    queryFn: async () => {
-      const { data, error } = await api.assignments[materialId].notes.get();
-      if (error) throw error;
-      return data;
-    },
+    queryFn: async () => unwrap((await api.assignments({ materialId }).notes.get()).data),
   });
 
   const upsertMutation = useMutation({
-    mutationFn: async (body: string) => {
-      const { data, error } = await api.assignments[materialId].notes.put({ body });
-      if (error) throw error;
-      return data;
-    },
+    mutationFn: async (body: string) => unwrap((await api.assignments({ materialId }).notes.put({ body })).data),
     onMutate: () => setSaving(true),
     onSettled: () => {
       setSaving(false);

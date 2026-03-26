@@ -6,6 +6,7 @@ export const api = treaty<App>(
   {
     fetch: { credentials: "include" },
     headers: { "X-Requested-With": "dfg" },
+    throwHttpError: true,
   },
 ).api;
 

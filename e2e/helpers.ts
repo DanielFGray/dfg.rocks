@@ -1,7 +1,8 @@
 import { test as base, expect, type Page } from "@playwright/test";
 import type { UserRole } from "../shared/schemas.js";
 
-const api_url = process.env.API_URL || "http://localhost:3000";
+const vitePort = process.env.VITE_PORT || "8174";
+const api_url = process.env.API_URL || `http://localhost:${vitePort}`;
 
 type TestUser = {
   id: string;

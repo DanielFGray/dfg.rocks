@@ -13,7 +13,7 @@ function csrfCheck(headers: Record<string, string | undefined>): void {
   }
 }
 
-function expireSessionCookie(cookie: { session: { remove: () => void } }): void {
+function expireSessionCookie(cookie: Record<string, any>): void {
   cookie.session.remove();
 }
 
@@ -27,7 +27,7 @@ export const authenticatedRoutes = new Elysia({ prefix: "/api" })
     }
   })
   .derive(async ({ cookie }) => {
-    const token = cookie.session?.value;
+    const token = cookie.session?.value as string | undefined;
     const result = await sessionService.validateSessionToken(token);
     if (!result) throw new HttpError(401, "Unauthorized");
     return { auth: result as NonNullable<SessionResult> };

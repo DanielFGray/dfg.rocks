@@ -10,6 +10,8 @@ export const Route = createFileRoute("/_authed")({
     if (!user) {
       throw redirect({ to: "/login" });
     }
+
+    return { user, isAdmin: user.role === "admin" };
   },
   component: AuthedLayout,
 });

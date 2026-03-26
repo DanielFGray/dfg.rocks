@@ -1,7 +1,8 @@
 import { useState, type FormEvent } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { queryOptions, useSuspenseQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useSuspenseQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "../../lib/api.js";
+import { adminStudentsQuery, adminFamiliesQuery } from "../../lib/queries.js";
 import type { User, Family } from "../../lib/types.js";
 import { Button } from "../../components/ui/Button.js";
 import { Card } from "../../components/ui/Card.js";
@@ -9,28 +10,6 @@ import { Input } from "../../components/ui/Input.js";
 import { Select } from "../../components/ui/Select.js";
 import { Modal } from "../../components/ui/Modal.js";
 import { EmptyState } from "../../components/ui/EmptyState.js";
-
-/* ---------------------------------------------------------------------------
- * Query Options
- * --------------------------------------------------------------------------- */
-
-const adminStudentsQuery = queryOptions({
-  queryKey: ["admin", "students"],
-  queryFn: async () => {
-    const { data, error } = await api.admin.students.get();
-    if (error) throw error;
-    return data;
-  },
-});
-
-const adminFamiliesQuery = queryOptions({
-  queryKey: ["admin", "families"],
-  queryFn: async () => {
-    const { data, error } = await api.admin.families.get();
-    if (error) throw error;
-    return data;
-  },
-});
 
 /* ---------------------------------------------------------------------------
  * Route
@@ -58,7 +37,7 @@ function StudentsPage() {
 
   const inviteMutation = useMutation({
     mutationFn: async ({ familyId, email }: { familyId: string; email: string }) => {
-      const { data, error } = await api.admin.families[familyId].invite.post({ email });
+      const { data, error } = await api.admin.families({ familyId }).invite.post({ email });
       if (error) throw error;
       return data;
     },
@@ -89,7 +68,7 @@ function StudentsPage() {
         <Button onClick={openForm} data-pwid="invite-student">Invite Student</Button>
       </div>
 
-      {students.length === 0 ? (
+      {(students as User[]).length === 0 ? (
         <EmptyState message="No students yet." action={{ label: "Invite Student", onClick: openForm }} />
       ) : (
         <div className="flex flex-col gap-3">

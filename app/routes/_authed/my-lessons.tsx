@@ -1,28 +1,10 @@
 import { useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { queryOptions, useSuspenseQuery } from "@tanstack/react-query";
-import { api } from "../../lib/api.js";
+import { useSuspenseQuery } from "@tanstack/react-query";
+import { myLessonsQuery, myLessonNotesQuery } from "../../lib/queries.js";
 import type { Lesson, LessonNote } from "../../lib/types.js";
 import { Card } from "../../components/ui/Card.js";
 import { EmptyState } from "../../components/ui/EmptyState.js";
-
-const myLessonsQuery = queryOptions({
-  queryKey: ["my-lessons"],
-  queryFn: async () => {
-    const { data, error } = await api["my-lessons"].get();
-    if (error) throw error;
-    return data;
-  },
-});
-
-const myLessonNotesQuery = queryOptions({
-  queryKey: ["my-lesson-notes"],
-  queryFn: async () => {
-    const { data, error } = await api["my-lesson-notes"].get({ query: { limit: 100 } });
-    if (error) throw error;
-    return data;
-  },
-});
 
 export const Route = createFileRoute("/_authed/my-lessons")({
   loader: async ({ context: { queryClient } }) => {

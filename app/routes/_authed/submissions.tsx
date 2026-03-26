@@ -1,22 +1,14 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { queryOptions, useSuspenseQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useSuspenseQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "../../lib/api.js";
+import { adminSubmissionsQuery } from "../../lib/queries.js";
 import type { Submission } from "../../lib/types.js";
 import { Button } from "../../components/ui/Button.js";
 import { Card } from "../../components/ui/Card.js";
 import { EmptyState } from "../../components/ui/EmptyState.js";
 
-const submissionsQuery = queryOptions({
-  queryKey: ["admin", "submissions"],
-  queryFn: async () => {
-    const { data, error } = await api.admin.submissions.get();
-    if (error) throw error;
-    return data;
-  },
-});
-
 export const Route = createFileRoute("/_authed/submissions")({
-  loader: ({ context }) => context.queryClient.ensureQueryData(submissionsQuery),
+  loader: ({ context }) => context.queryClient.ensureQueryData(adminSubmissionsQuery),
   head: () => ({ meta: [{ title: "Submissions | DFG Portal" }] }),
   component: SubmissionsPage,
   pendingComponent: () => (
@@ -27,11 +19,11 @@ export const Route = createFileRoute("/_authed/submissions")({
 function SubmissionsPage() {
   const queryClient = useQueryClient();
 
-  const { data: items } = useSuspenseQuery(submissionsQuery);
+  const { data: items } = useSuspenseQuery(adminSubmissionsQuery);
 
   const markReadMutation = useMutation({
     mutationFn: async (id: string) => {
-      const { data, error } = await api.admin.submissions[id].patch({ is_read: true });
+      const { data, error } = await api.admin.submissions({ id }).patch({ is_read: true });
       if (error) throw error;
       return data;
     },
@@ -44,7 +36,7 @@ function SubmissionsPage() {
     <main data-pwid="submissions" className="max-w-[1100px] mx-auto px-5 md:px-8 pt-20 pb-16">
       <h1 className="text-3xl font-bold tracking-tight mb-8">Contact Submissions</h1>
 
-      {items.length === 0 ? (
+      {(items as Submission[]).length === 0 ? (
         <EmptyState message="No submissions yet." />
       ) : (
         <div className="flex flex-col gap-3">

@@ -2,6 +2,7 @@ export type {
   User,
   Course,
   Module,
+  ModuleWithMaterials,
   Material,
   CourseDetail,
   StudentDetail,

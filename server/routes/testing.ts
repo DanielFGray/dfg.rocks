@@ -2,13 +2,14 @@
  * Testing API -- Elysia server-side test helpers for E2E tests.
  * Only loaded when NODE_ENV !== "production".
  */
-import Elysia, { t } from "elysia";
+import Elysia, { t, type Static } from "elysia";
 import crypto from "crypto";
 import { sql } from "kysely";
 import { rootDb } from "../db.js";
 import { sessionService } from "../services/sessionService.js";
 import { HttpError, mapPgError } from "../pgErrors.js";
 import { env } from "../assertEnv.js";
+import type { UserRole } from "../../shared/schemas.js";
 
 if (env.NODE_ENV === "production") {
   throw new Error("testing API must not be loaded in production");
@@ -31,13 +32,17 @@ function setSessionCookie(
   });
 }
 
-type LoginParams = {
-  username?: string;
-  password?: string;
-  role?: string;
-  name?: string;
-  email?: string;
-};
+const LoginParams = t.Object({
+  username: t.Optional(t.String()),
+  password: t.Optional(t.String()),
+  role: t.Optional(
+    t.Union([t.Literal("admin"), t.Literal("teacher"), t.Literal("student")]),
+  ),
+  name: t.Optional(t.String()),
+  email: t.Optional(t.String()),
+});
+
+type LoginParams = Static<typeof LoginParams>;
 
 async function loginHandler(
   params: LoginParams,
@@ -84,7 +89,7 @@ async function loginHandler(
   if (role !== "student") {
     await rootDb
       .updateTable("app_public.users")
-      .set({ role: role as any })
+      .set({ role })
       .where("id", "=", userId)
       .execute();
   }
@@ -119,29 +124,17 @@ export const testingRoutes = new Elysia({ prefix: "/api" })
 
   // --- Login (POST) ---
   .post("/testing/login", async ({ body, cookie }) => {
-    return await loginHandler(body, cookie);
+    return await loginHandler(body as LoginParams, cookie);
   }, {
-    body: t.Object({
-      username: t.Optional(t.String()),
-      password: t.Optional(t.String()),
-      role: t.Optional(t.String()),
-      name: t.Optional(t.String()),
-      email: t.Optional(t.String()),
-    }),
+    body: LoginParams,
   })
 
   // --- Login (GET, redirects to /dashboard) ---
-  .get("/testing/login", async ({ query, cookie, set }) => {
-    await loginHandler(query, cookie);
-    set.redirect = "/dashboard";
+  .get("/testing/login", async ({ query, cookie, redirect, request }) => {
+    await loginHandler(query as LoginParams, cookie);
+    return redirect(new URL("/dashboard", request.url).toString());
   }, {
-    query: t.Object({
-      username: t.Optional(t.String()),
-      password: t.Optional(t.String()),
-      role: t.Optional(t.String()),
-      name: t.Optional(t.String()),
-      email: t.Optional(t.String()),
-    }),
+    query: LoginParams,
   })
 
   // --- Clear test data ---

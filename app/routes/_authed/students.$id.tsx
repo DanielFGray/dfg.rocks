@@ -1,7 +1,8 @@
 import { useState, type FormEvent } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { queryOptions, useSuspenseQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useSuspenseQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "../../lib/api.js";
+import { studentDetailQuery, adminCoursesQuery, libraryQuery } from "../../lib/queries.js";
 import type { Course, Material, StudentDetail } from "../../lib/types.js";
 import { Button } from "../../components/ui/Button.js";
 import { Card } from "../../components/ui/Card.js";
@@ -9,38 +10,6 @@ import { Select } from "../../components/ui/Select.js";
 import { Modal } from "../../components/ui/Modal.js";
 import { ConfirmDialog } from "../../components/ui/ConfirmDialog.js";
 import { EmptyState } from "../../components/ui/EmptyState.js";
-
-/* ---------------------------------------------------------------------------
- * Query Options
- * --------------------------------------------------------------------------- */
-
-const studentDetailQuery = (id: string) =>
-  queryOptions({
-    queryKey: ["admin", "students", id],
-    queryFn: async () => {
-      const { data, error } = await api.admin.students[id].get();
-      if (error) throw error;
-      return data;
-    },
-  });
-
-const adminCoursesQuery = queryOptions({
-  queryKey: ["admin", "courses"],
-  queryFn: async () => {
-    const { data, error } = await api.admin.courses.get();
-    if (error) throw error;
-    return data;
-  },
-});
-
-const libraryQuery = queryOptions({
-  queryKey: ["library"],
-  queryFn: async () => {
-    const { data, error } = await api.library.get();
-    if (error) throw error;
-    return data;
-  },
-});
 
 /* ---------------------------------------------------------------------------
  * Route
@@ -92,8 +61,7 @@ function StudentDetailPage() {
   // ---- Mutations ----
   const enrollMutation = useMutation({
     mutationFn: async (courseId: string) => {
-      const { data, error } = await api.admin.students[id].enroll.post({ course_id: courseId });
-      if (error) throw error;
+      const { data } = await api.admin.students({ id }).enroll.post({ course_id: courseId });
       return data;
     },
     onSettled: () => invalidateStudent(),
@@ -101,8 +69,7 @@ function StudentDetailPage() {
 
   const unenrollMutation = useMutation({
     mutationFn: async (courseId: string) => {
-      const { data, error } = await api.admin.students[id].enroll[courseId].delete();
-      if (error) throw error;
+      const { data } = await api.admin.students({ id }).enroll({ courseId }).delete();
       return data;
     },
     onSettled: () => invalidateStudent(),
@@ -110,8 +77,7 @@ function StudentDetailPage() {
 
   const assignMutation = useMutation({
     mutationFn: async (materialId: string) => {
-      const { data, error } = await api.admin.students[id].assign.post({ material_id: materialId });
-      if (error) throw error;
+      const { data } = await api.admin.students({ id }).assign.post({ material_id: materialId });
       return data;
     },
     onSettled: () => invalidateStudent(),
@@ -119,8 +85,7 @@ function StudentDetailPage() {
 
   const unassignMutation = useMutation({
     mutationFn: async (materialId: string) => {
-      const { data, error } = await api.admin.students[id].assign[materialId].delete();
-      if (error) throw error;
+      const { data } = await api.admin.students({ id }).assign({ materialId }).delete();
       return data;
     },
     onSettled: () => invalidateStudent(),

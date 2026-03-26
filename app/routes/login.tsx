@@ -60,7 +60,7 @@ function PasswordForm({ email, onEmailChange }: { email: string; onEmailChange: 
         required
         data-pwid="login-id"
         value={email}
-        onChange={(e) => onEmailChange(e.target.value)}
+        onChange={(v) => onEmailChange(v)}
       />
       <Input
         id="login-password"
@@ -70,7 +70,7 @@ function PasswordForm({ email, onEmailChange }: { email: string; onEmailChange: 
         required
         data-pwid="login-password"
         value={password}
-        onChange={(e) => setPassword(e.target.value)}
+        onChange={(v) => setPassword(v)}
       />
       <Button
         type="submit"

@@ -2,15 +2,22 @@ import { useState } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { api } from "../../lib/api.js";
+import { availableSlotsQuery } from "../../lib/queries.js";
 import type { LocationType } from "../../lib/types.js";
 import { Button } from "../../components/ui/Button.js";
 import { Card } from "../../components/ui/Card.js";
+import { Select } from "../../components/ui/Select.js";
 import { EmptyState } from "../../components/ui/EmptyState.js";
 import { ConfirmDialog } from "../../components/ui/ConfirmDialog.js";
 
 export const Route = createFileRoute("/_authed/book-lesson")({
+  loader: ({ context: { queryClient } }) =>
+    queryClient.ensureQueryData(availableSlotsQuery(new Date().toISOString().slice(0, 10))),
   head: () => ({ meta: [{ title: "Book a Lesson | DFG Portal" }] }),
   component: BookLessonPage,
+  pendingComponent: () => (
+    <main className="max-w-[1100px] mx-auto px-5 md:px-8 pt-20 pb-16 text-muted">Loading...</main>
+  ),
 });
 
 /* ---------------------------------------------------------------------------
@@ -69,23 +76,15 @@ function BookLessonPage() {
   const [selectedLocation, setSelectedLocation] = useState<LocationType>("online");
   const [bookingSlot, setBookingSlot] = useState<{ start: string; end: string } | null>(null);
 
-  const { data: slots, isError } = useQuery({
-    queryKey: ["available-slots", selectedDate],
-    queryFn: async () => {
-      const { data, error } = await api["available-slots"].get({ query: { date: selectedDate, days: 7, duration: 60 } });
-      if (error) throw error;
-      return data;
-    },
-  });
+  const { data: slots, isError } = useQuery(availableSlotsQuery(selectedDate));
 
   const bookMutation = useMutation({
     mutationFn: async (slot: { start: string; end: string }) => {
-      const { data, error } = await api["my-lessons"].book.post({
+      const { data } = await api["my-lessons"].book.post({
         scheduled_at: slot.start,
         duration_minutes: 60,
         location_type: selectedLocation,
       });
-      if (error) throw error;
       return data;
     },
     onSuccess: () => {
@@ -127,24 +126,16 @@ function BookLessonPage() {
       <h1 className="text-3xl font-bold tracking-tight mb-6">Book a Lesson</h1>
 
       {/* Location type selector */}
-      <div className="flex flex-col gap-1.5 mb-6">
-        <label htmlFor="booking-location" className="text-sm font-medium text-muted">
-          Lesson Type
-        </label>
-        <select
+      <div className="mb-6">
+        <Select
           id="booking-location"
           name="location_type"
+          label="Lesson Type"
+          options={locationOptions}
           value={selectedLocation}
+          onChange={(v) => setSelectedLocation(v as LocationType)}
           data-pwid="booking-location"
-          onChange={(e) => setSelectedLocation(e.target.value as LocationType)}
-          className="rounded-lg border border-white/10 bg-card px-4 py-3 text-primary outline-none transition-colors focus:border-accent focus:ring-1 focus:ring-accent/50 cursor-pointer"
-        >
-          {locationOptions.map((opt) => (
-            <option key={opt.value} value={opt.value}>
-              {opt.label}
-            </option>
-          ))}
-        </select>
+        />
       </div>
 
       {/* Week navigation */}

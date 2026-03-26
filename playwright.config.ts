@@ -1,6 +1,6 @@
 import { defineConfig, devices } from "@playwright/test";
 
-const vitePort = process.env.VITE_PORT || "5173";
+const vitePort = process.env.VITE_PORT || "8174";
 
 export default defineConfig({
   testDir: "./e2e",

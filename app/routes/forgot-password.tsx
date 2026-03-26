@@ -60,7 +60,7 @@ function ForgotPasswordPage() {
             required
             data-pwid="forgot-email"
             value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            onChange={(v) => setEmail(v)}
           />
           <Button
             type="submit"

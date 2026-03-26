@@ -26,8 +26,7 @@ create table app_public.families (
 );
 alter table app_public.families enable row level security;
 
-grant select on app_public.families to :DATABASE_VISITOR;
-grant update(name, slug) on app_public.families to :DATABASE_VISITOR;
+grant select, update(name, slug) on app_public.families to :DATABASE_VISITOR;
 
 --------------------------------------------------------------------------------
 

@@ -1,3 +1,11 @@
+import {
+  TextField,
+  Label,
+  Input as AriaInput,
+  FieldError,
+  Text,
+} from "react-aria-components";
+
 type InputProps = {
   id: string;
   name: string;
@@ -8,7 +16,9 @@ type InputProps = {
   required?: boolean;
   placeholder?: string;
   disabled?: boolean;
-  onChange?: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  error?: string;
+  onChange?: (value: string) => void;
+  onBlur?: () => void;
   "data-pwid"?: string;
 };
 
@@ -22,25 +32,34 @@ export const Input = ({
   required,
   placeholder,
   disabled,
+  error,
   onChange,
-  "data-pwid": dataCy,
+  onBlur,
+  "data-pwid": pwid,
 }: InputProps) => (
-  <div className="flex flex-col gap-1.5">
-    <label htmlFor={id} className="text-sm font-medium text-muted">
-      {label}
-    </label>
-    <input
+  <TextField
+    name={name}
+    value={value}
+    defaultValue={defaultValue}
+    isRequired={required}
+    isDisabled={disabled}
+    isInvalid={!!error}
+    onChange={onChange}
+    className="flex flex-col gap-1.5"
+  >
+    <Label className="text-sm font-medium text-muted">{label}</Label>
+    <AriaInput
       id={id}
-      name={name}
       type={type}
-      value={value}
-      defaultValue={defaultValue}
-      required={required}
       placeholder={placeholder}
-      disabled={disabled}
-      onChange={onChange}
-      data-pwid={dataCy}
-      className="rounded-lg border border-white/10 bg-card px-4 py-3 text-primary placeholder:text-muted/50 outline-none transition-colors focus:border-accent focus:ring-1 focus:ring-accent/50"
+      onBlur={onBlur}
+      data-pwid={pwid}
+      className={`rounded-lg border bg-card px-4 py-3 text-primary placeholder:text-muted/50 outline-none transition-colors data-[focused]:border-accent data-[focused]:ring-1 data-[focused]:ring-accent/50 ${error ? "border-red-500/50" : "border-white/10"}`}
     />
-  </div>
+    {error ? (
+      <Text slot="errorMessage" className="text-sm text-red-400 mt-0.5">
+        {error}
+      </Text>
+    ) : null}
+  </TextField>
 );

@@ -1,29 +1,12 @@
 import { useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { queryOptions, useSuspenseQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useSuspenseQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "../../lib/api.js";
+import { assignmentsQuery, practiceLogsQuery } from "../../lib/queries.js";
 import type { Material, PracticeLog } from "../../lib/types.js";
 import { Button } from "../../components/ui/Button.js";
 import { Card } from "../../components/ui/Card.js";
 import { EmptyState } from "../../components/ui/EmptyState.js";
-
-const assignmentsQuery = queryOptions({
-  queryKey: ["assignments"],
-  queryFn: async () => {
-    const { data, error } = await api.assignments.get();
-    if (error) throw error;
-    return data;
-  },
-});
-
-const practiceLogsQuery = queryOptions({
-  queryKey: ["practice-logs"],
-  queryFn: async () => {
-    const { data, error } = await api["practice-logs"].get();
-    if (error) throw error;
-    return data;
-  },
-});
 
 export const Route = createFileRoute("/_authed/assignments")({
   loader: async ({ context: { queryClient } }) => {
@@ -89,8 +72,7 @@ function AssignmentsPage() {
 
   const logPracticeMutation = useMutation({
     mutationFn: async (params: { material_id: string; status: "practiced" | "completed" }) => {
-      const { data, error } = await api["practice-logs"].post(params);
-      if (error) throw error;
+      const { data } = await api["practice-logs"].post(params);
       return data;
     },
     onMutate: (params) => setLoadingMaterialId(params.material_id),
