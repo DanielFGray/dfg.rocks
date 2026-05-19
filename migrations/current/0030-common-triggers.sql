@@ -154,8 +154,7 @@ begin
       v_last_topic = v_topic;
       perform pg_notify(v_topic, json_build_object(
         'event', v_event,
-        'subject', v_sub,
-        'id', v_record.id
+        'subject', v_sub
       )::text);
     end if;
   end loop;

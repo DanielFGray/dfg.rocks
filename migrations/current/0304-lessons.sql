@@ -18,13 +18,6 @@ alter table app_public.lessons enable row level security;
 create index lessons_student_scheduled on app_public.lessons(student_id, scheduled_at);
 create index lessons_scheduled_at on app_public.lessons(scheduled_at);
 
-create policy select_own on app_public.lessons for select
-  using (
-    app_public.current_user_role() = 'admin'
-    or student_id = app_public.current_user_id()
-    or student_id in (select app_public.current_user_family_member_ids())
-  );
-
 grant select on app_public.lessons to :DATABASE_VISITOR;
 
 comment on table app_public.lessons is 'Scheduled lessons. Google Calendar is the source of truth; scheduled_at is cached for queries.';

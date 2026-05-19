@@ -15,21 +15,6 @@ alter table app_public.messages
 
 alter table app_public.messages enable row level security;
 
-create policy select_own on app_public.messages for select
-  using (
-    app_public.current_user_role() = 'admin'
-    or sender_id = app_public.current_user_id()
-    or recipient_id = app_public.current_user_id()
-    or sender_id in (select app_public.current_user_family_member_ids())
-    or recipient_id in (select app_public.current_user_family_member_ids())
-  );
-
-create policy insert_sender on app_public.messages for insert
-  with check (sender_id = app_public.current_user_id());
-
-create policy update_recipient on app_public.messages for update
-  using (recipient_id = app_public.current_user_id());
-
 grant select,
   insert (sender_id, recipient_id, body),
   update (is_read) on app_public.messages to :DATABASE_VISITOR;

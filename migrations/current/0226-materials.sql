@@ -11,3 +11,6 @@ create table app_public.materials (
 );
 
 comment on table app_public.materials is 'Uploaded files/resources (PDFs, audio, etc). Can be global or course-specific.';
+
+alter table app_public.materials enable row level security;
+grant select on app_public.materials to :DATABASE_VISITOR;

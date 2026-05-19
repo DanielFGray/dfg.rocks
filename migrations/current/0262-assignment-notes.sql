@@ -11,19 +11,6 @@ create unique index assignment_notes_student_material on app_public.assignment_n
 
 alter table app_public.assignment_notes enable row level security;
 
-create policy select_own on app_public.assignment_notes for select
-  using (
-    app_public.current_user_role() = 'admin'
-    or student_id = app_public.current_user_id()
-    or student_id in (select app_public.current_user_family_member_ids())
-  );
-
-create policy insert_own on app_public.assignment_notes for insert
-  with check (student_id = app_public.current_user_id());
-
-create policy update_own on app_public.assignment_notes for update
-  using (student_id = app_public.current_user_id());
-
 grant select,
   insert (student_id, material_id, body),
   update (body) on app_public.assignment_notes to :DATABASE_VISITOR;

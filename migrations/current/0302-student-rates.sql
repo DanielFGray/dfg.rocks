@@ -21,13 +21,6 @@ grant select on app_public.student_rates to :DATABASE_VISITOR;
 alter table app_public.student_rates
   add constraint student_rates_rate_positive check (rate_cents > 0);
 
-create policy select_own on app_public.student_rates for select
-  using (
-    app_public.current_user_role() = 'admin'
-    or student_id = app_public.current_user_id()
-    or student_id in (select app_public.current_user_family_member_ids())
-  );
-
 comment on table app_public.student_rates is 'Per-student lesson pricing. Rate varies by location type, travel distance, commitment level.';
 comment on column app_public.student_rates.rate_cents is 'Lesson price in cents.';
 comment on column app_public.student_rates.lesson_duration_minutes is 'Standard lesson length: 30 or 60 minutes.';
