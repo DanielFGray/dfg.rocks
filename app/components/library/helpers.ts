@@ -1,6 +1,14 @@
-export type FileCategory = "pdf" | "image" | "audio" | "video" | "other";
+export type FileCategory = "pdf" | "image" | "audio" | "video" | "notation" | "other";
 
-export const categorize = (mime: string): FileCategory => {
+const NOTATION_EXTENSIONS = new Set([".gp", ".gp3", ".gp4", ".gp5", ".gpx", ".musicxml", ".mxl"]);
+
+export function isNotation(filename: string): boolean {
+  const ext = filename.slice(filename.lastIndexOf(".")).toLowerCase();
+  return NOTATION_EXTENSIONS.has(ext);
+}
+
+export const categorize = (mime: string, filename?: string): FileCategory => {
+  if (filename && isNotation(filename)) return "notation";
   if (mime === "application/pdf") return "pdf";
   if (mime.startsWith("image/")) return "image";
   if (mime.startsWith("audio/")) return "audio";
@@ -13,15 +21,17 @@ export const categoryLabel: Record<FileCategory, string> = {
   image: "Image",
   audio: "Audio",
   video: "Video",
+  notation: "Notation",
   other: "File",
 };
 
 export const categoryColor: Record<FileCategory, string> = {
-  pdf: "bg-red-500/15 text-red-400",
-  image: "bg-emerald-500/15 text-emerald-400",
-  audio: "bg-violet-500/15 text-violet-400",
-  video: "bg-blue-500/15 text-blue-400",
-  other: "bg-white/10 text-muted",
+  pdf: "bg-red-500/15 text-red-600 dark:text-red-400",
+  image: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400",
+  audio: "bg-violet-500/15 text-violet-600 dark:text-violet-400",
+  video: "bg-blue-500/15 text-blue-600 dark:text-blue-400",
+  notation: "bg-amber-500/15 text-amber-600 dark:text-amber-400",
+  other: "bg-overlay/10 dark:bg-overlay-dark/10 text-muted dark:text-muted-dark",
 };
 
 export const formatSize = (bytes: number) =>

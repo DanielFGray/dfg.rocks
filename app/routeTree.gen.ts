@@ -30,8 +30,12 @@ import { Route as AuthedBookLessonRouteImport } from './routes/_authed/book-less
 import { Route as AuthedAssignmentsRouteImport } from './routes/_authed/assignments'
 import { Route as AuthedAssignmentNotesRouteImport } from './routes/_authed/assignment-notes'
 import { Route as AuthedStudentsIndexRouteImport } from './routes/_authed/students.index'
+import { Route as AuthedCoursesIndexRouteImport } from './routes/_authed/courses.index'
+import { Route as AuthedAssignmentsIndexRouteImport } from './routes/_authed/assignments.index'
 import { Route as AuthedStudentsIdRouteImport } from './routes/_authed/students.$id'
 import { Route as AuthedCoursesIdRouteImport } from './routes/_authed/courses.$id'
+import { Route as AuthedAssignmentsMaterialIdRouteImport } from './routes/_authed/assignments.$materialId'
+import { Route as AuthedCoursesCourseIdModulesModuleIdEditRouteImport } from './routes/_authed/courses.$courseId.modules.$moduleId.edit'
 
 const VerifyEmailRoute = VerifyEmailRouteImport.update({
   id: '/verify-email',
@@ -137,6 +141,16 @@ const AuthedStudentsIndexRoute = AuthedStudentsIndexRouteImport.update({
   path: '/students/',
   getParentRoute: () => AuthedRoute,
 } as any)
+const AuthedCoursesIndexRoute = AuthedCoursesIndexRouteImport.update({
+  id: '/courses/',
+  path: '/courses/',
+  getParentRoute: () => AuthedRoute,
+} as any)
+const AuthedAssignmentsIndexRoute = AuthedAssignmentsIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AuthedAssignmentsRoute,
+} as any)
 const AuthedStudentsIdRoute = AuthedStudentsIdRouteImport.update({
   id: '/students/$id',
   path: '/students/$id',
@@ -147,6 +161,18 @@ const AuthedCoursesIdRoute = AuthedCoursesIdRouteImport.update({
   path: '/courses/$id',
   getParentRoute: () => AuthedRoute,
 } as any)
+const AuthedAssignmentsMaterialIdRoute =
+  AuthedAssignmentsMaterialIdRouteImport.update({
+    id: '/$materialId',
+    path: '/$materialId',
+    getParentRoute: () => AuthedAssignmentsRoute,
+  } as any)
+const AuthedCoursesCourseIdModulesModuleIdEditRoute =
+  AuthedCoursesCourseIdModulesModuleIdEditRouteImport.update({
+    id: '/courses/$courseId/modules/$moduleId/edit',
+    path: '/courses/$courseId/modules/$moduleId/edit',
+    getParentRoute: () => AuthedRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -158,7 +184,7 @@ export interface FileRoutesByFullPath {
   '/reset-password': typeof ResetPasswordRoute
   '/verify-email': typeof VerifyEmailRoute
   '/assignment-notes': typeof AuthedAssignmentNotesRoute
-  '/assignments': typeof AuthedAssignmentsRoute
+  '/assignments': typeof AuthedAssignmentsRouteWithChildren
   '/book-lesson': typeof AuthedBookLessonRoute
   '/dashboard': typeof AuthedDashboardRoute
   '/lessons': typeof AuthedLessonsRoute
@@ -168,9 +194,13 @@ export interface FileRoutesByFullPath {
   '/settings': typeof AuthedSettingsRoute
   '/submissions': typeof AuthedSubmissionsRoute
   '/api/$': typeof ApiSplatRoute
+  '/assignments/$materialId': typeof AuthedAssignmentsMaterialIdRoute
   '/courses/$id': typeof AuthedCoursesIdRoute
   '/students/$id': typeof AuthedStudentsIdRoute
+  '/assignments/': typeof AuthedAssignmentsIndexRoute
+  '/courses/': typeof AuthedCoursesIndexRoute
   '/students/': typeof AuthedStudentsIndexRoute
+  '/courses/$courseId/modules/$moduleId/edit': typeof AuthedCoursesCourseIdModulesModuleIdEditRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -182,7 +212,6 @@ export interface FileRoutesByTo {
   '/reset-password': typeof ResetPasswordRoute
   '/verify-email': typeof VerifyEmailRoute
   '/assignment-notes': typeof AuthedAssignmentNotesRoute
-  '/assignments': typeof AuthedAssignmentsRoute
   '/book-lesson': typeof AuthedBookLessonRoute
   '/dashboard': typeof AuthedDashboardRoute
   '/lessons': typeof AuthedLessonsRoute
@@ -192,9 +221,13 @@ export interface FileRoutesByTo {
   '/settings': typeof AuthedSettingsRoute
   '/submissions': typeof AuthedSubmissionsRoute
   '/api/$': typeof ApiSplatRoute
+  '/assignments/$materialId': typeof AuthedAssignmentsMaterialIdRoute
   '/courses/$id': typeof AuthedCoursesIdRoute
   '/students/$id': typeof AuthedStudentsIdRoute
+  '/assignments': typeof AuthedAssignmentsIndexRoute
+  '/courses': typeof AuthedCoursesIndexRoute
   '/students': typeof AuthedStudentsIndexRoute
+  '/courses/$courseId/modules/$moduleId/edit': typeof AuthedCoursesCourseIdModulesModuleIdEditRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -208,7 +241,7 @@ export interface FileRoutesById {
   '/reset-password': typeof ResetPasswordRoute
   '/verify-email': typeof VerifyEmailRoute
   '/_authed/assignment-notes': typeof AuthedAssignmentNotesRoute
-  '/_authed/assignments': typeof AuthedAssignmentsRoute
+  '/_authed/assignments': typeof AuthedAssignmentsRouteWithChildren
   '/_authed/book-lesson': typeof AuthedBookLessonRoute
   '/_authed/dashboard': typeof AuthedDashboardRoute
   '/_authed/lessons': typeof AuthedLessonsRoute
@@ -218,9 +251,13 @@ export interface FileRoutesById {
   '/_authed/settings': typeof AuthedSettingsRoute
   '/_authed/submissions': typeof AuthedSubmissionsRoute
   '/api/$': typeof ApiSplatRoute
+  '/_authed/assignments/$materialId': typeof AuthedAssignmentsMaterialIdRoute
   '/_authed/courses/$id': typeof AuthedCoursesIdRoute
   '/_authed/students/$id': typeof AuthedStudentsIdRoute
+  '/_authed/assignments/': typeof AuthedAssignmentsIndexRoute
+  '/_authed/courses/': typeof AuthedCoursesIndexRoute
   '/_authed/students/': typeof AuthedStudentsIndexRoute
+  '/_authed/courses/$courseId/modules/$moduleId/edit': typeof AuthedCoursesCourseIdModulesModuleIdEditRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -244,9 +281,13 @@ export interface FileRouteTypes {
     | '/settings'
     | '/submissions'
     | '/api/$'
+    | '/assignments/$materialId'
     | '/courses/$id'
     | '/students/$id'
+    | '/assignments/'
+    | '/courses/'
     | '/students/'
+    | '/courses/$courseId/modules/$moduleId/edit'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -258,7 +299,6 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/verify-email'
     | '/assignment-notes'
-    | '/assignments'
     | '/book-lesson'
     | '/dashboard'
     | '/lessons'
@@ -268,9 +308,13 @@ export interface FileRouteTypes {
     | '/settings'
     | '/submissions'
     | '/api/$'
+    | '/assignments/$materialId'
     | '/courses/$id'
     | '/students/$id'
+    | '/assignments'
+    | '/courses'
     | '/students'
+    | '/courses/$courseId/modules/$moduleId/edit'
   id:
     | '__root__'
     | '/'
@@ -293,9 +337,13 @@ export interface FileRouteTypes {
     | '/_authed/settings'
     | '/_authed/submissions'
     | '/api/$'
+    | '/_authed/assignments/$materialId'
     | '/_authed/courses/$id'
     | '/_authed/students/$id'
+    | '/_authed/assignments/'
+    | '/_authed/courses/'
     | '/_authed/students/'
+    | '/_authed/courses/$courseId/modules/$moduleId/edit'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -460,6 +508,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedStudentsIndexRouteImport
       parentRoute: typeof AuthedRoute
     }
+    '/_authed/courses/': {
+      id: '/_authed/courses/'
+      path: '/courses'
+      fullPath: '/courses/'
+      preLoaderRoute: typeof AuthedCoursesIndexRouteImport
+      parentRoute: typeof AuthedRoute
+    }
+    '/_authed/assignments/': {
+      id: '/_authed/assignments/'
+      path: '/'
+      fullPath: '/assignments/'
+      preLoaderRoute: typeof AuthedAssignmentsIndexRouteImport
+      parentRoute: typeof AuthedAssignmentsRoute
+    }
     '/_authed/students/$id': {
       id: '/_authed/students/$id'
       path: '/students/$id'
@@ -474,12 +536,39 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedCoursesIdRouteImport
       parentRoute: typeof AuthedRoute
     }
+    '/_authed/assignments/$materialId': {
+      id: '/_authed/assignments/$materialId'
+      path: '/$materialId'
+      fullPath: '/assignments/$materialId'
+      preLoaderRoute: typeof AuthedAssignmentsMaterialIdRouteImport
+      parentRoute: typeof AuthedAssignmentsRoute
+    }
+    '/_authed/courses/$courseId/modules/$moduleId/edit': {
+      id: '/_authed/courses/$courseId/modules/$moduleId/edit'
+      path: '/courses/$courseId/modules/$moduleId/edit'
+      fullPath: '/courses/$courseId/modules/$moduleId/edit'
+      preLoaderRoute: typeof AuthedCoursesCourseIdModulesModuleIdEditRouteImport
+      parentRoute: typeof AuthedRoute
+    }
   }
 }
 
+interface AuthedAssignmentsRouteChildren {
+  AuthedAssignmentsMaterialIdRoute: typeof AuthedAssignmentsMaterialIdRoute
+  AuthedAssignmentsIndexRoute: typeof AuthedAssignmentsIndexRoute
+}
+
+const AuthedAssignmentsRouteChildren: AuthedAssignmentsRouteChildren = {
+  AuthedAssignmentsMaterialIdRoute: AuthedAssignmentsMaterialIdRoute,
+  AuthedAssignmentsIndexRoute: AuthedAssignmentsIndexRoute,
+}
+
+const AuthedAssignmentsRouteWithChildren =
+  AuthedAssignmentsRoute._addFileChildren(AuthedAssignmentsRouteChildren)
+
 interface AuthedRouteChildren {
   AuthedAssignmentNotesRoute: typeof AuthedAssignmentNotesRoute
-  AuthedAssignmentsRoute: typeof AuthedAssignmentsRoute
+  AuthedAssignmentsRoute: typeof AuthedAssignmentsRouteWithChildren
   AuthedBookLessonRoute: typeof AuthedBookLessonRoute
   AuthedDashboardRoute: typeof AuthedDashboardRoute
   AuthedLessonsRoute: typeof AuthedLessonsRoute
@@ -490,12 +579,14 @@ interface AuthedRouteChildren {
   AuthedSubmissionsRoute: typeof AuthedSubmissionsRoute
   AuthedCoursesIdRoute: typeof AuthedCoursesIdRoute
   AuthedStudentsIdRoute: typeof AuthedStudentsIdRoute
+  AuthedCoursesIndexRoute: typeof AuthedCoursesIndexRoute
   AuthedStudentsIndexRoute: typeof AuthedStudentsIndexRoute
+  AuthedCoursesCourseIdModulesModuleIdEditRoute: typeof AuthedCoursesCourseIdModulesModuleIdEditRoute
 }
 
 const AuthedRouteChildren: AuthedRouteChildren = {
   AuthedAssignmentNotesRoute: AuthedAssignmentNotesRoute,
-  AuthedAssignmentsRoute: AuthedAssignmentsRoute,
+  AuthedAssignmentsRoute: AuthedAssignmentsRouteWithChildren,
   AuthedBookLessonRoute: AuthedBookLessonRoute,
   AuthedDashboardRoute: AuthedDashboardRoute,
   AuthedLessonsRoute: AuthedLessonsRoute,
@@ -506,7 +597,10 @@ const AuthedRouteChildren: AuthedRouteChildren = {
   AuthedSubmissionsRoute: AuthedSubmissionsRoute,
   AuthedCoursesIdRoute: AuthedCoursesIdRoute,
   AuthedStudentsIdRoute: AuthedStudentsIdRoute,
+  AuthedCoursesIndexRoute: AuthedCoursesIndexRoute,
   AuthedStudentsIndexRoute: AuthedStudentsIndexRoute,
+  AuthedCoursesCourseIdModulesModuleIdEditRoute:
+    AuthedCoursesCourseIdModulesModuleIdEditRoute,
 }
 
 const AuthedRouteWithChildren =

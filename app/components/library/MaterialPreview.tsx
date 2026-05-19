@@ -1,34 +1,55 @@
+import { lazy, Suspense } from "react";
 import type { Material } from "../../lib/types.js";
 import { categorize, downloadUrl } from "./helpers.js";
+import type { AlphaTabPlayerProps } from "../alphatab/AlphaTabPlayer.js";
 
-export const MaterialPreview = ({ material }: { material: Material }) => {
-  const cat = categorize(material.mime_type);
+const AlphaTabPlayer = lazy(() =>
+  import("../alphatab/AlphaTabPlayer.js").then((m) => ({
+    default: m.AlphaTabPlayer,
+  })),
+);
+
+const card =
+  "rounded-lg overflow-hidden bg-overlay/5 dark:bg-overlay-dark/5 border border-overlay/6 dark:border-overlay-dark/6";
+
+export const MaterialPreview = ({
+  material,
+  embedded,
+  notationPlayerProps,
+}: {
+  material: Material;
+  embedded?: boolean;
+  notationPlayerProps?: Omit<AlphaTabPlayerProps, "src">;
+}) => {
+  const cat = categorize(material.mime_type, material.original_filename);
   const src = downloadUrl(material.id);
 
   switch (cat) {
     case "pdf":
       return (
-        <div className="rounded-lg overflow-hidden bg-white/5 border border-white/[0.06]">
-          <iframe
-            src={src}
-            className="w-full h-[70vh] min-h-[400px]"
-            title={material.title}
-          />
+        <div className={embedded ? "overflow-hidden" : card}>
+          <iframe src={src} className="h-[70vh] min-h-[400px] w-full" title={material.title} />
         </div>
       );
     case "image":
       return (
-        <div className="rounded-lg overflow-hidden bg-white/5 border border-white/[0.06] flex items-center justify-center p-4">
+        <div
+          className={
+            embedded
+              ? "flex items-center justify-center"
+              : `${card} p-4 flex items-center justify-center`
+          }
+        >
           <img
             src={src}
             alt={material.title}
-            className="max-w-full max-h-[70vh] object-contain rounded"
+            className="rounded-sm max-h-[70vh] max-w-full object-contain"
           />
         </div>
       );
     case "audio":
       return (
-        <div className="rounded-lg bg-white/5 border border-white/[0.06] p-4">
+        <div className={embedded ? "" : `${card} p-4`}>
           <audio controls preload="metadata" className="w-full">
             <source src={src} type={material.mime_type} />
           </audio>
@@ -36,20 +57,34 @@ export const MaterialPreview = ({ material }: { material: Material }) => {
       );
     case "video":
       return (
-        <div className="rounded-lg overflow-hidden bg-white/5 border border-white/[0.06]">
-          <video controls preload="metadata" className="w-full max-h-[70vh]">
+        <div className={embedded ? "overflow-hidden" : card}>
+          <video controls preload="metadata" className="max-h-[70vh] w-full">
             <source src={src} type={material.mime_type} />
           </video>
         </div>
       );
+    case "notation":
+      return (
+        <Suspense
+          fallback={
+            <div className="p-6 text-sm text-muted dark:text-muted-dark text-center">
+              Loading...
+            </div>
+          }
+        >
+          <AlphaTabPlayer src={src} {...notationPlayerProps} />
+        </Suspense>
+      );
     default:
       return (
-        <div className="rounded-lg bg-white/5 border border-white/[0.06] p-6 text-center">
-          <p className="text-muted text-sm">Preview not available for this file type.</p>
+        <div className={embedded ? "text-center" : `${card} p-6 text-center`}>
+          <p className="text-sm text-muted dark:text-muted-dark">
+            Preview not available for this file type.
+          </p>
           <a
             href={src}
             download
-            className="inline-block mt-3 text-sm text-accent hover:text-accent-hover transition-colors"
+            className="mt-3 text-sm text-accent hover:text-accent-hover inline-block transition-colors"
           >
             Download file
           </a>
