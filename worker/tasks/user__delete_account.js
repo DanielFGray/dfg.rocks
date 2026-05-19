@@ -15,10 +15,7 @@ export default async (inPayload, { addJob, withPgClient }) => {
   const {
     rows: [user],
   } = await withPgClient((pgClient) =>
-    pgClient.query(
-      `select users.* from app_public.users where id = $1`,
-      [userId],
-    ),
+    pgClient.query(`select users.* from app_public.users where id = $1`, [userId]),
   );
   if (!user) {
     console.error("User not found; aborting");

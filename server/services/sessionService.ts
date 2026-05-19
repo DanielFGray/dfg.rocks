@@ -1,5 +1,6 @@
 import crypto from "crypto";
 import type { UserRole } from "../../shared/schemas.js";
+import { parseWith, UserRoleSchema } from "../../shared/validation.js";
 import { rootDb } from "../db.js";
 import { valkey } from "../valkey.js";
 
@@ -97,7 +98,7 @@ export const sessionService = {
         id: data.user_id!,
         username: data.username!,
         name: data.name ?? "",
-        role: data.role! as UserRole,
+        role: parseWith(UserRoleSchema, data.role),
       },
       session: {
         id: data.session_uuid!,
@@ -112,10 +113,7 @@ export const sessionService = {
     const sessionUuid = await valkey.hget(key, "session_uuid");
     await valkey.del(key);
     if (sessionUuid) {
-      await rootDb
-        .deleteFrom("app_private.sessions")
-        .where("id", "=", sessionUuid)
-        .execute();
+      await rootDb.deleteFrom("app_private.sessions").where("id", "=", sessionUuid).execute();
     }
   },
 

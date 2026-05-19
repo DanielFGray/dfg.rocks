@@ -2,12 +2,12 @@ import { useEffect } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation } from "@tanstack/react-query";
 import { api } from "../lib/api.js";
+import { getErrorMessage } from "../lib/errors.js";
+import { TokenSearch, parseWith } from "../../shared/validation.js";
 
 export const Route = createFileRoute("/verify-email")({
   head: () => ({ meta: [{ title: "Verify Email | DFG Portal" }] }),
-  validateSearch: (search: Record<string, unknown>) => ({
-    token: (search.token as string) ?? "",
-  }),
+  validateSearch: (search: Record<string, unknown>) => parseWith(TokenSearch, search),
   component: VerifyEmailPage,
 });
 
@@ -16,6 +16,7 @@ function VerifyEmailPage() {
 
   const verify = useMutation({
     mutationFn: async () => {
+      if (!token) throw new Error("Missing verification token");
       const { error } = await api["verify-email"].post({ token });
       if (error) throw error;
     },
@@ -32,22 +33,40 @@ function VerifyEmailPage() {
     return (
       <main className="flex min-h-screen items-center justify-center px-4">
         <div className="text-center">
-          <h1 className="mb-4 text-2xl font-bold text-primary">Invalid Link</h1>
-          <p className="mb-6 text-sm text-muted">This verification link is missing a token.</p>
-          <Link to="/login" className="text-sm text-accent hover:underline">Back to login</Link>
+          <h1 className="mb-4 text-2xl font-bold text-primary dark:text-primary-dark">
+            Invalid Link
+          </h1>
+          <p className="mb-6 text-sm text-muted dark:text-muted-dark">
+            This verification link is missing a token.
+          </p>
+          <Link
+            to="/login"
+            search={{ redirect: undefined }}
+            className="text-sm text-accent hover:underline"
+          >
+            Back to login
+          </Link>
         </div>
       </main>
     );
   }
 
   if (verify.isError) {
-    const message = (verify.error as any)?.value?.error ?? verify.error.message;
+    const message = getErrorMessage(verify.error, "Verification failed");
     return (
       <main className="flex min-h-screen items-center justify-center px-4">
         <div className="text-center">
-          <h1 className="mb-4 text-2xl font-bold text-primary">Verification Failed</h1>
-          <p className="mb-6 text-sm text-muted">{message}</p>
-          <Link to="/login" className="text-sm text-accent hover:underline">Back to login</Link>
+          <h1 className="mb-4 text-2xl font-bold text-primary dark:text-primary-dark">
+            Verification Failed
+          </h1>
+          <p className="mb-6 text-sm text-muted dark:text-muted-dark">{message}</p>
+          <Link
+            to="/login"
+            search={{ redirect: undefined }}
+            className="text-sm text-accent hover:underline"
+          >
+            Back to login
+          </Link>
         </div>
       </main>
     );
@@ -57,9 +76,15 @@ function VerifyEmailPage() {
     return (
       <main className="flex min-h-screen items-center justify-center px-4">
         <div className="text-center">
-          <h1 className="mb-4 text-2xl font-bold text-primary">Email Verified</h1>
-          <p className="mb-6 text-sm text-muted">Your email has been verified successfully.</p>
-          <Link to="/dashboard" className="text-sm text-accent hover:underline">Go to dashboard</Link>
+          <h1 className="mb-4 text-2xl font-bold text-primary dark:text-primary-dark">
+            Email Verified
+          </h1>
+          <p className="mb-6 text-sm text-muted dark:text-muted-dark">
+            Your email has been verified successfully.
+          </p>
+          <Link to="/dashboard" className="text-sm text-accent hover:underline">
+            Go to dashboard
+          </Link>
         </div>
       </main>
     );
@@ -68,7 +93,7 @@ function VerifyEmailPage() {
   return (
     <main className="flex min-h-screen items-center justify-center px-4">
       <div className="text-center">
-        <p className="text-sm text-muted">Verifying your email...</p>
+        <p className="text-sm text-muted dark:text-muted-dark">Verifying your email...</p>
       </div>
     </main>
   );

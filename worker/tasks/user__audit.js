@@ -30,10 +30,7 @@ export default async (inPayload, { addJob, withPgClient }) => {
   const {
     rows: [user],
   } = await withPgClient((pgClient) =>
-    pgClient.query(
-      `select id, email, name from app_public.users where id = $1`,
-      [userId],
-    ),
+    pgClient.query(`select id, email, name from app_public.users where id = $1`, [userId]),
   );
   if (!user) {
     console.error("User not found for audit notification; aborting");

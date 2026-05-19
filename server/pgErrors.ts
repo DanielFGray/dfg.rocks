@@ -23,7 +23,8 @@ const pg_errcodes: Record<string, (msg: string) => HttpError> = {
   /** Password too weak (< 8 chars) */
   WEAKP: (msg) => new HttpError(400, msg || "Password is too weak (minimum 8 characters)"),
   /** Cannot delete -- user is a family parent */
-  OWNER: (msg) => new HttpError(400, msg || "Cannot delete account while you are a parent in a family"),
+  OWNER: (msg) =>
+    new HttpError(400, msg || "Cannot delete account while you are a parent in a family"),
   /** Not found */
   NTFND: (msg) => new HttpError(404, msg || "Not found"),
   /** Denied -- business rule violation */
@@ -37,17 +38,16 @@ const pg_errcodes: Record<string, (msg: string) => HttpError> = {
  * otherwise rethrow the original error.
  */
 export function mapPgError(err: unknown): never {
-  if (
-    typeof err === "object" &&
-    err !== null &&
-    "code" in err &&
-    typeof (err as DatabaseError).code === "string"
-  ) {
-    const cause = err as DatabaseError;
-    const code = cause.code!;
+  if (typeof err === "object" && err !== null) {
+    const cause = err as { code?: unknown; message?: unknown };
+    if (typeof cause.code !== "string") {
+      throw err;
+    }
+
+    const code = cause.code;
     const factory = pg_errcodes[code];
     if (factory) {
-      throw factory(cause.message ?? "");
+      throw factory(typeof cause.message === "string" ? cause.message : "");
     }
   }
   throw err;

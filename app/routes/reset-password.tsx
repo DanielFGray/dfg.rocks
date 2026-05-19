@@ -3,8 +3,11 @@ import { useMutation } from "@tanstack/react-query";
 import { useForm } from "@tanstack/react-form";
 import * as v from "valibot";
 import { api } from "../lib/api.js";
+import { getErrorMessage } from "../lib/errors.js";
+import { fieldError } from "../lib/form.js";
 import { Button } from "../components/ui/Button.js";
 import { Input } from "../components/ui/Input.js";
+import { TokenSearch, parseWith } from "../../shared/validation.js";
 
 const passwordValidator = {
   onChange: v.pipe(v.string(), v.minLength(6, "Must be at least 6 characters")),
@@ -12,9 +15,7 @@ const passwordValidator = {
 
 export const Route = createFileRoute("/reset-password")({
   head: () => ({ meta: [{ title: "Reset Password | DFG Portal" }] }),
-  validateSearch: (search: Record<string, unknown>) => ({
-    token: (search.token as string) ?? "",
-  }),
+  validateSearch: (search: Record<string, unknown>) => parseWith(TokenSearch, search),
   component: ResetPasswordPage,
 });
 
@@ -24,11 +25,12 @@ function ResetPasswordPage() {
 
   const reset = useMutation({
     mutationFn: async (password: string) => {
+      if (!token) throw new Error("Missing reset token");
       const { error } = await api["reset-password"].post({ token, password });
       if (error) throw error;
     },
     onSuccess: () => {
-      navigate({ to: "/login" });
+      navigate({ to: "/login", search: { redirect: undefined } });
     },
   });
 
@@ -44,10 +46,14 @@ function ResetPasswordPage() {
       <main className="flex min-h-screen items-center justify-center px-4">
         <div className="w-full max-w-sm text-center">
           <h1 className="mb-4 text-3xl font-bold tracking-tight">Invalid Link</h1>
-          <p className="text-sm text-muted">
+          <p className="text-sm text-muted dark:text-muted-dark">
             This link is missing a token. Please use the link from your reset email.
           </p>
-          <Link to="/login" className="mt-6 inline-block text-sm text-accent hover:underline">
+          <Link
+            to="/login"
+            search={{ redirect: undefined }}
+            className="mt-6 inline-block text-sm text-accent hover:underline"
+          >
             Back to Log In
           </Link>
         </div>
@@ -55,23 +61,30 @@ function ResetPasswordPage() {
     );
   }
 
-  const serverError = reset.isError
-    ? ((reset.error as any)?.value?.error ?? reset.error.message)
-    : null;
+  const serverError = reset.isError ? getErrorMessage(reset.error, "Password reset failed") : null;
 
   return (
-    <main data-pwid="reset-password-page" className="flex min-h-screen items-center justify-center px-4">
+    <main
+      data-testid="reset-password-page"
+      className="flex min-h-screen items-center justify-center px-4"
+    >
       <div className="w-full max-w-sm">
         <div className="mb-8 text-center">
           <h1 className="text-3xl font-bold tracking-tight">Reset Password</h1>
-          <p className="mt-2 text-sm text-muted">Enter your new password</p>
+          <p className="mt-2 text-sm text-muted dark:text-muted-dark">Enter your new password</p>
         </div>
-        <form onSubmit={(e) => { e.preventDefault(); form.handleSubmit(); }} className="flex flex-col gap-5">
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            form.handleSubmit();
+          }}
+          className="flex flex-col gap-5"
+        >
           {serverError ? (
             <div
-              data-pwid="reset-password-error"
+              data-testid="reset-password-error"
               role="alert"
-              className="mb-6 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-400"
+              className="mb-6 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-600 dark:text-red-400"
             >
               {serverError}
             </div>
@@ -83,11 +96,11 @@ function ResetPasswordPage() {
                 name="password"
                 label="New Password"
                 type="password"
-                data-pwid="reset-password-input"
+                data-testid="reset-password-input"
                 value={field.state.value}
                 onChange={(v) => field.handleChange(v)}
                 onBlur={() => field.handleBlur()}
-                error={field.state.meta.errors[0] as string | undefined}
+                error={fieldError(field.state.meta.errors)}
               />
             )}
           </form.Field>
@@ -107,11 +120,11 @@ function ResetPasswordPage() {
                 name="confirm"
                 label="Confirm New Password"
                 type="password"
-                data-pwid="reset-password-confirm"
+                data-testid="reset-password-confirm"
                 value={field.state.value}
                 onChange={(v) => field.handleChange(v)}
                 onBlur={() => field.handleBlur()}
-                error={field.state.meta.errors[0] as string | undefined}
+                error={fieldError(field.state.meta.errors)}
               />
             )}
           </form.Field>
@@ -121,7 +134,7 @@ function ResetPasswordPage() {
                 type="submit"
                 variant="primary"
                 className="mt-2 w-full"
-                data-pwid="reset-password-submit"
+                data-testid="reset-password-submit"
                 disabled={!canSubmit || reset.isPending}
               >
                 {reset.isPending ? "Resetting..." : "Reset Password"}

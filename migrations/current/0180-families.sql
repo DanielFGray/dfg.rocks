@@ -7,6 +7,7 @@ drop function if exists app_public.families_current_user_is_owner(app_public.fam
 drop function if exists app_public.accept_invitation_to_family(uuid, text) cascade;
 drop function if exists app_public.get_family_for_invitation(uuid, text) cascade;
 drop function if exists app_public.family_for_invitation(uuid, text) cascade;
+drop function if exists app_private.create_qr_invite(uuid) cascade;
 drop function if exists app_public.invite_user_to_family(uuid, uuid) cascade;
 drop function if exists app_public.invite_to_family(uuid, citext, citext) cascade;
 drop function if exists app_public.current_user_invited_family_ids() cascade;
@@ -53,8 +54,8 @@ create table app_public.family_invitations (
   code text,
   user_id uuid references app_public.users on delete cascade,
   email citext,
-  check ((user_id is null) <> (email is null)),
-  check ((code is null) = (email is null)),
+  expires_at timestamptz,
+  check (user_id is not null or email is not null or code is not null),
   unique (family_id, user_id),
   unique (family_id, email)
 );
@@ -148,6 +149,22 @@ begin
 end;
 $$ language plpgsql volatile security definer set search_path = pg_catalog, public, pg_temp;
 
+create function app_private.create_qr_invite(family_id uuid)
+  returns app_public.family_invitations as $$
+declare
+  v_invitation app_public.family_invitations;
+begin
+  insert into app_public.family_invitations(family_id, code, expires_at)
+    values (
+      create_qr_invite.family_id,
+      encode(gen_random_bytes(12), 'hex'),
+      now() + interval '24 hours'
+    )
+    returning * into v_invitation;
+  return v_invitation;
+end;
+$$ language plpgsql volatile security definer set search_path = pg_catalog, public, pg_temp;
+
 create function app_public.family_for_invitation(invitation_id uuid, code text = null)
   returns app_public.families as $$
 declare
@@ -162,6 +179,10 @@ begin
 
   if v_invitation is null then
     raise exception 'We could not find that invitation' using errcode = 'NTFND';
+  end if;
+
+  if v_invitation.expires_at is not null and v_invitation.expires_at < now() then
+    raise exception 'This invitation has expired' using errcode = 'DNIED';
   end if;
 
   if v_invitation.user_id is not null then

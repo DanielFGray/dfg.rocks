@@ -1,30 +1,21 @@
 import Elysia, { t } from "elysia";
 import { sql } from "kysely";
 import { rootDb } from "../db.js";
+import { env } from "../assertEnv.js";
 import { sessionService } from "../services/sessionService.js";
 import { authService } from "../services/authService.js";
 import { checkRateLimit } from "../services/rateLimiter.js";
 import { HttpError } from "../pgErrors.js";
-import type { UserRole } from "../../shared/schemas.js";
+import type { User } from "../../shared/schemas.js";
 
 // === Helpers ===
 
-type UserRow = {
-  readonly id: string;
-  readonly username: string;
-  readonly name: string;
-  readonly role: string;
-  readonly is_verified: boolean;
-};
+type UserRow = Readonly<Pick<User, "id" | "username" | "name" | "role" | "is_verified">>;
+type UserResponse = Pick<User, "id" | "username" | "name" | "email" | "role" | "is_verified">;
 
-type UserResponse = {
-  id: string;
-  username: string;
-  name: string;
-  email: string;
-  role: UserRole;
-  is_verified: boolean;
-};
+function getCookieString(value: unknown): string | undefined {
+  return typeof value === "string" ? value : undefined;
+}
 
 async function primaryEmailForUser(userId: string): Promise<string> {
   const row = await rootDb
@@ -46,7 +37,7 @@ function setSessionCookie(
     value: token,
     httpOnly: true,
     sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
+    secure: env.NODE_ENV === "production",
     path: "/",
     expires: expiresAt,
   });
@@ -76,7 +67,7 @@ async function sessionFromUser(
     username: user.username,
     name: user.name ?? "",
     email,
-    role: user.role as UserRole,
+    role: user.role,
     is_verified: user.is_verified,
   };
 }
@@ -103,96 +94,104 @@ export const authRoutes = new Elysia({ prefix: "/api" })
   })
 
   // --- Login ---
-  .post("/login", async ({ body, headers, cookie }) => {
-    csrfCheck(headers);
+  .post(
+    "/login",
+    async ({ body, headers, cookie }) => {
+      csrfCheck(headers);
 
-    const ip = headers["x-forwarded-for"] ?? "unknown";
-    checkRateLimit(`login:${ip}`, 10, 60_000);
+      const ip = headers["x-forwarded-for"] ?? "unknown";
+      checkRateLimit(`login:${ip}`, 10, 60_000);
 
-    const { id, password } = body;
-    const result = await authService.login({ id, password });
+      const { id, password } = body;
+      const result = await authService.login({ id, password });
 
-    setSessionCookie(cookie, result.token, result.expiresAt);
+      setSessionCookie(cookie, result.token, result.expiresAt);
 
-    const email = await primaryEmailForUser(result.user.id);
-    return {
-      id: result.user.id,
-      username: result.user.username,
-      name: result.user.name ?? "",
-      email,
-      role: result.user.role as UserRole,
-      is_verified: result.user.is_verified ?? false,
-    };
-  }, {
-    body: t.Object({
-      id: t.String(),
-      password: t.String(),
-    })
-  })
+      const email = await primaryEmailForUser(result.user.id);
+      return {
+        id: result.user.id,
+        username: result.user.username,
+        name: result.user.name ?? "",
+        email,
+        role: result.user.role,
+        is_verified: result.user.is_verified ?? false,
+      };
+    },
+    {
+      body: t.Object({
+        id: t.String(),
+        password: t.String(),
+      }),
+    },
+  )
 
   // --- Request magic link ---
-  .post("/magic-link", async ({ body, headers }) => {
-    csrfCheck(headers);
+  .post(
+    "/magic-link",
+    async ({ body, headers }) => {
+      csrfCheck(headers);
 
-    const ip = headers["x-forwarded-for"] ?? "unknown";
-    checkRateLimit(`magic-link:${ip}`, 5, 60_000);
+      const ip = headers["x-forwarded-for"] ?? "unknown";
+      checkRateLimit(`magic-link:${ip}`, 5, 60_000);
 
-    const { email } = body;
-    await sql`select app_private.generate_magic_link(${email}::citext)`.execute(
-      rootDb,
-    );
+      const { email } = body;
+      await sql`select app_private.generate_magic_link(${email}::citext)`.execute(rootDb);
 
-    return { success: true as const };
-  }, {
-    body: t.Object({
-      email: t.String(),
-    })
-  })
+      return { success: true as const };
+    },
+    {
+      body: t.Object({
+        email: t.String(),
+      }),
+    },
+  )
 
   // --- Verify magic link ---
-  .post("/magic-link/verify", async ({ body, headers, cookie }) => {
-    csrfCheck(headers);
+  .post(
+    "/magic-link/verify",
+    async ({ body, headers, cookie }) => {
+      csrfCheck(headers);
 
-    const { token } = body;
+      const { token } = body;
 
-    const user = await rootDb
-      .selectFrom(
-        sql<UserRow>`app_private.verify_magic_link(${token})`.as("u"),
-      )
-      .selectAll()
-      .executeTakeFirst();
+      const user = await rootDb
+        .selectFrom(sql<UserRow>`app_private.verify_magic_link(${token})`.as("u"))
+        .selectAll()
+        .executeTakeFirst();
 
-    if (!user) {
-      throw new HttpError(400, "Invalid or expired magic link");
-    }
+      if (!user) {
+        throw new HttpError(400, "Invalid or expired magic link");
+      }
 
-    // Magic link proves email ownership -- mark user + email as verified
-    await rootDb
-      .updateTable("app_public.user_emails")
-      .set({ is_verified: true })
-      .where("user_id", "=", user.id)
-      .where("is_verified", "=", false)
-      .execute();
+      // Magic link proves email ownership -- mark user + email as verified
+      await rootDb
+        .updateTable("app_public.user_emails")
+        .set({ is_verified: true })
+        .where("user_id", "=", user.id)
+        .where("is_verified", "=", false)
+        .execute();
 
-    await rootDb
-      .updateTable("app_public.users")
-      .set({ is_verified: true })
-      .where("id", "=", user.id)
-      .where("is_verified", "=", false)
-      .execute();
+      await rootDb
+        .updateTable("app_public.users")
+        .set({ is_verified: true })
+        .where("id", "=", user.id)
+        .where("is_verified", "=", false)
+        .execute();
 
-    return await sessionFromUser({ ...user, is_verified: true }, cookie);
-  }, {
-    body: t.Object({
-      token: t.String(),
-    })
-  })
+      return await sessionFromUser({ ...user, is_verified: true }, cookie);
+    },
+    {
+      body: t.Object({
+        token: t.String(),
+      }),
+    },
+  )
 
   // --- Logout ---
   .post("/logout", async ({ headers, cookie }) => {
     csrfCheck(headers);
 
-    const token = cookie.session?.value as string | undefined;
+    const token = getCookieString(cookie.session?.value);
     const cookieId = token ? cookieIdFromToken(token) : undefined;
     await authService.logout(cookieId);
     expireSessionCookie(cookie);
@@ -201,39 +200,47 @@ export const authRoutes = new Elysia({ prefix: "/api" })
   })
 
   // --- Forgot password ---
-  .post("/forgot-password", async ({ body, headers }) => {
-    csrfCheck(headers);
+  .post(
+    "/forgot-password",
+    async ({ body, headers }) => {
+      csrfCheck(headers);
 
-    const { email } = body;
-    await authService.forgotPassword({ email });
+      const { email } = body;
+      await authService.forgotPassword({ email });
 
-    return { success: true as const };
-  }, {
-    body: t.Object({
-      email: t.String(),
-    })
-  })
+      return { success: true as const };
+    },
+    {
+      body: t.Object({
+        email: t.String(),
+      }),
+    },
+  )
 
   // --- Reset password ---
-  .post("/reset-password", async ({ body, headers, cookie }) => {
-    csrfCheck(headers);
+  .post(
+    "/reset-password",
+    async ({ body, headers, cookie }) => {
+      csrfCheck(headers);
 
-    const { token, password } = body;
-    const result = await authService.resetPassword({ token, password });
+      const { token, password } = body;
+      const result = await authService.resetPassword({ token, password });
 
-    setSessionCookie(cookie, result.token, result.expiresAt);
+      setSessionCookie(cookie, result.token, result.expiresAt);
 
-    return { success: true as const };
-  }, {
-    body: t.Object({
-      token: t.String(),
-      password: t.String(),
-    })
-  })
+      return { success: true as const };
+    },
+    {
+      body: t.Object({
+        token: t.String(),
+        password: t.String(),
+      }),
+    },
+  )
 
   // --- Me (current user, nullable) ---
   .get("/me", async ({ cookie }) => {
-    const token = cookie.session?.value as string | undefined;
+    const token = getCookieString(cookie.session?.value);
     const session = await sessionService.validateSessionToken(token);
 
     if (!session) return { user: null };
@@ -245,11 +252,7 @@ export const authRoutes = new Elysia({ prefix: "/api" })
         eb
           .selectFrom("app_public.user_emails")
           .select("email")
-          .whereRef(
-            "app_public.user_emails.user_id",
-            "=",
-            "app_public.users.id",
-          )
+          .whereRef("app_public.user_emails.user_id", "=", "app_public.users.id")
           .where("is_primary", "=", true)
           .limit(1)
           .as("email"),
@@ -264,7 +267,7 @@ export const authRoutes = new Elysia({ prefix: "/api" })
             username: profile.username,
             name: profile.name ?? "",
             email: profile.email ?? "",
-            role: profile.role as UserRole,
+            role: profile.role,
             is_verified: profile.is_verified,
           }
         : null,
@@ -275,7 +278,7 @@ export const authRoutes = new Elysia({ prefix: "/api" })
   .post("/resend-verification", async ({ headers, cookie }) => {
     csrfCheck(headers);
 
-    const token = cookie.session?.value as string | undefined;
+    const token = getCookieString(cookie.session?.value);
     const session = await sessionService.validateSessionToken(token);
 
     if (!session) return { success: true as const };

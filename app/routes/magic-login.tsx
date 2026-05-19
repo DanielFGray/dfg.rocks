@@ -1,29 +1,40 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate, useRouter } from "@tanstack/react-router";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
 import { api } from "../lib/api.js";
+import { consumeLoginRedirect, normalizeLoginRedirect } from "../lib/loginRedirect.js";
+import { getErrorMessage } from "../lib/errors.js";
+import { resetAuthClientState } from "../lib/authClientState.js";
 
 export const Route = createFileRoute("/magic-login")({
   head: () => ({ meta: [{ title: "Magic Link Login | DFG Portal" }] }),
   validateSearch: (search: Record<string, unknown>) => ({
-    token: (search.token as string) ?? "",
+    token: typeof search.token === "string" ? search.token : undefined,
+    redirect: normalizeLoginRedirect(search.redirect),
   }),
   component: MagicLoginPage,
 });
 
 function MagicLoginPage() {
-  const { token } = Route.useSearch();
+  const { token, redirect } = Route.useSearch();
   const navigate = useNavigate();
+  const router = useRouter();
   const queryClient = useQueryClient();
 
   const verify = useMutation({
     mutationFn: async () => {
+      if (!token) throw new Error("Missing magic link token");
       const { data, error } = await api["magic-link"].verify.post({ token });
       if (error) throw error;
       return data;
     },
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["me"] });
+      await resetAuthClientState({ queryClient, router });
+      const nextRedirect = consumeLoginRedirect(redirect);
+      if (nextRedirect) {
+        window.location.assign(nextRedirect);
+        return;
+      }
       navigate({ to: "/dashboard" });
     },
   });
@@ -39,22 +50,40 @@ function MagicLoginPage() {
     return (
       <main className="flex min-h-screen items-center justify-center px-4">
         <div className="text-center">
-          <h1 className="mb-4 text-2xl font-bold text-primary">Invalid Link</h1>
-          <p className="mb-6 text-sm text-muted">This magic link is missing a token.</p>
-          <Link to="/login" className="text-sm text-accent hover:underline">Back to login</Link>
+          <h1 className="mb-4 text-2xl font-bold text-primary dark:text-primary-dark">
+            Invalid Link
+          </h1>
+          <p className="mb-6 text-sm text-muted dark:text-muted-dark">
+            This magic link is missing a token.
+          </p>
+          <Link
+            to="/login"
+            search={{ redirect }}
+            className="text-sm text-accent hover:underline"
+          >
+            Back to login
+          </Link>
         </div>
       </main>
     );
   }
 
   if (verify.isError) {
-    const message = (verify.error as any)?.value?.error ?? verify.error.message;
+    const message = getErrorMessage(verify.error, "Link expired");
     return (
       <main className="flex min-h-screen items-center justify-center px-4">
         <div className="text-center">
-          <h1 className="mb-4 text-2xl font-bold text-primary">Link Expired</h1>
-          <p className="mb-6 text-sm text-muted">{message}</p>
-          <Link to="/login" className="text-sm text-accent hover:underline">Back to login</Link>
+          <h1 className="mb-4 text-2xl font-bold text-primary dark:text-primary-dark">
+            Link Expired
+          </h1>
+          <p className="mb-6 text-sm text-muted dark:text-muted-dark">{message}</p>
+          <Link
+            to="/login"
+            search={{ redirect }}
+            className="text-sm text-accent hover:underline"
+          >
+            Back to login
+          </Link>
         </div>
       </main>
     );
@@ -63,7 +92,7 @@ function MagicLoginPage() {
   return (
     <main className="flex min-h-screen items-center justify-center px-4">
       <div className="text-center">
-        <p className="text-sm text-muted">Verifying magic link...</p>
+        <p className="text-sm text-muted dark:text-muted-dark">Verifying magic link...</p>
       </div>
     </main>
   );

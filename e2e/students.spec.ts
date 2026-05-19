@@ -1,4 +1,4 @@
-import { test, expect, getPw, loginViaUi } from "./helpers.js";
+import { test, expect, loginViaUi } from "./helpers.js";
 
 test.describe("students management", () => {
   test("admin sees students page with roster", async ({ page, testing }) => {
@@ -11,11 +11,9 @@ test.describe("students management", () => {
     });
 
     await loginViaUi(page, "test_admin", "testpassword123");
-    await getPw(page, "nav-students").click();
-    await expect(getPw(page, "students")).toBeVisible();
-    await expect(
-      page.getByRole("heading", { name: "Students" }),
-    ).toBeVisible();
+    await page.getByTestId("nav-students").click();
+    await expect(page.getByTestId("students")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Students" })).toBeVisible();
     await expect(page.getByText("Alice Student")).toBeVisible();
   });
 
@@ -25,18 +23,19 @@ test.describe("students management", () => {
     await testing.seedInvitation({ email: "bob@test.local" });
 
     await loginViaUi(page, "test_admin", "testpassword123");
-    await getPw(page, "nav-students").click();
-    await expect(getPw(page, "students")).toBeVisible();
+    await page.getByTestId("nav-students").click();
+    await expect(page.getByTestId("students")).toBeVisible();
 
-    await getPw(page, "invite-student").click();
-    const form = getPw(page, "invite-form");
+    await page.getByTestId("invite-student").click();
+    const form = page.getByTestId("invite-form");
     // Select the family and fill email
-    await form.locator('select[name="family_id"]').selectOption({ index: 0 });
-    await form.locator('input[name="email"]').fill("carol@test.local");
-    await form.locator('button[type="submit"]').click();
+    await form.getByRole("button", { name: /Family/ }).click();
+    await page.getByRole("option").first().click();
+    await form.getByLabel("Email").fill("carol@test.local");
+    await form.getByRole("button", { name: "Send Invite" }).click();
 
     // Modal closes, back to students page
-    await expect(getPw(page, "students")).toBeVisible();
+    await expect(page.getByTestId("students")).toBeVisible();
   });
 
   test("student name links to detail page", async ({ page, testing }) => {
@@ -49,12 +48,10 @@ test.describe("students management", () => {
     });
 
     await loginViaUi(page, "test_admin", "testpassword123");
-    await getPw(page, "nav-students").click();
-    await page.getByText("Carol Musician").first().click();
+    await page.getByTestId("nav-students").click();
+    await page.getByRole("link", { name: "Carol Musician" }).click();
 
-    await expect(getPw(page, "student-detail")).toBeVisible();
-    await expect(
-      page.getByRole("heading", { name: "Carol Musician" }),
-    ).toBeVisible();
+    await expect(page.getByTestId("student-detail")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Carol Musician" })).toBeVisible();
   });
 });

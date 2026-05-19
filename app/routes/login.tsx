@@ -1,20 +1,39 @@
-import { useState } from "react";
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
+import { createFileRoute, Link, useNavigate, useRouter } from "@tanstack/react-router";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "../lib/api.js";
+import { getErrorMessage } from "../lib/errors.js";
+import { resetAuthClientState } from "../lib/authClientState.js";
+import {
+  consumeLoginRedirect,
+  normalizeLoginRedirect,
+  rememberLoginRedirect,
+} from "../lib/loginRedirect.js";
 import { Button } from "../components/ui/Button.js";
 import { Input } from "../components/ui/Input.js";
 
 export const Route = createFileRoute("/login")({
   head: () => ({ meta: [{ title: "Log In | DFG Portal" }] }),
+  validateSearch: (search: Record<string, unknown>) => ({
+    redirect: normalizeLoginRedirect(search.redirect),
+  }),
   component: LoginPage,
 });
 
 /* ---------------------------------------------------------------------------
  * Password Form
  * --------------------------------------------------------------------------- */
-function PasswordForm({ email, onEmailChange }: { email: string; onEmailChange: (v: string) => void }) {
+function PasswordForm({
+  email,
+  onEmailChange,
+  redirectTo,
+}: {
+  email: string;
+  onEmailChange: (v: string) => void;
+  redirectTo?: string;
+}) {
   const navigate = useNavigate();
+  const router = useRouter();
   const queryClient = useQueryClient();
   const [password, setPassword] = useState("");
 
@@ -25,7 +44,12 @@ function PasswordForm({ email, onEmailChange }: { email: string; onEmailChange: 
       return data;
     },
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["me"] });
+      await resetAuthClientState({ queryClient, router });
+      const nextRedirect = consumeLoginRedirect(redirectTo);
+      if (nextRedirect) {
+        window.location.assign(nextRedirect);
+        return;
+      }
       navigate({ to: "/dashboard" });
     },
   });
@@ -36,21 +60,21 @@ function PasswordForm({ email, onEmailChange }: { email: string; onEmailChange: 
   };
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+    <form onSubmit={handleSubmit} className="gap-5 flex flex-col">
       {login.isPending ? (
         <div
-          data-pwid="login-pending"
-          className="mb-6 rounded-lg border border-blue-500/30 bg-blue-500/10 px-4 py-3 text-sm text-blue-400"
+          data-testid="login-pending"
+          className="mb-6 rounded-lg border-blue-500/30 bg-blue-500/10 px-4 py-3 text-sm text-blue-400 border"
         >
           Logging in...
         </div>
       ) : login.isError ? (
         <div
-          data-pwid="login-error"
+          data-testid="login-error"
           role="alert"
-          className="mb-6 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-400"
+          className="mb-6 rounded-lg border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-600 dark:text-red-400 border"
         >
-          {(login.error as any)?.value?.error ?? login.error.message}
+          {getErrorMessage(login.error, "Login failed")}
         </div>
       ) : null}
       <Input
@@ -58,7 +82,7 @@ function PasswordForm({ email, onEmailChange }: { email: string; onEmailChange: 
         name="id"
         label="Username or Email"
         required
-        data-pwid="login-id"
+        data-testid="login-id"
         value={email}
         onChange={(v) => onEmailChange(v)}
       />
@@ -68,16 +92,11 @@ function PasswordForm({ email, onEmailChange }: { email: string; onEmailChange: 
         label="Password"
         type="password"
         required
-        data-pwid="login-password"
+        data-testid="login-password"
         value={password}
         onChange={(v) => setPassword(v)}
       />
-      <Button
-        type="submit"
-        variant="primary"
-        className="mt-2 w-full"
-        data-pwid="login-submit"
-      >
+      <Button type="submit" variant="primary" className="mt-2 w-full" data-testid="login-submit">
         Log In
       </Button>
     </form>
@@ -87,7 +106,15 @@ function PasswordForm({ email, onEmailChange }: { email: string; onEmailChange: 
 /* ---------------------------------------------------------------------------
  * Magic Link Form
  * --------------------------------------------------------------------------- */
-function MagicLinkForm({ email, onEmailChange }: { email: string; onEmailChange: (v: string) => void }) {
+function MagicLinkForm({
+  email,
+  onEmailChange,
+  redirectTo,
+}: {
+  email: string;
+  onEmailChange: (v: string) => void;
+  redirectTo?: string;
+}) {
   const magicLink = useMutation({
     mutationFn: async () => {
       const { error } = await api["magic-link"].post({ email });
@@ -98,12 +125,11 @@ function MagicLinkForm({ email, onEmailChange }: { email: string; onEmailChange:
   if (magicLink.isSuccess) {
     return (
       <div className="py-8 text-center">
-        <p className="mb-2 text-lg font-semibold text-primary">
+        <p className="mb-2 text-lg font-semibold text-primary dark:text-primary-dark">
           Check your email
         </p>
-        <p className="text-sm text-muted">
-          We sent a magic link to your email address. Click the link to log
-          in.
+        <p className="text-sm text-muted dark:text-muted-dark">
+          We sent a magic link to your email address. Click the link to log in.
         </p>
       </div>
     );
@@ -112,13 +138,17 @@ function MagicLinkForm({ email, onEmailChange }: { email: string; onEmailChange:
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!email.trim()) return;
+    rememberLoginRedirect(redirectTo);
     magicLink.mutate();
   };
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-5">
-      <div className="flex flex-col gap-1.5">
-        <label htmlFor="magic-email" className="text-sm font-medium text-muted">
+    <form onSubmit={handleSubmit} className="gap-5 flex flex-col">
+      <div className="gap-1.5 flex flex-col">
+        <label
+          htmlFor="magic-email"
+          className="text-sm font-medium text-muted dark:text-muted-dark"
+        >
           Email
         </label>
         <input
@@ -126,17 +156,17 @@ function MagicLinkForm({ email, onEmailChange }: { email: string; onEmailChange:
           name="email"
           type="email"
           required
-          data-pwid="magic-email"
+          data-testid="magic-email"
           value={email}
           onChange={(e) => onEmailChange(e.target.value)}
-          className="rounded-lg border border-white/10 bg-card px-4 py-3 text-primary outline-none transition-colors placeholder:text-muted/50 focus:border-accent focus:ring-1 focus:ring-accent/50"
+          className="rounded-lg border-overlay/10 dark:border-overlay-dark/10 bg-card dark:bg-card-dark px-4 py-3 text-primary dark:text-primary-dark placeholder:text-muted/50 dark:placeholder:text-muted-dark/50 focus:border-accent focus:ring-accent/50 border transition-colors outline-hidden focus:ring-1"
         />
       </div>
       <Button
         type="submit"
         variant="primary"
         className="mt-2 w-full"
-        data-pwid="magic-link-submit"
+        data-testid="magic-link-submit"
       >
         Send Magic Link
       </Button>
@@ -148,8 +178,13 @@ function MagicLinkForm({ email, onEmailChange }: { email: string; onEmailChange:
  * Login Page
  * --------------------------------------------------------------------------- */
 function LoginPage() {
+  const { redirect } = Route.useSearch();
   const [activeTab, setActiveTab] = useState<"password" | "magic">("password");
   const [email, setEmail] = useState("");
+
+  useEffect(() => {
+    rememberLoginRedirect(redirect);
+  }, [redirect]);
 
   const switchTab = (t: "password" | "magic") => () => {
     setActiveTab(t);
@@ -158,61 +193,52 @@ function LoginPage() {
   const tabClass = (t: "password" | "magic") =>
     `flex-1 py-2.5 text-sm font-medium rounded-lg transition-colors cursor-pointer ${
       activeTab === t
-        ? "bg-white/[0.08] text-primary"
-        : "text-muted hover:text-primary"
+        ? "bg-overlay/8 dark:bg-overlay-dark/8 text-primary dark:text-primary-dark"
+        : "text-muted dark:text-muted-dark hover:text-primary dark:hover:text-primary-dark"
     }`;
 
   return (
-    <main
-      data-pwid="login-page"
-      className="flex min-h-screen items-center justify-center px-4"
-    >
-      <div className="w-full max-w-sm">
+    <main data-testid="login-page" className="px-4 flex min-h-screen items-center justify-center">
+      <div className="max-w-sm w-full">
         <div className="mb-8 text-center">
           <h1 className="text-3xl font-bold tracking-tight">Log In</h1>
-          <p className="mt-2 text-sm text-muted">Student Portal</p>
+          <p className="mt-2 text-sm text-muted dark:text-muted-dark">Student Portal</p>
         </div>
 
         {/* Tab switcher */}
-        <div className="mb-6 flex gap-1 rounded-xl bg-white/[0.04] p-1">
-          <button
-            type="button"
-            onClick={switchTab("password")}
-            className={tabClass("password")}
-          >
+        <div className="mb-6 gap-1 rounded-xl bg-overlay/4 dark:bg-overlay-dark/4 p-1 flex">
+          <button type="button" onClick={switchTab("password")} className={tabClass("password")}>
             Password
           </button>
-          <button
-            type="button"
-            onClick={switchTab("magic")}
-            className={tabClass("magic")}
-          >
+          <button type="button" onClick={switchTab("magic")} className={tabClass("magic")}>
             Magic Link
           </button>
         </div>
 
         {activeTab === "password" ? (
-          <PasswordForm email={email} onEmailChange={setEmail} />
+          <PasswordForm email={email} onEmailChange={setEmail} redirectTo={redirect} />
         ) : (
-          <MagicLinkForm email={email} onEmailChange={setEmail} />
+          <MagicLinkForm email={email} onEmailChange={setEmail} redirectTo={redirect} />
         )}
 
         {/* Divider */}
-        <div className="relative my-8">
-          <div className="absolute inset-0 flex items-center">
-            <div className="w-full border-t border-white/[0.08]" />
+        <div className="my-8 relative">
+          <div className="inset-0 absolute flex items-center">
+            <div className="border-overlay/8 dark:border-overlay-dark/8 w-full border-t" />
           </div>
-          <div className="relative flex justify-center text-xs">
-            <span className="bg-[var(--bg)] px-3 text-muted">or continue with</span>
+          <div className="text-xs relative flex justify-center">
+            <span className="px-3 text-muted dark:text-muted-dark bg-(--bg)">
+              or continue with
+            </span>
           </div>
         </div>
 
         {/* OAuth buttons */}
-        <div className="flex flex-col gap-3">
+        <div className="gap-3 flex flex-col">
           <a
             href="/api/oauth/google"
-            data-pwid="google-oauth"
-            className="flex w-full items-center justify-center gap-3 rounded-lg border border-white/10 bg-white/[0.04] px-4 py-3 text-sm font-medium text-primary transition-colors hover:bg-white/[0.08]"
+            data-testid="google-oauth"
+            className="gap-3 rounded-lg border-overlay/10 dark:border-overlay-dark/10 bg-overlay/4 dark:bg-overlay-dark/4 px-4 py-3 text-sm font-medium text-primary dark:text-primary-dark hover:bg-overlay/8 dark:hover:bg-overlay-dark/8 flex w-full items-center justify-center border transition-colors"
           >
             <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
               <path
@@ -236,8 +262,8 @@ function LoginPage() {
           </a>
           <a
             href="/api/oauth/apple"
-            data-pwid="apple-oauth"
-            className="flex w-full items-center justify-center gap-3 rounded-lg border border-white/10 bg-white/[0.04] px-4 py-3 text-sm font-medium text-primary transition-colors hover:bg-white/[0.08]"
+            data-testid="apple-oauth"
+            className="gap-3 rounded-lg border-overlay/10 dark:border-overlay-dark/10 bg-overlay/4 dark:bg-overlay-dark/4 px-4 py-3 text-sm font-medium text-primary dark:text-primary-dark hover:bg-overlay/8 dark:hover:bg-overlay-dark/8 flex w-full items-center justify-center border transition-colors"
           >
             <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
               <path d="M17.05 20.28c-.98.95-2.05.88-3.08.4-1.09-.5-2.08-.48-3.24 0-1.44.62-2.2.44-3.06-.4C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.8 1.18-.24 2.31-.93 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.54 4.09zM12.03 7.25c-.15-2.23 1.66-4.07 3.74-4.25.29 2.58-2.34 4.5-3.74 4.25z" />
@@ -249,7 +275,7 @@ function LoginPage() {
         <div className="mt-6 text-center">
           <Link
             to="/forgot-password"
-            data-pwid="forgot-password-link"
+            data-testid="forgot-password-link"
             className="text-sm text-accent hover:underline"
           >
             Forgot password?

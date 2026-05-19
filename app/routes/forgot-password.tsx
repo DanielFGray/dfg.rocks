@@ -25,13 +25,22 @@ function ForgotPasswordPage() {
 
   if (submitted) {
     return (
-      <main data-pwid="forgot-password-page" className="flex min-h-screen items-center justify-center px-4">
-        <div className="w-full max-w-sm text-center">
+      <main
+        data-testid="forgot-password-page"
+        className="px-4 flex min-h-screen items-center justify-center"
+      >
+        <div className="max-w-sm w-full text-center">
           <h1 className="mb-4 text-3xl font-bold tracking-tight">Check Your Email</h1>
-          <p className="text-sm text-muted">
-            If an account exists with that email, we've sent a password reset link. Check your inbox.
+          <p className="text-sm text-muted dark:text-muted-dark">
+            If an account exists with that email, we've sent a password reset link. Check your
+            inbox.
           </p>
-          <Link to="/login" data-pwid="back-to-login" className="mt-6 inline-block text-sm text-accent hover:underline">
+          <Link
+            to="/login"
+            search={{ redirect: undefined }}
+            data-testid="back-to-login"
+            className="mt-6 text-sm text-accent inline-block hover:underline"
+          >
             Back to Log In
           </Link>
         </div>
@@ -45,20 +54,25 @@ function ForgotPasswordPage() {
   };
 
   return (
-    <main data-pwid="forgot-password-page" className="flex min-h-screen items-center justify-center px-4">
-      <div className="w-full max-w-sm">
+    <main
+      data-testid="forgot-password-page"
+      className="px-4 flex min-h-screen items-center justify-center"
+    >
+      <div className="max-w-sm w-full">
         <div className="mb-8 text-center">
           <h1 className="text-3xl font-bold tracking-tight">Forgot Password</h1>
-          <p className="mt-2 text-sm text-muted">Enter your email and we'll send a reset link</p>
+          <p className="mt-2 text-sm text-muted dark:text-muted-dark">
+            Enter your email and we'll send a reset link
+          </p>
         </div>
-        <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+        <form onSubmit={handleSubmit} className="gap-5 flex flex-col">
           <Input
             id="forgot-email"
             name="email"
             label="Email"
             type="email"
             required
-            data-pwid="forgot-email"
+            data-testid="forgot-email"
             value={email}
             onChange={(v) => setEmail(v)}
           />
@@ -66,14 +80,18 @@ function ForgotPasswordPage() {
             type="submit"
             variant="primary"
             className="mt-2 w-full"
-            data-pwid="forgot-submit"
+            data-testid="forgot-submit"
             disabled={forgot.isPending}
           >
             {forgot.isPending ? "Sending..." : "Send Reset Link"}
           </Button>
         </form>
         <div className="mt-6 text-center">
-          <Link to="/login" className="text-sm text-accent hover:underline">
+          <Link
+            to="/login"
+            search={{ redirect: undefined }}
+            className="text-sm text-accent hover:underline"
+          >
             Back to Log In
           </Link>
         </div>
