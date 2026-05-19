@@ -37,9 +37,13 @@ export const adminTodayLessonsQuery = () => {
   return queryOptions({
     queryKey: ["admin", "lessons", "today", todayStr],
     queryFn: async () =>
-      unwrap((await api.admin.lessons.get({
-        query: { from: `${todayStr}T00:00:00.000Z`, to: `${todayStr}T23:59:59.999Z` },
-      })).data),
+      unwrap(
+        (
+          await api.admin.lessons.get({
+            query: { from: `${todayStr}T00:00:00.000Z`, to: `${todayStr}T23:59:59.999Z` },
+          })
+        ).data,
+      ),
   });
 };
 
@@ -111,7 +115,8 @@ export const courseDetailQuery = (id: string) =>
 
 export const scheduledLessonsQuery = queryOptions({
   queryKey: ["my-lessons", "scheduled"],
-  queryFn: async () => unwrap((await api["my-lessons"].get({ query: { status: "scheduled", limit: 5 } })).data),
+  queryFn: async () =>
+    unwrap((await api["my-lessons"].get({ query: { status: "scheduled", limit: 5 } })).data),
 });
 
 export const myLessonsQuery = queryOptions({
@@ -142,5 +147,6 @@ export const workingHoursQuery = queryOptions({
 export const availableSlotsQuery = (date: string) =>
   queryOptions({
     queryKey: ["available-slots", date],
-    queryFn: async () => unwrap((await api["available-slots"].get({ query: { date, days: 7, duration: 60 } })).data),
+    queryFn: async () =>
+      unwrap((await api["available-slots"].get({ query: { date, days: 7, duration: 60 } })).data),
   });

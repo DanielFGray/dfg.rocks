@@ -3,6 +3,7 @@ import type { useMutation } from "@tanstack/react-query";
 import type { Message } from "../../lib/types.js";
 import { Button } from "../ui/Button.js";
 import { formatTime } from "./helpers.js";
+import { Link } from "@tanstack/react-router";
 
 export function MessageThread({
   thread,
@@ -20,7 +21,9 @@ export function MessageThread({
   partnerId: string;
   composeText: string;
   setComposeText: (text: string) => void;
-  sendMessageMutation: ReturnType<typeof useMutation<Message, Error, { recipient_id?: string; body: string }>>;
+  sendMessageMutation: ReturnType<
+    typeof useMutation<Message, Error, { recipient_id?: string; body: string }>
+  >;
   markReadMutation: ReturnType<typeof useMutation<{ success: true }, Error, string>>;
 }) {
   const markedRef = useRef(new Set<string>());
@@ -53,34 +56,33 @@ export function MessageThread({
   };
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex h-full flex-col">
       {/* Header */}
-      <div className="px-5 py-3 border-b border-white/[0.06] shrink-0">
-        <h2 className="text-lg font-semibold text-primary">
-          {partnerName}
+      <div className="px-5 py-3 border-overlay/6 dark:border-overlay-dark/6 shrink-0 border-b">
+        <h2 className="text-lg font-semibold text-primary dark:text-primary-dark">
+          <Link to="/students/$id" params={{ id: partnerId }}>
+            {partnerName}
+          </Link>
         </h2>
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto px-5 py-4 flex flex-col gap-3">
+      <div className="px-5 py-4 gap-3 flex flex-1 flex-col overflow-y-auto">
         {thread.map((msg) => {
           const isMine = msg.sender_id === myId;
           return (
-            <div
-              key={msg.id}
-              className={`flex ${isMine ? "justify-end" : "justify-start"}`}
-            >
+            <div key={msg.id} className={`flex ${isMine ? "justify-end" : "justify-start"}`}>
               <div
                 className={[
                   "max-w-[75%] rounded-xl px-4 py-2.5 text-sm leading-relaxed",
                   isMine
-                    ? "bg-accent/20 text-primary"
-                    : "bg-white/[0.06] text-primary",
+                    ? "bg-accent/20 text-primary dark:text-primary-dark"
+                    : "bg-overlay/6 dark:bg-overlay-dark/6 text-primary dark:text-primary-dark",
                 ].join(" ")}
               >
-                <p className="whitespace-pre-wrap break-words">{msg.body}</p>
+                <p className="wrap-break-word whitespace-pre-wrap">{msg.body}</p>
                 <p
-                  className={`text-xs mt-1 ${isMine ? "text-accent/50" : "text-muted/40"}`}
+                  className={`text-xs mt-1 ${isMine ? "text-accent/50" : "text-muted/40 dark:text-muted-dark/40"}`}
                 >
                   {formatTime(msg.created_at)}
                 </p>
@@ -91,19 +93,19 @@ export function MessageThread({
       </div>
 
       {/* Compose */}
-      <div className="px-5 py-3 border-t border-white/[0.06] shrink-0">
-        <div className="flex gap-3 items-end">
+      <div className="px-5 py-3 border-overlay/6 dark:border-overlay-dark/6 shrink-0 border-t">
+        <div className="gap-3 flex items-end">
           <textarea
-            data-pwid="compose-input"
+            data-testid="compose-input"
             value={composeText}
             onChange={(e) => setComposeText(e.target.value)}
             onKeyDown={onKeyDown}
             placeholder="Type a message..."
             rows={2}
-            className="flex-1 rounded-lg border border-white/10 bg-card px-4 py-3 text-primary placeholder:text-muted/50 outline-none transition-colors focus:border-accent focus:ring-1 focus:ring-accent/50 resize-none text-sm"
+            className="rounded-lg border-overlay/10 dark:border-overlay-dark/10 bg-card dark:bg-card-dark px-4 py-3 text-primary dark:text-primary-dark placeholder:text-muted/50 dark:placeholder:text-muted-dark/50 focus:border-accent focus:ring-accent/50 text-sm flex-1 resize-none border transition-colors outline-hidden focus:ring-1"
           />
           <Button
-            data-pwid="send-btn"
+            data-testid="send-btn"
             onClick={onSend}
             disabled={!composeText.trim()}
             className="shrink-0"

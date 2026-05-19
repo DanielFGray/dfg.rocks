@@ -1,10 +1,5 @@
 import type { ReactNode } from "react";
-import {
-  ModalOverlay,
-  Modal,
-  Dialog,
-  Heading,
-} from "react-aria-components";
+import { ModalOverlay, Modal, Dialog, Heading } from "react-aria-components";
 import { Button } from "./Button.js";
 
 type SidebarProps = {
@@ -18,21 +13,26 @@ type SidebarProps = {
 export const Sidebar = ({ open, onClose, title, children, footer }: SidebarProps) => (
   <ModalOverlay
     isOpen={open}
-    onOpenChange={(isOpen) => { if (!isOpen) onClose(); }}
+    onOpenChange={(isOpen) => {
+      if (!isOpen) onClose();
+    }}
     isDismissable
-    className="fixed inset-0 z-[200] md:hidden data-[entering]:animate-in data-[entering]:fade-in data-[exiting]:animate-out data-[exiting]:fade-out"
+    className="inset-0 md:hidden data-[entering]:animate-in data-[entering]:fade-in data-[exiting]:animate-out data-[exiting]:fade-out fixed z-200"
   >
-    <Modal className="absolute top-0 right-0 h-full w-72 outline-none">
-      <Dialog className="h-full bg-card border-l border-white/[0.06] shadow-2xl flex flex-col outline-none">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-white/[0.06]">
-          <Heading slot="title" className="text-lg font-semibold text-primary">
+    <Modal className="top-0 right-0 w-72 absolute h-full outline-hidden">
+      <Dialog className="bg-card dark:bg-card-dark border-overlay/6 dark:border-overlay-dark/6 shadow-2xl flex h-full flex-col border-l outline-hidden">
+        <div className="px-6 py-4 border-overlay/6 dark:border-overlay-dark/6 flex items-center justify-between border-b">
+          <Heading
+            slot="title"
+            className="text-lg font-semibold text-primary dark:text-primary-dark"
+          >
             {title}
           </Heading>
           <Button
             variant="ghost"
             onClick={onClose}
             aria-label="Close"
-            className="rounded-lg p-1.5 px-1.5 py-1.5 text-muted transition-colors hover:bg-white/5 hover:text-primary"
+            className="rounded-lg p-1.5 px-1.5 py-1.5 text-muted dark:text-muted-dark hover:bg-overlay/5 dark:hover:bg-overlay-dark/5 hover:text-primary dark:hover:text-primary-dark transition-colors"
           >
             <svg
               xmlns="http://www.w3.org/2000/svg"
@@ -50,11 +50,9 @@ export const Sidebar = ({ open, onClose, title, children, footer }: SidebarProps
             </svg>
           </Button>
         </div>
-        <div className="flex flex-col flex-1 overflow-y-auto">
-          {children}
-        </div>
+        <div className="flex flex-1 flex-col overflow-y-auto">{children}</div>
         {footer ? (
-          <div className="border-t border-white/[0.06]">
+          <div className="border-overlay/6 dark:border-overlay-dark/6 border-t">
             {footer}
           </div>
         ) : null}

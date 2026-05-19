@@ -3,6 +3,7 @@ import { useForm } from "@tanstack/react-form";
 import * as v from "valibot";
 import { useMutation } from "@tanstack/react-query";
 import { api } from "../lib/api.js";
+import { fieldError } from "../lib/form.js";
 import { Modal } from "./ui/Modal.js";
 import { Input } from "./ui/Input.js";
 import { Select } from "./ui/Select.js";
@@ -46,7 +47,15 @@ export function CourseFormModal({ open, onClose, course, onSuccess }: CourseForm
   });
 
   const updateMutation = useMutation({
-    mutationFn: async ({ id, ...payload }: { id: string; title: string; instrument: string; description?: string }) => {
+    mutationFn: async ({
+      id,
+      ...payload
+    }: {
+      id: string;
+      title: string;
+      instrument: string;
+      description?: string;
+    }) => {
       const { data, error } = await api.admin.courses({ id }).patch(payload);
       if (error) throw error;
       return data;
@@ -96,9 +105,12 @@ export function CourseFormModal({ open, onClose, course, onSuccess }: CourseForm
   return (
     <Modal open={open} onClose={onClose} title={course ? "Edit Course" : "New Course"}>
       <form
-        data-pwid="course-form"
-        onSubmit={(e) => { e.preventDefault(); form.handleSubmit(); }}
-        className="flex flex-col gap-5"
+        data-testid="course-form"
+        onSubmit={(e) => {
+          e.preventDefault();
+          form.handleSubmit();
+        }}
+        className="gap-5 flex flex-col"
       >
         <form.Field name="title" validators={requiredValidator}>
           {(field) => (
@@ -109,7 +121,7 @@ export function CourseFormModal({ open, onClose, course, onSuccess }: CourseForm
               value={field.state.value}
               onChange={(v) => field.handleChange(v)}
               onBlur={() => field.handleBlur()}
-              error={field.state.meta.errors[0] as string | undefined}
+              error={fieldError(field.state.meta.errors)}
               placeholder="e.g. Fingerpicking Foundations"
             />
           )}
@@ -124,7 +136,7 @@ export function CourseFormModal({ open, onClose, course, onSuccess }: CourseForm
               value={field.state.value}
               onChange={(v) => field.handleChange(v)}
               onBlur={() => field.handleBlur()}
-              error={field.state.meta.errors[0] as string | undefined}
+              error={fieldError(field.state.meta.errors)}
             />
           )}
         </form.Field>
@@ -142,13 +154,18 @@ export function CourseFormModal({ open, onClose, course, onSuccess }: CourseForm
             />
           )}
         </form.Field>
-        <div className="flex justify-end gap-3 pt-2">
+        <div className="gap-3 pt-2 flex justify-end">
           <Button variant="ghost" onClick={onClose}>
             Cancel
           </Button>
           <form.Subscribe selector={(s) => s.canSubmit}>
             {(canSubmit) => (
-              <Button type="submit" variant="primary" disabled={!canSubmit}>
+              <Button
+                type="submit"
+                variant="primary"
+                disabled={!canSubmit}
+                data-testid="course-submit"
+              >
                 {course ? "Save Changes" : "Create Course"}
               </Button>
             )}

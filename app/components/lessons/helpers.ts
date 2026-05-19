@@ -1,4 +1,5 @@
 import * as v from "valibot";
+import type { LocationType } from "../../lib/types.js";
 
 export const requiredValidator = {
   onChange: v.pipe(v.string(), v.minLength(1, "Required")),
@@ -9,7 +10,10 @@ export const durationOptions = [
   { value: "60", label: "60 minutes" },
 ];
 
-export const locationOptions = [
+export const locationOptions: Array<{
+  value: "" | LocationType;
+  label: string;
+}> = [
   { value: "", label: "Select location..." },
   { value: "in_person_teacher_travels", label: "In-Person (Teacher Travels)" },
   { value: "in_person_student_travels", label: "In-Person (Student Travels)" },

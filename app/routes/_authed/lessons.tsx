@@ -1,9 +1,9 @@
 import { useState } from "react";
-import { createFileRoute } from "@tanstack/react-router";
-import { useSuspenseQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { createFileRoute, useRouter } from "@tanstack/react-router";
+import { useMutation } from "@tanstack/react-query";
 import { api } from "../../lib/api.js";
-import { adminLessonsQuery, adminStudentsQuery, unwrap } from "../../lib/queries.js";
-import type { Lesson, LessonNote, User, LocationType } from "../../lib/types.js";
+import type { Lesson, User, LocationType } from "../../lib/types.js";
+import { getLessonNote, getLessonsPageData } from "../../lib/routeData.js";
 import { Button } from "../../components/ui/Button.js";
 import { EmptyState } from "../../components/ui/EmptyState.js";
 import { ConfirmDialog } from "../../components/ui/ConfirmDialog.js";
@@ -19,12 +19,7 @@ import { LessonCard } from "../../components/lessons/LessonCard.js";
 
 export const Route = createFileRoute("/_authed/lessons")({
   head: () => ({ meta: [{ title: "Lessons | DFG Portal" }] }),
-  loader: async ({ context: { queryClient } }) => {
-    await Promise.allSettled([
-      queryClient.ensureQueryData(adminLessonsQuery),
-      queryClient.ensureQueryData(adminStudentsQuery),
-    ]);
-  },
+  loader: () => getLessonsPageData(),
   component: LessonsPage,
   pendingComponent: () => <div>Loading...</div>,
 });
@@ -34,25 +29,23 @@ export const Route = createFileRoute("/_authed/lessons")({
  * --------------------------------------------------------------------------- */
 
 function LessonsPage() {
-  const queryClient = useQueryClient();
+  const router = useRouter();
+  const { lessons, students } = Route.useLoaderData();
 
   const [formOpen, setFormOpen] = useState(false);
   const [cancelTarget, setCancelTarget] = useState<Lesson | null>(null);
   const [noteState, setNoteState] = useState<NoteEditorState>(null);
   const [noteSaving, setNoteSaving] = useState(false);
 
-  const { data: lessons } = useSuspenseQuery(adminLessonsQuery);
-  const { data: students } = useSuspenseQuery(adminStudentsQuery);
-
   // Build student lookup by id
   const studentMap = new Map<string, User>();
-  (students as User[]).forEach((s) => {
+  students.forEach((s) => {
     studentMap.set(s.id, s);
   });
 
   const studentOptions = [
     { value: "", label: "Select student..." },
-    ...(students as User[]).map((s) => ({ value: s.id, label: s.name })),
+    ...students.map((s) => ({ value: s.id, label: s.name })),
   ];
 
   /* -- Mutations -- */
@@ -69,27 +62,35 @@ function LessonsPage() {
     },
     onSettled: () => {
       setFormOpen(false);
-      queryClient.invalidateQueries({ queryKey: ["admin-lessons"] });
+      void router.invalidate();
     },
   });
 
   const completeLessonMutation = useMutation({
     mutationFn: async (id: string) => {
-      const { data } = await api.admin.lessons({ id }).patch({ status: "completed" });
+      const { data, error } = await api.admin.lessons({ id }).patch({ status: "completed" });
+      if (error) throw error;
+      if (!data || "error" in data) {
+        throw new Error(data?.error ?? "Failed to complete lesson");
+      }
       return data;
     },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ["admin-lessons"] });
+      void router.invalidate();
     },
   });
 
   const cancelLessonMutation = useMutation({
     mutationFn: async (id: string) => {
-      const { data } = await api.admin.lessons({ id }).patch({ status: "cancelled" });
+      const { data, error } = await api.admin.lessons({ id }).patch({ status: "cancelled" });
+      if (error) throw error;
+      if (!data || "error" in data) {
+        throw new Error(data?.error ?? "Failed to cancel lesson");
+      }
       return data;
     },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ["admin-lessons"] });
+      void router.invalidate();
     },
   });
 
@@ -105,17 +106,32 @@ function LessonsPage() {
       };
       publish: boolean;
     }) => {
-      const { data } = await api.admin.lessons({ id: params.lessonId }).notes.post(params.payload);
+      const { data, error } = await api.admin
+        .lessons({ id: params.lessonId })
+        .notes.post(params.payload);
+      if (error) throw error;
+      if (!data || "error" in data) {
+        throw new Error(data?.error ?? "Failed to save lesson note");
+      }
       if (params.publish) {
-        const { data: pubData } = await api.admin.lessons({ id: params.lessonId }).notes.publish.patch();
+        const { data: pubData, error: publishError } = await api.admin
+          .lessons({ id: params.lessonId })
+          .notes.publish.patch();
+        if (publishError) throw publishError;
+        if (!pubData || "error" in pubData) {
+          throw new Error(pubData?.error ?? "Failed to publish lesson note");
+        }
         return { data: { ...data, ...pubData } };
       }
       return data;
     },
-    onSettled: () => {
+    onSuccess: () => {
       setNoteSaving(false);
       setNoteState(null);
-      queryClient.invalidateQueries({ queryKey: ["admin-lessons"] });
+      void router.invalidate();
+    },
+    onError: () => {
+      setNoteSaving(false);
     },
   });
 
@@ -133,15 +149,23 @@ function LessonsPage() {
 
   const openNoteEditor = async (lesson: Lesson) => {
     try {
-      const note = unwrap((await api.admin.lessons({ id: lesson.id }).notes.get()).data) as LessonNote;
+      const data = await getLessonNote({ data: { lessonId: lesson.id } });
+
       setNoteState({
         lesson,
-        topics: note.topics_covered ?? "",
-        homework: note.homework ?? "",
-        progress: note.progress_observations ?? "",
-        notes: note.notes ?? "",
+        topics: data.topics_covered ?? "",
+        homework: data.homework ?? "",
+        progress: data.progress_observations ?? "",
+        notes: data.notes ?? "",
       });
-    } catch {
+    } catch (error) {
+      if (
+        !(error instanceof Error) ||
+        !error.message.toLowerCase().includes("lesson note not found")
+      ) {
+        return;
+      }
+
       setNoteState({
         lesson,
         topics: "",
@@ -170,10 +194,10 @@ function LessonsPage() {
   };
 
   return (
-    <main data-pwid="lessons" className="max-w-[1100px] mx-auto px-5 md:px-8 pt-20 pb-16">
-      <div className="flex items-center justify-between mb-8">
+    <main data-testid="lessons" className="px-5 md:px-8 pt-20 pb-16 mx-auto max-w-[1100px]">
+      <div className="mb-8 flex items-center justify-between">
         <h1 className="text-3xl font-bold tracking-tight">Lessons</h1>
-        <Button data-pwid="new-lesson" onClick={openNewLesson}>
+        <Button data-testid="new-lesson" onClick={openNewLesson}>
           New Lesson
         </Button>
       </div>
@@ -184,8 +208,8 @@ function LessonsPage() {
           action={{ label: "New Lesson", onClick: openNewLesson }}
         />
       ) : (
-        <div className="flex flex-col gap-3">
-          {(lessons as Lesson[]).map((lesson) => {
+        <div className="gap-3 flex flex-col">
+          {lessons.map((lesson) => {
             const student = studentMap.get(lesson.student_id);
             const studentName = student ? student.name : "Unknown Student";
 

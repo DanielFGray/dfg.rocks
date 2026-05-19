@@ -65,12 +65,8 @@ export function NoteEditorModal({
     : "Lesson Notes";
 
   return (
-    <Modal
-      open={state !== null}
-      onClose={onClose}
-      title={title}
-    >
-      <div className="flex flex-col gap-4" data-pwid="note-editor">
+    <Modal open={state !== null} onClose={onClose} title={title}>
+      <div className="gap-4 flex flex-col" data-testid="note-editor">
         <noteForm.Field name="topics_covered">
           {(field) => (
             <Textarea
@@ -127,7 +123,7 @@ export function NoteEditorModal({
             />
           )}
         </noteForm.Field>
-        <div className="flex justify-end gap-3 pt-2">
+        <div className="gap-3 pt-2 flex justify-end">
           <Button variant="ghost" onClick={onClose}>
             Cancel
           </Button>
@@ -135,7 +131,7 @@ export function NoteEditorModal({
             variant="outline"
             onClick={() => handleSave(true)}
             disabled={saving}
-            data-pwid="save-note-draft"
+            data-testid="save-note-draft"
           >
             Save Draft
           </Button>
@@ -143,7 +139,7 @@ export function NoteEditorModal({
             variant="primary"
             onClick={() => handleSave(false)}
             disabled={saving}
-            data-pwid="publish-note"
+            data-testid="publish-note"
           >
             Publish
           </Button>

@@ -1,9 +1,4 @@
-import {
-  TextField,
-  Label,
-  TextArea as AriaTextArea,
-  Text,
-} from "react-aria-components";
+import { TextField, Label, TextArea as AriaTextArea, Text } from "react-aria-components";
 
 type TextareaProps = {
   id: string;
@@ -18,7 +13,7 @@ type TextareaProps = {
   error?: string;
   onChange?: (value: string) => void;
   onBlur?: () => void;
-  "data-pwid"?: string;
+  "data-testid"?: string;
 };
 
 export const Textarea = ({
@@ -34,7 +29,7 @@ export const Textarea = ({
   error,
   onChange,
   onBlur,
-  "data-pwid": pwid,
+  "data-testid": pwid,
 }: TextareaProps) => (
   <TextField
     name={name}
@@ -44,19 +39,19 @@ export const Textarea = ({
     isDisabled={disabled}
     isInvalid={!!error}
     onChange={onChange}
-    className="flex flex-col gap-1.5"
+    className="gap-1.5 flex flex-col"
   >
-    <Label className="text-sm font-medium text-muted">{label}</Label>
+    <Label className="text-sm font-medium text-muted dark:text-muted-dark">{label}</Label>
     <AriaTextArea
       id={id}
       rows={rows}
       placeholder={placeholder}
       onBlur={onBlur}
-      data-pwid={pwid}
-      className={`rounded-lg border bg-card px-4 py-3 text-primary placeholder:text-muted/50 outline-none transition-colors data-[focused]:border-accent data-[focused]:ring-1 data-[focused]:ring-accent/50 resize-y ${error ? "border-red-500/50" : "border-white/10"}`}
+      data-testid={pwid}
+      className={`rounded-lg bg-card dark:bg-card-dark px-4 py-3 text-primary dark:text-primary-dark placeholder:text-muted/50 dark:placeholder:text-muted-dark/50 data-focused:border-accent data-focused:ring-accent/50 resize-y border transition-colors outline-hidden data-focused:ring-1 ${error ? "border-red-500/50" : "border-overlay/10 dark:border-overlay-dark/10"}`}
     />
     {error ? (
-      <Text slot="errorMessage" className="text-sm text-red-400 mt-0.5">
+      <Text slot="errorMessage" className="text-sm text-red-600 dark:text-red-400 mt-0.5">
         {error}
       </Text>
     ) : null}

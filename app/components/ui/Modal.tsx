@@ -1,10 +1,5 @@
 import type { ReactNode } from "react";
-import {
-  ModalOverlay,
-  Modal as AriaModal,
-  Dialog,
-  Heading,
-} from "react-aria-components";
+import { ModalOverlay, Modal as AriaModal, Dialog, Heading } from "react-aria-components";
 import { Button } from "./Button.js";
 
 type ModalProps = {
@@ -17,21 +12,26 @@ type ModalProps = {
 export const Modal = ({ open, onClose, title, children }: ModalProps) => (
   <ModalOverlay
     isOpen={open}
-    onOpenChange={(isOpen) => { if (!isOpen) onClose(); }}
+    onOpenChange={(isOpen) => {
+      if (!isOpen) onClose();
+    }}
     isDismissable
-    className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm data-[entering]:animate-in data-[entering]:fade-in data-[exiting]:animate-out data-[exiting]:fade-out"
+    className="data-[entering]:animate-in data-[entering]:fade-in data-[exiting]:animate-out data-[exiting]:fade-out fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs duration-500"
   >
-    <AriaModal className="w-full max-w-lg outline-none">
-      <Dialog className="relative rounded-xl border border-white/[0.06] bg-card p-6 shadow-2xl outline-none">
+    <AriaModal className="w-full max-w-lg outline-hidden">
+      <Dialog className="relative rounded-xl border border-overlay/6 bg-card p-6 shadow-2xl outline-hidden dark:border-overlay-dark/6 dark:bg-card-dark">
         <div className="mb-4 flex items-center justify-between">
-          <Heading slot="title" className="text-lg font-semibold text-primary">
+          <Heading
+            slot="title"
+            className="text-lg font-semibold text-primary dark:text-primary-dark"
+          >
             {title}
           </Heading>
           <Button
             variant="ghost"
             onClick={onClose}
             aria-label="Close"
-            className="rounded-lg p-1.5 px-1.5 py-1.5 text-muted transition-colors hover:bg-white/5 hover:text-primary"
+            className="rounded-lg p-1.5 px-1.5 py-1.5 text-muted transition-colors hover:bg-overlay/5 hover:text-primary dark:text-muted-dark dark:hover:bg-overlay-dark/5 dark:hover:text-primary-dark"
           >
             <svg
               xmlns="http://www.w3.org/2000/svg"

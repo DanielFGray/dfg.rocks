@@ -1,38 +1,29 @@
-import { test, expect, getPw, loginViaUi } from "./helpers.js";
+import { test, expect, loginViaUi } from "./helpers.js";
 
 test.describe("enrollment management", () => {
-  test("course detail shows enrolled students section", async ({
-    page,
-    testing,
-  }) => {
+  test("course detail shows enrolled students section", async ({ page, testing }) => {
     await testing.login();
-    const student = await testing.login({
+    await testing.login({
       username: "test_enrolled",
       role: "student",
       name: "Enrolled Student",
     });
-    const course = await testing.seedCourse({
+    await testing.seedCourse({
       title: "Test: Enrollment Course",
       instrument: "Guitar",
     });
-    await testing.enroll(student.id, course.id);
+    await testing.enroll("test_enrolled", "Test: Enrollment Course");
 
     await loginViaUi(page, "test_admin", "testpassword123");
+    await page.getByTestId("nav-courses").click();
     await page.getByText("Test: Enrollment Course").click();
 
-    await expect(
-      page.getByRole("heading", { name: "Enrolled Students" }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Enrolled Students" })).toBeVisible();
     // The enrolled student's name appears as a link in the section
-    await expect(
-      page.getByRole("link", { name: "Enrolled Student" }),
-    ).toBeVisible();
+    await expect(page.getByRole("link", { name: "Enrolled Student" })).toBeVisible();
   });
 
-  test("admin can enroll student from student detail", async ({
-    page,
-    testing,
-  }) => {
+  test("admin can enroll student from student detail", async ({ page, testing }) => {
     await testing.login();
     await testing.login({
       username: "test_enroll_target",
@@ -45,9 +36,9 @@ test.describe("enrollment management", () => {
     });
 
     await loginViaUi(page, "test_admin", "testpassword123");
-    await getPw(page, "nav-students").click();
+    await page.getByTestId("nav-students").click();
     await page.getByText("Enroll Target").first().click();
-    await expect(getPw(page, "student-detail")).toBeVisible();
+    await expect(page.getByTestId("student-detail")).toBeVisible();
 
     // Should see empty enrolled courses
     await expect(page.getByText("Not enrolled in any courses")).toBeVisible();
@@ -58,16 +49,17 @@ test.describe("enrollment management", () => {
     await enrollAction.click();
 
     // Wait for the modal form to appear
-    const enrollForm = getPw(page, "enroll-form");
+    const enrollForm = page.getByTestId("enroll-form");
     await expect(enrollForm).toBeVisible({ timeout: 10_000 });
-    await enrollForm
-      .locator('select[name="course_id"]')
-      .selectOption({ label: "Test: Enroll Target Course (Piano)" });
-    await enrollForm.locator('button[type="submit"]').click();
+    await enrollForm.getByRole("button", { name: /Course/ }).click();
+    const courseOpt = page.getByRole("option", { name: /Enroll Target Course/ });
+    await expect(courseOpt).toBeVisible();
+    await courseOpt.click();
+    await enrollForm.getByRole("button", { name: "Enroll", exact: true }).click();
 
-    // Should now see the course
+    // Should now see the course in the student detail section
     await expect(
-      page.getByText("Test: Enroll Target Course"),
+      page.locator("main").getByText("Test: Enroll Target Course", { exact: true }),
     ).toBeVisible({ timeout: 10_000 });
   });
 });

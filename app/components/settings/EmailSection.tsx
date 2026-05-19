@@ -1,20 +1,21 @@
 import { useState } from "react";
-import { useSuspenseQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import { api } from "../../lib/api.js";
-import { myEmailsQuery } from "../../lib/queries.js";
 import type { UserEmail } from "../../lib/types.js";
 import { Button } from "../ui/Button.js";
 import { Card } from "../ui/Card.js";
 import { Input } from "../ui/Input.js";
 import { ConfirmDialog } from "../ui/ConfirmDialog.js";
 
-export function EmailSection() {
-  const queryClient = useQueryClient();
-
+export function EmailSection({
+  emails,
+  onRefresh,
+}: {
+  emails: UserEmail[];
+  onRefresh: () => void;
+}) {
   const [newEmail, setNewEmail] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<UserEmail | null>(null);
-
-  const { data: emails } = useSuspenseQuery(myEmailsQuery);
 
   const addEmailMutation = useMutation({
     mutationFn: async (email: string) => {
@@ -23,7 +24,7 @@ export function EmailSection() {
       return data;
     },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ["my-emails"] });
+      onRefresh();
     },
   });
 
@@ -34,7 +35,7 @@ export function EmailSection() {
       return data;
     },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ["my-emails"] });
+      onRefresh();
     },
   });
 
@@ -53,7 +54,7 @@ export function EmailSection() {
       return data;
     },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ["my-emails"] });
+      onRefresh();
     },
   });
 
@@ -72,40 +73,42 @@ export function EmailSection() {
 
   return (
     <>
-      <section data-pwid="email-section">
+      <section data-testid="email-section">
         <h2 className="text-xl font-semibold mb-4">Email Addresses</h2>
 
-        <div className="flex flex-col gap-3 mb-6">
-          {(emails as UserEmail[]).map((em) => (
+        <div className="gap-3 mb-6 flex flex-col">
+          {emails.map((em) => (
             <Card key={em.id}>
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <div className="sm:flex-row sm:items-center sm:justify-between gap-3 flex flex-col">
                 <div className="min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-medium text-primary break-all">{em.email}</span>
+                  <div className="gap-2 flex flex-wrap items-center">
+                    <span className="font-medium text-primary dark:text-primary-dark break-all">
+                      {em.email}
+                    </span>
                     {em.is_primary ? (
-                      <span className="rounded-full px-2 py-0.5 text-xs font-semibold bg-accent/20 text-accent">
+                      <span className="px-2 py-0.5 text-xs font-semibold bg-accent/20 text-accent rounded-full">
                         Primary
                       </span>
                     ) : null}
                     {em.is_verified ? (
-                      <span className="rounded-full px-2 py-0.5 text-xs font-semibold bg-green-500/20 text-green-400">
+                      <span className="px-2 py-0.5 text-xs font-semibold bg-green-500/20 text-green-400 rounded-full">
                         Verified
                       </span>
                     ) : (
-                      <span className="rounded-full px-2 py-0.5 text-xs font-semibold bg-amber-500/20 text-amber-400">
+                      <span className="px-2 py-0.5 text-xs font-semibold bg-amber-500/20 text-amber-400 rounded-full">
                         Unverified
                       </span>
                     )}
                   </div>
                 </div>
 
-                <div className="flex gap-2 shrink-0 flex-wrap">
+                <div className="gap-2 flex shrink-0 flex-wrap">
                   {em.is_verified && !em.is_primary ? (
                     <Button
                       variant="ghost"
                       onClick={() => makePrimaryMutation.mutate(em.id)}
                       className="text-xs px-3 py-1.5"
-                      data-pwid="make-primary"
+                      data-testid="make-primary"
                     >
                       Make Primary
                     </Button>
@@ -115,7 +118,7 @@ export function EmailSection() {
                       variant="ghost"
                       onClick={() => resendVerificationMutation.mutate(em.id)}
                       className="text-xs px-3 py-1.5 text-amber-400 hover:text-amber-300"
-                      data-pwid="resend-verification"
+                      data-testid="resend-verification"
                     >
                       Resend Verification
                     </Button>
@@ -124,8 +127,8 @@ export function EmailSection() {
                     <Button
                       variant="ghost"
                       onClick={() => setDeleteTarget(em)}
-                      className="text-xs px-3 py-1.5 text-red-400 hover:text-red-300"
-                      data-pwid="remove-email"
+                      className="text-xs px-3 py-1.5 text-red-600 hover:text-red-500 dark:text-red-400 dark:hover:text-red-300"
+                      data-testid="remove-email"
                     >
                       Remove
                     </Button>
@@ -138,8 +141,12 @@ export function EmailSection() {
 
         {/* Add email form */}
         <Card>
-          <form onSubmit={handleAddEmail} className="flex flex-col sm:flex-row gap-3 items-end" data-pwid="add-email-form">
-            <div className="flex-1 w-full">
+          <form
+            onSubmit={handleAddEmail}
+            className="sm:flex-row gap-3 flex flex-col items-end"
+            data-testid="add-email-form"
+          >
+            <div className="w-full flex-1">
               <Input
                 id="new-email"
                 name="email"
@@ -148,10 +155,10 @@ export function EmailSection() {
                 value={newEmail}
                 onChange={(v) => setNewEmail(v)}
                 placeholder="you@example.com"
-                data-pwid="new-email-input"
+                data-testid="new-email-input"
               />
             </div>
-            <Button type="submit" variant="outline" data-pwid="add-email-btn">
+            <Button type="submit" variant="outline" data-testid="add-email-btn">
               Add Email
             </Button>
           </form>
@@ -162,11 +169,7 @@ export function EmailSection() {
       <ConfirmDialog
         open={deleteTarget !== null}
         title="Remove Email"
-        message={
-          deleteTarget
-            ? `Remove ${deleteTarget.email} from your account?`
-            : ""
-        }
+        message={deleteTarget ? `Remove ${deleteTarget.email} from your account?` : ""}
         confirmLabel="Remove"
         variant="danger"
         onConfirm={confirmDelete}

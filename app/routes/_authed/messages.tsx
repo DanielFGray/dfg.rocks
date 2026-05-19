@@ -1,9 +1,8 @@
 import { useState } from "react";
-import { createFileRoute } from "@tanstack/react-router";
-import { useSuspenseQuery, useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { createFileRoute, useRouter } from "@tanstack/react-router";
+import { useMutation } from "@tanstack/react-query";
 import { api } from "../../lib/api.js";
-import { messagesQuery, adminStudentsQuery, unwrap } from "../../lib/queries.js";
-import type { Message, User } from "../../lib/types.js";
+import { getMessagesPageData } from "../../lib/routeData.js";
 import { useAuth } from "../../lib/hooks/useAuth.js";
 import { Button } from "../../components/ui/Button.js";
 import { EmptyState } from "../../components/ui/EmptyState.js";
@@ -12,20 +11,13 @@ import { MessageThread } from "../../components/messages/MessageThread.js";
 import { ConversationList } from "../../components/messages/ConversationList.js";
 
 export const Route = createFileRoute("/_authed/messages")({
-  loader: async ({ context: { queryClient, isAdmin } }) => {
-    if (isAdmin) {
-      await Promise.allSettled([
-        queryClient.ensureQueryData(messagesQuery),
-        queryClient.ensureQueryData(adminStudentsQuery),
-      ]);
-    } else {
-      await queryClient.ensureQueryData(messagesQuery);
-    }
-  },
+  loader: () => getMessagesPageData(),
   head: () => ({ meta: [{ title: "Messages | DFG Portal" }] }),
   component: MessagesPage,
   pendingComponent: () => (
-    <main className="max-w-[1100px] mx-auto px-5 md:px-8 pt-20 pb-16 text-muted">Loading...</main>
+    <main className="px-5 md:px-8 pt-20 pb-16 text-muted dark:text-muted-dark mx-auto max-w-[1100px]">
+      Loading...
+    </main>
   ),
 });
 
@@ -35,16 +27,12 @@ export const Route = createFileRoute("/_authed/messages")({
 
 function MessagesPage() {
   const { user, isAdmin } = useAuth();
-  const queryClient = useQueryClient();
-
-  const { data: allMessages } = useSuspenseQuery(messagesQuery);
-
-  // Admin: fetch students for name lookup
-  const { data: studentsData } = useQuery({ ...adminStudentsQuery, enabled: isAdmin });
+  const router = useRouter();
+  const { messages: allMessages, students: studentsData } = Route.useLoaderData();
 
   const nameMap = new Map<string, string>();
   if (isAdmin && studentsData) {
-    (studentsData as User[]).forEach((s) => {
+    studentsData.forEach((s) => {
       nameMap.set(s.id, s.name);
     });
   }
@@ -77,18 +65,32 @@ function MessagesPage() {
 
   // ---- Mutations ----
   const sendMessageMutation = useMutation({
-    mutationFn: async (payload: { recipient_id?: string; body: string }) =>
-      unwrap((await api.messages.post(payload)).data),
+    mutationFn: async (payload: { recipient_id?: string; body: string }) => {
+      const { data, error } = await api.messages.post(payload);
+      if (error) throw error;
+      if (!data || "error" in data) {
+        throw new Error(data?.error ?? "Failed to send message");
+      }
+      return data;
+    },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ["messages"] });
+      void router.invalidate();
     },
   });
 
   const markReadMutation = useMutation({
-    mutationFn: async (id: string) =>
-      unwrap((await api.messages({ id }).patch({ is_read: true })).data),
+    mutationFn: async (id: string) => {
+      const { data, error } = await api.messages({ id }).patch({
+        is_read: true,
+      });
+      if (error) throw error;
+      if (!data || "error" in data) {
+        throw new Error(data?.error ?? "Failed to mark message read");
+      }
+      return data;
+    },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ["messages"] });
+      void router.invalidate();
     },
   });
 
@@ -96,10 +98,7 @@ function MessagesPage() {
   if (conversations.size === 0) {
     if (isAdmin) {
       return (
-        <main
-          data-pwid="messages"
-          className="max-w-[1100px] mx-auto px-5 md:px-8 pt-20 pb-16"
-        >
+        <main data-testid="messages" className="px-5 md:px-8 pt-20 pb-16 mx-auto max-w-[1100px]">
           <h1 className="text-3xl font-bold tracking-tight mb-8">Messages</h1>
           <EmptyState message="No messages yet. Messages with students will appear here." />
         </main>
@@ -110,9 +109,12 @@ function MessagesPage() {
     const onSend = () => {
       const body = composeText.trim();
       if (!body) return;
-      sendMessageMutation.mutate({ body }, {
-        onSuccess: () => setComposeText(""),
-      });
+      sendMessageMutation.mutate(
+        { body },
+        {
+          onSuccess: () => setComposeText(""),
+        },
+      );
     };
 
     const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -123,25 +125,24 @@ function MessagesPage() {
     };
 
     return (
-      <main
-        data-pwid="messages"
-        className="max-w-[1100px] mx-auto px-5 md:px-8 pt-20 pb-16"
-      >
+      <main data-testid="messages" className="px-5 md:px-8 pt-20 pb-16 mx-auto max-w-[1100px]">
         <h1 className="text-3xl font-bold tracking-tight mb-8">Messages</h1>
-        <div className="rounded-xl border border-white/[0.06] bg-card p-5">
-          <p className="text-muted text-sm mb-4">Send a message to your teacher.</p>
-          <div className="flex flex-col gap-3">
+        <div className="rounded-xl border-overlay/6 dark:border-overlay-dark/6 bg-card dark:bg-card-dark p-5 border">
+          <p className="text-muted dark:text-muted-dark text-sm mb-4">
+            Send a message to your teacher.
+          </p>
+          <div className="gap-3 flex flex-col">
             <textarea
-              data-pwid="compose-input"
+              data-testid="compose-input"
               value={composeText}
               onChange={(e) => setComposeText(e.target.value)}
               onKeyDown={onKeyDown}
               placeholder="Type a message..."
               rows={3}
-              className="rounded-lg border border-white/10 bg-card px-4 py-3 text-primary placeholder:text-muted/50 outline-none transition-colors focus:border-accent focus:ring-1 focus:ring-accent/50 resize-none text-sm"
+              className="rounded-lg border-overlay/10 dark:border-overlay-dark/10 bg-card dark:bg-card-dark px-4 py-3 text-primary dark:text-primary-dark placeholder:text-muted/50 dark:placeholder:text-muted-dark/50 focus:border-accent focus:ring-accent/50 text-sm resize-none border transition-colors outline-hidden focus:ring-1"
             />
             <div className="flex justify-end">
-              <Button data-pwid="send-btn" onClick={onSend} disabled={!composeText.trim()}>
+              <Button data-testid="send-btn" onClick={onSend} disabled={!composeText.trim()}>
                 Send
               </Button>
             </div>
@@ -151,29 +152,26 @@ function MessagesPage() {
     );
   }
 
-  const activeThread = activePartner
-    ? conversations.get(activePartner) ?? []
-    : [];
+  const activeThread = activePartner ? (conversations.get(activePartner) ?? []) : [];
 
   return (
-    <main
-      data-pwid="messages"
-      className="max-w-[1100px] mx-auto px-5 md:px-8 pt-20 pb-16"
-    >
+    <main data-testid="messages" className="px-5 md:px-8 pt-20 pb-16 mx-auto max-w-[1100px]">
       <h1 className="text-3xl font-bold tracking-tight mb-6">Messages</h1>
 
-      <div className="flex gap-4 h-[calc(100vh-12rem)]">
+      <div className="gap-4 flex h-[calc(100vh-12rem)]">
         {/* Conversation list sidebar */}
-        <ConversationList
-          conversations={conversations}
-          activePartner={activePartner}
-          myId={user.id}
-          getName={getName}
-          onSelect={selectPartner}
-        />
+        {isAdmin && (
+          <ConversationList
+            conversations={conversations}
+            activePartner={activePartner}
+            myId={user.id}
+            getName={getName}
+            onSelect={selectPartner}
+          />
+        )}
 
         {/* Thread panel */}
-        <div className="flex-1 rounded-xl border border-white/[0.06] bg-card overflow-hidden">
+        <div className="rounded-xl border-overlay/6 dark:border-overlay-dark/6 bg-card dark:bg-card-dark flex-1 overflow-hidden border">
           {activePartner ? (
             <MessageThread
               thread={activeThread}
@@ -186,7 +184,7 @@ function MessagesPage() {
               markReadMutation={markReadMutation}
             />
           ) : (
-            <div className="flex items-center justify-center h-full text-muted">
+            <div className="text-muted dark:text-muted-dark flex h-full items-center justify-center">
               Select a conversation
             </div>
           )}

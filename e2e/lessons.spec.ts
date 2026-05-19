@@ -1,18 +1,18 @@
-import { test, expect, getPw, loginViaUi } from "./helpers.js";
+import { test, expect, loginViaUi } from "./helpers.js";
 
 test.describe("lesson management", () => {
   test("admin sees lessons page with scheduled lessons", async ({ page, testing }) => {
     await testing.login();
-    const student = await testing.login({
+    await testing.login({
       username: "test_lesson_student",
       role: "student",
       name: "Lesson Student",
     });
-    await testing.seedLesson({ student_id: student.id });
+    await testing.seedLesson({ username: "test_lesson_student" });
 
     await loginViaUi(page, "test_admin", "testpassword123");
-    await getPw(page, "nav-lessons").click();
-    await expect(getPw(page, "lessons")).toBeVisible();
+    await page.getByTestId("nav-lessons").click();
+    await expect(page.getByTestId("lessons")).toBeVisible();
     await expect(page.getByText("Lesson Student")).toBeVisible();
     await expect(page.getByText("Scheduled")).toBeVisible();
   });
@@ -26,76 +26,95 @@ test.describe("lesson management", () => {
     });
 
     await loginViaUi(page, "test_admin", "testpassword123");
-    await getPw(page, "nav-lessons").click();
-    await getPw(page, "new-lesson").click();
+    await page.getByTestId("nav-lessons").click();
+    await page.getByTestId("new-lesson").click();
 
-    // Fill the form
-    await page.locator("#lesson-student").selectOption({ label: "New Lesson Student" });
-    await page.locator("#lesson-scheduled-at").fill("2026-04-01T10:00");
-    await page.locator("#lesson-duration").selectOption("60");
-    await page.locator("#lesson-location").selectOption("online");
-    await page.locator('[data-pwid="lesson-form"] button[type="submit"]').click();
+    // Fill the form — React Aria Selects need explicit waits for popover rendering
+    const lessonForm = page.getByTestId("lesson-form");
+    await lessonForm.getByRole("button", { name: /Student/ }).click();
+    const studentOpt = page.getByRole("option", { name: "New Lesson Student" });
+    await expect(studentOpt).toBeVisible();
+    await studentOpt.click();
 
-    // Should see the new lesson
-    await expect(page.getByText("New Lesson Student")).toBeVisible();
+    await lessonForm.getByLabel("Date & Time").fill("2026-04-01T10:00");
+
+    await lessonForm.getByRole("button", { name: /Duration/ }).click();
+    const durationOpt = page.getByRole("option", { name: "60 minutes" });
+    await expect(durationOpt).toBeVisible();
+    await durationOpt.click();
+
+    await lessonForm.getByRole("button", { name: /Location/ }).click();
+    const locationOpt = page.getByRole("option", { name: "Online" });
+    await expect(locationOpt).toBeVisible();
+    await locationOpt.click();
+
+    await page.getByTestId("lesson-submit").click();
+
+    // Should see the new lesson in the list
+    await expect(page.getByTestId("lessons")).toBeVisible();
+    await expect(page.locator("main").getByText("New Lesson Student")).toBeVisible();
   });
 
   test("admin can mark a lesson as completed", async ({ page, testing }) => {
     await testing.login();
-    const student = await testing.login({
+    await testing.login({
       username: "test_complete",
       role: "student",
       name: "Complete Student",
     });
-    await testing.seedLesson({ student_id: student.id });
+    await testing.seedLesson({ username: "test_complete" });
 
     await loginViaUi(page, "test_admin", "testpassword123");
-    await getPw(page, "nav-lessons").click();
-    await getPw(page, "complete-lesson").first().click();
+    await page.getByTestId("nav-lessons").click();
+    await page.getByTestId("complete-lesson").first().click();
     await expect(page.getByText("Completed")).toBeVisible();
   });
 
   test("admin can cancel a lesson", async ({ page, testing }) => {
     await testing.login();
-    const student = await testing.login({
+    await testing.login({
       username: "test_cancel",
       role: "student",
       name: "Cancel Student",
     });
-    await testing.seedLesson({ student_id: student.id });
+    await testing.seedLesson({ username: "test_cancel" });
 
     await loginViaUi(page, "test_admin", "testpassword123");
-    await getPw(page, "nav-lessons").click();
-    await getPw(page, "cancel-lesson").first().click();
-    // Confirm dialog should appear
-    await page.getByRole("button", { name: "Cancel Lesson" }).last().click();
+    await page.getByTestId("nav-lessons").click();
+    await page.getByTestId("cancel-lesson").first().click();
+    const confirmDialog = page.getByRole("alertdialog", { name: "Cancel Lesson" });
+    await expect(confirmDialog).toBeVisible();
+    await confirmDialog.getByRole("button", { name: "Cancel Lesson" }).click();
     await expect(page.getByText("Cancelled")).toBeVisible();
   });
 
   test("admin can add notes to a lesson and publish", async ({ page, testing }) => {
     await testing.login();
-    const student = await testing.login({
+    await testing.login({
       username: "test_notes",
       role: "student",
       name: "Notes Student",
     });
-    await testing.seedLesson({ student_id: student.id, status: "completed" });
+    await testing.seedLesson({ username: "test_notes", status: "completed" });
 
     await loginViaUi(page, "test_admin", "testpassword123");
-    await getPw(page, "nav-lessons").click();
+    await page.getByTestId("nav-lessons").click();
 
     // Click Notes button on the lesson
-    await getPw(page, "lesson-notes").first().click();
+    await page.getByTestId("lesson-notes").first().click();
 
     // Fill note fields
-    await page.locator("#note-topics").fill("Worked on rudiments");
-    await page.locator("#note-homework").fill("Practice paradiddles 10 min daily");
-    await page.locator("#note-progress").fill("Great rhythm, needs work on dynamics");
+    const noteEditor = page.getByTestId("note-editor");
+    await noteEditor.getByLabel("Topics Covered").fill("Worked on rudiments");
+    await noteEditor.getByLabel("Homework").fill("Practice paradiddles 10 min daily");
+    await noteEditor
+      .getByLabel("Progress Observations")
+      .fill("Great rhythm, needs work on dynamics");
 
     // Publish the note
-    await getPw(page, "publish-note").click();
+    await page.getByTestId("publish-note").click();
 
     // Modal should close, back to lessons list
-    await expect(getPw(page, "lessons")).toBeVisible();
+    await expect(page.getByTestId("lessons")).toBeVisible();
   });
 });

@@ -25,7 +25,7 @@ type SelectProps = {
   error?: string;
   onChange?: (value: string) => void;
   onBlur?: () => void;
-  "data-pwid"?: string;
+  "data-testid"?: string;
 };
 
 export const Select = ({
@@ -39,27 +39,27 @@ export const Select = ({
   error,
   onChange,
   onBlur,
-  "data-pwid": pwid,
+  "data-testid": pwid,
 }: SelectProps) => (
   <AriaSelect
     name={name}
-    selectedKey={value ?? null}
+    {...(value !== undefined ? { selectedKey: value || null } : {})}
     isRequired={required}
     isDisabled={disabled}
     isInvalid={!!error}
     onSelectionChange={(key) => onChange?.(String(key))}
     onBlur={onBlur}
-    className="flex flex-col gap-1.5"
+    className="gap-1.5 flex flex-col"
   >
-    <Label className="text-sm font-medium text-muted">{label}</Label>
+    <Label className="text-sm font-medium text-muted dark:text-muted-dark">{label}</Label>
     <Button
       id={id}
-      data-pwid={pwid}
-      className={`flex items-center justify-between rounded-lg border bg-card px-4 py-3 text-primary outline-none transition-colors data-[focused]:border-accent data-[focused]:ring-1 data-[focused]:ring-accent/50 cursor-pointer ${error ? "border-red-500/50" : "border-white/10"}`}
+      data-testid={pwid}
+      className={`rounded-lg bg-card dark:bg-card-dark px-4 py-3 text-primary dark:text-primary-dark data-focused:border-accent data-focused:ring-accent/50 flex cursor-pointer items-center justify-between border transition-colors outline-hidden data-focused:ring-1 ${error ? "border-red-500/50" : "border-overlay/10 dark:border-overlay-dark/10"}`}
     >
-      <SelectValue className="data-[placeholder]:text-muted/50 truncate" />
+      <SelectValue className="data-placeholder:text-muted/50 dark:data-placeholder:text-muted-dark/50 truncate" />
       <svg
-        className="ml-2 h-4 w-4 text-muted shrink-0"
+        className="ml-2 h-4 w-4 text-muted dark:text-muted-dark shrink-0"
         xmlns="http://www.w3.org/2000/svg"
         viewBox="0 0 24 24"
         fill="none"
@@ -71,14 +71,14 @@ export const Select = ({
         <polyline points="6 9 12 15 18 9" />
       </svg>
     </Button>
-    <Popover className="w-[var(--trigger-width)] overflow-auto rounded-lg border border-white/10 bg-card shadow-2xl max-h-60">
-      <ListBox className="outline-none p-1">
+    <Popover className="rounded-lg border-overlay/10 dark:border-overlay-dark/10 bg-card dark:bg-card-dark shadow-2xl max-h-60 w-(--trigger-width) overflow-auto border">
+      <ListBox className="p-1 outline-hidden">
         {options.map((opt) => (
           <ListBoxItem
             key={opt.value}
             id={opt.value}
             textValue={opt.label}
-            className="rounded-md px-3 py-2 text-sm text-primary cursor-pointer outline-none data-[focused]:bg-white/[0.08] data-[selected]:text-accent transition-colors"
+            className="rounded-md px-3 py-2 text-sm text-primary dark:text-primary-dark data-focused:bg-overlay/8 dark:data-focused:bg-overlay-dark/8 data-selected:text-accent cursor-pointer transition-colors outline-hidden"
           >
             {opt.label}
           </ListBoxItem>
@@ -86,7 +86,7 @@ export const Select = ({
       </ListBox>
     </Popover>
     {error ? (
-      <Text slot="errorMessage" className="text-sm text-red-400 mt-0.5">
+      <Text slot="errorMessage" className="text-sm text-red-600 dark:text-red-400 mt-0.5">
         {error}
       </Text>
     ) : null}

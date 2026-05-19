@@ -8,19 +8,17 @@ type ButtonProps = {
   disabled?: boolean;
   onClick?: () => void;
   className?: string;
-  "data-pwid"?: string;
+  "data-testid"?: string;
   [key: string]: unknown;
 };
 
-const variants = {
-  primary:
-    "bg-accent text-white hover:bg-accent-hover hover:-translate-y-px",
+const variants: Record<NonNullable<ButtonProps["variant"]>, string> = {
+  primary: "bg-accent text-white hover:bg-accent-hover hover:-translate-y-px",
   outline:
-    "bg-transparent border border-white/20 text-primary hover:border-accent hover:text-accent",
+    "bg-transparent border border-overlay/20 dark:border-overlay-dark/20 text-primary dark:text-primary-dark hover:border-accent hover:text-accent",
   ghost:
-    "bg-transparent text-muted hover:text-primary hover:bg-white/5",
-  danger:
-    "bg-red-600 text-white hover:bg-red-500 hover:-translate-y-px",
+    "bg-transparent text-muted dark:text-muted-dark hover:text-primary dark:hover:text-primary-dark hover:bg-overlay/5 dark:hover:bg-overlay-dark/5",
+  danger: "bg-red-600 text-white hover:bg-red-500 hover:-translate-y-px",
 };
 
 export const Button = ({
@@ -30,18 +28,18 @@ export const Button = ({
   disabled,
   onClick,
   className,
-  "data-pwid": pwid,
+  "data-testid": pwid,
   ...rest
 }: ButtonProps) => (
   <AriaButton
     type={type}
     isDisabled={disabled}
     onPress={() => onClick?.()}
-    data-pwid={pwid}
+    data-testid={pwid}
     className={[
       "inline-flex items-center justify-center gap-2 rounded-xl px-6 py-3 text-sm font-semibold transition-all cursor-pointer",
-      "data-[disabled]:opacity-50 data-[disabled]:cursor-not-allowed data-[disabled]:hover:transform-none",
-      "data-[focus-visible]:outline-none data-[focus-visible]:ring-2 data-[focus-visible]:ring-accent/60 data-[focus-visible]:ring-offset-2 data-[focus-visible]:ring-offset-bg",
+      "data-disabled:opacity-50 data-disabled:cursor-not-allowed data-disabled:hover:transform-none",
+      "data-focus-visible:outline-hidden data-focus-visible:ring-2 data-focus-visible:ring-accent/60 data-focus-visible:ring-offset-2 data-[focus-visible]:ring-offset-bg",
       variants[variant],
       className,
     ]

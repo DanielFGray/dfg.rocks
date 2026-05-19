@@ -1,6 +1,6 @@
 /// <reference types="vite/client" />
 
-import type { ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 import { Outlet, createRootRouteWithContext, HeadContent, Scripts } from "@tanstack/react-router";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
@@ -16,7 +16,11 @@ export const Route = createRootRouteWithContext<RouterContext>()({
     ],
     links: [
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
-      { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
+      {
+        rel: "preconnect",
+        href: "https://fonts.gstatic.com",
+        crossOrigin: "anonymous",
+      },
       {
         rel: "stylesheet",
         href: "https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,600;0,9..40,700;1,9..40,400&display=swap",
@@ -38,12 +42,39 @@ function RootComponent() {
 }
 
 function RootDocument({ children }: { children: ReactNode }) {
+  useEffect(() => {
+    const root = document.documentElement;
+    const updateViewportWidth = () => {
+      root.style.setProperty(
+        "--viewport-client-width",
+        `${document.documentElement.clientWidth}px`,
+      );
+    };
+
+    updateViewportWidth();
+
+    const resizeObserver =
+      typeof ResizeObserver === "undefined"
+        ? null
+        : new ResizeObserver(() => {
+            updateViewportWidth();
+          });
+
+    resizeObserver?.observe(root);
+    window.addEventListener("resize", updateViewportWidth);
+
+    return () => {
+      resizeObserver?.disconnect();
+      window.removeEventListener("resize", updateViewportWidth);
+    };
+  }, []);
+
   return (
     <html lang="en">
       <head>
         <HeadContent />
       </head>
-      <body className="bg-surface font-sans text-lg leading-relaxed text-primary">
+      <body className="bg-surface font-sans text-lg leading-relaxed text-primary dark:bg-surface-dark dark:text-primary-dark">
         <div id="root">{children}</div>
         <Scripts />
       </body>
