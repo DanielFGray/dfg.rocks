@@ -1,42 +1,66 @@
-import { useState } from "react";
-import { createFileRoute } from "@tanstack/react-router";
-import { useSuspenseQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
+import { createFileRoute, useRouter } from "@tanstack/react-router";
+import { useMutation } from "@tanstack/react-query";
 import { api, uploadMaterial } from "../../lib/api.js";
-import { libraryQuery } from "../../lib/queries.js";
 import type { Material } from "../../lib/types.js";
-import { useAuth } from "../../lib/hooks/useAuth.js";
+import { getLibraryPageData } from "../../lib/routeData.js";
 import { Button } from "../../components/ui/Button.js";
-import { Input } from "../../components/ui/Input.js";
 import { Modal } from "../../components/ui/Modal.js";
 import { ConfirmDialog } from "../../components/ui/ConfirmDialog.js";
 import { EmptyState } from "../../components/ui/EmptyState.js";
 import { MaterialCard } from "../../components/library/MaterialCard.js";
+import { UploadMaterialForm } from "../../components/library/UploadMaterialForm.js";
 
 export const Route = createFileRoute("/_authed/library")({
-  loader: ({ context }) => context.queryClient.ensureQueryData(libraryQuery),
+  loader: () => getLibraryPageData(),
   head: () => ({ meta: [{ title: "Library | DFG Portal" }] }),
   component: LibraryPage,
   pendingComponent: () => (
-    <main className="max-w-[1100px] mx-auto px-5 md:px-8 pt-20 pb-16 text-muted">Loading...</main>
+    <main className="px-5 md:px-8 pt-20 pb-16 text-muted dark:text-muted-dark mx-auto max-w-[1100px]">
+      Loading...
+    </main>
   ),
 });
 
 function LibraryPage() {
-  const queryClient = useQueryClient();
-  const { isAdmin } = useAuth();
+  const router = useRouter();
+  const { materials: loaderMaterials, isAdmin } = Route.useLoaderData();
 
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Material | null>(null);
+  const [pendingCreated, setPendingCreated] = useState<Material[]>([]);
+  const [pendingDeletedIds, setPendingDeletedIds] = useState<string[]>([]);
 
-  const { data: materials } = useSuspenseQuery(libraryQuery);
+  const materials = [
+    ...pendingCreated.filter(
+      (item) =>
+        !pendingDeletedIds.includes(item.id) &&
+        !loaderMaterials.some((existing) => existing.id === item.id),
+    ),
+    ...loaderMaterials.filter((item) => !pendingDeletedIds.includes(item.id)),
+  ];
+
+  useEffect(() => {
+    setPendingCreated((current) =>
+      current.filter((item) => !loaderMaterials.some((existing) => existing.id === item.id)),
+    );
+    setPendingDeletedIds((current) =>
+      current.filter((id) => loaderMaterials.some((item) => item.id === id)),
+    );
+  }, [loaderMaterials]);
 
   const uploadMutation = useMutation({
     mutationFn: async ({ file, title }: { file: File; title: string }) =>
       uploadMaterial(file, title, true),
-    onSuccess: () => {
+    onSuccess: (material: Material) => {
       setUploadModalOpen(false);
-      queryClient.invalidateQueries({ queryKey: ["library"] });
+      setPendingCreated((current) => [
+        material,
+        ...current.filter((item) => item.id !== material.id),
+      ]);
+      setPendingDeletedIds((current) => current.filter((id) => id !== material.id));
+      void router.invalidate();
     },
   });
 
@@ -44,11 +68,16 @@ function LibraryPage() {
     mutationFn: async (id: string) => {
       const { data, error } = await api.admin.materials({ id }).delete();
       if (error) throw error;
+      if (!data || "error" in data) {
+        throw new Error(data?.error ?? "Failed to delete material");
+      }
       return data;
     },
-    onSuccess: () => {
+    onSuccess: (_, id) => {
       setDeleteTarget(null);
-      queryClient.invalidateQueries({ queryKey: ["library"] });
+      setPendingCreated((current) => current.filter((item) => item.id !== id));
+      setPendingDeletedIds((current) => [...current, id]);
+      void router.invalidate();
     },
   });
 
@@ -56,23 +85,17 @@ function LibraryPage() {
     setExpandedId((prev) => (prev === id ? null : id));
   };
 
-  const handleUploadSubmit = (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    const form = e.currentTarget;
-    const data = new FormData(form);
-    const file = data.get("file");
-    const title = data.get("title") as string;
-    if (!file || !(file instanceof File) || !title) return;
+  const handleUpload = (file: File, title: string) => {
     uploadMutation.mutate({ file, title });
   };
 
   return (
-    <main data-pwid="library" className="max-w-[1100px] mx-auto px-5 md:px-8 pt-20 pb-16">
+    <main data-testid="library" className="px-5 md:px-8 pt-20 pb-16 mx-auto max-w-[1100px]">
       {/* ---- Header ---- */}
-      <div className="flex items-center justify-between mb-8">
+      <div className="mb-8 flex items-center justify-between">
         <h1 className="text-3xl font-bold tracking-tight">Library</h1>
         {isAdmin ? (
-          <Button onClick={() => setUploadModalOpen(true)} data-pwid="upload-material">
+          <Button onClick={() => setUploadModalOpen(true)} data-testid="upload-material">
             Upload Material
           </Button>
         ) : null}
@@ -88,13 +111,16 @@ function LibraryPage() {
           }
           action={
             isAdmin
-              ? { label: "Upload Material", onClick: () => setUploadModalOpen(true) }
+              ? {
+                  label: "Upload Material",
+                  onClick: () => setUploadModalOpen(true),
+                }
               : undefined
           }
         />
       ) : (
-        <div className="flex flex-col gap-2">
-          {(materials as Material[]).map((m) => (
+        <div className="gap-2 flex flex-col">
+          {materials.map((m) => (
             <MaterialCard
               key={m.id}
               material={m}
@@ -109,40 +135,16 @@ function LibraryPage() {
 
       {/* ---- Upload Modal ---- */}
       {isAdmin ? (
-        <Modal open={uploadModalOpen} onClose={() => setUploadModalOpen(false)} title="Upload Material">
-          <form
-            onSubmit={handleUploadSubmit}
-            data-pwid="upload-material-form"
-            className="flex flex-col gap-5"
-          >
-            <Input
-              id="material-title"
-              name="title"
-              label="Title"
-              required
-              placeholder="e.g. Scales Reference Sheet"
-            />
-            <div className="flex flex-col gap-1.5">
-              <label htmlFor="material-file" className="text-sm font-medium text-muted">
-                File
-              </label>
-              <input
-                id="material-file"
-                name="file"
-                type="file"
-                required
-                className="rounded-lg border border-white/10 bg-card px-4 py-3 text-primary file:mr-4 file:rounded-lg file:border-0 file:bg-accent/20 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-accent hover:file:bg-accent/30 file:cursor-pointer outline-none transition-colors focus:border-accent focus:ring-1 focus:ring-accent/50"
-              />
-            </div>
-            <div className="flex justify-end gap-3 mt-2">
-              <Button variant="ghost" onClick={() => setUploadModalOpen(false)}>
-                Cancel
-              </Button>
-              <Button type="submit" variant="primary">
-                Upload
-              </Button>
-            </div>
-          </form>
+        <Modal
+          open={uploadModalOpen}
+          onClose={() => setUploadModalOpen(false)}
+          title="Upload Material"
+        >
+          <UploadMaterialForm
+            onSubmit={handleUpload}
+            onCancel={() => setUploadModalOpen(false)}
+            isPending={uploadMutation.isPending}
+          />
         </Modal>
       ) : null}
 

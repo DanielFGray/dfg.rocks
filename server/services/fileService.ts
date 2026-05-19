@@ -1,19 +1,20 @@
 import fs from "fs/promises";
 import path from "path";
+import { sql } from "kysely";
 import { rootDb } from "../db.js";
 import { HttpError } from "../pgErrors.js";
 import { env } from "../assertEnv.js";
+import { extractNotationTracksFromBytes } from "./notationService.js";
 
 const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
 
-const ALLOWED_MIME_PATTERNS = [
-  "application/pdf",
-  /^image\//,
-  /^audio\//,
-  /^video\//,
-] as const;
+const ALLOWED_MIME_PATTERNS = ["application/pdf", /^image\//, /^audio\//, /^video\//] as const;
 
-function isMimeAllowed(mimeType: string): boolean {
+const NOTATION_EXTENSIONS = new Set([".gp", ".gp3", ".gp4", ".gp5", ".gpx", ".musicxml", ".mxl"]);
+
+function isFileAllowed(mimeType: string, filename: string): boolean {
+  const ext = path.extname(filename).toLowerCase();
+  if (NOTATION_EXTENSIONS.has(ext)) return true;
   return ALLOWED_MIME_PATTERNS.some((pattern) =>
     typeof pattern === "string" ? mimeType === pattern : pattern.test(mimeType),
   );
@@ -35,10 +36,10 @@ export const fileService = {
       throw new HttpError(413, "File too large. Maximum size is 50MB.");
     }
 
-    if (!isMimeAllowed(file.type)) {
+    if (!isFileAllowed(file.type, file.name)) {
       throw new HttpError(
         400,
-        `File type "${file.type}" is not allowed. Allowed: PDF, images, audio, video.`,
+        `File type "${file.type}" is not allowed. Allowed: PDF, images, audio, video, notation files.`,
       );
     }
 
@@ -47,6 +48,7 @@ export const fileService = {
     const filePath = path.join(uploadsDir, storedName);
 
     const buffer = Buffer.from(await file.arrayBuffer());
+    const notationTracks = extractNotationTracksFromBytes(new Uint8Array(buffer), file.name);
     await fs.writeFile(filePath, buffer);
 
     const material = await rootDb
@@ -58,6 +60,8 @@ export const fileService = {
         mime_type: file.type,
         file_size: file.size,
         is_global: isGlobal,
+        notation_tracks:
+          notationTracks === null ? null : sql`${JSON.stringify(notationTracks)}::jsonb`,
         uploaded_by: uploadedBy,
       })
       .returning([
@@ -67,6 +71,7 @@ export const fileService = {
         "mime_type",
         "file_size",
         "is_global",
+        "notation_tracks",
       ])
       .executeTakeFirst();
 
@@ -133,11 +138,7 @@ export const fileService = {
         const enrolled = await rootDb
           .selectFrom("app_public.module_materials as mm")
           .innerJoin("app_public.modules as mod", "mod.id", "mm.module_id")
-          .innerJoin(
-            "app_public.enrollments as e",
-            "e.course_id",
-            "mod.course_id",
-          )
+          .innerJoin("app_public.enrollments as e", "e.course_id", "mod.course_id")
           .where("mm.material_id", "=", materialId)
           .where("e.student_id", "=", userId)
           .select(["mm.material_id"])

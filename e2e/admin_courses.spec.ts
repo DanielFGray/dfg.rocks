@@ -1,23 +1,20 @@
-import { test, expect, getPw, loginViaUi } from "./helpers.js";
+import { test, expect, loginViaUi } from "./helpers.js";
 
 test.describe("admin course management", () => {
-  test("admin sees New Course button", async ({ page, testing }) => {
-    await testing.login();
-    await loginViaUi(page, "test_admin", "testpassword123");
-    await expect(getPw(page, "new-course")).toBeVisible();
-  });
-
   test("admin can create a course", async ({ page, testing }) => {
     await testing.login();
     await loginViaUi(page, "test_admin", "testpassword123");
+    await page.getByTestId("nav-courses").click();
 
-    await getPw(page, "new-course").click();
-    await expect(getPw(page, "course-form")).toBeVisible();
+    await page.getByTestId("new-course").click();
+    await expect(page.getByTestId("course-form")).toBeVisible();
 
-    await page.locator("#course-title").fill("Test: Admin Created");
-    await page.locator("#course-instrument").selectOption("Drums");
-    await page.locator("#course-description").fill("Created via admin UI");
-    await page.locator('[data-pwid="course-form"] button[type="submit"]').click();
+    const form = page.getByTestId("course-form");
+    await form.getByLabel("Title").fill("Test: Admin Created");
+    await form.getByRole("button", { name: /Instrument/ }).click();
+    await page.getByRole("option", { name: "Drums" }).click();
+    await form.getByLabel("Description").fill("Created via admin UI");
+    await page.getByTestId("course-submit").click();
 
     // Should refresh and show the new course
     await expect(page.getByText("Test: Admin Created")).toBeVisible();
@@ -25,8 +22,12 @@ test.describe("admin course management", () => {
 
   test("admin sees edit/delete buttons on course cards", async ({ page, testing }) => {
     await testing.login();
-    await testing.seedCourse({ title: "Test: With Buttons", instrument: "Guitar" });
+    await testing.seedCourse({
+      title: "Test: With Buttons",
+      instrument: "Guitar",
+    });
     await loginViaUi(page, "test_admin", "testpassword123");
+    await page.getByTestId("nav-courses").click();
 
     await expect(page.getByRole("button", { name: "Edit" }).first()).toBeVisible();
     await expect(page.getByRole("button", { name: "Delete" }).first()).toBeVisible();

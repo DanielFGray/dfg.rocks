@@ -1,98 +1,116 @@
 import * as v from "valibot";
 
-export const UserRoleSchema = v.picklist([
-  "admin",
-  "student",
-  "parent",
-  "teacher",
-]);
+export const UserRole = v.picklist(["admin", "student", "parent", "teacher"]);
 
-export type UserRole = v.InferOutput<typeof UserRoleSchema>;
+export type UserRole = v.InferOutput<typeof UserRole>;
 
-export const UserSchema = v.object({
+export const User = v.object({
   id: v.string(),
   username: v.string(),
   name: v.string(),
   email: v.string(),
-  role: UserRoleSchema,
+  role: UserRole,
   is_verified: v.boolean(),
 });
 
-export type User = v.InferOutput<typeof UserSchema>;
+export type User = v.InferOutput<typeof User>;
 
-export const CourseSchema = v.object({
+export const Course = v.object({
   id: v.string(),
   title: v.string(),
   description: v.string(),
   instrument: v.string(),
 });
 
-export type Course = v.InferOutput<typeof CourseSchema>;
+export type Course = v.InferOutput<typeof Course>;
 
-export const ModuleSchema = v.object({
+export const Module = v.object({
   id: v.string(),
   course_id: v.string(),
   title: v.string(),
-  description: v.nullable(v.string()),
+  content: v.nullable(v.unknown()),
   sort_order: v.number(),
 });
 
-export type Module = v.InferOutput<typeof ModuleSchema>;
+export type Module = v.InferOutput<typeof Module>;
 
-export const MaterialSchema = v.object({
+export const MaterialNotationTrack = v.object({
+  index: v.number(),
+  name: v.string(),
+  short_name: v.string(),
+  is_percussion: v.boolean(),
+});
+
+export const Material = v.object({
   id: v.string(),
   title: v.string(),
   original_filename: v.string(),
   mime_type: v.string(),
   file_size: v.number(),
   is_global: v.boolean(),
+  notation_tracks: v.nullable(v.array(MaterialNotationTrack)),
 });
 
-export type Material = v.InferOutput<typeof MaterialSchema>;
+export type Material = v.InferOutput<typeof Material>;
 
-export const ModuleWithMaterialsSchema = v.object({
+export type MaterialNotationTrack = NonNullable<Material["notation_tracks"]>[number];
+
+export const AssignedMaterial = v.object({
+  id: v.string(),
+  title: v.string(),
+  original_filename: v.string(),
+  mime_type: v.string(),
+  file_size: v.number(),
+  is_global: v.boolean(),
+  notation_tracks: v.nullable(v.array(MaterialNotationTrack)),
+  assigned_track_index: v.nullable(v.number()),
+});
+
+export type AssignedMaterial = v.InferOutput<typeof AssignedMaterial>;
+
+export const ModuleWithMaterials = v.object({
   id: v.string(),
   course_id: v.string(),
   title: v.string(),
-  description: v.nullable(v.string()),
+  content: v.nullable(v.unknown()),
   sort_order: v.number(),
-  materials: v.array(MaterialSchema),
+  materials: v.array(Material),
 });
 
-export type ModuleWithMaterials = v.InferOutput<typeof ModuleWithMaterialsSchema>;
+export type ModuleWithMaterials = v.InferOutput<typeof ModuleWithMaterials>;
 
-export const CourseDetailSchema = v.object({
+export const CourseDetail = v.object({
   id: v.string(),
   title: v.string(),
   description: v.string(),
   instrument: v.string(),
-  modules: v.array(ModuleWithMaterialsSchema),
+  modules: v.array(ModuleWithMaterials),
 });
 
-export type CourseDetail = v.InferOutput<typeof CourseDetailSchema>;
+export type CourseDetail = v.InferOutput<typeof CourseDetail>;
 
-export const EnrolledCourseSchema = v.object({
+export const EnrolledCourse = v.object({
   id: v.string(),
   title: v.string(),
   instrument: v.string(),
 });
 
-export type EnrolledCourse = v.InferOutput<typeof EnrolledCourseSchema>;
+export type EnrolledCourse = v.InferOutput<typeof EnrolledCourse>;
 
-export const StudentDetailSchema = v.object({
+export const StudentDetail = v.object({
   id: v.string(),
   username: v.string(),
   name: v.string(),
   email: v.string(),
-  role: UserRoleSchema,
+  role: UserRole,
   is_verified: v.boolean(),
-  enrolled_courses: v.array(EnrolledCourseSchema),
-  assigned_materials: v.array(MaterialSchema),
+  enrolled_courses: v.array(EnrolledCourse),
+  assigned_materials: v.array(AssignedMaterial),
 });
 
-export type StudentDetail = v.InferOutput<typeof StudentDetailSchema>;
+export type StudentDetail = v.InferOutput<typeof StudentDetail>;
 
-export const SubmissionSchema = v.object({
+export const Submission = v.object({
   id: v.string(),
   name: v.string(),
   email: v.string(),
@@ -104,24 +122,32 @@ export const SubmissionSchema = v.object({
   created_at: v.string(),
 });
 
-export type Submission = v.InferOutput<typeof SubmissionSchema>;
+export type Submission = v.InferOutput<typeof Submission>;
 
-export const PracticeLogStatusSchema = v.picklist(["practiced", "completed"]);
+export const PracticeLogStatus = v.picklist(["practiced", "completed"]);
 
-export type PracticeLogStatus = v.InferOutput<typeof PracticeLogStatusSchema>;
+export type PracticeLogStatus = v.InferOutput<typeof PracticeLogStatus>;
 
-export const PracticeLogSchema = v.object({
+export const PracticeLog = v.object({
   id: v.string(),
   student_id: v.string(),
   material_id: v.string(),
-  status: PracticeLogStatusSchema,
+  status: PracticeLogStatus,
   notes: v.nullable(v.string()),
   logged_at: v.string(),
 });
 
-export type PracticeLog = v.InferOutput<typeof PracticeLogSchema>;
+export type PracticeLog = v.InferOutput<typeof PracticeLog>;
 
-export const AssignmentNoteSchema = v.object({
+export const AssignmentProgress = v.object({
+  material_id: v.string(),
+  listened_seconds: v.number(),
+  updated_at: v.string(),
+});
+
+export type AssignmentProgress = v.InferOutput<typeof AssignmentProgress>;
+
+export const AssignmentNote = v.object({
   id: v.string(),
   student_id: v.string(),
   material_id: v.string(),
@@ -130,9 +156,19 @@ export const AssignmentNoteSchema = v.object({
   updated_at: v.string(),
 });
 
-export type AssignmentNote = v.InferOutput<typeof AssignmentNoteSchema>;
+export type AssignmentNote = v.InferOutput<typeof AssignmentNote>;
 
-export const MessageSchema = v.object({
+export const AssignmentReview = v.object({
+  id: v.string(),
+  material_id: v.string(),
+  stars: v.pipe(v.number(), v.minValue(1), v.maxValue(5)),
+  listened_seconds: v.number(),
+  created_at: v.string(),
+});
+
+export type AssignmentReview = v.InferOutput<typeof AssignmentReview>;
+
+export const Message = v.object({
   id: v.string(),
   sender_id: v.string(),
   recipient_id: v.string(),
@@ -141,9 +177,9 @@ export const MessageSchema = v.object({
   created_at: v.string(),
 });
 
-export type Message = v.InferOutput<typeof MessageSchema>;
+export type Message = v.InferOutput<typeof Message>;
 
-export const FamilySchema = v.object({
+export const Family = v.object({
   id: v.string(),
   slug: v.string(),
   name: v.string(),
@@ -151,9 +187,9 @@ export const FamilySchema = v.object({
   created_at: v.string(),
 });
 
-export type Family = v.InferOutput<typeof FamilySchema>;
+export type Family = v.InferOutput<typeof Family>;
 
-export const FamilyInvitationSchema = v.object({
+export const FamilyInvitation = v.object({
   id: v.string(),
   family_id: v.string(),
   family_name: v.string(),
@@ -162,73 +198,64 @@ export const FamilyInvitationSchema = v.object({
   email: v.nullable(v.string()),
 });
 
-export type FamilyInvitation = v.InferOutput<typeof FamilyInvitationSchema>;
+export type FamilyInvitation = v.InferOutput<typeof FamilyInvitation>;
 
-export const LocationTypeSchema = v.picklist([
+export const LocationType = v.picklist([
   "in_person_teacher_travels",
   "in_person_student_travels",
   "studio",
   "online",
 ]);
 
-export type LocationType = v.InferOutput<typeof LocationTypeSchema>;
+export type LocationType = v.InferOutput<typeof LocationType>;
 
-export const LessonStatusSchema = v.picklist([
-  "scheduled",
-  "completed",
-  "cancelled",
-  "no_show",
-]);
+export const LessonStatus = v.picklist(["scheduled", "completed", "cancelled", "no_show"]);
 
-export type LessonStatus = v.InferOutput<typeof LessonStatusSchema>;
+export type LessonStatus = v.InferOutput<typeof LessonStatus>;
 
-export const DepositStatusSchema = v.picklist([
-  "held",
-  "refunded",
-  "captured",
-]);
+export const DepositStatus = v.picklist(["held", "refunded", "captured"]);
 
-export type DepositStatus = v.InferOutput<typeof DepositStatusSchema>;
+export type DepositStatus = v.InferOutput<typeof DepositStatus>;
 
-export const LessonSchema = v.object({
+export const Lesson = v.object({
   id: v.string(),
   student_id: v.string(),
   gcal_event_id: v.nullable(v.string()),
   scheduled_at: v.string(),
   duration_minutes: v.number(),
-  location_type: LocationTypeSchema,
-  status: LessonStatusSchema,
+  location_type: LocationType,
+  status: LessonStatus,
   cancellation_reason: v.nullable(v.string()),
   cancelled_at: v.nullable(v.string()),
   completed_at: v.nullable(v.string()),
   created_at: v.string(),
 });
 
-export type Lesson = v.InferOutput<typeof LessonSchema>;
+export type Lesson = v.InferOutput<typeof Lesson>;
 
-export const StudentRateSchema = v.object({
+export const StudentRate = v.object({
   id: v.string(),
   student_id: v.string(),
   rate_cents: v.number(),
   lesson_duration_minutes: v.number(),
-  location_type: LocationTypeSchema,
+  location_type: LocationType,
   notes: v.nullable(v.string()),
   created_at: v.string(),
 });
 
-export type StudentRate = v.InferOutput<typeof StudentRateSchema>;
+export type StudentRate = v.InferOutput<typeof StudentRate>;
 
-export const LessonDepositSchema = v.object({
+export const LessonDeposit = v.object({
   id: v.string(),
   lesson_id: v.string(),
   amount_cents: v.number(),
-  status: DepositStatusSchema,
+  status: DepositStatus,
   created_at: v.string(),
 });
 
-export type LessonDeposit = v.InferOutput<typeof LessonDepositSchema>;
+export type LessonDeposit = v.InferOutput<typeof LessonDeposit>;
 
-export const UserEmailSchema = v.object({
+export const UserEmail = v.object({
   id: v.string(),
   email: v.string(),
   is_verified: v.boolean(),
@@ -236,9 +263,9 @@ export const UserEmailSchema = v.object({
   created_at: v.string(),
 });
 
-export type UserEmail = v.InferOutput<typeof UserEmailSchema>;
+export type UserEmail = v.InferOutput<typeof UserEmail>;
 
-export const LessonNoteSchema = v.object({
+export const LessonNote = v.object({
   id: v.string(),
   lesson_id: v.string(),
   topics_covered: v.nullable(v.string()),
@@ -251,37 +278,49 @@ export const LessonNoteSchema = v.object({
   updated_at: v.string(),
 });
 
-export type LessonNote = v.InferOutput<typeof LessonNoteSchema>;
+export type LessonNote = v.InferOutput<typeof LessonNote>;
 
-export const TimeSlotSchema = v.object({
+export const TimeSlot = v.object({
   start: v.string(),
   end: v.string(),
 });
 
-export type TimeSlot = v.InferOutput<typeof TimeSlotSchema>;
+export type TimeSlot = v.InferOutput<typeof TimeSlot>;
 
-export const WorkingHoursDaySchema = v.object({
+export const WorkingHoursDay = v.object({
   start: v.string(),
   end: v.string(),
 });
 
-export type WorkingHoursDay = v.InferOutput<typeof WorkingHoursDaySchema>;
+export type WorkingHoursDay = v.InferOutput<typeof WorkingHoursDay>;
 
-export const WorkingHoursSchema = v.object({
-  0: v.nullable(WorkingHoursDaySchema),
-  1: v.nullable(WorkingHoursDaySchema),
-  2: v.nullable(WorkingHoursDaySchema),
-  3: v.nullable(WorkingHoursDaySchema),
-  4: v.nullable(WorkingHoursDaySchema),
-  5: v.nullable(WorkingHoursDaySchema),
-  6: v.nullable(WorkingHoursDaySchema),
+export const WorkingHours = v.object({
+  0: v.nullable(WorkingHoursDay),
+  1: v.nullable(WorkingHoursDay),
+  2: v.nullable(WorkingHoursDay),
+  3: v.nullable(WorkingHoursDay),
+  4: v.nullable(WorkingHoursDay),
+  5: v.nullable(WorkingHoursDay),
+  6: v.nullable(WorkingHoursDay),
 });
 
-export type WorkingHours = v.InferOutput<typeof WorkingHoursSchema>;
+export type WorkingHours = v.InferOutput<typeof WorkingHours>;
 
-export const GcalStatusSchema = v.object({
+export const GcalStatus = v.object({
   connected: v.boolean(),
   calendar_id: v.nullable(v.string()),
 });
 
-export type GcalStatus = v.InferOutput<typeof GcalStatusSchema>;
+export type GcalStatus = v.InferOutput<typeof GcalStatus>;
+
+export const Testimonial = v.object({
+  id: v.string(),
+  user_id: v.string(),
+  body: v.string(),
+  display_name: v.string(),
+  role_label: v.string(),
+  created_at: v.string(),
+  updated_at: v.string(),
+});
+
+export type Testimonial = v.InferOutput<typeof Testimonial>;

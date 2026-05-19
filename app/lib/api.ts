@@ -1,21 +1,22 @@
 import { treaty } from "@elysiajs/eden";
 import type { App } from "../../server/app.js";
+import type { Material } from "./types.js";
 
-export const api = treaty<App>(
+export const { api } = treaty<App>(
   typeof window !== "undefined" ? window.location.origin : "http://localhost",
   {
     fetch: { credentials: "include" },
     headers: { "X-Requested-With": "dfg" },
-    throwHttpError: true,
+    // throwHttpError: true,
   },
-).api;
+);
 
 // File upload (multipart — can't go through Eden)
 export async function uploadMaterial(
   file: File,
   title: string,
   isGlobal: boolean,
-) {
+): Promise<Material> {
   const formData = new FormData();
   formData.append("file", file);
   formData.append("title", title);
@@ -27,8 +28,8 @@ export async function uploadMaterial(
     headers: { "X-Requested-With": "dfg" },
   });
   if (!res.ok) {
-    const data = (await res.json().catch(() => ({ error: "Upload failed" }))) as { error?: string };
+    const data = await res.json().catch(() => ({ error: "Upload failed" }));
     throw new Error(data.error ?? "Upload failed");
   }
-  return res.json();
+  return res.json() as Promise<Material>;
 }

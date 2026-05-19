@@ -1,23 +1,33 @@
 import Elysia, { t } from "elysia";
 import { sql } from "kysely";
+import { createReadStream } from "fs";
+import { Readable } from "stream";
 import { rootDb, withAuthContext } from "../db.js";
 import { sessionService } from "../services/sessionService.js";
 import { googleCalendarService } from "../services/googleCalendarService.js";
+import {
+  rescheduleTestimonialReminders,
+  setTestimonialReminderIntervalDays,
+  getTestimonialReminderIntervalDays,
+} from "../services/testimonialReminderService.js";
 import { fileService } from "../services/fileService.js";
+import { resolveAssignedTrackIndex } from "../services/notationService.js";
 import { HttpError, mapPgError } from "../pgErrors.js";
 import { env } from "../assertEnv.js";
 import type { UserRole } from "../../shared/schemas.js";
+import { extractMaterialIds } from "../../shared/content.js";
+import type { LessonStatus, LocationType } from "../../shared/schemas.js";
 
 // === Shared schemas ===
 
-const LocationType = t.Union([
+const LocationTypeSchema = t.Union([
   t.Literal("in_person_teacher_travels"),
   t.Literal("in_person_student_travels"),
   t.Literal("studio"),
   t.Literal("online"),
 ]);
 
-const LessonStatus = t.Union([
+const LessonStatusSchema = t.Union([
   t.Literal("scheduled"),
   t.Literal("completed"),
   t.Literal("cancelled"),
@@ -30,6 +40,18 @@ function toJson(value: unknown): string {
   return JSON.stringify(value);
 }
 
+function toIsoString(value: Date | string): string {
+  return value instanceof Date ? value.toISOString() : value;
+}
+
+function toIsoStringOrNull(value: Date | string | null): string | null {
+  return value ? toIsoString(value) : null;
+}
+
+function getCookieString(value: unknown): string | undefined {
+  return typeof value === "string" ? value : undefined;
+}
+
 function serializeLesson(r: {
   scheduled_at: Date | string;
   cancelled_at: Date | string | null;
@@ -39,10 +61,10 @@ function serializeLesson(r: {
 }) {
   return {
     ...r,
-    scheduled_at: (r.scheduled_at as Date).toISOString(),
-    cancelled_at: r.cancelled_at ? (r.cancelled_at as Date).toISOString() : null,
-    completed_at: r.completed_at ? (r.completed_at as Date).toISOString() : null,
-    created_at: (r.created_at as Date).toISOString(),
+    scheduled_at: toIsoString(r.scheduled_at),
+    cancelled_at: toIsoStringOrNull(r.cancelled_at),
+    completed_at: toIsoStringOrNull(r.completed_at),
+    created_at: toIsoString(r.created_at),
   };
 }
 
@@ -54,9 +76,9 @@ function serializeLessonNote(r: {
 }) {
   return {
     ...r,
-    material_ids: (r.material_ids ?? null) as string[] | null,
-    created_at: (r.created_at as Date).toISOString(),
-    updated_at: (r.updated_at as Date).toISOString(),
+    material_ids: r.material_ids ?? null,
+    created_at: toIsoString(r.created_at),
+    updated_at: toIsoString(r.updated_at),
   };
 }
 
@@ -70,7 +92,7 @@ export const adminRoutes = new Elysia({ prefix: "/api/admin" })
     }
   })
   .derive(async ({ cookie, headers }) => {
-    const token = cookie.session?.value as string | undefined;
+    const token = getCookieString(cookie.session?.value);
     const result = await sessionService.validateSessionToken(token);
     if (!result) throw new HttpError(401, "Unauthorized");
     if (result.user.role !== "admin") throw new HttpError(403, "Forbidden");
@@ -80,47 +102,55 @@ export const adminRoutes = new Elysia({ prefix: "/api/admin" })
 
   // --- Submissions ---
 
-  .get("/submissions", async ({ query }) => {
-    const limit = query.limit || 50;
-    const offset = query.offset || 0;
+  .get(
+    "/submissions",
+    async ({ query }) => {
+      const limit = query.limit || 50;
+      const offset = query.offset || 0;
 
-    const rows = await rootDb
-      .selectFrom("app_public.contact_submissions")
-      .selectAll()
-      .orderBy("created_at", "desc")
-      .limit(limit)
-      .offset(offset)
-      .execute();
+      const rows = await rootDb
+        .selectFrom("app_public.contact_submissions")
+        .selectAll()
+        .orderBy("created_at", "desc")
+        .limit(limit)
+        .offset(offset)
+        .execute();
 
-    return rows.map((r) => ({
-      ...r,
-      created_at: r.created_at.toISOString(),
-    }));
-  }, {
-    query: t.Object({
-      limit: t.Optional(t.Numeric()),
-      offset: t.Optional(t.Numeric()),
-    }),
-  })
+      return rows.map((r) => ({
+        ...r,
+        created_at: r.created_at.toISOString(),
+      }));
+    },
+    {
+      query: t.Object({
+        limit: t.Optional(t.Numeric()),
+        offset: t.Optional(t.Numeric()),
+      }),
+    },
+  )
 
-  .patch("/submissions/:id", async ({ params, body }) => {
-    const { is_read } = body;
+  .patch(
+    "/submissions/:id",
+    async ({ params, body }) => {
+      const { is_read } = body;
 
-    const row = await rootDb
-      .updateTable("app_public.contact_submissions")
-      .set({ is_read })
-      .where("id", "=", params.id)
-      .returning(["id"])
-      .executeTakeFirst();
+      const row = await rootDb
+        .updateTable("app_public.contact_submissions")
+        .set({ is_read })
+        .where("id", "=", params.id)
+        .returning(["id"])
+        .executeTakeFirst();
 
-    if (!row) throw new HttpError(404, "Submission not found");
+      if (!row) throw new HttpError(404, "Submission not found");
 
-    return { success: true as const };
-  }, {
-    body: t.Object({
-      is_read: t.Boolean(),
-    }),
-  })
+      return { success: true as const };
+    },
+    {
+      body: t.Object({
+        is_read: t.Boolean(),
+      }),
+    },
+  )
 
   // --- Students ---
 
@@ -129,7 +159,8 @@ export const adminRoutes = new Elysia({ prefix: "/api/admin" })
       .selectFrom("app_public.users")
       .select(["id", "username", "name", "role", "is_verified"])
       .select((eb) =>
-        eb.selectFrom("app_public.user_emails")
+        eb
+          .selectFrom("app_public.user_emails")
           .select("email")
           .whereRef("app_public.user_emails.user_id", "=", "app_public.users.id")
           .where("is_primary", "=", true)
@@ -143,7 +174,7 @@ export const adminRoutes = new Elysia({ prefix: "/api/admin" })
       ...r,
       name: r.name ?? "",
       email: r.email ?? "",
-      role: r.role as UserRole,
+      role: r.role,
     }));
   })
 
@@ -152,7 +183,8 @@ export const adminRoutes = new Elysia({ prefix: "/api/admin" })
       .selectFrom("app_public.users")
       .select(["id", "username", "name", "role", "is_verified"])
       .select((eb) =>
-        eb.selectFrom("app_public.user_emails")
+        eb
+          .selectFrom("app_public.user_emails")
           .select("email")
           .whereRef("app_public.user_emails.user_id", "=", "app_public.users.id")
           .where("is_primary", "=", true)
@@ -169,7 +201,7 @@ export const adminRoutes = new Elysia({ prefix: "/api/admin" })
       ...raw,
       name: raw.name ?? "",
       email: raw.email ?? "",
-      role: raw.role as UserRole,
+      role: raw.role,
     };
 
     const enrolled_courses = await rootDb
@@ -212,7 +244,8 @@ export const adminRoutes = new Elysia({ prefix: "/api/admin" })
       .where("e.course_id", "=", params.id)
       .select(["u.id", "u.username", "u.name", "u.role", "u.is_verified"])
       .select((eb) =>
-        eb.selectFrom("app_public.user_emails")
+        eb
+          .selectFrom("app_public.user_emails")
           .select("email")
           .whereRef("app_public.user_emails.user_id", "=", "u.id")
           .where("is_primary", "=", true)
@@ -226,177 +259,203 @@ export const adminRoutes = new Elysia({ prefix: "/api/admin" })
       username: r.username,
       name: r.name ?? "",
       email: r.email ?? "",
-      role: r.role as UserRole,
+      role: r.role,
       is_verified: r.is_verified,
     }));
   })
 
-  .post("/courses", async ({ body }) => {
-    const { title, description, instrument } = body;
+  .post(
+    "/courses",
+    async ({ body }) => {
+      const { title, description, instrument } = body;
 
-    const course = await rootDb
-      .insertInto("app_public.courses")
-      .values({
-        title,
-        description: description ?? "",
-        instrument,
-      })
-      .returning(["id", "title", "description", "instrument"])
-      .executeTakeFirstOrThrow();
+      const course = await rootDb
+        .insertInto("app_public.courses")
+        .values({
+          title,
+          description: description ?? "",
+          instrument,
+        })
+        .returning(["id", "title", "description", "instrument"])
+        .executeTakeFirstOrThrow();
 
-    return course;
-  }, {
-    body: t.Object({
-      title: t.String(),
-      description: t.Optional(t.String()),
-      instrument: t.String(),
-    }),
-  })
+      return course;
+    },
+    {
+      body: t.Object({
+        title: t.String(),
+        description: t.Optional(t.String()),
+        instrument: t.String(),
+      }),
+    },
+  )
 
-  .patch("/courses/:id", async ({ params, body }) => {
-    const updates: Record<string, string> = {};
-    if (body.title !== undefined) updates.title = body.title;
-    if (body.description !== undefined) updates.description = body.description;
-    if (body.instrument !== undefined) updates.instrument = body.instrument;
+  .patch(
+    "/courses/:id",
+    async ({ params, body }) => {
+      const updates: Record<string, string> = {};
+      if (body.title !== undefined) updates.title = body.title;
+      if (body.description !== undefined) updates.description = body.description;
+      if (body.instrument !== undefined) updates.instrument = body.instrument;
 
-    const course = await rootDb
-      .updateTable("app_public.courses")
-      .set(updates)
-      .where("id", "=", params.id)
-      .returning(["id", "title", "description", "instrument"])
-      .executeTakeFirst();
+      const course = await rootDb
+        .updateTable("app_public.courses")
+        .set(updates)
+        .where("id", "=", params.id)
+        .returning(["id", "title", "description", "instrument"])
+        .executeTakeFirst();
 
-    if (!course) throw new HttpError(404, "Course not found");
+      if (!course) throw new HttpError(404, "Course not found");
 
-    return course;
-  }, {
-    body: t.Object({
-      title: t.Optional(t.String()),
-      description: t.Optional(t.String()),
-      instrument: t.Optional(t.String()),
-    }),
-  })
+      return course;
+    },
+    {
+      body: t.Object({
+        title: t.Optional(t.String()),
+        description: t.Optional(t.String()),
+        instrument: t.Optional(t.String()),
+      }),
+    },
+  )
 
   .delete("/courses/:id", async ({ params }) => {
-    await rootDb
-      .deleteFrom("app_public.courses")
-      .where("id", "=", params.id)
-      .execute();
+    await rootDb.deleteFrom("app_public.courses").where("id", "=", params.id).execute();
 
     return { success: true as const };
   })
 
   // --- Modules ---
 
-  .post("/courses/:id/modules", async ({ params, body }) => {
-    const { title, description, sort_order } = body;
-
+  .get("/modules/:id", async ({ params }) => {
     const mod = await rootDb
-      .insertInto("app_public.modules")
-      .values({
-        course_id: params.id,
-        title,
-        description: description ?? null,
-        sort_order: sort_order ?? 0,
-      })
-      .returning(["id", "course_id", "title", "description", "sort_order"])
-      .executeTakeFirstOrThrow();
-
-    return mod;
-  }, {
-    body: t.Object({
-      title: t.String(),
-      description: t.Optional(t.String()),
-      sort_order: t.Optional(t.Number()),
-    }),
-  })
-
-  .patch("/modules/:id", async ({ params, body }) => {
-    const updates: Record<string, unknown> = {};
-    if (body.title !== undefined) updates.title = body.title;
-    if (body.description !== undefined) updates.description = body.description;
-    if (body.sort_order !== undefined) updates.sort_order = body.sort_order;
-
-    const mod = await rootDb
-      .updateTable("app_public.modules")
-      .set(updates)
+      .selectFrom("app_public.modules")
+      .select(["id", "course_id", "title", "content", "sort_order"])
       .where("id", "=", params.id)
-      .returning(["id", "course_id", "title", "description", "sort_order"])
       .executeTakeFirst();
 
     if (!mod) throw new HttpError(404, "Module not found");
 
     return mod;
-  }, {
-    body: t.Object({
-      title: t.Optional(t.String()),
-      description: t.Optional(t.String()),
-      sort_order: t.Optional(t.Number()),
-    }),
   })
+
+  .post(
+    "/courses/:id/modules",
+    async ({ params, body }) => {
+      const { title, sort_order } = body;
+
+      const mod = await rootDb
+        .insertInto("app_public.modules")
+        .values({
+          course_id: params.id,
+          title,
+          sort_order: sort_order ?? 0,
+        })
+        .returning(["id", "course_id", "title", "content", "sort_order"])
+        .executeTakeFirstOrThrow();
+
+      return mod;
+    },
+    {
+      body: t.Object({
+        title: t.String(),
+        sort_order: t.Optional(t.Number()),
+      }),
+    },
+  )
+
+  .patch(
+    "/modules/:id",
+    async ({ params, body }) => {
+      const updates: Record<string, unknown> = {};
+      if (body.title !== undefined) updates.title = body.title;
+      if (body.content !== undefined)
+        updates.content = body.content ? JSON.stringify(body.content) : null;
+      if (body.sort_order !== undefined) updates.sort_order = body.sort_order;
+
+      const mod = await rootDb
+        .updateTable("app_public.modules")
+        .set(updates)
+        .where("id", "=", params.id)
+        .returning(["id", "course_id", "title", "content", "sort_order"])
+        .executeTakeFirst();
+
+      if (!mod) throw new HttpError(404, "Module not found");
+
+      // Sync module_materials from content
+      if (body.content !== undefined) {
+        const materialIds = extractMaterialIds(body.content);
+
+        // Remove materials no longer in content
+        if (materialIds.length > 0) {
+          await rootDb
+            .deleteFrom("app_public.module_materials")
+            .where("module_id", "=", params.id)
+            .where("material_id", "not in", materialIds)
+            .execute();
+        } else {
+          await rootDb
+            .deleteFrom("app_public.module_materials")
+            .where("module_id", "=", params.id)
+            .execute();
+        }
+
+        // Insert new materials
+        for (let i = 0; i < materialIds.length; i++) {
+          await rootDb
+            .insertInto("app_public.module_materials")
+            .values({
+              module_id: params.id,
+              material_id: materialIds[i],
+              sort_order: i,
+            })
+            .onConflict((oc) => oc.doNothing())
+            .execute();
+        }
+      }
+
+      return mod;
+    },
+    {
+      body: t.Object({
+        title: t.Optional(t.String()),
+        content: t.Optional(t.Unknown()),
+        sort_order: t.Optional(t.Number()),
+      }),
+    },
+  )
 
   .delete("/modules/:id", async ({ params }) => {
-    await rootDb
-      .deleteFrom("app_public.modules")
-      .where("id", "=", params.id)
-      .execute();
+    await rootDb.deleteFrom("app_public.modules").where("id", "=", params.id).execute();
 
     return { success: true as const };
   })
 
-  // --- Module materials ---
-
-  .post("/modules/:id/materials", async ({ params, body }) => {
-    const { material_id, sort_order } = body;
-
-    await rootDb
-      .insertInto("app_public.module_materials")
-      .values({
-        module_id: params.id,
-        material_id,
-        sort_order: sort_order ?? 0,
-      })
-      .onConflict((oc) => oc.doNothing())
-      .execute();
-
-    return { success: true as const };
-  }, {
-    body: t.Object({
-      material_id: t.String(),
-      sort_order: t.Optional(t.Number()),
-    }),
-  })
-
-  .delete("/modules/:id/materials/:materialId", async ({ params }) => {
-    await rootDb
-      .deleteFrom("app_public.module_materials")
-      .where("module_id", "=", params.id)
-      .where("material_id", "=", params.materialId)
-      .execute();
-
-    return { success: true as const };
-  })
+  // (module_materials now synced automatically from content on PATCH /modules/:id)
 
   // --- Enrollment ---
 
-  .post("/students/:id/enroll", async ({ params, body }) => {
-    const { course_id } = body;
+  .post(
+    "/students/:id/enroll",
+    async ({ params, body }) => {
+      const { course_id } = body;
 
-    await rootDb
-      .insertInto("app_public.enrollments")
-      .values({
-        student_id: params.id,
-        course_id,
-      })
-      .onConflict((oc) => oc.doNothing())
-      .execute();
+      await rootDb
+        .insertInto("app_public.enrollments")
+        .values({
+          student_id: params.id,
+          course_id,
+        })
+        .onConflict((oc) => oc.doNothing())
+        .execute();
 
-    return { success: true as const };
-  }, {
-    body: t.Object({
-      course_id: t.String(),
-    }),
-  })
+      return { success: true as const };
+    },
+    {
+      body: t.Object({
+        course_id: t.String(),
+      }),
+    },
+  )
 
   .delete("/students/:id/enroll/:courseId", async ({ params }) => {
     await rootDb
@@ -410,24 +469,38 @@ export const adminRoutes = new Elysia({ prefix: "/api/admin" })
 
   // --- Student materials ---
 
-  .post("/students/:id/assign", async ({ params, body }) => {
-    const { material_id } = body;
-
-    await rootDb
-      .insertInto("app_public.student_materials")
-      .values({
-        student_id: params.id,
+  .post(
+    "/students/:id/assign",
+    async ({ params, body }) => {
+      const { material_id } = body;
+      const assignedTrackIndex = await resolveAssignedTrackIndex(
         material_id,
-      })
-      .onConflict((oc) => oc.doNothing())
-      .execute();
+        body.assigned_track_index,
+      );
 
-    return { success: true as const };
-  }, {
-    body: t.Object({
-      material_id: t.String(),
-    }),
-  })
+      await rootDb
+        .insertInto("app_public.student_materials")
+        .values({
+          student_id: params.id,
+          material_id,
+          assigned_track_index: assignedTrackIndex,
+        })
+        .onConflict((oc) =>
+          oc.columns(["student_id", "material_id"]).doUpdateSet({
+            assigned_track_index: assignedTrackIndex,
+          }),
+        )
+        .execute();
+
+      return { success: true as const };
+    },
+    {
+      body: t.Object({
+        material_id: t.String(),
+        assigned_track_index: t.Optional(t.Nullable(t.Numeric())),
+      }),
+    },
+  )
 
   .delete("/students/:id/assign/:materialId", async ({ params }) => {
     await rootDb
@@ -477,35 +550,45 @@ export const adminRoutes = new Elysia({ prefix: "/api/admin" })
 
   // --- Families ---
 
-  .post("/families", async ({ body, auth }) => {
-    const { slug, name } = body;
+  .post(
+    "/families",
+    async ({ body, auth }) => {
+      const { slug, name } = body;
 
-    try {
-      const family = await withAuthContext(auth.session.id, async (trx) => {
-        return await trx
-          .selectFrom(
-            sql<{ id: string; slug: string; name: string; description: string | null; created_at: Date }>`
+      try {
+        const family = await withAuthContext(auth.session.id, async (trx) => {
+          return await trx
+            .selectFrom(
+              sql<{
+                id: string;
+                slug: string;
+                name: string;
+                description: string | null;
+                created_at: Date;
+              }>`
               app_public.create_family(${slug}::citext, ${name})
             `.as("f"),
-          )
-          .selectAll()
-          .executeTakeFirstOrThrow();
-      });
+            )
+            .selectAll()
+            .executeTakeFirstOrThrow();
+        });
 
-      return {
-        ...family,
-        created_at: (family.created_at as Date).toISOString(),
-      };
-    } catch (err) {
-      if (err instanceof HttpError) throw err;
-      mapPgError(err);
-    }
-  }, {
-    body: t.Object({
-      slug: t.String(),
-      name: t.String(),
-    }),
-  })
+        return {
+          ...family,
+          created_at: family.created_at.toISOString(),
+        };
+      } catch (err) {
+        if (err instanceof HttpError) throw err;
+        mapPgError(err);
+      }
+    },
+    {
+      body: t.Object({
+        slug: t.String(),
+        name: t.String(),
+      }),
+    },
+  )
 
   .get("/families", async () => {
     const rows = await rootDb
@@ -516,33 +599,88 @@ export const adminRoutes = new Elysia({ prefix: "/api/admin" })
 
     return rows.map((r) => ({
       ...r,
-      created_at: (r.created_at as Date).toISOString(),
+      created_at: r.created_at.toISOString(),
     }));
   })
 
-  .post("/families/:familyId/invite", async ({ params, body, auth }) => {
-    const { username, email } = body;
+  .post(
+    "/families/:familyId/invite",
+    async ({ params, body, auth }) => {
+      const { username, email } = body;
 
-    try {
-      await withAuthContext(auth.session.id, async (trx) => {
-        await sql`app_public.invite_to_family(
+      try {
+        await withAuthContext(auth.session.id, async (trx) => {
+          await sql`app_public.invite_to_family(
           ${params.familyId}::uuid,
           ${username ?? null}::citext,
           ${email ?? null}::citext
         )`.execute(trx);
-      });
-    } catch (err) {
-      if (err instanceof HttpError) throw err;
-      mapPgError(err);
-    }
+        });
+      } catch (err) {
+        if (err instanceof HttpError) throw err;
+        mapPgError(err);
+      }
 
-    return { success: true as const };
-  }, {
-    body: t.Object({
-      username: t.Optional(t.String()),
-      email: t.Optional(t.String()),
-    }),
-  })
+      return { success: true as const };
+    },
+    {
+      body: t.Object({
+        username: t.Optional(t.String()),
+        email: t.Optional(t.String()),
+      }),
+    },
+  )
+
+  .post(
+    "/families/:familyId/qr-invite",
+    async ({ params, body }) => {
+      let familyId = params.familyId;
+
+      if (familyId === "new") {
+        if (!body.name || !body.slug) {
+          throw new HttpError(400, "Name and slug are required when creating a new family");
+        }
+        const family = await rootDb
+          .insertInto("app_public.families")
+          .values({ name: body.name, slug: body.slug })
+          .returning(["id"])
+          .executeTakeFirstOrThrow();
+        familyId = family.id;
+      }
+
+      try {
+        const invitation = await rootDb
+          .selectFrom(
+            sql<{
+              id: string;
+              code: string;
+              expires_at: Date;
+            }>`app_private.create_qr_invite(${familyId}::uuid)`.as("i"),
+          )
+          .select(["id", "code", "expires_at"])
+          .executeTakeFirstOrThrow();
+
+        const rootUrl = env.VITE_ROOT_URL || `http://localhost:${env.PORT}`;
+        const url = `${rootUrl}/accept-invite?id=${invitation.id}&code=${invitation.code}`;
+
+        return {
+          invitationId: invitation.id,
+          code: invitation.code,
+          url,
+          expiresAt: invitation.expires_at.toISOString(),
+        };
+      } catch (err) {
+        if (err instanceof HttpError) throw err;
+        mapPgError(err);
+      }
+    },
+    {
+      body: t.Object({
+        name: t.Optional(t.String()),
+        slug: t.Optional(t.String()),
+      }),
+    },
+  )
 
   .get("/families/:familyId/invitations", async ({ params }) => {
     return await rootDb
@@ -562,122 +700,155 @@ export const adminRoutes = new Elysia({ prefix: "/api/admin" })
 
   // --- Lessons ---
 
-  .post("/lessons", async ({ body }) => {
-    const lesson = await rootDb
-      .insertInto("app_public.lessons")
-      .values({
-        student_id: body.student_id,
-        scheduled_at: new Date(body.scheduled_at),
-        duration_minutes: body.duration_minutes,
-        location_type: body.location_type as any,
-        gcal_event_id: body.gcal_event_id ?? null,
-      })
-      .returning([
-        "id", "student_id", "gcal_event_id", "scheduled_at",
-        "duration_minutes", "location_type", "status",
-        "cancellation_reason", "cancelled_at", "completed_at", "created_at",
-      ])
-      .executeTakeFirstOrThrow();
+  .post(
+    "/lessons",
+    async ({ body }) => {
+      const lesson = await rootDb
+        .insertInto("app_public.lessons")
+        .values({
+          student_id: body.student_id,
+          scheduled_at: new Date(body.scheduled_at),
+          duration_minutes: body.duration_minutes,
+          location_type: body.location_type,
+          gcal_event_id: body.gcal_event_id ?? null,
+        })
+        .returning([
+          "id",
+          "student_id",
+          "gcal_event_id",
+          "scheduled_at",
+          "duration_minutes",
+          "location_type",
+          "status",
+          "cancellation_reason",
+          "cancelled_at",
+          "completed_at",
+          "created_at",
+        ])
+        .executeTakeFirstOrThrow();
 
-    // Best-effort gcal event creation
-    try {
-      const connected = await googleCalendarService.isConnected();
-      if (connected && lesson.scheduled_at) {
-        const student = await rootDb
-          .selectFrom("app_public.users")
-          .select(["name"])
-          .where("id", "=", lesson.student_id)
-          .executeTakeFirst();
-
-        const studentName = student?.name ?? "Student";
-        const startTime = new Date(lesson.scheduled_at as unknown as string);
-        const endTime = new Date(startTime.getTime() + lesson.duration_minutes * 60000);
-
-        const eventId = await googleCalendarService.createEvent({
-          summary: `Lesson: ${studentName}`,
-          description: `${lesson.duration_minutes} min ${lesson.location_type.replace(/_/g, " ")} lesson`,
-          start: startTime.toISOString(),
-          end: endTime.toISOString(),
-        });
-
-        if (eventId) {
-          await rootDb
-            .updateTable("app_public.lessons")
-            .set({ gcal_event_id: eventId })
-            .where("id", "=", lesson.id)
-            .execute();
-        }
-      }
-    } catch {
-      // gcal errors are non-fatal
-    }
-
-    // Re-fetch to get potentially updated gcal_event_id
-    const updated = await rootDb
-      .selectFrom("app_public.lessons")
-      .select([
-        "id", "student_id", "gcal_event_id", "scheduled_at",
-        "duration_minutes", "location_type", "status",
-        "cancellation_reason", "cancelled_at", "completed_at", "created_at",
-      ])
-      .where("id", "=", lesson.id)
-      .executeTakeFirst();
-
-    return serializeLesson(updated ?? lesson);
-  }, {
-    body: t.Object({
-      student_id: t.String(),
-      scheduled_at: t.String(),
-      duration_minutes: t.Number(),
-      location_type: LocationType,
-      gcal_event_id: t.Optional(t.String()),
-    }),
-  })
-
-  .patch("/lessons/:id", async ({ params, body }) => {
-    const updates: Record<string, unknown> = {};
-    if (body.scheduled_at !== undefined) updates.scheduled_at = new Date(body.scheduled_at);
-    if (body.duration_minutes !== undefined) updates.duration_minutes = body.duration_minutes;
-    if (body.location_type !== undefined) updates.location_type = body.location_type;
-    if (body.status !== undefined) {
-      updates.status = body.status;
-      if (body.status === "cancelled") updates.cancelled_at = new Date();
-      if (body.status === "completed") updates.completed_at = new Date();
-    }
-    if (body.cancellation_reason !== undefined) updates.cancellation_reason = body.cancellation_reason;
-
-    const lesson = await rootDb
-      .updateTable("app_public.lessons")
-      .set(updates)
-      .where("id", "=", params.id)
-      .returning([
-        "id", "student_id", "gcal_event_id", "scheduled_at",
-        "duration_minutes", "location_type", "status",
-        "cancellation_reason", "cancelled_at", "completed_at", "created_at",
-      ])
-      .executeTakeFirst();
-
-    if (!lesson) throw new HttpError(404, "Lesson not found");
-
-    // Best-effort gcal cleanup on cancellation
-    if (body.status === "cancelled" && lesson.gcal_event_id) {
+      // Best-effort gcal event creation
       try {
-        await googleCalendarService.deleteEvent(lesson.gcal_event_id);
+        const connected = await googleCalendarService.isConnected();
+        if (connected && lesson.scheduled_at) {
+          const student = await rootDb
+            .selectFrom("app_public.users")
+            .select(["name"])
+            .where("id", "=", lesson.student_id)
+            .executeTakeFirst();
+
+          const studentName = student?.name ?? "Student";
+          const startTime = new Date(String(lesson.scheduled_at));
+          const endTime = new Date(startTime.getTime() + lesson.duration_minutes * 60000);
+
+          const eventId = await googleCalendarService.createEvent({
+            summary: `Lesson: ${studentName}`,
+            description: `${lesson.duration_minutes} min ${lesson.location_type.replace(/_/g, " ")} lesson`,
+            start: startTime.toISOString(),
+            end: endTime.toISOString(),
+          });
+
+          if (eventId) {
+            await rootDb
+              .updateTable("app_public.lessons")
+              .set({ gcal_event_id: eventId })
+              .where("id", "=", lesson.id)
+              .execute();
+          }
+        }
       } catch {
         // gcal errors are non-fatal
       }
-    }
 
-    return serializeLesson(lesson);
-  }, {
-    body: t.Object({
-      scheduled_at: t.Optional(t.String()),
-      duration_minutes: t.Optional(t.Number()),
-      location_type: t.Optional(LocationType),
-      status: t.Optional(LessonStatus),
-      cancellation_reason: t.Optional(t.String()),
-    }),
-  })
+      // Re-fetch to get potentially updated gcal_event_id
+      const updated = await rootDb
+        .selectFrom("app_public.lessons")
+        .select([
+          "id",
+          "student_id",
+          "gcal_event_id",
+          "scheduled_at",
+          "duration_minutes",
+          "location_type",
+          "status",
+          "cancellation_reason",
+          "cancelled_at",
+          "completed_at",
+          "created_at",
+        ])
+        .where("id", "=", lesson.id)
+        .executeTakeFirst();
+
+      return serializeLesson(updated ?? lesson);
+    },
+    {
+      body: t.Object({
+        student_id: t.String(),
+        scheduled_at: t.String(),
+        duration_minutes: t.Number(),
+        location_type: LocationTypeSchema,
+        gcal_event_id: t.Optional(t.String()),
+      }),
+    },
+  )
+
+  .patch(
+    "/lessons/:id",
+    async ({ params, body }) => {
+      const updates: Record<string, unknown> = {};
+      if (body.scheduled_at !== undefined) updates.scheduled_at = new Date(body.scheduled_at);
+      if (body.duration_minutes !== undefined) updates.duration_minutes = body.duration_minutes;
+      if (body.location_type !== undefined) updates.location_type = body.location_type;
+      if (body.status !== undefined) {
+        updates.status = body.status;
+        if (body.status === "cancelled") updates.cancelled_at = new Date();
+        if (body.status === "completed") updates.completed_at = new Date();
+      }
+      if (body.cancellation_reason !== undefined)
+        updates.cancellation_reason = body.cancellation_reason;
+
+      const lesson = await rootDb
+        .updateTable("app_public.lessons")
+        .set(updates)
+        .where("id", "=", params.id)
+        .returning([
+          "id",
+          "student_id",
+          "gcal_event_id",
+          "scheduled_at",
+          "duration_minutes",
+          "location_type",
+          "status",
+          "cancellation_reason",
+          "cancelled_at",
+          "completed_at",
+          "created_at",
+        ])
+        .executeTakeFirst();
+
+      if (!lesson) throw new HttpError(404, "Lesson not found");
+
+      // Best-effort gcal cleanup on cancellation
+      if (body.status === "cancelled" && lesson.gcal_event_id) {
+        try {
+          await googleCalendarService.deleteEvent(lesson.gcal_event_id);
+        } catch {
+          // gcal errors are non-fatal
+        }
+      }
+
+      return serializeLesson(lesson);
+    },
+    {
+      body: t.Object({
+        scheduled_at: t.Optional(t.String()),
+        duration_minutes: t.Optional(t.Number()),
+        location_type: t.Optional(LocationTypeSchema),
+        status: t.Optional(LessonStatusSchema),
+        cancellation_reason: t.Optional(t.String()),
+      }),
+    },
+  )
 
   .delete("/lessons/:id", async ({ params }) => {
     // Fetch lesson first to check for gcal_event_id
@@ -698,162 +869,207 @@ export const adminRoutes = new Elysia({ prefix: "/api/admin" })
       }
     }
 
-    await rootDb
-      .deleteFrom("app_public.lessons")
-      .where("id", "=", params.id)
-      .execute();
+    await rootDb.deleteFrom("app_public.lessons").where("id", "=", params.id).execute();
 
     return { success: true as const };
   })
 
-  .get("/lessons", async ({ query }) => {
-    const limit = query.limit || 50;
-    const offset = query.offset || 0;
+  .get(
+    "/lessons",
+    async ({ query }) => {
+      const limit = query.limit || 50;
+      const offset = query.offset || 0;
 
-    let q = rootDb
-      .selectFrom("app_public.lessons")
-      .select([
-        "id", "student_id", "gcal_event_id", "scheduled_at",
-        "duration_minutes", "location_type", "status",
-        "cancellation_reason", "cancelled_at", "completed_at", "created_at",
-      ])
-      .orderBy("scheduled_at", "desc")
-      .limit(limit)
-      .offset(offset);
+      let q = rootDb
+        .selectFrom("app_public.lessons")
+        .select([
+          "id",
+          "student_id",
+          "gcal_event_id",
+          "scheduled_at",
+          "duration_minutes",
+          "location_type",
+          "status",
+          "cancellation_reason",
+          "cancelled_at",
+          "completed_at",
+          "created_at",
+        ])
+        .orderBy("scheduled_at", "desc")
+        .limit(limit)
+        .offset(offset);
 
-    if (query.student_id) q = q.where("student_id", "=", query.student_id);
-    if (query.status) q = q.where("status", "=", query.status as "scheduled");
-    if (query.from) q = q.where("scheduled_at", ">=", new Date(query.from));
-    if (query.to) q = q.where("scheduled_at", "<=", new Date(query.to));
+      if (query.student_id) q = q.where("student_id", "=", query.student_id);
+      if (query.status) q = q.where("status", "=", query.status as LessonStatus);
+      if (query.from) q = q.where("scheduled_at", ">=", new Date(query.from));
+      if (query.to) q = q.where("scheduled_at", "<=", new Date(query.to));
 
-    const rows = await q.execute();
+      const rows = await q.execute();
 
-    return rows.map(serializeLesson);
-  }, {
-    query: t.Object({
-      limit: t.Optional(t.Numeric()),
-      offset: t.Optional(t.Numeric()),
-      student_id: t.Optional(t.String()),
-      status: t.Optional(t.String()),
-      from: t.Optional(t.String()),
-      to: t.Optional(t.String()),
-    }),
-  })
+      return rows.map(serializeLesson);
+    },
+    {
+      query: t.Object({
+        limit: t.Optional(t.Numeric()),
+        offset: t.Optional(t.Numeric()),
+        student_id: t.Optional(t.String()),
+        status: t.Optional(t.String()),
+        from: t.Optional(t.String()),
+        to: t.Optional(t.String()),
+      }),
+    },
+  )
 
   // --- Student rates ---
 
-  .post("/student-rates", async ({ body }) => {
-    const rate = await rootDb
-      .insertInto("app_public.student_rates")
-      .values({
-        student_id: body.student_id,
-        rate_cents: body.rate_cents,
-        lesson_duration_minutes: body.lesson_duration_minutes,
-        location_type: body.location_type as any,
-        notes: body.notes ?? null,
-      })
-      .onConflict((oc) =>
-        oc.columns(["student_id", "location_type"]).doUpdateSet({
+  .post(
+    "/student-rates",
+    async ({ body }) => {
+      const rate = await rootDb
+        .insertInto("app_public.student_rates")
+        .values({
+          student_id: body.student_id,
           rate_cents: body.rate_cents,
           lesson_duration_minutes: body.lesson_duration_minutes,
+          location_type: body.location_type,
           notes: body.notes ?? null,
-        }),
-      )
-      .returning([
-        "id", "student_id", "rate_cents",
-        "lesson_duration_minutes", "location_type", "notes", "created_at",
-      ])
-      .executeTakeFirstOrThrow();
+        })
+        .onConflict((oc) =>
+          oc.columns(["student_id", "location_type"]).doUpdateSet({
+            rate_cents: body.rate_cents,
+            lesson_duration_minutes: body.lesson_duration_minutes,
+            notes: body.notes ?? null,
+          }),
+        )
+        .returning([
+          "id",
+          "student_id",
+          "rate_cents",
+          "lesson_duration_minutes",
+          "location_type",
+          "notes",
+          "created_at",
+        ])
+        .executeTakeFirstOrThrow();
 
-    return {
-      ...rate,
-      created_at: (rate.created_at as Date).toISOString(),
-    };
-  }, {
-    body: t.Object({
-      student_id: t.String(),
-      rate_cents: t.Number(),
-      lesson_duration_minutes: t.Number(),
-      location_type: LocationType,
-      notes: t.Optional(t.String()),
-    }),
-  })
+      return {
+        ...rate,
+        created_at: rate.created_at.toISOString(),
+      };
+    },
+    {
+      body: t.Object({
+        student_id: t.String(),
+        rate_cents: t.Number(),
+        lesson_duration_minutes: t.Number(),
+        location_type: LocationTypeSchema,
+        notes: t.Optional(t.String()),
+      }),
+    },
+  )
 
-  .get("/student-rates/:studentId", async ({ params, query }) => {
-    let q = rootDb
-      .selectFrom("app_public.student_rates")
-      .select([
-        "id", "student_id", "rate_cents",
-        "lesson_duration_minutes", "location_type", "notes", "created_at",
-      ])
-      .where("student_id", "=", params.studentId);
+  .get(
+    "/student-rates/:studentId",
+    async ({ params, query }) => {
+      let q = rootDb
+        .selectFrom("app_public.student_rates")
+        .select([
+          "id",
+          "student_id",
+          "rate_cents",
+          "lesson_duration_minutes",
+          "location_type",
+          "notes",
+          "created_at",
+        ])
+        .where("student_id", "=", params.studentId);
 
-    if (query.location_type) {
-      q = q.where("location_type", "=", query.location_type as "studio");
-    }
+      if (query.location_type) {
+        q = q.where("location_type", "=", query.location_type as LocationType);
+      }
 
-    const rows = await q.execute();
+      const rows = await q.execute();
 
-    return rows.map((r) => ({
-      ...r,
-      created_at: (r.created_at as Date).toISOString(),
-    }));
-  }, {
-    query: t.Object({
-      location_type: t.Optional(t.String()),
-    }),
-  })
+      return rows.map((r) => ({
+        ...r,
+        created_at: r.created_at.toISOString(),
+      }));
+    },
+    {
+      query: t.Object({
+        location_type: t.Optional(t.String()),
+      }),
+    },
+  )
 
   // --- Lesson notes ---
 
-  .post("/lessons/:id/notes", async ({ params, body }) => {
-    const note = await rootDb
-      .insertInto("app_public.lesson_notes")
-      .values({
-        lesson_id: params.id,
-        topics_covered: body.topics_covered ?? null,
-        homework: body.homework ?? null,
-        progress_observations: body.progress_observations ?? null,
-        notes: body.notes ?? null,
-        material_ids: body.material_ids ? [...body.material_ids] : null,
-        draft: body.draft ?? true,
-      })
-      .onConflict((oc) =>
-        oc.column("lesson_id").doUpdateSet({
+  .post(
+    "/lessons/:id/notes",
+    async ({ params, body }) => {
+      const note = await rootDb
+        .insertInto("app_public.lesson_notes")
+        .values({
+          lesson_id: params.id,
           topics_covered: body.topics_covered ?? null,
           homework: body.homework ?? null,
           progress_observations: body.progress_observations ?? null,
           notes: body.notes ?? null,
           material_ids: body.material_ids ? [...body.material_ids] : null,
           draft: body.draft ?? true,
-        }),
-      )
-      .returning([
-        "id", "lesson_id", "topics_covered", "homework",
-        "progress_observations", "notes", "material_ids",
-        "draft", "created_at", "updated_at",
-      ])
-      .executeTakeFirstOrThrow();
+        })
+        .onConflict((oc) =>
+          oc.column("lesson_id").doUpdateSet({
+            topics_covered: body.topics_covered ?? null,
+            homework: body.homework ?? null,
+            progress_observations: body.progress_observations ?? null,
+            notes: body.notes ?? null,
+            material_ids: body.material_ids ? [...body.material_ids] : null,
+            draft: body.draft ?? true,
+          }),
+        )
+        .returning([
+          "id",
+          "lesson_id",
+          "topics_covered",
+          "homework",
+          "progress_observations",
+          "notes",
+          "material_ids",
+          "draft",
+          "created_at",
+          "updated_at",
+        ])
+        .executeTakeFirstOrThrow();
 
-    return serializeLessonNote(note);
-  }, {
-    body: t.Object({
-      topics_covered: t.Optional(t.String()),
-      homework: t.Optional(t.String()),
-      progress_observations: t.Optional(t.String()),
-      notes: t.Optional(t.String()),
-      material_ids: t.Optional(t.Array(t.String())),
-      draft: t.Optional(t.Boolean()),
-    }),
-  })
+      return serializeLessonNote(note);
+    },
+    {
+      body: t.Object({
+        topics_covered: t.Optional(t.String()),
+        homework: t.Optional(t.String()),
+        progress_observations: t.Optional(t.String()),
+        notes: t.Optional(t.String()),
+        material_ids: t.Optional(t.Array(t.String())),
+        draft: t.Optional(t.Boolean()),
+      }),
+    },
+  )
 
   .get("/lessons/:id/notes", async ({ params }) => {
     const note = await rootDb
       .selectFrom("app_public.lesson_notes")
       .select([
-        "id", "lesson_id", "topics_covered", "homework",
-        "progress_observations", "notes", "material_ids",
-        "draft", "created_at", "updated_at",
+        "id",
+        "lesson_id",
+        "topics_covered",
+        "homework",
+        "progress_observations",
+        "notes",
+        "material_ids",
+        "draft",
+        "created_at",
+        "updated_at",
       ])
       .where("lesson_id", "=", params.id)
       .executeTakeFirst();
@@ -869,9 +1085,16 @@ export const adminRoutes = new Elysia({ prefix: "/api/admin" })
       .set({ draft: false })
       .where("lesson_id", "=", params.id)
       .returning([
-        "id", "lesson_id", "topics_covered", "homework",
-        "progress_observations", "notes", "material_ids",
-        "draft", "created_at", "updated_at",
+        "id",
+        "lesson_id",
+        "topics_covered",
+        "homework",
+        "progress_observations",
+        "notes",
+        "material_ids",
+        "draft",
+        "created_at",
+        "updated_at",
       ])
       .executeTakeFirst();
 
@@ -897,90 +1120,97 @@ export const adminRoutes = new Elysia({ prefix: "/api/admin" })
 
     return {
       connected: tokenRow !== undefined,
-      calendar_id: calIdRow ? (calIdRow.value as string) : null,
+      calendar_id: calIdRow ? calIdRow.value : null,
     };
   })
 
   .get("/gcal/auth-url", () => {
-    const clientId = process.env.GOOGLE_CALENDAR_CLIENT_ID ?? "";
+    const clientId = env.GOOGLE_CALENDAR_CLIENT_ID ?? "";
     const redirectUri = `${env.VITE_ROOT_URL ?? `http://localhost:${env.PORT}`}/api/admin/gcal/callback`;
     const scope = "https://www.googleapis.com/auth/calendar.events";
     const url = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${encodeURIComponent(clientId)}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=${encodeURIComponent(scope)}&access_type=offline&prompt=consent`;
     return { url };
   })
 
-  .get("/gcal/callback", async ({ query, set }) => {
-    const { code } = query;
+  .get(
+    "/gcal/callback",
+    async ({ query, set }) => {
+      const { code } = query;
 
-    const clientId = process.env.GOOGLE_CALENDAR_CLIENT_ID ?? "";
-    const clientSecret = process.env.GOOGLE_CALENDAR_CLIENT_SECRET ?? "";
-    const redirectUri = `${env.VITE_ROOT_URL ?? `http://localhost:${env.PORT}`}/api/admin/gcal/callback`;
+      const clientId = env.GOOGLE_CALENDAR_CLIENT_ID ?? "";
+      const clientSecret = env.GOOGLE_CALENDAR_CLIENT_SECRET ?? "";
+      const redirectUri = `${env.VITE_ROOT_URL ?? `http://localhost:${env.PORT}`}/api/admin/gcal/callback`;
 
-    // Exchange code for tokens
-    const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({
-        code,
-        client_id: clientId,
-        client_secret: clientSecret,
-        redirect_uri: redirectUri,
-        grant_type: "authorization_code",
-      }),
-    });
+      // Exchange code for tokens
+      const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+          code,
+          client_id: clientId,
+          client_secret: clientSecret,
+          redirect_uri: redirectUri,
+          grant_type: "authorization_code",
+        }),
+      });
 
-    if (!tokenRes.ok) {
-      const text = await tokenRes.text();
-      throw new HttpError(400, `Google OAuth error: ${text}`);
-    }
+      if (!tokenRes.ok) {
+        const text = await tokenRes.text();
+        throw new HttpError(400, `Google OAuth error: ${text}`);
+      }
 
-    const tokenData = (await tokenRes.json()) as Record<string, unknown>;
-    const accessToken = tokenData.access_token;
-    const refreshToken = tokenData.refresh_token;
-    const expiresIn = tokenData.expires_in;
+      const tokenData = await tokenRes.json();
+      const accessToken = tokenData.access_token;
+      const refreshToken = tokenData.refresh_token;
+      const expiresIn = tokenData.expires_in;
 
-    if (typeof accessToken !== "string") {
-      throw new HttpError(400, "No access_token in response");
-    }
+      if (typeof accessToken !== "string") {
+        throw new HttpError(400, "No access_token in response");
+      }
 
-    // Store refresh token
-    if (typeof refreshToken === "string") {
+      // Store refresh token
+      if (typeof refreshToken === "string") {
+        await rootDb
+          .insertInto("app_private.admin_settings")
+          .values({ key: "gcal_refresh_token", value: toJson(refreshToken) })
+          .onConflict((oc) => oc.column("key").doUpdateSet({ value: toJson(refreshToken) }))
+          .execute();
+      }
+
+      // Store access token + expiry
       await rootDb
         .insertInto("app_private.admin_settings")
-        .values({ key: "gcal_refresh_token", value: toJson(refreshToken) })
-        .onConflict((oc) => oc.column("key").doUpdateSet({ value: toJson(refreshToken) }))
+        .values({ key: "gcal_access_token", value: toJson(accessToken) })
+        .onConflict((oc) => oc.column("key").doUpdateSet({ value: toJson(accessToken) }))
         .execute();
-    }
 
-    // Store access token + expiry
-    await rootDb
-      .insertInto("app_private.admin_settings")
-      .values({ key: "gcal_access_token", value: toJson(accessToken) })
-      .onConflict((oc) => oc.column("key").doUpdateSet({ value: toJson(accessToken) }))
-      .execute();
+      const expiresAt = new Date(
+        Date.now() + (typeof expiresIn === "number" ? expiresIn : 3600) * 1000,
+      ).toISOString();
+      await rootDb
+        .insertInto("app_private.admin_settings")
+        .values({
+          key: "gcal_access_token_expires_at",
+          value: toJson(expiresAt),
+        })
+        .onConflict((oc) => oc.column("key").doUpdateSet({ value: toJson(expiresAt) }))
+        .execute();
 
-    const expiresAt = new Date(
-      Date.now() + (typeof expiresIn === "number" ? expiresIn : 3600) * 1000,
-    ).toISOString();
-    await rootDb
-      .insertInto("app_private.admin_settings")
-      .values({ key: "gcal_access_token_expires_at", value: toJson(expiresAt) })
-      .onConflict((oc) => oc.column("key").doUpdateSet({ value: toJson(expiresAt) }))
-      .execute();
+      // Default calendar to "primary"
+      await rootDb
+        .insertInto("app_private.admin_settings")
+        .values({ key: "gcal_calendar_id", value: toJson("primary") })
+        .onConflict((oc) => oc.column("key").doNothing())
+        .execute();
 
-    // Default calendar to "primary"
-    await rootDb
-      .insertInto("app_private.admin_settings")
-      .values({ key: "gcal_calendar_id", value: toJson("primary") })
-      .onConflict((oc) => oc.column("key").doNothing())
-      .execute();
-
-    return { success: true as const };
-  }, {
-    query: t.Object({
-      code: t.String(),
-    }),
-  })
+      return { success: true as const };
+    },
+    {
+      query: t.Object({
+        code: t.String(),
+      }),
+    },
+  )
 
   .post("/gcal/disconnect", async () => {
     await rootDb
@@ -1006,15 +1236,17 @@ export const adminRoutes = new Elysia({ prefix: "/api/admin" })
       .where("key", "=", "working_hours")
       .executeTakeFirst();
 
-    return (row?.value as Record<string, unknown>) ?? {
-      0: null, // Sunday
-      1: { start: "09:00", end: "20:00" },
-      2: { start: "09:00", end: "20:00" },
-      3: { start: "09:00", end: "20:00" },
-      4: { start: "09:00", end: "20:00" },
-      5: { start: "09:00", end: "20:00" },
-      6: { start: "10:00", end: "14:00" },
-    };
+    return (
+      row?.value ?? {
+        0: null, // Sunday
+        1: { start: "09:00", end: "20:00" },
+        2: { start: "09:00", end: "20:00" },
+        3: { start: "09:00", end: "20:00" },
+        4: { start: "09:00", end: "20:00" },
+        5: { start: "09:00", end: "20:00" },
+        6: { start: "10:00", end: "14:00" },
+      }
+    );
   })
 
   .post("/working-hours", async ({ body }) => {
@@ -1025,7 +1257,31 @@ export const adminRoutes = new Elysia({ prefix: "/api/admin" })
       .execute();
 
     return { success: true as const };
-  });
+  })
+
+  .get("/testimonial-reminder-interval", async () => {
+    return {
+      interval_days: await getTestimonialReminderIntervalDays(),
+    };
+  })
+
+  .post(
+    "/testimonial-reminder-interval",
+    async ({ body }) => {
+      await setTestimonialReminderIntervalDays(body.interval_days);
+      await rescheduleTestimonialReminders(body.interval_days);
+
+      return {
+        success: true as const,
+        interval_days: body.interval_days,
+      };
+    },
+    {
+      body: t.Object({
+        interval_days: t.Integer({ minimum: 1, maximum: 365 }),
+      }),
+    },
+  );
 
 // === Download route (auth-only, not admin-only) ===
 // This is a separate plugin because the download route only requires
@@ -1039,19 +1295,22 @@ export const materialDownloadRoute = new Elysia()
     }
   })
   .get("/api/materials/:id/download", async ({ params, cookie }) => {
-    const token = cookie.session?.value as string | undefined;
+    const token = getCookieString(cookie.session?.value);
     const result = await sessionService.validateSessionToken(token);
     if (!result) throw new HttpError(401, "Not authenticated");
 
     const fileInfo = await fileService.download(params.id, result.user.id);
 
-    const bunFile = Bun.file(fileInfo.path);
-    const stream = bunFile.stream();
+    const nodeStream = createReadStream(fileInfo.path);
+    const webStream = Readable.toWeb(nodeStream);
 
-    return new Response(stream, {
+    return new Response(webStream as unknown as BodyInit, {
       headers: {
         "content-type": fileInfo.mimeType,
-        "content-disposition": `attachment; filename="${encodeURIComponent(fileInfo.filename)}"`,
+        "content-disposition":
+          fileInfo.mimeType === "application/pdf"
+            ? `inline; filename="${encodeURIComponent(fileInfo.filename)}"`
+            : `attachment; filename="${encodeURIComponent(fileInfo.filename)}"`,
       },
     });
   });
