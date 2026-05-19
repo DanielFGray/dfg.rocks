@@ -6,12 +6,12 @@ FROM base AS deps
 COPY package.json bun.lock ./
 RUN bun install --frozen-lockfile --production
 
-# Build the frontend
+# Build the app
 FROM base AS build
 COPY package.json bun.lock ./
 RUN bun install --frozen-lockfile
 COPY . .
-RUN bunx fibrae build
+RUN bun run build
 
 # Production image
 FROM base AS runtime
@@ -25,6 +25,7 @@ COPY worker ./worker
 COPY .gmrc ./
 
 ENV NODE_ENV=production
+ENV PORT=3001
 EXPOSE 3001
 
-CMD ["bun", "server/index.ts"]
+CMD ["bun", "run", "dist/server/server.js"]

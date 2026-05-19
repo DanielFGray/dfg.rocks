@@ -36,22 +36,34 @@ const fields: [string, FieldDef][] = [
   ["DATABASE_VISITOR", { derive: (c) => `${c.DATABASE_NAME}_visitor` }],
   ["SHADOW_DATABASE_PASSWORD", { generate: genPassword }],
 
-  ["ROOT_DATABASE_URL", {
-    derive: (c) =>
-      `postgres://${c.ROOT_DATABASE_USER}:${c.ROOT_DATABASE_PASSWORD}@${c.DATABASE_HOST}:${c.DATABASE_PORT}/template1`,
-  }],
-  ["DATABASE_URL", {
-    derive: (c) =>
-      `postgres://${c.DATABASE_OWNER}:${c.DATABASE_OWNER_PASSWORD}@${c.DATABASE_HOST}:${c.DATABASE_PORT}/${c.DATABASE_NAME}`,
-  }],
-  ["AUTH_DATABASE_URL", {
-    derive: (c) =>
-      `postgres://${c.DATABASE_AUTHENTICATOR}:${c.DATABASE_AUTHENTICATOR_PASSWORD}@${c.DATABASE_HOST}:${c.DATABASE_PORT}/${c.DATABASE_NAME}`,
-  }],
-  ["SHADOW_DATABASE_URL", {
-    derive: (c) =>
-      `postgres://${c.DATABASE_NAME}_shadow:${c.SHADOW_DATABASE_PASSWORD}@${c.DATABASE_HOST}:${c.DATABASE_PORT}/${c.DATABASE_NAME}_shadow`,
-  }],
+  [
+    "ROOT_DATABASE_URL",
+    {
+      derive: (c) =>
+        `postgres://${c.ROOT_DATABASE_USER}:${c.ROOT_DATABASE_PASSWORD}@${c.DATABASE_HOST}:${c.DATABASE_PORT}/template1`,
+    },
+  ],
+  [
+    "DATABASE_URL",
+    {
+      derive: (c) =>
+        `postgres://${c.DATABASE_OWNER}:${c.DATABASE_OWNER_PASSWORD}@${c.DATABASE_HOST}:${c.DATABASE_PORT}/${c.DATABASE_NAME}`,
+    },
+  ],
+  [
+    "AUTH_DATABASE_URL",
+    {
+      derive: (c) =>
+        `postgres://${c.DATABASE_AUTHENTICATOR}:${c.DATABASE_AUTHENTICATOR_PASSWORD}@${c.DATABASE_HOST}:${c.DATABASE_PORT}/${c.DATABASE_NAME}`,
+    },
+  ],
+  [
+    "SHADOW_DATABASE_URL",
+    {
+      derive: (c) =>
+        `postgres://${c.DATABASE_NAME}_shadow:${c.SHADOW_DATABASE_PASSWORD}@${c.DATABASE_HOST}:${c.DATABASE_PORT}/${c.DATABASE_NAME}_shadow`,
+    },
+  ],
 
   ["PORT", { default: "3000" }],
   ["VITE_ROOT_URL", { derive: (c) => `http://localhost:${c.PORT}` }],

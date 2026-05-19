@@ -88,9 +88,7 @@ export default async (_payload, helpers) => {
         return;
       }
 
-      const data = /** @type {{ items?: Array<any>, nextSyncToken?: string }} */ (
-        await res.json()
-      );
+      const data = /** @type {{ items?: Array<any>, nextSyncToken?: string }} */ (await res.json());
       const events = data.items || [];
       const nextSyncToken = data.nextSyncToken;
 
@@ -128,10 +126,10 @@ export default async (_payload, helpers) => {
         } else if (event.start?.dateTime) {
           // Event moved — update cached scheduled_at
           const newStart = new Date(event.start.dateTime);
-          await pgClient.query(
-            `update app_public.lessons set scheduled_at = $1 where id = $2`,
-            [newStart, lesson.id],
-          );
+          await pgClient.query(`update app_public.lessons set scheduled_at = $1 where id = $2`, [
+            newStart,
+            lesson.id,
+          ]);
           processed++;
         }
       }
@@ -146,22 +144,24 @@ export default async (_payload, helpers) => {
         );
       }
 
-      logger.info(
-        `gcal__sync: fetched ${events.length} events, processed ${processed} changes`,
-      );
+      logger.info(`gcal__sync: fetched ${events.length} events, processed ${processed} changes`);
     });
   } catch (err) {
     logger.error(`gcal__sync: unexpected error: ${err}`);
   }
 
   // Always reschedule, even on error
-  await addJob("gcal__sync", {}, {
-    runAt: new Date(Date.now() + SYNC_INTERVAL_MS),
-    queueName: "gcal",
-    maxAttempts: 1,
-    jobKey: "gcal__sync",
-    jobKeyMode: "replace",
-  });
+  await addJob(
+    "gcal__sync",
+    {},
+    {
+      runAt: new Date(Date.now() + SYNC_INTERVAL_MS),
+      queueName: "gcal",
+      maxAttempts: 1,
+      jobKey: "gcal__sync",
+      jobKeyMode: "replace",
+    },
+  );
 };
 
 // === helpers ===
@@ -221,9 +221,7 @@ async function getValidAccessToken(pgClient, logger) {
   const clientId = process.env.GOOGLE_CALENDAR_CLIENT_ID;
   const clientSecret = process.env.GOOGLE_CALENDAR_CLIENT_SECRET;
   if (!clientId || !clientSecret) {
-    logger.error(
-      "gcal__sync: missing GOOGLE_CALENDAR_CLIENT_ID or GOOGLE_CALENDAR_CLIENT_SECRET",
-    );
+    logger.error("gcal__sync: missing GOOGLE_CALENDAR_CLIENT_ID or GOOGLE_CALENDAR_CLIENT_SECRET");
     return null;
   }
 
@@ -244,9 +242,7 @@ async function getValidAccessToken(pgClient, logger) {
     return null;
   }
 
-  const tokens = /** @type {{ access_token: string, expires_in: number }} */ (
-    await res.json()
-  );
+  const tokens = /** @type {{ access_token: string, expires_in: number }} */ (await res.json());
 
   // Store refreshed tokens (matching googleCalendarService.ts storage format)
   await pgClient.query(

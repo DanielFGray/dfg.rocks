@@ -1,5 +1,7 @@
 import { rootDb } from "../db.js";
+import { env } from "../assertEnv.js";
 import { HttpError } from "../pgErrors.js";
+import { parseWith, WorkingHours as WorkingHoursSchema } from "../../shared/validation.js";
 
 // === Types ===
 
@@ -29,10 +31,18 @@ export interface TimeSlot {
 }
 
 export interface WorkingHours {
-  [dayOfWeek: number]:
-    | { start: string; end: string }
-    | null; // 0=Sunday..6=Saturday, null = not working
+  [dayOfWeek: number]: { start: string; end: string } | null; // 0=Sunday..6=Saturday, null = not working
 }
+
+const defaultWorkingHours: WorkingHours = {
+  0: null,
+  1: { start: "09:00", end: "20:00" },
+  2: { start: "09:00", end: "20:00" },
+  3: { start: "09:00", end: "20:00" },
+  4: { start: "09:00", end: "20:00" },
+  5: { start: "09:00", end: "20:00" },
+  6: { start: "10:00", end: "14:00" },
+};
 
 // === Constants ===
 
@@ -46,10 +56,10 @@ const TOKEN_EXPIRY_BUFFER_MS = 60_000;
 
 // === Helpers ===
 
-const getClientId = () => process.env.GOOGLE_CALENDAR_CLIENT_ID ?? "";
-const getClientSecret = () => process.env.GOOGLE_CALENDAR_CLIENT_SECRET ?? "";
+const getClientId = () => env.GOOGLE_CALENDAR_CLIENT_ID ?? "";
+const getClientSecret = () => env.GOOGLE_CALENDAR_CLIENT_SECRET ?? "";
 const getRedirectUri = () => {
-  const root = process.env.VITE_ROOT_URL ?? "http://localhost:3000";
+  const root = env.VITE_ROOT_URL ?? "http://localhost:3000";
   return `${root}/api/admin/gcal/callback`;
 };
 
@@ -61,7 +71,7 @@ async function getSetting(key: string): Promise<unknown> {
     .select("value")
     .where("key", "=", key)
     .executeTakeFirst();
-  return row ? (row.value as unknown) : null;
+  return row ? row.value : null;
 }
 
 async function setSetting(key: string, value: unknown): Promise<void> {
@@ -73,10 +83,7 @@ async function setSetting(key: string, value: unknown): Promise<void> {
 }
 
 async function deleteSetting(key: string): Promise<void> {
-  await rootDb
-    .deleteFrom("app_private.admin_settings")
-    .where("key", "=", key)
-    .execute();
+  await rootDb.deleteFrom("app_private.admin_settings").where("key", "=", key).execute();
 }
 
 // ---- token management ----
@@ -124,7 +131,7 @@ async function getAccessToken(): Promise<string> {
     throw new HttpError(res.status, `Token refresh failed: ${text}`);
   }
 
-  const json = (await res.json()) as { access_token: string; expires_in: number };
+  const json = await res.json();
 
   const newToken = json.access_token;
   const newExpiry = Date.now() + json.expires_in * 1000;
@@ -248,7 +255,7 @@ async function listEventsImpl(timeMin: string, timeMax: string): Promise<GcalEve
     const res = await gcalFetch(
       `/calendars/${encodeURIComponent(calId)}/events?${params.toString()}`,
     );
-    const decoded = (await res.json()) as GcalEventList;
+    const decoded = await res.json();
 
     if (decoded.items) all.push(...decoded.items);
     if (decoded.nextPageToken) {
@@ -283,7 +290,7 @@ async function incrementalSyncImpl(): Promise<{
     const res = await gcalFetch(
       `/calendars/${encodeURIComponent(calId)}/events?${params.toString()}`,
     );
-    const decoded = (await res.json()) as GcalEventList;
+    const decoded = await res.json();
 
     const nextToken = decoded.nextSyncToken ?? "";
     await setSetting("gcal_sync_token", nextToken);
@@ -314,7 +321,7 @@ async function incrementalSyncImpl(): Promise<{
     throw new HttpError(res.status, text);
   }
 
-  const decoded = (await res.json()) as GcalEventList;
+  const decoded = await res.json();
 
   const nextToken = decoded.nextSyncToken ?? "";
   await setSetting("gcal_sync_token", nextToken);
@@ -356,11 +363,7 @@ export const googleCalendarService = {
       throw new HttpError(res.status, `Token exchange failed: ${text}`);
     }
 
-    const json = (await res.json()) as {
-      access_token: string;
-      refresh_token?: string;
-      expires_in: number;
-    };
+    const json = await res.json();
 
     if (!json.refresh_token) {
       throw new HttpError(400, "No refresh token received. Re-authorize with prompt=consent.");
@@ -368,10 +371,7 @@ export const googleCalendarService = {
 
     await setSetting("gcal_refresh_token", json.refresh_token);
     await setSetting("gcal_access_token", json.access_token);
-    await setSetting(
-      "gcal_access_token_expires_at",
-      Date.now() + json.expires_in * 1000,
-    );
+    await setSetting("gcal_access_token_expires_at", Date.now() + json.expires_in * 1000);
   },
 
   async isConnected() {
@@ -391,12 +391,7 @@ export const googleCalendarService = {
 
   listEvents: listEventsImpl,
 
-  async createEvent(params: {
-    summary: string;
-    description?: string;
-    start: string;
-    end: string;
-  }) {
+  async createEvent(params: { summary: string; description?: string; start: string; end: string }) {
     const calId = await getCalendarId();
     const body = {
       summary: params.summary,
@@ -405,12 +400,12 @@ export const googleCalendarService = {
       end: { dateTime: params.end },
     };
 
-    const res = await gcalFetch(
-      `/calendars/${encodeURIComponent(calId)}/events`,
-      { method: "POST", body: JSON.stringify(body) },
-    );
+    const res = await gcalFetch(`/calendars/${encodeURIComponent(calId)}/events`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
 
-    const json = (await res.json()) as { id: string };
+    const json = await res.json();
     return json.id;
   },
 
@@ -424,7 +419,12 @@ export const googleCalendarService = {
 
   async updateEvent(
     eventId: string,
-    params: { summary?: string; description?: string; start?: string; end?: string },
+    params: {
+      summary?: string;
+      description?: string;
+      start?: string;
+      end?: string;
+    },
   ) {
     const calId = await getCalendarId();
     const body: Record<string, unknown> = {};
@@ -441,29 +441,20 @@ export const googleCalendarService = {
 
   async getAvailableSlots(params: { date: string; days: number; duration: number }) {
     const wh = await getSetting("working_hours");
-    const workingHours: WorkingHours = (wh as WorkingHours) ?? {};
+    const workingHours = wh ? parseWith(WorkingHoursSchema, wh) : defaultWorkingHours;
 
     const startDate = new Date(`${params.date}T00:00:00`);
     const endDate = new Date(startDate);
     endDate.setDate(endDate.getDate() + params.days);
 
-    const events = await listEventsImpl(
-      startDate.toISOString(),
-      endDate.toISOString(),
-    );
+    const events = await listEventsImpl(startDate.toISOString(), endDate.toISOString());
 
-    return computeAvailableSlots(
-      events,
-      params.date,
-      params.days,
-      params.duration,
-      workingHours,
-    );
+    return computeAvailableSlots(events, params.date, params.days, params.duration, workingHours);
   },
 
   async getWorkingHours() {
     const v = await getSetting("working_hours");
-    return (v as WorkingHours) ?? {};
+    return v ? parseWith(WorkingHoursSchema, v) : defaultWorkingHours;
   },
 
   setWorkingHours: (hours: WorkingHours) => setSetting("working_hours", hours),

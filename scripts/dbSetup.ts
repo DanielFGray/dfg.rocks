@@ -7,9 +7,25 @@ const env = (k: string) => {
   return v;
 };
 
+async function connectWithRetry(connectionString: string, retries = 10) {
+  for (let i = 0; i <= retries; i++) {
+    const client = new pg.Client({ connectionString });
+    try {
+      await client.connect();
+      return client;
+    } catch (error: any) {
+      await client.end().catch(() => {});
+      if (error?.code === "28P01") throw error;
+      if (i === retries) throw error;
+      await new Promise((resolve) => setTimeout(resolve, 200 * Math.pow(1.8, i)));
+    }
+  }
+
+  throw new Error("Failed to connect to database");
+}
+
 async function main() {
-  const client = new pg.Client({ connectionString: env("ROOT_DATABASE_URL") });
-  await client.connect();
+  const client = await connectWithRetry(env("ROOT_DATABASE_URL"));
 
   const dbName = env("DATABASE_NAME");
   const owner = env("DATABASE_OWNER");
@@ -34,20 +50,14 @@ async function main() {
 
   // Create roles
   await client.query(`CREATE ROLE "${owner}" LOGIN PASSWORD '${ownerPw}'`);
-  await client.query(
-    `CREATE ROLE "${auth}" LOGIN PASSWORD '${authPw}' NOINHERIT`,
-  );
+  await client.query(`CREATE ROLE "${auth}" LOGIN PASSWORD '${authPw}' NOINHERIT`);
   await client.query(`CREATE ROLE "${visitor}"`);
-  await client.query(
-    `CREATE ROLE "${dbName}_shadow" LOGIN PASSWORD '${shadowPw}' SUPERUSER`,
-  );
+  await client.query(`CREATE ROLE "${dbName}_shadow" LOGIN PASSWORD '${shadowPw}' SUPERUSER`);
   await client.query(`GRANT "${visitor}" TO "${auth}"`);
 
   // Create databases
   await client.query(`CREATE DATABASE "${dbName}" OWNER "${owner}"`);
-  await client.query(
-    `CREATE DATABASE "${dbName}_shadow" OWNER "${dbName}_shadow"`,
-  );
+  await client.query(`CREATE DATABASE "${dbName}_shadow" OWNER "${dbName}_shadow"`);
   await client.query(`CREATE DATABASE "${dbName}_test" OWNER "${owner}"`);
 
   console.log(`Created databases and roles for ${dbName}`);

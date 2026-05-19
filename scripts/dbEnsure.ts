@@ -7,9 +7,14 @@ import pg from "pg";
 import runAll from "npm-run-all";
 
 const run = (scripts: string[]) =>
-  runAll(scripts, { stdin: process.stdin, stdout: process.stdout, stderr: process.stderr, silent: true }) as Promise<void>;
+  runAll(scripts, {
+    stdin: process.stdin,
+    stdout: process.stdout,
+    stderr: process.stderr,
+    silent: true,
+  }) as Promise<void>;
 
-async function testConnection(url: string, retries = 7): Promise<void> {
+async function testConnection(url: string, retries = 7) {
   for (let i = 0; i <= retries; i++) {
     const pool = new pg.Pool({ connectionString: url, connectionTimeoutMillis: 3000 });
     try {
