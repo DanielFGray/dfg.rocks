@@ -1,25 +1,71 @@
 import { describe, beforeAll, afterAll, expect, it } from "vitest";
 import pg from "pg";
 import { execSync } from "child_process";
-import { mkdirSync } from "fs";
-import {
-  PostgreSqlContainer,
-  type StartedPostgreSqlContainer,
-} from "@testcontainers/postgresql";
-import {
-  GenericContainer,
-  type StartedTestContainer,
-} from "testcontainers";
+import { mkdirSync, readFileSync } from "fs";
+import Redis from "ioredis";
+import { Logger, consoleLogFactory, type Job } from "graphile-worker";
 
 // -- Shared state --
 let handler: (request: Request) => Promise<Response>;
 let testDb: pg.Client;
-let pgContainer: StartedPostgreSqlContainer;
-let valkeyContainer: StartedTestContainer;
+let testValkey: Redis | null = null;
 
 let adminCookie: string;
 let studentCookie: string;
 let studentId: string;
+
+function loadDotEnvFile() {
+  const envPath = `${process.cwd()}/.env`;
+  const contents = readFileSync(envPath, "utf8");
+
+  for (const line of contents.split(/\r?\n/u)) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) {
+      continue;
+    }
+
+    const separatorIndex = trimmed.indexOf("=");
+    if (separatorIndex < 0) {
+      continue;
+    }
+
+    const key = trimmed.slice(0, separatorIndex).trim();
+    if (!key || process.env[key] !== undefined) {
+      continue;
+    }
+
+    process.env[key] = trimmed.slice(separatorIndex + 1);
+  }
+}
+
+loadDotEnvFile();
+
+function requiredEnv(name: string): string {
+  const value = process.env[name];
+  if (!value) {
+    throw new Error(`Missing env: ${name}`);
+  }
+
+  return value;
+}
+
+function withDatabaseSuffix(connectionString: string, suffix: string): string {
+  const url = new URL(connectionString);
+  const databaseName = url.pathname.replace(/^\/+/, "");
+
+  if (!databaseName) {
+    throw new Error(`Connection string is missing a database name: ${connectionString}`);
+  }
+
+  url.pathname = `/${databaseName}${suffix}`;
+  return url.toString();
+}
+
+function withRedisDatabase(connectionString: string, databaseIndex: number): string {
+  const url = new URL(connectionString);
+  url.pathname = `/${databaseIndex}`;
+  return url.toString();
+}
 
 // -- Helpers --
 function req(
@@ -51,65 +97,29 @@ function getCookie(res: Response): string | null {
 // -- Setup / Teardown --
 describe("DFG Portal API", () => {
   beforeAll(async () => {
-    // 1. Start containers in parallel
-    const [pgC, vkC] = await Promise.all([
-      new PostgreSqlContainer("postgres:17-alpine")
-        .withUsername("postgres")
-        .withPassword("postgres")
-        .start(),
-      new GenericContainer("valkey/valkey:8-alpine")
-        .withExposedPorts(6379)
-        .start(),
-    ]);
-    pgContainer = pgC;
-    valkeyContainer = vkC;
-
-    const pgHost = pgC.getHost();
-    const pgPort = pgC.getMappedPort(5432);
-    const vkHost = vkC.getHost();
-    const vkPort = vkC.getMappedPort(6379);
-
-    const ownerPass = "owner_pass";
-    const authPass = "auth_pass";
-    const shadowPass = "shadow_pass";
-
-    const rootUrl = `postgres://postgres:postgres@${pgHost}:${pgPort}/template1`;
-    const dbUrl = `postgres://dfg_portal:${ownerPass}@${pgHost}:${pgPort}/dfg_portal`;
-    const shadowUrl = `postgres://dfg_portal_shadow:${shadowPass}@${pgHost}:${pgPort}/dfg_portal_shadow`;
-
-    // 2. Env for child processes
+    const dbUrl = withDatabaseSuffix(requiredEnv("DATABASE_URL"), "_test");
+    const authDbUrl = withDatabaseSuffix(requiredEnv("AUTH_DATABASE_URL"), "_test");
+    const testValkeyUrl = withRedisDatabase(requiredEnv("VALKEY_URL"), 15);
     const childEnv: Record<string, string> = {
-      ...(process.env as Record<string, string>),
-      ROOT_DATABASE_URL: rootUrl,
-      DATABASE_NAME: "dfg_portal",
-      DATABASE_OWNER: "dfg_portal",
-      DATABASE_OWNER_PASSWORD: ownerPass,
-      DATABASE_AUTHENTICATOR: "dfg_portal_authenticator",
-      DATABASE_AUTHENTICATOR_PASSWORD: authPass,
-      DATABASE_VISITOR: "dfg_portal_visitor",
-      SHADOW_DATABASE_PASSWORD: shadowPass,
-      NOCONFIRM: "1",
+      ...process.env,
       DATABASE_URL: dbUrl,
-      SHADOW_DATABASE_URL: shadowUrl,
+      AUTH_DATABASE_URL: authDbUrl,
+      VALKEY_URL: testValkeyUrl,
+      NOCONFIRM: "1",
+      NODE_ENV: "test",
+      PORT: "0",
+      VITE_ROOT_URL: process.env.VITE_ROOT_URL || "http://localhost:3000",
+      ADMIN_EMAIL: process.env.ADMIN_EMAIL || "admin@test.com",
     };
 
-    // 3. Create roles + databases
-    execSync("bun scripts/dbSetup.ts", {
-      env: childEnv,
-      stdio: "pipe",
-      cwd: process.cwd(),
-    });
-
     mkdirSync("generated", { recursive: true });
-
-    // 4. Apply migrations (worker:schema creates graphile_worker schema needed by migrations)
     execSync("bun -b graphile-migrate reset --erase", {
       env: childEnv,
       stdio: "pipe",
       cwd: process.cwd(),
     });
     execSync("cd worker && bun -b graphile-worker --schema-only", {
-      env: { ...childEnv, DATABASE_URL: dbUrl },
+      env: childEnv,
       stdio: "pipe",
       cwd: process.cwd(),
     });
@@ -119,36 +129,24 @@ describe("DFG Portal API", () => {
       cwd: process.cwd(),
     });
 
-    // 5. Set env vars for server modules
-    Object.assign(process.env, {
-      DATABASE_URL: dbUrl,
-      AUTH_DATABASE_URL: `postgres://dfg_portal_authenticator:${authPass}@${pgHost}:${pgPort}/dfg_portal`,
-      VALKEY_URL: `redis://${vkHost}:${vkPort}`,
-      SECRET: "test-secret",
-      PORT: "0",
-      ADMIN_EMAIL: "admin@test.com",
-      VITE_ROOT_URL: "http://localhost:3000",
-      DATABASE_VISITOR: "dfg_portal_visitor",
-      NODE_ENV: "test",
-    });
+    Object.assign(process.env, childEnv);
 
-    // 6. Seed admin user via SQL
+    testValkey = new Redis(testValkeyUrl);
+    await testValkey.flushdb();
+
     testDb = new pg.Client({ connectionString: dbUrl });
     await testDb.connect();
     const adminResult = await testDb.query(
       `select * from app_private.really_create_user($1::citext, $2, null, true, $3::citext, $4)`,
       ["admin", "Test Admin", "admin@test.com", "admin123"],
     );
-    await testDb.query(
-      `update app_public.users set role = 'admin' where id = $1`,
-      [adminResult.rows[0].id],
-    );
+    await testDb.query(`update app_public.users set role = 'admin' where id = $1`, [
+      adminResult.rows[0].id,
+    ]);
 
-    // 7. Dynamic import Elysia app
     const { app } = await import("../app.js");
-    handler = (request: Request) => app.fetch(request);
+    handler = (request: Request) => Promise.resolve(app.fetch(request));
 
-    // 8. Login as admin
     const loginRes = await req("POST", "/api/login", {
       body: { id: "admin", password: "admin123" },
     });
@@ -157,10 +155,28 @@ describe("DFG Portal API", () => {
       const body = await loginRes.text();
       throw new Error(`Admin login failed (${loginRes.status}): ${body}`);
     }
+
+    const studentResult = await testDb.query(
+      `select * from app_private.really_create_user($1::citext, $2, null, true, $3::citext, $4)`,
+      ["student1", "Test Student", "student1@test.com", "student123"],
+    );
+    studentId = studentResult.rows[0].id;
+
+    const studentLoginRes = await req("POST", "/api/login", {
+      body: { id: "student1", password: "student123" },
+    });
+    studentCookie = getCookie(studentLoginRes)!;
+    if (!studentCookie) {
+      const body = await studentLoginRes.text();
+      throw new Error(`Student login failed (${studentLoginRes.status}): ${body}`);
+    }
   }, 120_000);
 
   afterAll(async () => {
-    // Close DB pools before stopping containers to avoid connection-reset errors
+    try {
+      const { realtimeService } = await import("../services/realtimeService.js");
+      await realtimeService.stop();
+    } catch {}
     try {
       const db = await import("../db.js");
       await db.rootDb.destroy();
@@ -170,9 +186,8 @@ describe("DFG Portal API", () => {
       const { valkey } = await import("../valkey.js");
       valkey.disconnect();
     } catch {}
+    await testValkey?.quit();
     await testDb?.end();
-    await valkeyContainer?.stop();
-    await pgContainer?.stop();
   }, 30_000);
 
   // -- Test 1: Public endpoints --
@@ -207,13 +222,6 @@ describe("DFG Portal API", () => {
 
   // -- Test 2: Auth lifecycle --
   it("auth: login, password flows", async () => {
-    // Create student via SQL
-    const studentResult = await testDb.query(
-      `select * from app_private.really_create_user($1::citext, $2, null, true, $3::citext, $4)`,
-      ["student1", "Test Student", "student1@test.com", "student123"],
-    );
-    studentId = studentResult.rows[0].id;
-
     // Login with password
     const loginRes = await req("POST", "/api/login", {
       body: { id: "student1", password: "student123" },
@@ -265,11 +273,284 @@ describe("DFG Portal API", () => {
     expect((await me2.json()).user.username).toBe("student1");
   });
 
-  // -- Test 3: Curriculum CRUD + student access --
+  // -- Test 3: Testimonials --
+  it("testimonials: student CRUD, admin blocked", async () => {
+    const create = await req("PUT", "/api/testimonials", {
+      body: {
+        body: "Daniel has made lessons fun, approachable, and easy to stick with every week.",
+      },
+      cookie: studentCookie,
+    });
+    expect(create.status).toBe(200);
+    const created = await create.json();
+    expect(created.body).toContain("lessons fun");
+    expect(created.display_name).toBe("Test Student");
+    expect(created.role_label).toBe("Student");
+
+    const current = await req("GET", "/api/testimonials", {
+      cookie: studentCookie,
+    });
+    expect(current.status).toBe(200);
+    expect((await current.json()).body).toContain("lessons fun");
+
+    const update = await req("PUT", "/api/testimonials", {
+      body: {
+        body: "Daniel has made lessons fun, practical, and something I actually look forward to each week.",
+      },
+      cookie: studentCookie,
+    });
+    expect(update.status).toBe(200);
+    expect((await update.json()).body).toContain("look forward");
+
+    const adminAttempt = await req("GET", "/api/testimonials", {
+      cookie: adminCookie,
+    });
+    expect(adminAttempt.status).toBe(403);
+
+    const remove = await req("DELETE", "/api/testimonials", {
+      cookie: studentCookie,
+    });
+    expect(remove.status).toBe(200);
+
+    const afterDelete = await req("GET", "/api/testimonials", {
+      cookie: studentCookie,
+    });
+    expect(afterDelete.status).toBe(200);
+    expect(await afterDelete.text()).toBe("");
+
+    const { rows: reminderRows } = await testDb.query(
+      `select testimonial_prompt_enabled, testimonial_next_prompt_at
+       from app_private.user_secrets
+       where user_id = $1`,
+      [studentId],
+    );
+    expect(reminderRows[0].testimonial_prompt_enabled).toBe(false);
+    expect(reminderRows[0].testimonial_next_prompt_at).toBeTruthy();
+  });
+
+  it("testimonials: admin interval updates schedule and worker enables prompts", async () => {
+    const saveInterval = await req("POST", "/api/admin/testimonial-reminder-interval", {
+      body: { interval_days: 14 },
+      cookie: adminCookie,
+    });
+    expect(saveInterval.status).toBe(200);
+    expect((await saveInterval.json()).interval_days).toBe(14);
+
+    const { rows: scheduledRows } = await testDb.query(
+      `select testimonial_prompt_enabled, testimonial_next_prompt_at
+       from app_private.user_secrets
+       where user_id = $1`,
+      [studentId],
+    );
+    expect(scheduledRows[0].testimonial_prompt_enabled).toBe(false);
+    expect(new Date(scheduledRows[0].testimonial_next_prompt_at).getTime()).toBeGreaterThan(
+      Date.now(),
+    );
+
+    await testDb.query(
+      `update app_private.user_secrets
+       set testimonial_prompt_enabled = false,
+           testimonial_next_prompt_at = now() - interval '1 minute',
+           testimonial_last_emailed_at = null
+       where user_id = $1`,
+      [studentId],
+    );
+
+    const { default: reminderSweepTask } =
+      await import("../../worker/tasks/testimonials__reminder_sweep.js");
+    const jobs: Array<{ identifier: string; payload: unknown }> = [];
+    const workerLogger = new Logger(consoleLogFactory, { label: "test" });
+    const poolClient = Object.assign(testDb, {
+      release: () => undefined,
+    });
+    const makeJob = (identifier: string, payload: unknown): Job => ({
+      id: String(jobs.length + 1),
+      job_queue_id: null,
+      task_id: 1,
+      payload,
+      priority: 0,
+      run_at: new Date(),
+      attempts: 0,
+      max_attempts: 1,
+      last_error: null,
+      created_at: new Date(),
+      updated_at: new Date(),
+      key: null,
+      revision: 0,
+      locked_at: null,
+      locked_by: null,
+      flags: null,
+      is_available: true,
+      task_identifier: identifier,
+    });
+
+    await reminderSweepTask(
+      {},
+      {
+        job: makeJob("testimonials__reminder_sweep", {}),
+        withPgClient: async (callback) => callback(poolClient),
+        logger: workerLogger,
+        getQueueName: async () => null,
+        query: (queryText, values) => poolClient.query(queryText, values),
+        addJob: async (identifier: string, payload: unknown) => {
+          jobs.push({ identifier, payload });
+          return makeJob(identifier, payload);
+        },
+      },
+    );
+
+    expect(jobs.some((job) => job.identifier === "send_email")).toBe(true);
+    expect(jobs.some((job) => job.identifier === "testimonials__reminder_sweep")).toBe(false);
+
+    const emailJob = jobs.find((job) => job.identifier === "send_email");
+    expect(emailJob).toBeTruthy();
+    expect(emailJob?.payload).toMatchObject({
+      options: {
+        to: "student1@test.com",
+        subject: "How would you recommend DFG Music Lessons?",
+      },
+      template: "testimonial_reminder.mjml",
+    });
+
+    const { rows: afterSweepRows } = await testDb.query(
+      `select
+         testimonial_prompt_enabled,
+         testimonial_next_prompt_at,
+         testimonial_last_emailed_at
+       from app_private.user_secrets
+       where user_id = $1`,
+      [studentId],
+    );
+    expect(afterSweepRows[0].testimonial_prompt_enabled).toBe(true);
+    expect(afterSweepRows[0].testimonial_last_emailed_at).toBeTruthy();
+    expect(new Date(afterSweepRows[0].testimonial_next_prompt_at).getTime()).toBeGreaterThan(
+      Date.now(),
+    );
+  });
+
+  it("assignments: tracks playback time and self-reviews", async () => {
+    const notationTracks = [
+      {
+        index: 0,
+        name: "Lead Guitar",
+        short_name: "Lead",
+        is_percussion: false,
+      },
+      {
+        index: 1,
+        name: "Bass",
+        short_name: "Bass",
+        is_percussion: false,
+      },
+    ];
+    const notationMat = (
+      await testDb.query(
+        `insert into app_public.materials (
+           title,
+           original_filename,
+           file_path,
+           mime_type,
+           file_size,
+           is_global,
+           notation_tracks
+         )
+         values ($1, $2, $3, $4, $5, $6, $7::jsonb)
+         returning id`,
+        [
+          "Etude in G",
+          "etude.gp5",
+          "/data/etude.gp5",
+          "application/octet-stream",
+          4096,
+          false,
+          JSON.stringify(notationTracks),
+        ],
+      )
+    ).rows[0];
+
+    const missingTrack = await req("POST", `/api/admin/students/${studentId}/assign`, {
+      body: { material_id: notationMat.id },
+      cookie: adminCookie,
+    });
+    expect(missingTrack.status).toBe(400);
+
+    const assign = await req("POST", `/api/admin/students/${studentId}/assign`, {
+      body: { material_id: notationMat.id, assigned_track_index: 1 },
+      cookie: adminCookie,
+    });
+    expect(assign.status).toBe(200);
+
+    const assignmentRow = await testDb.query(
+      `select assigned_track_index
+       from app_public.student_materials
+       where student_id = $1 and material_id = $2`,
+      [studentId, notationMat.id],
+    );
+    expect(assignmentRow.rows[0]?.assigned_track_index).toBe(1);
+
+    const playback1 = await req("POST", `/api/assignments/${notationMat.id}/playback`, {
+      body: { seconds: 35 },
+      cookie: studentCookie,
+    });
+    expect(playback1.status).toBe(200);
+    expect((await playback1.json()).listened_seconds).toBe(35);
+
+    const review1 = await req("POST", `/api/assignments/${notationMat.id}/reviews`, {
+      body: { stars: 4 },
+      cookie: studentCookie,
+    });
+    expect(review1.status).toBe(200);
+    const review1Body = await review1.json();
+    expect(review1Body.stars).toBe(4);
+    expect(review1Body.listened_seconds).toBe(35);
+
+    const playback2 = await req("POST", `/api/assignments/${notationMat.id}/playback`, {
+      body: { seconds: 25 },
+      cookie: studentCookie,
+    });
+    expect(playback2.status).toBe(200);
+    expect((await playback2.json()).listened_seconds).toBe(60);
+
+    const review2 = await req("POST", `/api/assignments/${notationMat.id}/reviews`, {
+      body: { stars: 5 },
+      cookie: studentCookie,
+    });
+    expect(review2.status).toBe(200);
+    const review2Body = await review2.json();
+    expect(review2Body.stars).toBe(5);
+    expect(review2Body.listened_seconds).toBe(60);
+
+    const adminAttempt = await req("POST", `/api/assignments/${notationMat.id}/playback`, {
+      body: { seconds: 10 },
+      cookie: adminCookie,
+    });
+    expect(adminAttempt.status).toBe(403);
+
+    expect(
+      (
+        await req("DELETE", `/api/admin/students/${studentId}/assign/${notationMat.id}`, {
+          cookie: adminCookie,
+        })
+      ).status,
+    ).toBe(200);
+    expect(
+      (
+        await req("DELETE", `/api/admin/materials/${notationMat.id}`, {
+          cookie: adminCookie,
+        })
+      ).status,
+    ).toBe(200);
+  });
+
+  // -- Test 4: Curriculum CRUD + student access --
   it("curriculum: admin CRUD, enrollment, student views", async () => {
     // Create course
     const createCourse = await req("POST", "/api/admin/courses", {
-      body: { title: "Guitar 101", instrument: "guitar", description: "Beginner guitar" },
+      body: {
+        title: "Guitar 101",
+        instrument: "guitar",
+        description: "Beginner guitar",
+      },
       cookie: adminCookie,
     });
     expect(createCourse.status).toBe(200);
@@ -296,27 +577,37 @@ describe("DFG Portal API", () => {
 
     // Update module
     const updateMod = await req("PATCH", `/api/admin/modules/${moduleId}`, {
-      body: { description: "Fundamentals" },
+      body: { title: "Week 1: Fundamentals" },
       cookie: adminCookie,
     });
     expect(updateMod.status).toBe(200);
+    expect((await updateMod.json()).title).toBe("Week 1: Fundamentals");
 
     // Seed materials via DB
-    const globalMat = (await testDb.query(
-      `insert into app_public.materials (title, original_filename, file_path, mime_type, file_size, is_global)
+    const globalMat = (
+      await testDb.query(
+        `insert into app_public.materials (title, original_filename, file_path, mime_type, file_size, is_global)
        values ($1, $2, $3, $4, $5, $6) returning id`,
-      ["Chord Chart", "chords.pdf", "/data/chords.pdf", "application/pdf", 12345, true],
-    )).rows[0];
+        ["Chord Chart", "chords.pdf", "/data/chords.pdf", "application/pdf", 12345, true],
+      )
+    ).rows[0];
 
-    const privateMat = (await testDb.query(
-      `insert into app_public.materials (title, original_filename, file_path, mime_type, file_size, is_global)
+    const privateMat = (
+      await testDb.query(
+        `insert into app_public.materials (title, original_filename, file_path, mime_type, file_size, is_global)
        values ($1, $2, $3, $4, $5, $6) returning id`,
-      ["Private Notes", "notes.pdf", "/data/notes.pdf", "application/pdf", 5432, false],
-    )).rows[0];
+        ["Private Notes", "notes.pdf", "/data/notes.pdf", "application/pdf", 5432, false],
+      )
+    ).rows[0];
 
-    // Attach global material to module
-    const attach = await req("POST", `/api/admin/modules/${moduleId}/materials`, {
-      body: { material_id: globalMat.id, sort_order: 1 },
+    // Sync module materials via content
+    const attach = await req("PATCH", `/api/admin/modules/${moduleId}`, {
+      body: {
+        content: {
+          type: "doc",
+          content: [{ type: "materialEmbed", attrs: { materialId: globalMat.id } }],
+        },
+      },
       cookie: adminCookie,
     });
     expect(attach.status).toBe(200);
@@ -336,7 +627,9 @@ describe("DFG Portal API", () => {
     expect(assign.status).toBe(200);
 
     // Admin lists courses
-    const adminCourses = await req("GET", "/api/admin/courses", { cookie: adminCookie });
+    const adminCourses = await req("GET", "/api/admin/courses", {
+      cookie: adminCookie,
+    });
     expect(adminCourses.status).toBe(200);
     expect((await adminCourses.json()).length).toBeGreaterThanOrEqual(1);
 
@@ -348,7 +641,9 @@ describe("DFG Portal API", () => {
     expect(courseList[0].title).toBe("Guitar 101");
 
     // Course detail with modules + materials
-    const detail = await req("GET", `/api/courses/${courseId}`, { cookie: studentCookie });
+    const detail = await req("GET", `/api/courses/${courseId}`, {
+      cookie: studentCookie,
+    });
     expect(detail.status).toBe(200);
     const courseDetail = await detail.json();
     expect(courseDetail.modules).toHaveLength(1);
@@ -362,27 +657,54 @@ describe("DFG Portal API", () => {
     expect(libraryList.some((m: any) => m.title === "Chord Chart")).toBe(true);
 
     // Assignments
-    const assignments = await req("GET", "/api/assignments", { cookie: studentCookie });
+    const assignments = await req("GET", "/api/assignments", {
+      cookie: studentCookie,
+    });
     expect(assignments.status).toBe(200);
     const assignList = await assignments.json();
     expect(assignList.some((m: any) => m.title === "Private Notes")).toBe(true);
 
     // Cleanup
-    expect((await req("DELETE", `/api/admin/modules/${moduleId}/materials/${globalMat.id}`, { cookie: adminCookie })).status).toBe(200);
-    expect((await req("DELETE", `/api/admin/students/${studentId}/assign/${privateMat.id}`, { cookie: adminCookie })).status).toBe(200);
-    expect((await req("DELETE", `/api/admin/students/${studentId}/enroll/${courseId}`, { cookie: adminCookie })).status).toBe(200);
+    expect(
+      (
+        await req("DELETE", `/api/admin/students/${studentId}/assign/${privateMat.id}`, {
+          cookie: adminCookie,
+        })
+      ).status,
+    ).toBe(200);
+    expect(
+      (
+        await req("DELETE", `/api/admin/students/${studentId}/enroll/${courseId}`, {
+          cookie: adminCookie,
+        })
+      ).status,
+    ).toBe(200);
 
     const empty = await req("GET", "/api/courses", { cookie: studentCookie });
     expect(empty.status).toBe(200);
     expect(await empty.json()).toHaveLength(0);
 
-    expect((await req("DELETE", `/api/admin/modules/${moduleId}`, { cookie: adminCookie })).status).toBe(200);
-    expect((await req("DELETE", `/api/admin/courses/${courseId}`, { cookie: adminCookie })).status).toBe(200);
+    expect(
+      (
+        await req("DELETE", `/api/admin/modules/${moduleId}`, {
+          cookie: adminCookie,
+        })
+      ).status,
+    ).toBe(200);
+    expect(
+      (
+        await req("DELETE", `/api/admin/courses/${courseId}`, {
+          cookie: adminCookie,
+        })
+      ).status,
+    ).toBe(200);
   });
 
-  // -- Test 4: Admin dashboard --
+  // -- Test 5: Admin dashboard --
   it("admin: submissions and student list", async () => {
-    const subs = await req("GET", "/api/admin/submissions", { cookie: adminCookie });
+    const subs = await req("GET", "/api/admin/submissions", {
+      cookie: adminCookie,
+    });
     expect(subs.status).toBe(200);
     const subList = await subs.json();
     expect(subList.length).toBeGreaterThanOrEqual(1);
@@ -396,18 +718,22 @@ describe("DFG Portal API", () => {
     });
     expect(patch.status).toBe(200);
 
-    const students = await req("GET", "/api/admin/students", { cookie: adminCookie });
+    const students = await req("GET", "/api/admin/students", {
+      cookie: adminCookie,
+    });
     expect(students.status).toBe(200);
     const studentList = await students.json();
     expect(studentList.some((s: any) => s.username === "student1")).toBe(true);
   });
 
-  // -- Test 5: Authorization --
+  // -- Test 6: Authorization --
   it("authorization: access control", async () => {
     const unauth = await req("GET", "/api/courses");
     expect(unauth.status).toBe(401);
 
-    const studentAdmin = await req("GET", "/api/admin/courses", { cookie: studentCookie });
+    const studentAdmin = await req("GET", "/api/admin/courses", {
+      cookie: studentCookie,
+    });
     expect(studentAdmin.status).toBe(403);
 
     const meNoAuth = await req("GET", "/api/me");

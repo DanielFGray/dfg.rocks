@@ -1,0 +1,2 @@
+# Run the testimonial reminder sweep once per hour.
+0 * * * * testimonials__reminder_sweep ?jobKey=testimonials__reminder_sweep

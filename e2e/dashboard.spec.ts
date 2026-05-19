@@ -1,22 +1,30 @@
-import { test, expect, getPw, loginViaUi } from "./helpers.js";
+import { test, expect, loginViaUi } from "./helpers.js";
 
 test.describe("dashboard", () => {
-  test("shows courses after login", async ({ page, testing }) => {
-    await testing.login();
-    await loginViaUi(page, "test_admin", "testpassword123");
-    await expect(getPw(page, "dashboard")).toBeVisible();
+  test("hides testimonial prompt for a new student", async ({ page, testing }) => {
+    await testing.login({
+      username: "test_prompt_hidden",
+      role: "student",
+      email: "prompt-hidden@test.local",
+    });
+
+    await loginViaUi(page, "test_prompt_hidden", "testpassword123");
+    await expect(page.getByTestId("testimonial-prompt")).not.toBeVisible();
   });
 
-  test.skip("survives page refresh", async ({ page, testing }) => {
-    await testing.login();
-    await loginViaUi(page, "test_admin", "testpassword123");
-    await expect(getPw(page, "dashboard")).toBeVisible();
+  test("shows testimonial prompt after reminders are enabled", async ({ page, testing }) => {
+    await testing.login({
+      username: "test_prompt_ready",
+      role: "student",
+      email: "prompt-ready@test.local",
+    });
+    await testing.setTestimonialReminder({
+      username: "test_prompt_ready",
+      prompt_enabled: true,
+      next_prompt_at: new Date().toISOString(),
+    });
 
-    // Hard refresh — client re-renders after SSR shell
-    await page.reload({ waitUntil: "networkidle" });
-    await expect(getPw(page, "dashboard")).toBeVisible({ timeout: 15_000 });
-    await expect(
-      page.getByRole("heading", { name: "Courses" }),
-    ).toBeVisible();
+    await loginViaUi(page, "test_prompt_ready", "testpassword123");
+    await expect(page.getByTestId("testimonial-prompt")).toBeVisible();
   });
 });

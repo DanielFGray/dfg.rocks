@@ -1,7 +1,6 @@
-import { useState } from "react";
-import { useSuspenseQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
+import { useMutation } from "@tanstack/react-query";
 import { api } from "../../lib/api.js";
-import { gcalStatusQuery, workingHoursQuery, unwrap } from "../../lib/queries.js";
 import type { WorkingHours } from "../../lib/types.js";
 import { Button } from "../ui/Button.js";
 import { Card } from "../ui/Card.js";
@@ -35,8 +34,8 @@ const defaultWorkingHours: WorkingHoursMap = {
 
 function toWorkingHoursMap(wh: WorkingHours): WorkingHoursMap {
   const mapped: WorkingHoursMap = {};
-  for (let i = 0; i <= 6; i++) {
-    mapped[String(i)] = wh[i as keyof WorkingHours] ?? null;
+  for (const day of days) {
+    mapped[day.index] = wh[Number(day.index) as keyof WorkingHours] ?? null;
   }
   return mapped;
 }
@@ -45,16 +44,29 @@ function toWorkingHoursMap(wh: WorkingHours): WorkingHoursMap {
  * AdminSection — Google Calendar + Working Hours (admin only)
  * --------------------------------------------------------------------------- */
 
-export function AdminSection() {
-  const queryClient = useQueryClient();
-
-  const { data: gcalStatus } = useSuspenseQuery(gcalStatusQuery);
-
-  const { data: workingHoursData } = useSuspenseQuery(workingHoursQuery);
-
+export function AdminSection({
+  gcalStatus,
+  workingHoursData,
+  testimonialReminderIntervalDays,
+  onRefresh,
+}: {
+  gcalStatus: { connected: boolean; calendar_id?: string | null };
+  workingHoursData: WorkingHours;
+  testimonialReminderIntervalDays: number;
+  onRefresh: () => void;
+}) {
   const [workingHours, setWorkingHours] = useState<WorkingHoursMap>(() =>
-    workingHoursData ? toWorkingHoursMap(workingHoursData as WorkingHours) : defaultWorkingHours,
+    workingHoursData ? toWorkingHoursMap(workingHoursData) : defaultWorkingHours,
   );
+  const [intervalDays, setIntervalDays] = useState(() => String(testimonialReminderIntervalDays));
+
+  useEffect(() => {
+    setWorkingHours(workingHoursData ? toWorkingHoursMap(workingHoursData) : defaultWorkingHours);
+  }, [workingHoursData]);
+
+  useEffect(() => {
+    setIntervalDays(String(testimonialReminderIntervalDays));
+  }, [testimonialReminderIntervalDays]);
 
   const disconnectMutation = useMutation({
     mutationFn: async () => {
@@ -62,13 +74,13 @@ export function AdminSection() {
       return data;
     },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ["gcal-status"] });
+      onRefresh();
     },
   });
 
   const saveHoursMutation = useMutation({
     mutationFn: async (hours: WorkingHoursMap) => {
-      return unwrap((await api.admin["working-hours"].post({
+      const { data, error } = await api.admin["working-hours"].post({
         0: hours["0"] ?? null,
         1: hours["1"] ?? null,
         2: hours["2"] ?? null,
@@ -76,15 +88,32 @@ export function AdminSection() {
         4: hours["4"] ?? null,
         5: hours["5"] ?? null,
         6: hours["6"] ?? null,
-      } as WorkingHours)).data);
+      });
+      if (error) throw error;
+      return data;
     },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ["working-hours"] });
+      onRefresh();
+    },
+  });
+
+  const saveReminderIntervalMutation = useMutation({
+    mutationFn: async (nextIntervalDays: number) => {
+      const { data, error } = await api.admin["testimonial-reminder-interval"].post({
+        interval_days: nextIntervalDays,
+      });
+      if (error) throw error;
+      return data;
+    },
+    onSettled: () => {
+      onRefresh();
     },
   });
 
   const handleConnect = async () => {
-    const data = unwrap((await api.admin.gcal["auth-url"].get()).data);
+    const { data, error } = await api.admin.gcal["auth-url"].get();
+    if (error) throw error;
+    if ("error" in data) throw new Error(data.error);
     window.location.href = data.url;
   };
 
@@ -103,22 +132,33 @@ export function AdminSection() {
     });
   };
 
+  const parsedIntervalDays = Number(intervalDays);
+  const canSaveInterval =
+    Number.isInteger(parsedIntervalDays) &&
+    parsedIntervalDays >= 1 &&
+    parsedIntervalDays <= 365 &&
+    parsedIntervalDays !== testimonialReminderIntervalDays &&
+    !saveReminderIntervalMutation.isPending;
+
   return (
-    <section className="mb-12" data-pwid="gcal-section">
+    <section className="mb-12" data-testid="gcal-section">
       <h2 className="text-xl font-semibold mb-4">Google Calendar</h2>
 
       {gcalStatus.connected ? (
         <Card>
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div className="sm:flex-row sm:items-center sm:justify-between gap-3 flex flex-col">
             <div>
-              <p className="text-primary font-medium">Connected</p>
-              <p className="text-sm text-muted">Calendar: {"calendar_id" in gcalStatus ? gcalStatus.calendar_id ?? "primary" : "primary"}</p>
+              <p className="text-primary dark:text-primary-dark font-medium">Connected</p>
+              <p className="text-sm text-muted dark:text-muted-dark">
+                Calendar:{" "}
+                {"calendar_id" in gcalStatus ? (gcalStatus.calendar_id ?? "primary") : "primary"}
+              </p>
             </div>
             <Button
               variant="ghost"
               onClick={() => disconnectMutation.mutate()}
-              className="text-red-400 hover:text-red-300"
-              data-pwid="gcal-disconnect"
+              className="text-red-600 hover:text-red-500 dark:text-red-400 dark:hover:text-red-300"
+              data-testid="gcal-disconnect"
             >
               Disconnect
             </Button>
@@ -126,16 +166,14 @@ export function AdminSection() {
         </Card>
       ) : (
         <Card>
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div className="sm:flex-row sm:items-center sm:justify-between gap-3 flex flex-col">
             <div>
-              <p className="text-muted">Not connected</p>
-              <p className="text-sm text-muted/60">Connect your Google Calendar to enable scheduling</p>
+              <p className="text-muted dark:text-muted-dark">Not connected</p>
+              <p className="text-sm text-muted/60 dark:text-muted-dark/60">
+                Connect your Google Calendar to enable scheduling
+              </p>
             </div>
-            <Button
-              variant="primary"
-              onClick={handleConnect}
-              data-pwid="gcal-connect"
-            >
+            <Button variant="primary" onClick={handleConnect} data-testid="gcal-connect">
               Connect Calendar
             </Button>
           </div>
@@ -144,45 +182,47 @@ export function AdminSection() {
 
       {/* Working Hours */}
       <h3 className="text-lg font-semibold mt-8 mb-4">Working Hours</h3>
-      <div className="flex flex-col gap-2">
+      <div className="gap-2 flex flex-col">
         {days.map((day) => (
           <Card key={day.index}>
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-              <span className="font-medium text-primary w-24">{day.label}</span>
+            <div className="sm:flex-row sm:items-center sm:justify-between gap-3 flex flex-col">
+              <span className="font-medium text-primary dark:text-primary-dark w-24">
+                {day.label}
+              </span>
               {workingHours[day.index] ? (
-                <div className="flex items-center gap-2 flex-wrap">
+                <div className="gap-2 flex flex-wrap items-center">
                   <input
                     type="time"
                     value={workingHours[day.index]!.start}
                     onChange={(e) => updateDayTime(day.index, "start", e.target.value)}
-                    className="bg-surface border border-border rounded px-2 py-1 text-sm text-primary"
-                    data-pwid={`hours-start-${day.index}`}
+                    className="bg-surface dark:bg-surface-dark border-border rounded-sm px-2 py-1 text-sm text-primary dark:text-primary-dark border"
+                    data-testid={`hours-start-${day.index}`}
                   />
-                  <span className="text-muted">to</span>
+                  <span className="text-muted dark:text-muted-dark">to</span>
                   <input
                     type="time"
                     value={workingHours[day.index]!.end}
                     onChange={(e) => updateDayTime(day.index, "end", e.target.value)}
-                    className="bg-surface border border-border rounded px-2 py-1 text-sm text-primary"
-                    data-pwid={`hours-end-${day.index}`}
+                    className="bg-surface dark:bg-surface-dark border-border rounded-sm px-2 py-1 text-sm text-primary dark:text-primary-dark border"
+                    data-testid={`hours-end-${day.index}`}
                   />
                   <Button
                     variant="ghost"
                     onClick={() => toggleDay(day.index)}
-                    className="text-xs text-red-400 hover:text-red-300"
-                    data-pwid={`hours-off-${day.index}`}
+                    className="text-xs text-red-600 hover:text-red-500 dark:text-red-400 dark:hover:text-red-300"
+                    data-testid={`hours-off-${day.index}`}
                   >
                     Off
                   </Button>
                 </div>
               ) : (
-                <div className="flex items-center gap-2">
-                  <span className="text-muted text-sm">Not working</span>
+                <div className="gap-2 flex items-center">
+                  <span className="text-muted dark:text-muted-dark text-sm">Not working</span>
                   <Button
                     variant="ghost"
                     onClick={() => toggleDay(day.index)}
                     className="text-xs text-green-400 hover:text-green-300"
-                    data-pwid={`hours-on-${day.index}`}
+                    data-testid={`hours-on-${day.index}`}
                   >
                     Enable
                   </Button>
@@ -191,16 +231,55 @@ export function AdminSection() {
             </div>
           </Card>
         ))}
-        <div className="flex justify-end mt-4">
+        <div className="mt-4 flex justify-end">
           <Button
             variant="primary"
             onClick={() => saveHoursMutation.mutate(workingHours)}
-            data-pwid="save-working-hours"
+            data-testid="save-working-hours"
           >
             Save Working Hours
           </Button>
         </div>
       </div>
+
+      <h3 className="text-lg font-semibold mt-8 mb-4">Testimonial Reminders</h3>
+      <Card>
+        <div className="gap-4 sm:flex-row sm:items-end sm:justify-between flex flex-col">
+          <div className="flex-1">
+            <p className="font-medium text-primary dark:text-primary-dark">Reminder interval</p>
+            <p className="text-sm text-muted dark:text-muted-dark">
+              New students and parents will see the dashboard testimonial prompt after this many
+              days, and reminder emails will repeat on the same cadence until they submit one.
+            </p>
+          </div>
+          <div className="gap-2 sm:min-w-56 flex flex-col">
+            <label
+              htmlFor="testimonial-reminder-interval"
+              className="text-sm font-medium text-primary dark:text-primary-dark"
+            >
+              Days between reminders
+            </label>
+            <input
+              id="testimonial-reminder-interval"
+              type="number"
+              min={1}
+              max={365}
+              value={intervalDays}
+              onChange={(e) => setIntervalDays(e.target.value)}
+              className="bg-surface dark:bg-surface-dark border-border rounded-sm px-3 py-2 text-sm text-primary dark:text-primary-dark border"
+              data-testid="testimonial-reminder-interval-input"
+            />
+            <Button
+              variant="primary"
+              onClick={() => saveReminderIntervalMutation.mutate(parsedIntervalDays)}
+              disabled={!canSaveInterval}
+              data-testid="save-testimonial-reminder-interval"
+            >
+              {saveReminderIntervalMutation.isPending ? "Saving..." : "Save Reminder Interval"}
+            </Button>
+          </div>
+        </div>
+      </Card>
     </section>
   );
 }
