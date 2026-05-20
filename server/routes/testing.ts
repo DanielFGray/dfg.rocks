@@ -5,7 +5,6 @@
 import Elysia, { t, type Static } from "elysia";
 import crypto from "crypto";
 import fs from "fs/promises";
-import path from "path";
 import { sql } from "kysely";
 import { rootDb } from "../db.js";
 import { sessionService } from "../services/sessionService.js";
@@ -16,6 +15,7 @@ import {
   extractNotationTracksFromBytes,
   resolveAssignedTrackIndex,
 } from "../services/notationService.js";
+import { storageService } from "../services/storageService.js";
 import type { LessonStatus, LocationType } from "../../shared/schemas.js";
 
 if (env.NODE_ENV === "production") {
@@ -171,23 +171,38 @@ export const testingRoutes = new Elysia({ prefix: "/api" })
 
     const testMaterialFiles = await rootDb
       .selectFrom("app_public.materials")
-      .select("file_path")
+      .select(["storage_backend", "storage_key"])
       .where((eb) =>
-        eb.or([eb("file_path", "like", "/test/%"), eb("file_path", "like", "/tmp/test-%")]),
+        eb.or([
+          eb("storage_key", "like", "test/%"),
+          eb("storage_key", "like", "/test/%"),
+          eb("storage_key", "like", "/tmp/test-%"),
+        ]),
       )
       .execute();
 
     await rootDb
       .deleteFrom("app_public.materials")
       .where((eb) =>
-        eb.or([eb("file_path", "like", "/test/%"), eb("file_path", "like", "/tmp/test-%")]),
+        eb.or([
+          eb("storage_key", "like", "test/%"),
+          eb("storage_key", "like", "/test/%"),
+          eb("storage_key", "like", "/tmp/test-%"),
+        ]),
       )
       .execute();
 
     await Promise.all(
       testMaterialFiles
-        .filter((material) => material.file_path.startsWith("/tmp/test-"))
-        .map((material) => fs.unlink(material.file_path).catch(() => {})),
+        .filter((material) => material.storage_backend === "local")
+        .map((material) =>
+          storageService
+            .delete({
+              storageBackend: material.storage_backend,
+              storageKey: material.storage_key,
+            })
+            .catch(() => {}),
+        ),
     );
 
     return redirect(new URL("/login", request.url).toString());
@@ -245,19 +260,17 @@ export const testingRoutes = new Elysia({ prefix: "/api" })
     async ({ body, redirect, request }) => {
       const originalFilename =
         body.original_filename ?? `${body.title.toLowerCase().replace(/\s+/g, "-")}.pdf`;
-      const filePath = body.source_file_path
-        ? `/tmp/test-${crypto.randomUUID()}${path.extname(originalFilename)}`
-        : `/test/${crypto.randomUUID()}-${originalFilename}`;
-
-      if (body.source_file_path) {
-        await fs.copyFile(body.source_file_path, filePath);
-      }
+      const bytes = body.source_file_path
+        ? new Uint8Array(await fs.readFile(body.source_file_path))
+        : Buffer.from(
+            `test-material:${body.title}:${originalFilename}:${crypto.randomUUID()}`,
+            "utf8",
+          );
+      const location = storageService.createTestingLocation(originalFilename);
+      await storageService.put(location, bytes);
 
       const notationTracks = body.source_file_path
-        ? extractNotationTracksFromBytes(
-            new Uint8Array(await fs.readFile(body.source_file_path)),
-            originalFilename,
-          )
+        ? extractNotationTracksFromBytes(bytes, originalFilename)
         : null;
 
       const material = await rootDb
@@ -265,9 +278,11 @@ export const testingRoutes = new Elysia({ prefix: "/api" })
         .values({
           title: body.title,
           original_filename: originalFilename,
-          file_path: filePath,
+          storage_backend: location.storageBackend,
+          storage_key: location.storageKey,
+          content_hash: null,
           mime_type: body.mime_type ?? "application/pdf",
-          file_size: body.file_size ?? 1024,
+          file_size: body.file_size ?? bytes.byteLength,
           is_global: body.is_global ?? false,
           notation_tracks:
             notationTracks === null ? null : sql`${JSON.stringify(notationTracks)}::jsonb`,

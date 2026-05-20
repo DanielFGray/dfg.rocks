@@ -1,10 +1,9 @@
-import fs from "fs/promises";
-import path from "path";
+import path from "node:path";
 import { sql } from "kysely";
 import { rootDb } from "../db.js";
 import { HttpError } from "../pgErrors.js";
-import { env } from "../assertEnv.js";
 import { extractNotationTracksFromBytes } from "./notationService.js";
+import { storageService, type StorageLocation } from "./storageService.js";
 
 const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
 
@@ -20,15 +19,71 @@ function isFileAllowed(mimeType: string, filename: string): boolean {
   );
 }
 
-function getExtension(filename: string): string {
-  const ext = path.extname(filename);
-  return ext || "";
+const MATERIAL_RESPONSE_COLUMNS = [
+  "id",
+  "title",
+  "original_filename",
+  "mime_type",
+  "file_size",
+  "is_global",
+  "notation_tracks",
+] as const;
+
+type MaterialRecord = {
+  id: string;
+  title: string;
+  original_filename: string;
+  mime_type: string;
+  file_size: number;
+  is_global: boolean;
+  notation_tracks: unknown;
+};
+
+type StoredMaterialRecord = MaterialRecord & {
+  storage_backend: string;
+  storage_key: string;
+};
+
+function toStorageLocation(
+  material: Pick<StoredMaterialRecord, "storage_backend" | "storage_key">,
+): StorageLocation {
+  return {
+    storageBackend: material.storage_backend,
+    storageKey: material.storage_key,
+  };
 }
 
-const uploadsDir = env.UPLOADS_DIR || "./uploads";
+async function findMaterialByContentHash(
+  contentHash: string,
+): Promise<StoredMaterialRecord | null> {
+  const material = await rootDb
+    .selectFrom("app_public.materials")
+    .select([...MATERIAL_RESPONSE_COLUMNS, "storage_backend", "storage_key"])
+    .where("content_hash", "=", contentHash)
+    .executeTakeFirst();
 
-// Ensure uploads directory exists
-await fs.mkdir(uploadsDir, { recursive: true });
+  return material ?? null;
+}
+
+function toMaterialResponse(material: MaterialRecord): MaterialRecord {
+  return {
+    id: material.id,
+    title: material.title,
+    original_filename: material.original_filename,
+    mime_type: material.mime_type,
+    file_size: material.file_size,
+    is_global: material.is_global,
+    notation_tracks: material.notation_tracks,
+  };
+}
+
+async function ensureStoredBlob(material: StoredMaterialRecord, bytes: Uint8Array): Promise<void> {
+  const location = toStorageLocation(material);
+  const exists = await storageService.exists(location);
+  if (!exists) {
+    await storageService.put(location, bytes);
+  }
+}
 
 export const fileService = {
   async upload(file: File, title: string, isGlobal: boolean, uploadedBy: string) {
@@ -43,43 +98,55 @@ export const fileService = {
       );
     }
 
-    const ext = getExtension(file.name);
-    const storedName = `${crypto.randomUUID()}${ext}`;
-    const filePath = path.join(uploadsDir, storedName);
-
     const buffer = Buffer.from(await file.arrayBuffer());
+    const contentHash = storageService.hashBytes(buffer);
     const notationTracks = extractNotationTracksFromBytes(new Uint8Array(buffer), file.name);
-    await fs.writeFile(filePath, buffer);
 
-    const material = await rootDb
-      .insertInto("app_public.materials")
-      .values({
-        title,
-        original_filename: file.name,
-        file_path: filePath,
-        mime_type: file.type,
-        file_size: file.size,
-        is_global: isGlobal,
-        notation_tracks:
-          notationTracks === null ? null : sql`${JSON.stringify(notationTracks)}::jsonb`,
-        uploaded_by: uploadedBy,
-      })
-      .returning([
-        "id",
-        "title",
-        "original_filename",
-        "mime_type",
-        "file_size",
-        "is_global",
-        "notation_tracks",
-      ])
-      .executeTakeFirst();
-
-    if (!material) {
-      throw new Error("Insert returned no rows");
+    const existingMaterial = await findMaterialByContentHash(contentHash);
+    if (existingMaterial) {
+      await ensureStoredBlob(existingMaterial, buffer);
+      return toMaterialResponse(existingMaterial);
     }
 
-    return material;
+    const location = storageService.createMaterialLocation(contentHash);
+    await storageService.put(location, buffer);
+
+    try {
+      const material = await rootDb
+        .insertInto("app_public.materials")
+        .values({
+          title,
+          original_filename: file.name,
+          storage_backend: location.storageBackend,
+          storage_key: location.storageKey,
+          content_hash: contentHash,
+          mime_type: file.type,
+          file_size: buffer.byteLength,
+          is_global: isGlobal,
+          notation_tracks:
+            notationTracks === null ? null : sql`${JSON.stringify(notationTracks)}::jsonb`,
+          uploaded_by: uploadedBy,
+        })
+        .returning(MATERIAL_RESPONSE_COLUMNS)
+        .executeTakeFirst();
+
+      if (!material) {
+        throw new Error("Insert returned no rows");
+      }
+
+      return material;
+    } catch (error) {
+      const cause = error as { code?: unknown; constraint?: unknown };
+      if (cause.code === "23505" && cause.constraint === "materials_content_hash_key") {
+        const concurrentMaterial = await findMaterialByContentHash(contentHash);
+        if (concurrentMaterial) {
+          await ensureStoredBlob(concurrentMaterial, buffer);
+          return toMaterialResponse(concurrentMaterial);
+        }
+      }
+
+      throw error;
+    }
   },
 
   async download(materialId: string, userId: string) {
@@ -90,7 +157,8 @@ export const fileService = {
         "id",
         "title",
         "original_filename",
-        "file_path",
+        "storage_backend",
+        "storage_key",
         "mime_type",
         "is_global",
         "uploaded_by",
@@ -151,15 +219,13 @@ export const fileService = {
       }
     }
 
-    // Verify file exists on disk
-    try {
-      await fs.access(material.file_path);
-    } catch {
-      throw new HttpError(404, "File not found on disk");
+    const location = toStorageLocation(material);
+    if (!(await storageService.exists(location))) {
+      throw new HttpError(500, "Material blob missing from storage");
     }
 
     return {
-      path: material.file_path,
+      stream: await storageService.open(location),
       filename: material.original_filename,
       mimeType: material.mime_type,
     };

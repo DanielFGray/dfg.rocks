@@ -1,7 +1,7 @@
 import { test as base, expect, type Page } from "@playwright/test";
 import type { UserRole } from "../shared/schemas.js";
 
-const vitePort = process.env.VITE_PORT || "8174";
+const vitePort = process.env.PLAYWRIGHT_VITE_PORT || process.env.VITE_PORT || "4174";
 const api_url = process.env.API_URL || `http://localhost:${vitePort}`;
 
 type TestingApi = {
@@ -44,7 +44,11 @@ type TestingApi = {
     is_owner?: boolean;
     is_billing_contact?: boolean;
   }): Promise<void>;
-  seedInvitation(data: { email: string; family_slug?: string; expires_at?: string }): Promise<string>;
+  seedInvitation(data: {
+    email: string;
+    family_slug?: string;
+    expires_at?: string;
+  }): Promise<string>;
   seedDeleteAccountLink(data: { username: string }): Promise<string>;
   seedLesson(data: {
     username: string;

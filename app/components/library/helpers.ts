@@ -7,6 +7,28 @@ export function isNotation(filename: string): boolean {
   return NOTATION_EXTENSIONS.has(ext);
 }
 
+function normalizeTitleWhitespace(value: string): string {
+  return value.replace(/\s+/gu, " ").trim();
+}
+
+export function titleFromFilename(filename: string): string {
+  const basename = filename.split(/[/\\]/u).pop() ?? filename;
+  const stem = basename.replace(/\.[^.]+$/u, "");
+  return normalizeTitleWhitespace(stem.replace(/[._-]+/gu, " "));
+}
+
+export function getUploadMaterialTitle(
+  filename: string,
+  extractedScoreTitle: string | null | undefined,
+): string {
+  const normalizedScoreTitle = normalizeTitleWhitespace(extractedScoreTitle ?? "");
+  if (normalizedScoreTitle) {
+    return normalizedScoreTitle;
+  }
+
+  return titleFromFilename(filename);
+}
+
 export const categorize = (mime: string, filename?: string): FileCategory => {
   if (filename && isNotation(filename)) return "notation";
   if (mime === "application/pdf") return "pdf";

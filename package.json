@@ -25,12 +25,14 @@
     "worker:schema": "run-s 'worker --schema-only'",
     "test": "run-p test:unit test:e2e",
     "test:unit": "vitest run",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "e2e:server": "bun scripts/e2eServer.ts"
   },
   "dependencies": {
     "@aws-sdk/client-sesv2": "^3.1039.0",
     "@coderline/alphatab": "^1.9.0-alpha.1785",
     "@elysiajs/eden": "^1.4.9",
+    "@playwright/test": "^1.60.0",
     "@tailwindcss/typography": "^0.5.19",
     "@tanstack/react-form": "^1.29.1",
     "@tanstack/react-query": "^5.100.6",
@@ -63,7 +65,6 @@
     "valibot": "^1.3.1"
   },
   "devDependencies": {
-    "@playwright/test": "^1.59.1",
     "@tailwindcss/vite": "^4.3.0",
     "@testcontainers/postgresql": "^11.14.0",
     "@types/bun": "^1.3.14",

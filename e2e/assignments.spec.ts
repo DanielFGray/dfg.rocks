@@ -1,11 +1,7 @@
 import path from "node:path";
 import { test, expect, loginViaUi } from "./helpers.js";
 
-const notationFixturePath = path.join(
-  process.cwd(),
-  "uploads",
-  "20434311-ceb3-43ba-a489-aa83ac477167.gp5",
-);
+const notationFixturePath = path.join(process.cwd(), "e2e", "fixtures", "fixture-score.musicxml");
 
 test.describe("assignments management", () => {
   test("admin can assign a material from the assignments page", async ({ page, testing }) => {
@@ -17,7 +13,7 @@ test.describe("assignments management", () => {
     });
     await testing.seedMaterial({
       title: "Test Assignment Material Admin",
-      original_filename: "admin-assignment.gp5",
+      original_filename: "admin-assignment.musicxml",
       mime_type: "application/octet-stream",
       source_file_path: notationFixturePath,
       is_global: false,
@@ -109,7 +105,7 @@ test.describe("assignments management", () => {
     });
     await testing.seedMaterial({
       title: "Test: Student Review Material",
-      original_filename: "student-review.gp5",
+      original_filename: "student-review.musicxml",
       mime_type: "application/octet-stream",
       source_file_path: notationFixturePath,
       is_global: false,
@@ -117,7 +113,7 @@ test.describe("assignments management", () => {
     await testing.assignMaterial(
       "test_assignment_student_progress",
       "Test: Student Review Material",
-      2,
+      1,
     );
 
     await loginViaUi(page, "test_assignment_student_progress", "testpassword123");
@@ -136,8 +132,8 @@ test.describe("assignments management", () => {
       .filter({ hasText: "Test: Student Review Material" })
       .click();
     await expect(page.getByTestId("assignment-detail")).toBeVisible();
-    await expect(page.getByText("student-review.gp5 · Bass")).toBeVisible();
-    await expect(page.getByLabel("Track:")).toHaveValue("2", { timeout: 15_000 });
+    await expect(page.getByText("student-review.musicxml · Bass")).toBeVisible();
+    await expect(page.getByLabel("Track:")).toHaveValue("1", { timeout: 15_000 });
 
     await expect(page.getByText("No self-reviews yet.")).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Save Review" })).toHaveCount(0);

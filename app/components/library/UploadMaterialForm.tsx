@@ -6,7 +6,7 @@ import {
 } from "../../../shared/notationTracks.js";
 import { Input } from "../ui/Input.js";
 import { Button } from "../ui/Button.js";
-import { isNotation } from "./helpers.js";
+import { getUploadMaterialTitle, isNotation } from "./helpers.js";
 
 export function UploadMaterialForm({
   onSubmit,
@@ -18,9 +18,22 @@ export function UploadMaterialForm({
   isPending?: boolean;
 }) {
   const inspectionIdRef = useRef(0);
+  const titleWasEditedRef = useRef(false);
   const [notationTracks, setNotationTracks] = useState<MaterialNotationTrack[] | null>(null);
   const [isInspectingTracks, setIsInspectingTracks] = useState(false);
   const [trackInspectionError, setTrackInspectionError] = useState<string | null>(null);
+  const [title, setTitle] = useState("");
+
+  const setPrefilledTitle = (nextTitle: string) => {
+    if (!titleWasEditedRef.current) {
+      setTitle(nextTitle);
+    }
+  };
+
+  const handleTitleChange = (value: string) => {
+    titleWasEditedRef.current = true;
+    setTitle(value);
+  };
 
   const handleFileChange = async (file: File | null) => {
     const inspectionId = inspectionIdRef.current + 1;
@@ -29,7 +42,14 @@ export function UploadMaterialForm({
     setNotationTracks(null);
     setTrackInspectionError(null);
 
-    if (!file || !isNotation(file.name)) {
+    if (!file) {
+      setIsInspectingTracks(false);
+      return;
+    }
+
+    setPrefilledTitle(getUploadMaterialTitle(file.name, null));
+
+    if (!isNotation(file.name)) {
       setIsInspectingTracks(false);
       return;
     }
@@ -46,6 +66,7 @@ export function UploadMaterialForm({
         return;
       }
 
+      setPrefilledTitle(getUploadMaterialTitle(file.name, score.title));
       setNotationTracks(score.tracks.map(toMaterialNotationTrack));
     } catch (error) {
       if (inspectionIdRef.current !== inspectionId) {
@@ -67,25 +88,26 @@ export function UploadMaterialForm({
     const form = e.currentTarget;
     const data = new FormData(form);
     const file = data.get("file");
-    const title = data.get("title");
-    if (!file || !(file instanceof File) || typeof title !== "string") return;
-    onSubmit(file, title);
+    if (!file || !(file instanceof File)) return;
+    onSubmit(file, title.trim());
   };
 
   return (
     <form
       onSubmit={handleSubmit}
       data-testid="upload-material-form"
-      className="gap-5 flex flex-col"
+      className="flex flex-col gap-5"
     >
       <Input
         id="material-title"
         name="title"
         label="Title"
+        value={title}
+        onChange={handleTitleChange}
         required
         placeholder="e.g. Scales Reference Sheet"
       />
-      <div className="gap-1.5 flex flex-col">
+      <div className="flex flex-col gap-1.5">
         <label
           htmlFor="material-file"
           className="text-sm font-medium text-muted dark:text-muted-dark"
@@ -98,13 +120,13 @@ export function UploadMaterialForm({
           type="file"
           required
           onChange={(e) => void handleFileChange(e.currentTarget.files?.[0] ?? null)}
-          className="rounded-lg border-overlay/10 bg-card px-4 py-3 text-primary file:mr-4 file:rounded-lg file:bg-accent/20 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-accent hover:file:bg-accent/30 focus:border-accent focus:ring-accent/50 dark:border-overlay-dark/10 dark:bg-card-dark dark:text-primary-dark border transition-colors outline-hidden file:cursor-pointer file:border-0 focus:ring-1"
+          className="rounded-lg border border-overlay/10 bg-card px-4 py-3 text-primary outline-hidden transition-colors file:mr-4 file:cursor-pointer file:rounded-lg file:border-0 file:bg-accent/20 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-accent hover:file:bg-accent/30 focus:border-accent focus:ring-1 focus:ring-accent/50 dark:border-overlay-dark/10 dark:bg-card-dark dark:text-primary-dark"
         />
         {isInspectingTracks ? (
           <p className="text-sm text-muted dark:text-muted-dark">Inspecting notation tracks...</p>
         ) : null}
         {notationTracks && notationTracks.length > 0 ? (
-          <div className="rounded-lg border-overlay/6 bg-card px-4 py-3 text-sm dark:border-overlay-dark/6 dark:bg-card-dark border">
+          <div className="rounded-lg border border-overlay/6 bg-card px-4 py-3 text-sm dark:border-overlay-dark/6 dark:bg-card-dark">
             <p className="font-medium text-primary dark:text-primary-dark">
               Detected {notationTracks.length} track
               {notationTracks.length === 1 ? "" : "s"}
@@ -128,7 +150,7 @@ export function UploadMaterialForm({
           </p>
         ) : null}
       </div>
-      <div className="mt-2 gap-3 flex justify-end">
+      <div className="mt-2 flex justify-end gap-3">
         <Button variant="ghost" onClick={onCancel}>
           Cancel
         </Button>

@@ -1,6 +1,6 @@
 import { defineConfig, devices } from "@playwright/test";
 
-const vitePort = process.env.VITE_PORT || "8174";
+const vitePort = process.env.PLAYWRIGHT_VITE_PORT || process.env.VITE_PORT || "4174";
 
 export default defineConfig({
   testDir: "./e2e",
@@ -25,9 +25,9 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: "bun run dev:app",
+    command: `VITE_PORT=${vitePort} bun run e2e:server`,
     url: `http://localhost:${vitePort}`,
-    reuseExistingServer: !process.env.CI,
-    timeout: 30_000,
+    reuseExistingServer: false,
+    timeout: 120_000,
   },
 });

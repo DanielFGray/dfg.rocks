@@ -1,7 +1,5 @@
 import Elysia, { t } from "elysia";
 import { sql } from "kysely";
-import { createReadStream } from "fs";
-import { Readable } from "stream";
 import { rootDb, withAuthContext } from "../db.js";
 import { sessionService } from "../services/sessionService.js";
 import { googleCalendarService } from "../services/googleCalendarService.js";
@@ -1301,10 +1299,7 @@ export const materialDownloadRoute = new Elysia()
 
     const fileInfo = await fileService.download(params.id, result.user.id);
 
-    const nodeStream = createReadStream(fileInfo.path);
-    const webStream = Readable.toWeb(nodeStream);
-
-    return new Response(webStream as unknown as BodyInit, {
+    return new Response(fileInfo.stream as unknown as BodyInit, {
       headers: {
         "content-type": fileInfo.mimeType,
         "content-disposition":

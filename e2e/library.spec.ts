@@ -2,22 +2,20 @@ import fs from "fs/promises";
 import path from "path";
 import { test, expect, loginViaUi } from "./helpers.js";
 
-const notationFixturePath = path.join(
-  process.cwd(),
-  "uploads",
-  "20434311-ceb3-43ba-a489-aa83ac477167.gp5",
-);
+const notationFixturePath = path.join(process.cwd(), "e2e", "fixtures", "fixture-score.musicxml");
 
 test.describe("library", () => {
   test("admin can upload a material and see it in the library", async ({ page, testing }) => {
     await testing.login();
     await loginViaUi(page, "test_admin", "testpassword123");
 
-    const title = `Test Upload ${Date.now()}`;
-    const fixturePath = path.join(process.cwd(), "e2e", ".tmp-upload.pdf");
+    const expectedTitle = "Moonlight Sonata";
+    const tempDir = path.join(process.cwd(), "e2e", ".tmp");
+    const fixturePath = path.join(tempDir, "Moonlight-Sonata.pdf");
     let materialId: string | null = null;
 
-    await fs.writeFile(fixturePath, "%PDF-1.4\n% Test upload fixture\n");
+    await fs.mkdir(tempDir, { recursive: true });
+    await fs.writeFile(fixturePath, `%PDF-1.4\n% Test upload fixture ${Date.now()}\n`);
 
     try {
       await page.getByTestId("nav-library").click();
@@ -27,8 +25,8 @@ test.describe("library", () => {
       const form = page.getByTestId("upload-material-form");
       await expect(form).toBeVisible();
 
-      await form.getByLabel("Title").fill(title);
       await form.getByLabel("File").setInputFiles(fixturePath);
+      await expect(form.getByLabel("Title")).toHaveValue(expectedTitle);
 
       const uploadResponsePromise = page.waitForResponse(
         (response) =>
@@ -44,9 +42,9 @@ test.describe("library", () => {
         title: string;
       };
       materialId = uploaded.id;
-      expect(uploaded.title).toBe(title);
+      expect(uploaded.title).toBe(expectedTitle);
 
-      const row = page.getByTestId("material-row").filter({ hasText: title });
+      const row = page.getByTestId("material-row").filter({ hasText: expectedTitle });
       await expect(row).toBeVisible();
 
       const deleteResponse = await page.request.delete(`/api/admin/materials/${materialId}`, {
@@ -64,23 +62,36 @@ test.describe("library", () => {
     }
   });
 
-  test("admin upload detects notation tracks before submit", async ({ page, testing }) => {
+  test("admin upload prefills score titles and keeps manual edits", async ({ page, testing }) => {
     await testing.login();
     await loginViaUi(page, "test_admin", "testpassword123");
+    const tempDir = path.join(process.cwd(), "e2e", ".tmp");
+    const fallbackFixturePath = path.join(tempDir, "manual-override.pdf");
 
-    await page.getByTestId("nav-library").click();
-    await expect(page.getByRole("heading", { name: "Library" })).toBeVisible();
+    await fs.mkdir(tempDir, { recursive: true });
+    await fs.writeFile(fallbackFixturePath, `%PDF-1.4\n% Manual override fixture ${Date.now()}\n`);
 
-    await page.getByTestId("upload-material").click();
-    const form = page.getByTestId("upload-material-form");
-    await expect(form).toBeVisible();
+    try {
+      await page.getByTestId("nav-library").click();
+      await expect(page.getByRole("heading", { name: "Library" })).toBeVisible();
 
-    await form.getByLabel("Title").fill("Notation Track Detection");
-    await form.getByLabel("File").setInputFiles(notationFixturePath);
+      await page.getByTestId("upload-material").click();
+      const form = page.getByTestId("upload-material-form");
+      await expect(form).toBeVisible();
 
-    await expect(form.getByText("Detected 4 tracks")).toBeVisible();
-    await expect(form.getByText("Guitar 1")).toBeVisible();
-    await expect(form.getByText("Bass")).toBeVisible();
-    await expect(form.getByText("Drums")).toBeVisible();
+      await form.getByLabel("File").setInputFiles(notationFixturePath);
+
+      await expect(form.getByLabel("Title")).toHaveValue("Fixture Score Title");
+      await expect(form.getByText("Detected 3 tracks")).toBeVisible();
+      await expect(form.getByText("Guitar 1")).toBeVisible();
+      await expect(form.getByText("Bass")).toBeVisible();
+      await expect(form.getByText("Drums")).toBeVisible();
+
+      await form.getByLabel("Title").fill("Manual Override");
+      await form.getByLabel("File").setInputFiles(fallbackFixturePath);
+      await expect(form.getByLabel("Title")).toHaveValue("Manual Override");
+    } finally {
+      await fs.rm(fallbackFixturePath, { force: true });
+    }
   });
 });

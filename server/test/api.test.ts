@@ -76,13 +76,23 @@ function req(
   const headers: Record<string, string> = {
     "X-Requested-With": "dfg",
   };
-  if (opts.body !== undefined) headers["Content-Type"] = "application/json";
   if (opts.cookie) headers["Cookie"] = `session=${opts.cookie}`;
+
+  const body =
+    opts.body instanceof FormData
+      ? opts.body
+      : opts.body !== undefined
+        ? (() => {
+            headers["Content-Type"] = "application/json";
+            return JSON.stringify(opts.body);
+          })()
+        : undefined;
+
   return handler(
     new Request(`http://localhost${path}`, {
       method,
       headers,
-      body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
+      body,
     }),
   );
 }
@@ -428,6 +438,72 @@ describe("DFG Portal API", () => {
     );
   });
 
+  it("materials: upload dedupes by hash and repairs missing blobs", async () => {
+    const bytes = Buffer.from(`%PDF-1.4\n% dedupe test ${Date.now()}\n`);
+
+    const uploadMaterial = (title: string, filename: string, isGlobal: boolean) => {
+      const formData = new FormData();
+      formData.append("file", new File([bytes], filename, { type: "application/pdf" }));
+      formData.append("title", title);
+      formData.append("is_global", isGlobal ? "true" : "false");
+      return req("POST", "/api/admin/materials/upload", {
+        body: formData,
+        cookie: adminCookie,
+      });
+    };
+
+    const firstUpload = await uploadMaterial("Original Title", "original-upload.pdf", true);
+    expect(firstUpload.status).toBe(200);
+    const firstMaterial = await firstUpload.json();
+    expect(firstMaterial.title).toBe("Original Title");
+    expect(firstMaterial.original_filename).toBe("original-upload.pdf");
+    expect(firstMaterial.is_global).toBe(true);
+
+    const firstRow = (
+      await testDb.query(
+        `select id, content_hash, storage_backend, storage_key
+         from app_public.materials
+         where id = $1`,
+        [firstMaterial.id],
+      )
+    ).rows[0];
+    expect(firstRow.content_hash).toBeTruthy();
+
+    const { storageService } = await import("../services/storageService.js");
+    await storageService.delete({
+      storageBackend: firstRow.storage_backend,
+      storageKey: firstRow.storage_key,
+    });
+
+    const missingDownload = await req("GET", `/api/materials/${firstMaterial.id}/download`, {
+      cookie: adminCookie,
+    });
+    expect(missingDownload.status).toBe(500);
+    expect(await missingDownload.json()).toEqual({ error: "Material blob missing from storage" });
+
+    const secondUpload = await uploadMaterial("Conflicting Title", "renamed-upload.pdf", false);
+    expect(secondUpload.status).toBe(200);
+    const secondMaterial = await secondUpload.json();
+    expect(secondMaterial.id).toBe(firstMaterial.id);
+    expect(secondMaterial.title).toBe("Original Title");
+    expect(secondMaterial.original_filename).toBe("original-upload.pdf");
+    expect(secondMaterial.is_global).toBe(true);
+
+    const matchingRows = await testDb.query(
+      `select count(*)::int as count
+       from app_public.materials
+       where content_hash = $1`,
+      [firstRow.content_hash],
+    );
+    expect(matchingRows.rows[0]?.count).toBe(1);
+    expect(
+      await storageService.exists({
+        storageBackend: firstRow.storage_backend,
+        storageKey: firstRow.storage_key,
+      }),
+    ).toBe(true);
+  });
+
   it("assignments: tracks playback time and self-reviews", async () => {
     const notationTracks = [
       {
@@ -448,7 +524,7 @@ describe("DFG Portal API", () => {
         `insert into app_public.materials (
            title,
            original_filename,
-           file_path,
+           storage_key,
            mime_type,
            file_size,
            is_global,
@@ -586,16 +662,16 @@ describe("DFG Portal API", () => {
     // Seed materials via DB
     const globalMat = (
       await testDb.query(
-        `insert into app_public.materials (title, original_filename, file_path, mime_type, file_size, is_global)
-       values ($1, $2, $3, $4, $5, $6) returning id`,
+        `insert into app_public.materials (title, original_filename, storage_key, mime_type, file_size, is_global)
+        values ($1, $2, $3, $4, $5, $6) returning id`,
         ["Chord Chart", "chords.pdf", "/data/chords.pdf", "application/pdf", 12345, true],
       )
     ).rows[0];
 
     const privateMat = (
       await testDb.query(
-        `insert into app_public.materials (title, original_filename, file_path, mime_type, file_size, is_global)
-       values ($1, $2, $3, $4, $5, $6) returning id`,
+        `insert into app_public.materials (title, original_filename, storage_key, mime_type, file_size, is_global)
+        values ($1, $2, $3, $4, $5, $6) returning id`,
         ["Private Notes", "notes.pdf", "/data/notes.pdf", "application/pdf", 5432, false],
       )
     ).rows[0];
