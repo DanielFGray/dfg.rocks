@@ -79,7 +79,7 @@ function RatingSelector({
   disabled?: boolean;
 }) {
   return (
-    <div className="gap-1 flex items-center">
+    <div className="flex items-center gap-1">
       {Array.from({ length: 5 }, (_, index) => {
         const stars = index + 1;
         const active = value !== null && stars <= value;
@@ -90,7 +90,7 @@ function RatingSelector({
             type="button"
             onClick={() => onChange(stars)}
             disabled={disabled}
-            className="rounded-md p-1 hover:bg-overlay/6 dark:hover:bg-overlay-dark/6 cursor-pointer transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+            className="cursor-pointer rounded-md p-1 transition-colors hover:bg-overlay/6 disabled:cursor-not-allowed disabled:opacity-50 dark:hover:bg-overlay-dark/6"
             aria-label={`Rate ${stars} out of 5`}
           >
             <StarIcon filled={active} />
@@ -103,7 +103,7 @@ function RatingSelector({
 
 function StarsDisplay({ stars }: { stars: number }) {
   return (
-    <div className="gap-1 flex items-center" aria-label={`${stars} out of 5 stars`}>
+    <div className="flex items-center gap-1" aria-label={`${stars} out of 5 stars`}>
       {Array.from({ length: 5 }, (_, index) => (
         <StarIcon key={index} filled={index < stars} />
       ))}
@@ -200,15 +200,15 @@ export function StudentAssignmentDetail({
         notationPlayerProps={
           category === "notation"
             ? {
-                defaultTrackIndex: material.assigned_track_index,
-                onDurationSeconds: (seconds) => {
-                  setDurationSeconds((current) => (current === seconds ? current : seconds));
-                },
-                onPlaybackSeconds: (seconds) => {
-                  if (!canTrackAssignments) return;
-                  playbackMutation.mutate(seconds);
-                },
-              }
+              defaultTrackIndex: material.assigned_track_index,
+              onDurationSeconds: (seconds) => {
+                setDurationSeconds((current) => (current === seconds ? current : seconds));
+              },
+              onPlaybackSeconds: (seconds) => {
+                if (!canTrackAssignments) return;
+                playbackMutation.mutate(seconds);
+              },
+            }
             : undefined
         }
       />
@@ -218,7 +218,7 @@ export function StudentAssignmentDetail({
           <p className="mt-4 text-sm text-red-600 dark:text-red-400">{playbackError}</p>
         ) : null}
 
-        <div className="text-sm text-muted dark:text-muted-dark md:text-right gap-2 md:flex-row md:items-center md:justify-between flex flex-col">
+        <div className="flex flex-col gap-2 text-sm text-muted md:flex-row md:items-center md:justify-between md:text-right dark:text-muted-dark">
           {latestReview
             ? `Latest ${latestReview.stars}/5 ${formatDate(latestReview.created_at)}`
             : category === "notation" && !reviewUnlocked
@@ -258,13 +258,13 @@ export function StudentAssignmentDetail({
         )}
 
         {reviews.length === 0 ? null : (
-          <div className="mt-4 gap-2 flex flex-col">
+          <div className="mt-4 flex flex-col gap-2">
             {reviews.map((review) => (
               <div
                 key={review.id}
-                className="rounded-lg border-overlay/6 px-3 py-3 dark:border-overlay-dark/6 border"
+                className="rounded-lg border border-overlay/6 px-3 py-3 dark:border-overlay-dark/6"
               >
-                <div className="gap-3 flex items-center justify-between">
+                <div className="flex items-center justify-between gap-3">
                   <StarsDisplay stars={review.stars} />
                   <span className="text-xs text-muted/60 dark:text-muted-dark/60">
                     {formatDate(review.created_at)}
