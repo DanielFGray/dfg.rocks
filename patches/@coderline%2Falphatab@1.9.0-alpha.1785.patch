@@ -90,6 +90,38 @@ index 2a4e638abbdd1afc59727e8c2ea213bd5ced672b..c42dcd83809952a15e0c8513e0b18805
                  };
              },
              off: (_) => {
+@@ -40372,14 +40415,21 @@ class MidiFileSequencer {
+         let bpm = 120;
+         let timeSignatureNumerator = 4;
+         let timeSignatureDenominator = 4;
+-        if (this._mainState.eventIndex === 0) {
+-            bpm = this._mainState.tempoChanges[0].bpm;
+-            timeSignatureNumerator = this._mainState.firstTimeSignatureNumerator;
+-            timeSignatureDenominator = this._mainState.firstTimeSignatureDenominator;
+-        }
+-        else {
+-            bpm = this._synthesizer.currentTempo;
+-            timeSignatureNumerator = this._synthesizer.timeSignatureNumerator;
+-            timeSignatureDenominator = this._synthesizer.timeSignatureDenominator;
++        bpm = this._mainState.tempoChanges[0].bpm;
++        timeSignatureNumerator = this._mainState.firstTimeSignatureNumerator;
++        timeSignatureDenominator = this._mainState.firstTimeSignatureDenominator;
++        if (this._mainState.currentTime > 0) {
++            for (const synthEvent of this._mainState.synthData) {
++                if (synthEvent.time > this._mainState.currentTime) {
++                    break;
++                }
++                if (synthEvent.event.type === MidiEventType.TempoChange) {
++                    bpm = MidiFileSequencer._sanitizeBpm(synthEvent.event.beatsPerMinute);
++                }
++                else if (synthEvent.event.type === MidiEventType.TimeSignature) {
++                    timeSignatureNumerator = synthEvent.event.numerator;
++                    timeSignatureDenominator = Math.pow(2, synthEvent.event.denominatorIndex);
++                }
++            }
+         }
+         state.tempoChanges.push(new MidiFileSequencerTempoChange(bpm, 0, 0));
+         const metronomeLengthInTicks = (state.division * (4.0 / timeSignatureDenominator)) | 0;
 diff --git a/dist/alphaTab.js b/dist/alphaTab.js
 index 1b6566747116456705a0e1f0f7d46956d247bc45..dfdd8c7cb725742fc945d4402fa94fd287d880e2 100644
 --- a/dist/alphaTab.js
@@ -182,3 +214,35 @@ index 1b6566747116456705a0e1f0f7d46956d247bc45..dfdd8c7cb725742fc945d4402fa94fd2
                      };
                  },
                  off: (_) => {
+@@ -40378,14 +40425,21 @@
+             let bpm = 120;
+             let timeSignatureNumerator = 4;
+             let timeSignatureDenominator = 4;
+-            if (this._mainState.eventIndex === 0) {
+-                bpm = this._mainState.tempoChanges[0].bpm;
+-                timeSignatureNumerator = this._mainState.firstTimeSignatureNumerator;
+-                timeSignatureDenominator = this._mainState.firstTimeSignatureDenominator;
+-            }
+-            else {
+-                bpm = this._synthesizer.currentTempo;
+-                timeSignatureNumerator = this._synthesizer.timeSignatureNumerator;
+-                timeSignatureDenominator = this._synthesizer.timeSignatureDenominator;
++            bpm = this._mainState.tempoChanges[0].bpm;
++            timeSignatureNumerator = this._mainState.firstTimeSignatureNumerator;
++            timeSignatureDenominator = this._mainState.firstTimeSignatureDenominator;
++            if (this._mainState.currentTime > 0) {
++                for (const synthEvent of this._mainState.synthData) {
++                    if (synthEvent.time > this._mainState.currentTime) {
++                        break;
++                    }
++                    if (synthEvent.event.type === MidiEventType.TempoChange) {
++                        bpm = MidiFileSequencer._sanitizeBpm(synthEvent.event.beatsPerMinute);
++                    }
++                    else if (synthEvent.event.type === MidiEventType.TimeSignature) {
++                        timeSignatureNumerator = synthEvent.event.numerator;
++                        timeSignatureDenominator = Math.pow(2, synthEvent.event.denominatorIndex);
++                    }
++                }
+             }
+             state.tempoChanges.push(new MidiFileSequencerTempoChange(bpm, 0, 0));
+             const metronomeLengthInTicks = (state.division * (4.0 / timeSignatureDenominator)) | 0;

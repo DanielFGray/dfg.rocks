@@ -41,18 +41,31 @@ export function SpeedTrainerControl({
   onClearSelection,
 }: SpeedTrainerControlProps) {
   const [open, setOpen] = useState(false);
+  const handleTrainerButtonClick = () => {
+    if (isLooping) {
+      onLoopToggle();
+      return;
+    }
+
+    onLoopToggle();
+    setOpen(true);
+  };
 
   return (
     <>
       <div className="flex shrink-0 items-center gap-1.5 whitespace-nowrap">
         <button
           type="button"
-          onClick={() => setOpen(true)}
+          onClick={handleTrainerButtonClick}
           disabled={isLoading}
+          aria-pressed={isLooping}
           data-testid="alphatab-trainer-open"
-          className="rounded-sm border border-overlay/10 bg-card px-1.5 py-0.5 text-[11px] font-medium text-primary transition-colors hover:bg-overlay/4 disabled:cursor-not-allowed disabled:opacity-50 dark:border-overlay-dark/10 dark:bg-card-dark dark:text-primary-dark dark:hover:bg-overlay-dark/4"
+          className={`rounded-sm px-1.5 py-0.5 text-[11px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${isLooping
+              ? "border border-accent bg-accent text-white hover:bg-accent-hover"
+              : "border border-overlay/10 bg-card text-primary hover:bg-overlay/4 dark:border-overlay-dark/10 dark:bg-card-dark dark:text-primary-dark dark:hover:bg-overlay-dark/4"
+            }`}
         >
-          Trainer
+          Speed Trainer
         </button>
       </div>
 
@@ -106,11 +119,10 @@ export function SpeedTrainerControl({
               onClick={onLoopToggle}
               disabled={isLoading}
               data-testid="alphatab-loop-toggle"
-              className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
-                isLooping
+              className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${isLooping
                   ? "bg-accent text-white hover:bg-accent-hover"
                   : "border border-overlay/10 bg-card text-primary hover:bg-overlay/4 dark:border-overlay-dark/10 dark:bg-card-dark dark:text-primary-dark dark:hover:bg-overlay-dark/4"
-              }`}
+                }`}
             >
               {isLooping ? "On" : "Off"}
             </button>

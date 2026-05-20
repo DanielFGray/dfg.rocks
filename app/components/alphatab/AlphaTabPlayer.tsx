@@ -88,6 +88,7 @@ const MAX_DISPLAY_SCALE = 1.5;
 const MIN_PLAYBACK_SPEED = 0.25;
 const MAX_PLAYBACK_SPEED = 3;
 const DEFAULT_TRACK_VOLUME = 1;
+const DEFAULT_COUNT_IN_VOLUME = 1;
 const AUTO_SCROLL_TOP_MARGIN = 12;
 const AUTO_SCROLL_BOTTOM_MARGIN = 24;
 
@@ -107,6 +108,12 @@ interface PositionSnapshot {
 
 function clampValue(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
+}
+
+function useLatestRef<T>(value: T) {
+  const ref = useRef(value);
+  ref.current = value;
+  return ref;
 }
 
 function normalizePlaybackSpeed(speed: number): number {
@@ -250,13 +257,13 @@ function findCurrentNavigableBeatIndex(
   return result;
 }
 
-function getCurrentNavigableBeat(
-  beats: readonly NavigableBeat[],
-  currentTick: number,
-): NavigableBeat | null {
-  const index = findCurrentNavigableBeatIndex(beats, currentTick);
-  return index === -1 ? null : (beats[index] ?? null);
-}
+// function getCurrentNavigableBeat(
+//   beats: readonly NavigableBeat[],
+//   currentTick: number,
+// ): NavigableBeat | null {
+//   const index = findCurrentNavigableBeatIndex(beats, currentTick);
+//   return index === -1 ? null : (beats[index] ?? null);
+// }
 
 function getMeasureBoundaryBeat(
   beats: readonly NavigableBeat[],
@@ -285,34 +292,34 @@ function getMeasureBoundaryBeat(
   return beats[index] ?? null;
 }
 
-function getMeasureJumpBeat(
-  beats: readonly NavigableBeat[],
-  currentIndex: number,
-  direction: -1 | 1,
-): NavigableBeat | null {
-  const currentBeat = beats[currentIndex];
-  if (!currentBeat) {
-    return null;
-  }
+// function getMeasureJumpBeat(
+//   beats: readonly NavigableBeat[],
+//   currentIndex: number,
+//   direction: -1 | 1,
+// ): NavigableBeat | null {
+//   const currentBeat = beats[currentIndex];
+//   if (!currentBeat) {
+//     return null;
+//   }
 
-  let index = currentIndex;
-  while (true) {
-    index += direction;
+//   let index = currentIndex;
+//   while (true) {
+//     index += direction;
 
-    const candidate = beats[index];
-    if (!candidate) {
-      return currentBeat;
-    }
+//     const candidate = beats[index];
+//     if (!candidate) {
+//       return currentBeat;
+//     }
 
-    if (direction === 1 && candidate.masterBarIndex > currentBeat.masterBarIndex) {
-      return getMeasureBoundaryBeat(beats, index, "start");
-    }
+//     if (direction === 1 && candidate.masterBarIndex > currentBeat.masterBarIndex) {
+//       return getMeasureBoundaryBeat(beats, index, "start");
+//     }
 
-    if (direction === -1 && candidate.masterBarIndex < currentBeat.masterBarIndex) {
-      return getMeasureBoundaryBeat(beats, index, "start");
-    }
-  }
-}
+//     if (direction === -1 && candidate.masterBarIndex < currentBeat.masterBarIndex) {
+//       return getMeasureBoundaryBeat(beats, index, "start");
+//     }
+//   }
+// }
 
 function isEditableShortcutTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) {
@@ -403,23 +410,13 @@ export function AlphaTabPlayer({
   const controlsPanelRef = useRef<HTMLDivElement>(null);
   const apiRef = useRef<AlphaTabApi | null>(null);
   const initialTrackAppliedRef = useRef(false);
-  const onDurationSecondsRef = useRef(onDurationSeconds);
   const pendingPlaybackMsRef = useRef(0);
   const lastPlaybackStartedAtRef = useRef<number | null>(null);
   const containerWidthRef = useRef(0);
-  const zoomFactorRef = useRef(1);
   const resizeFrameRef = useRef<number | null>(null);
-  const selectedTrackIndexRef = useRef<number | null>(null);
-  const trackVolumeByIndexRef = useRef<TrackVolumeMap>({});
   const lastAutoScrollTargetRef = useRef<number | null>(null);
   const autoScrollFrameRef = useRef<number | null>(null);
   const positionSyncFrameRef = useRef<number | null>(null);
-  const playbackSpeedRef = useRef(1);
-  const baseTempoBpmRef = useRef<number | null>(null);
-  const loopPlaybackEnabledRef = useRef(false);
-  const trainerLoopCountRef = useRef(1);
-  const trainerStepModeRef = useRef<SpeedTrainerStepMode>("percent");
-  const trainerStepValueRef = useRef(5);
   const completedTrainerLoopsRef = useRef(0);
   const currentTickRef = useRef(0);
   const navigableBeatsRef = useRef<NavigableBeat[]>([]);
@@ -439,6 +436,7 @@ export function AlphaTabPlayer({
   const [position, setPosition] = useState<PlayerPosition>(EMPTY_POSITION);
   const [playbackSpeed, setPlaybackSpeed] = useState(1);
   const [metronomeVolume, setMetronomeVolume] = useState(0); // 0 = off
+  const [countInEnabled, setCountInEnabled] = useState(false);
   const [trackOptions, setTrackOptions] = useState<TrackOption[]>([]);
   const [selectedTrackIndex, setSelectedTrackIndex] = useState<number | null>(null);
   const [trackVolumeByIndex, setTrackVolumeByIndex] = useState<TrackVolumeMap>({});
@@ -452,46 +450,17 @@ export function AlphaTabPlayer({
   const [trainerStepValue, setTrainerStepValue] = useState(5);
   const isLoading = playerState === "loading";
   const isPlaying = playerState === "playing";
-
-  useEffect(() => {
-    onDurationSecondsRef.current = onDurationSeconds;
-  }, [onDurationSeconds]);
-
-  useEffect(() => {
-    zoomFactorRef.current = zoomFactor;
-  }, [zoomFactor]);
-
-  useEffect(() => {
-    selectedTrackIndexRef.current = selectedTrackIndex;
-  }, [selectedTrackIndex]);
-
-  useEffect(() => {
-    trackVolumeByIndexRef.current = trackVolumeByIndex;
-  }, [trackVolumeByIndex]);
-
-  useEffect(() => {
-    playbackSpeedRef.current = playbackSpeed;
-  }, [playbackSpeed]);
-
-  useEffect(() => {
-    baseTempoBpmRef.current = baseTempoBpm;
-  }, [baseTempoBpm]);
-
-  useEffect(() => {
-    loopPlaybackEnabledRef.current = loopPlaybackEnabled;
-  }, [loopPlaybackEnabled]);
-
-  useEffect(() => {
-    trainerLoopCountRef.current = trainerLoopCount;
-  }, [trainerLoopCount]);
-
-  useEffect(() => {
-    trainerStepModeRef.current = trainerStepMode;
-  }, [trainerStepMode]);
-
-  useEffect(() => {
-    trainerStepValueRef.current = trainerStepValue;
-  }, [trainerStepValue]);
+  const onDurationSecondsRef = useLatestRef(onDurationSeconds);
+  const zoomFactorRef = useLatestRef(zoomFactor);
+  const selectedTrackIndexRef = useLatestRef(selectedTrackIndex);
+  const trackVolumeByIndexRef = useLatestRef(trackVolumeByIndex);
+  const playbackSpeedRef = useLatestRef(playbackSpeed);
+  const baseTempoBpmRef = useLatestRef(baseTempoBpm);
+  const loopPlaybackEnabledRef = useLatestRef(loopPlaybackEnabled);
+  const trainerLoopCountRef = useLatestRef(trainerLoopCount);
+  const trainerStepModeRef = useLatestRef(trainerStepMode);
+  const trainerStepValueRef = useLatestRef(trainerStepValue);
+  const countInEnabledRef = useLatestRef(countInEnabled);
 
   const applyPlaybackSpeed = useCallback((speed: number, api = apiRef.current) => {
     const nextSpeed = normalizePlaybackSpeed(speed);
@@ -699,22 +668,22 @@ export function AlphaTabPlayer({
     [scrollBeatIntoView],
   );
 
-  const updatePlayerScrollOffset = useCallback((api = apiRef.current) => {
-    if (!api || typeof window === "undefined") {
-      return;
-    }
+  // const updatePlayerScrollOffset = useCallback((api = apiRef.current) => {
+  //   if (!api || typeof window === "undefined") {
+  //     return;
+  //   }
 
-    const rootStyles = getComputedStyle(document.documentElement);
-    const navHeight = Math.max(
-      parseCssPixelValue(rootStyles.getPropertyValue("--portal-nav-height")),
-      parseCssPixelValue(rootStyles.getPropertyValue("--portal-nav-visible-height")),
-    );
-    const controlsPanelHeight = controlsPanelRef.current?.getBoundingClientRect().height ?? 0;
+  //   const rootStyles = getComputedStyle(document.documentElement);
+  //   const navHeight = Math.max(
+  //     parseCssPixelValue(rootStyles.getPropertyValue("--portal-nav-height")),
+  //     parseCssPixelValue(rootStyles.getPropertyValue("--portal-nav-visible-height")),
+  //   );
+  //   const controlsPanelHeight = controlsPanelRef.current?.getBoundingClientRect().height ?? 0;
 
-    api.settings.player.scrollOffsetY = -Math.round(
-      navHeight + controlsPanelHeight + AUTO_SCROLL_TOP_MARGIN,
-    );
-  }, []);
+  //   api.settings.player.scrollOffsetY = -Math.round(
+  //     navHeight + controlsPanelHeight + AUTO_SCROLL_TOP_MARGIN,
+  //   );
+  // }, []);
 
   // Initialize AlphaTab API once
   useEffect(() => {
@@ -780,6 +749,7 @@ export function AlphaTabPlayer({
 
     applyPlaybackSpeed(playbackSpeedRef.current, api);
     api.metronomeVolume = metronomeVolume;
+    api.countInVolume = countInEnabledRef.current ? DEFAULT_COUNT_IN_VOLUME : 0;
     api.masterVolume = 1;
     api.isLooping = loopPlaybackEnabledRef.current;
 
@@ -1222,6 +1192,16 @@ export function AlphaTabPlayer({
     }
   }, [metronomeVolume]);
 
+  const handleCountInToggle = useCallback(() => {
+    setCountInEnabled((current) => {
+      const nextEnabled = !current;
+      if (apiRef.current) {
+        apiRef.current.countInVolume = nextEnabled ? DEFAULT_COUNT_IN_VOLUME : 0;
+      }
+      return nextEnabled;
+    });
+  }, []);
+
   const handleVolumeChange = useCallback((volume: number) => {
     const trackIndex = selectedTrackIndexRef.current;
     if (trackIndex === null) {
@@ -1325,7 +1305,16 @@ export function AlphaTabPlayer({
 
   const handleLoopPlaybackToggle = useCallback(() => {
     resetTrainerLoopProgress();
-    setLoopPlaybackEnabled((current) => !current);
+    setLoopPlaybackEnabled((current) => {
+      const next = !current;
+      loopPlaybackEnabledRef.current = next;
+
+      if (apiRef.current) {
+        apiRef.current.isLooping = next;
+      }
+
+      return next;
+    });
   }, [resetTrainerLoopProgress]);
 
   const handleTrainerLoopCountChange = useCallback(
@@ -1486,8 +1475,8 @@ export function AlphaTabPlayer({
       return;
     }
 
-    api.isLooping = loopPlaybackEnabled;
-  }, [loopPlaybackEnabled]);
+    api.countInVolume = countInEnabled ? DEFAULT_COUNT_IN_VOLUME : 0;
+  }, [countInEnabled]);
 
   const selectedTrackVolume =
     selectedTrackIndex === null
@@ -1505,15 +1494,17 @@ export function AlphaTabPlayer({
         ref={controlsPanelRef}
         className={`sticky top-[calc(env(safe-area-inset-top,0)+var(--portal-nav-visible-height))] z-30 bg-inherit backdrop-blur-md ${controlsViewportClassName}`}
       >
-        <div className="flex min-w-0 flex-col gap-2 p-2 pb-1 md:flex-row md:items-center md:gap-3 md:overflow-visible md:pb-0 md:[&::-webkit-scrollbar]:h-[6px]">
+        <div className="flex min-w-0 flex-col gap-2 p-2 pb-1 md:flex-row md:items-center md:gap-3 md:overflow-visible md:pb-0 md:[&::-webkit-scrollbar]:h-1.5">
           <div className="flex min-w-0 flex-1 items-center gap-2 md:gap-3">
             <PlayerControls
               metronomeVolume={metronomeVolume}
+              countInEnabled={countInEnabled}
               isLoading={isLoading}
               isPlaying={isPlaying}
               onPlayPause={handlePlayPause}
               onStop={handleStop}
               onMetronomeToggle={handleMetronomeToggle}
+              onCountInToggle={handleCountInToggle}
             />
 
             <ProgressBar
@@ -1524,7 +1515,7 @@ export function AlphaTabPlayer({
             />
           </div>
 
-          <div className="flex min-w-0 scrollbar-thin [scrollbar-color:rgb(15_23_42/0.18)_transparent] items-center gap-2 overflow-x-auto pb-0.5 md:flex-[0_1_auto] md:overflow-visible md:pb-0 [&::-webkit-scrollbar]:h-[6px] [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[rgb(15_23_42/0.18)] [&::-webkit-scrollbar-track]:bg-transparent [@media(hover:hover)_and_(pointer:fine)]:[scrollbar-color:transparent_transparent] [@media(hover:hover)_and_(pointer:fine)]:hover:[scrollbar-color:rgb(15_23_42/0.22)_transparent] [@media(hover:hover)_and_(pointer:fine)]:[&::-webkit-scrollbar-thumb]:bg-transparent [@media(hover:hover)_and_(pointer:fine)]:hover:[&::-webkit-scrollbar-thumb]:bg-[rgb(15_23_42/0.22)]">
+          <div className="flex min-w-0 scrollbar-thin [scrollbar-color:rgb(15_23_42/0.18)_transparent] items-center gap-2 overflow-x-auto pb-0.5 md:flex-[0_1_auto] md:overflow-visible md:pb-0 [&::-webkit-scrollbar]:h-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[rgb(15_23_42/0.18)] [&::-webkit-scrollbar-track]:bg-transparent [@media(hover:hover)_and_(pointer:fine)]:[scrollbar-color:transparent_transparent] [@media(hover:hover)_and_(pointer:fine)]:hover:[scrollbar-color:rgb(15_23_42/0.22)_transparent] [@media(hover:hover)_and_(pointer:fine)]:[&::-webkit-scrollbar-thumb]:bg-transparent [@media(hover:hover)_and_(pointer:fine)]:hover:[&::-webkit-scrollbar-thumb]:bg-[rgb(15_23_42/0.22)]">
             {trackOptions.length > 1 && (
               <label className="flex min-w-0 shrink-0 items-center gap-1.5 whitespace-nowrap">
                 <span className="text-[11px] text-muted dark:text-muted-dark">Track:</span>
@@ -1619,7 +1610,7 @@ export function AlphaTabPlayer({
       <div className={`relative z-0 overflow-hidden bg-inherit ${controlsViewportClassName}`}>
         <div
           ref={containerRef}
-          className="alphatab-player-surface min-h-[200px] w-full overscroll-x-contain rounded-sm focus-visible:ring-2 focus-visible:ring-[rgba(55,55,255,0.35)] focus-visible:ring-offset-2 focus-visible:ring-offset-transparent focus-visible:outline-none [&_.at-cursor-bar]:bg-[rgba(55,55,255,0.15)] [&_.at-cursor-beat]:w-[3px] [&_.at-cursor-beat]:bg-[rgba(180,180,180,0.75)] [&_.at-cursor-beat]:[backdrop-filter:invert(80%)]"
+          className="alphatab-player-surface min-h-50 w-full overscroll-x-contain rounded-sm focus-visible:ring-2 focus-visible:ring-[rgba(55,55,255,0.35)] focus-visible:ring-offset-2 focus-visible:ring-offset-transparent focus-visible:outline-none [&_.at-cursor-bar]:bg-[rgba(55,55,255,0.15)] [&_.at-cursor-beat]:w-0.75 [&_.at-cursor-beat]:bg-[rgba(180,180,180,0.75)] [&_.at-cursor-beat]:[backdrop-filter:invert(80%)]"
           id={instanceId}
           tabIndex={0}
           aria-label="Interactive notation player"
