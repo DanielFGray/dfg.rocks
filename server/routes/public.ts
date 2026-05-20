@@ -1,10 +1,22 @@
 import Elysia, { t } from "elysia";
 import { sql } from "kysely";
-import { decodeJwt } from "jose";
 import { rootDb } from "../db.js";
 import { sessionService } from "../services/sessionService.js";
 import { sendEmail } from "../services/emailService.js";
-import { oauthConfig } from "../services/oauthService.js";
+import {
+  createAuthorizationRequest,
+  decodeOAuthRedirect,
+  decodeOAuthState,
+  encodeOAuthRedirect,
+  encodeOAuthState,
+  exchangeAppleCode,
+  exchangeGoogleCode,
+  getOAuthCookieName,
+  getOAuthCookieOptions,
+  getOAuthRedirectCookieName,
+  getOAuthRedirectTarget,
+  verifyAppleIdToken,
+} from "../services/oauthService.js";
 import { checkRateLimit } from "../services/rateLimiter.js";
 import { HttpError, mapPgError } from "../pgErrors.js";
 import { env } from "../assertEnv.js";
@@ -65,6 +77,51 @@ function toJson(value: unknown): string {
 function csrfCheck(headers: Record<string, string | undefined>): void {
   if (!headers["x-requested-with"]) {
     throw new HttpError(400, "Missing CSRF header");
+  }
+}
+
+async function fetchGoogleUserInfo(
+  accessToken: string,
+): Promise<Record<string, unknown> & { sub: string }> {
+  const response = await fetch("https://openidconnect.googleapis.com/v1/userinfo", {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+
+  if (!response.ok) {
+    throw new HttpError(502, "Failed to fetch Google user info");
+  }
+
+  const userInfo = (await response.json()) as Record<string, unknown>;
+  if (typeof userInfo.sub !== "string") {
+    throw new HttpError(400, "Google user info is missing subject");
+  }
+
+  return {
+    ...userInfo,
+    sub: userInfo.sub,
+  };
+}
+
+function parseAppleUserPayload(value: string | undefined): { email?: string; name?: string } {
+  if (!value) {
+    return {};
+  }
+
+  try {
+    const parsed = JSON.parse(value) as {
+      email?: unknown;
+      name?: { firstName?: unknown; lastName?: unknown };
+    };
+    const firstName = typeof parsed.name?.firstName === "string" ? parsed.name.firstName : undefined;
+    const lastName = typeof parsed.name?.lastName === "string" ? parsed.name.lastName : undefined;
+    const name = [firstName, lastName].filter(Boolean).join(" ").trim() || undefined;
+
+    return {
+      email: typeof parsed.email === "string" ? parsed.email : undefined,
+      name,
+    };
+  } catch {
+    throw new HttpError(400, "Invalid Apple user payload");
   }
 }
 
@@ -134,56 +191,60 @@ export const publicRoutes = new Elysia({ prefix: "/api" })
   )
 
   // --- Google OAuth start ---
-  .get("/oauth/google", () => {
-    const { clientId, redirectUri } = oauthConfig.google;
-    const params = new URLSearchParams({
-      client_id: clientId,
-      redirect_uri: redirectUri,
-      response_type: "code",
-      scope: "openid email profile",
-      access_type: "offline",
-    });
-    return { url: `https://accounts.google.com/o/oauth2/v2/auth?${params}` };
-  })
+  .get(
+    "/oauth/google",
+    ({ query, cookie, redirect, request }) => {
+      const rootUrl = new URL(request.url).origin;
+      const authorization = createAuthorizationRequest("google", rootUrl, query.redirect);
+      const oauthCookieName = getOAuthCookieName("google");
+      const redirectCookieName = getOAuthRedirectCookieName("google");
+      const cookieOptions = getOAuthCookieOptions("google", rootUrl);
+
+      cookie[oauthCookieName]!.set({
+        value: encodeOAuthState(authorization.state),
+        ...cookieOptions,
+      });
+      if (authorization.state.redirect) {
+        cookie[redirectCookieName]!.set({
+          value: encodeOAuthRedirect(authorization.state.redirect),
+          ...cookieOptions,
+        });
+      } else {
+        cookie[redirectCookieName]?.remove();
+      }
+      return redirect(authorization.url.toString());
+    },
+    {
+      query: t.Object({
+        redirect: t.Optional(t.String()),
+      }),
+    },
+  )
 
   // --- Google OAuth callback ---
   .get(
     "/oauth/google/callback",
-    async ({ query, cookie }) => {
-      const { code } = query;
-      if (!code) {
-        throw new HttpError(400, "Missing code parameter");
+    async ({ query, cookie, redirect, request }) => {
+      const rootUrl = new URL(request.url).origin;
+      const cookieName = getOAuthCookieName("google");
+      const redirectCookieName = getOAuthRedirectCookieName("google");
+      const oauthState = decodeOAuthState(cookie[cookieName]?.value);
+      const redirectTarget = oauthState?.redirect ?? decodeOAuthRedirect(cookie[redirectCookieName]?.value);
+      cookie[cookieName]?.remove();
+      cookie[redirectCookieName]?.remove();
+
+      if (query.error) {
+        throw new HttpError(400, `Google OAuth failed (${query.error})`);
+      }
+      if (!query.code || !query.state) {
+        throw new HttpError(400, "Missing Google OAuth callback parameters");
+      }
+      if (!oauthState?.codeVerifier || oauthState.state !== query.state) {
+        throw new HttpError(400, "Invalid or expired Google OAuth state");
       }
 
-      const { clientId, clientSecret, redirectUri } = oauthConfig.google;
-
-      // Exchange code for tokens
-      const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: new URLSearchParams({
-          code,
-          client_id: clientId,
-          client_secret: clientSecret,
-          redirect_uri: redirectUri,
-          grant_type: "authorization_code",
-        }),
-      }).then((r) => r.json());
-
-      const tokenData = tokenRes;
-      if (typeof tokenData.access_token !== "string") {
-        throw new HttpError(400, "Token exchange failed");
-      }
-
-      // Fetch user info
-      const userInfoRes = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
-        headers: { Authorization: `Bearer ${tokenData.access_token}` },
-      }).then((r) => r.json());
-
-      const userInfo = userInfoRes;
-      if (typeof userInfo.sub !== "string") {
-        throw new HttpError(400, "Failed to fetch user info");
-      }
+      const tokens = await exchangeGoogleCode(rootUrl, query.code, oauthState.codeVerifier);
+      const userInfo = await fetchGoogleUserInfo(tokens.accessToken());
 
       // Link or register via DB function
       try {
@@ -194,13 +255,14 @@ export const publicRoutes = new Elysia({ prefix: "/api" })
             'google',
             ${userInfo.sub},
             ${toJson(userInfo)}::json,
-            ${toJson(tokenData)}::json
+            ${toJson(tokens.data)}::json
           )`.as("u"),
           )
           .selectAll()
           .executeTakeFirstOrThrow();
 
-        return await sessionFromUser(user, cookie);
+        await sessionFromUser(user, cookie);
+        return redirect(new URL(getOAuthRedirectTarget(redirectTarget), request.url).toString());
       } catch (err) {
         if (err instanceof HttpError) throw err;
         mapPgError(err);
@@ -209,61 +271,78 @@ export const publicRoutes = new Elysia({ prefix: "/api" })
     {
       query: t.Object({
         code: t.Optional(t.String()),
+        error: t.Optional(t.String()),
+        state: t.Optional(t.String()),
       }),
     },
   )
 
   // --- Apple OAuth start ---
-  .get("/oauth/apple", () => {
-    const { clientId, redirectUri } = oauthConfig.apple;
-    const params = new URLSearchParams({
-      client_id: clientId,
-      redirect_uri: redirectUri,
-      response_type: "code id_token",
-      scope: "name email",
-      response_mode: "form_post",
-    });
-    return { url: `https://appleid.apple.com/auth/authorize?${params}` };
-  })
+  .get(
+    "/oauth/apple",
+    ({ query, cookie, redirect, request }) => {
+      const rootUrl = new URL(request.url).origin;
+      const authorization = createAuthorizationRequest("apple", rootUrl, query.redirect);
+      const oauthCookieName = getOAuthCookieName("apple");
+      const redirectCookieName = getOAuthRedirectCookieName("apple");
+      const cookieOptions = getOAuthCookieOptions("apple", rootUrl);
+
+      cookie[oauthCookieName]!.set({
+        value: encodeOAuthState(authorization.state),
+        ...cookieOptions,
+      });
+      if (authorization.state.redirect) {
+        cookie[redirectCookieName]!.set({
+          value: encodeOAuthRedirect(authorization.state.redirect),
+          ...cookieOptions,
+        });
+      } else {
+        cookie[redirectCookieName]?.remove();
+      }
+      return redirect(authorization.url.toString());
+    },
+    {
+      query: t.Object({
+        redirect: t.Optional(t.String()),
+      }),
+    },
+  )
 
   // --- Apple OAuth callback ---
   .post(
     "/oauth/apple/callback",
-    async ({ body, cookie }) => {
-      const { code, id_token: bodyIdToken } = body;
+    async ({ body, cookie, redirect, request }) => {
+      const rootUrl = new URL(request.url).origin;
+      const cookieName = getOAuthCookieName("apple");
+      const redirectCookieName = getOAuthRedirectCookieName("apple");
+      const oauthState = decodeOAuthState(cookie[cookieName]?.value);
+      const redirectTarget = oauthState?.redirect ?? decodeOAuthRedirect(cookie[redirectCookieName]?.value);
+      cookie[cookieName]?.remove();
+      cookie[redirectCookieName]?.remove();
 
-      const { clientId, redirectUri } = oauthConfig.apple;
-
-      // Exchange code for tokens
-      const tokenRes = await fetch("https://appleid.apple.com/auth/token", {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: new URLSearchParams({
-          code,
-          client_id: clientId,
-          redirect_uri: redirectUri,
-          grant_type: "authorization_code",
-        }),
-      }).then((r) => r.json());
-
-      const tokenData = tokenRes;
-
-      // Decode the id_token JWT (from Apple's response or the POST payload)
-      const idToken =
-        (typeof tokenData.id_token === "string" ? tokenData.id_token : bodyIdToken) ?? "";
-      if (!idToken) {
-        throw new HttpError(400, "No id_token received from Apple");
+      if (body.error) {
+        throw new HttpError(400, `Apple OAuth failed (${body.error})`);
+      }
+      if (!body.code || !body.state) {
+        throw new HttpError(400, "Missing Apple OAuth callback parameters");
+      }
+      if (!oauthState || oauthState.state !== body.state) {
+        throw new HttpError(400, "Invalid or expired Apple OAuth state");
       }
 
-      const claims = decodeJwt(idToken);
-      const sub = claims.sub;
-      const email = typeof claims.email === "string" ? claims.email : undefined;
-
+      const tokens = await exchangeAppleCode(rootUrl, body.code);
+      const claims = await verifyAppleIdToken(tokens.idToken());
+      const appleUser = parseAppleUserPayload(body.user);
+      const sub = typeof claims.sub === "string" ? claims.sub : undefined;
       if (!sub) {
         throw new HttpError(400, "Invalid Apple id_token");
       }
 
-      const profile = { sub, email };
+      const profile = {
+        sub,
+        email: typeof claims.email === "string" ? claims.email : appleUser.email,
+        name: appleUser.name,
+      };
 
       try {
         const user = await rootDb
@@ -273,13 +352,14 @@ export const publicRoutes = new Elysia({ prefix: "/api" })
             'apple',
             ${sub},
             ${toJson(profile)}::json,
-            ${toJson(tokenData)}::json
+            ${toJson(tokens.data)}::json
           )`.as("u"),
           )
           .selectAll()
           .executeTakeFirstOrThrow();
 
-        return await sessionFromUser(user, cookie);
+        await sessionFromUser(user, cookie);
+        return redirect(new URL(getOAuthRedirectTarget(redirectTarget), request.url).toString());
       } catch (err) {
         if (err instanceof HttpError) throw err;
         mapPgError(err);
@@ -287,8 +367,11 @@ export const publicRoutes = new Elysia({ prefix: "/api" })
     },
     {
       body: t.Object({
-        code: t.String(),
+        code: t.Optional(t.String()),
+        error: t.Optional(t.String()),
         id_token: t.Optional(t.String()),
+        state: t.Optional(t.String()),
+        user: t.Optional(t.String()),
       }),
     },
   )

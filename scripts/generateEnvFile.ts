@@ -71,6 +71,14 @@ const fields: [string, FieldDef][] = [
   ["VALKEY_URL", { derive: (c) => `redis://${c.DATABASE_HOST}:6380` }],
   ["RESEND_API_KEY", { default: "" }],
   ["ADMIN_EMAIL", { default: "danielfgray@gmail.com" }],
+  ["GOOGLE_CALENDAR_CLIENT_ID", { default: "" }],
+  ["GOOGLE_CALENDAR_CLIENT_SECRET", { default: "" }],
+  ["GOOGLE_CLIENT_ID", { default: "" }],
+  ["GOOGLE_CLIENT_SECRET", { default: "" }],
+  ["APPLE_CLIENT_ID", { default: "" }],
+  ["APPLE_TEAM_ID", { default: "" }],
+  ["APPLE_KEY_ID", { default: "" }],
+  ["APPLE_PRIVATE_KEY", { default: "" }],
 ];
 
 const DOTENV_PATH = path.resolve(import.meta.dir, "..", ".env");

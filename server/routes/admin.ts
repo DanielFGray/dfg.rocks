@@ -50,6 +50,14 @@ function getCookieString(value: unknown): string | undefined {
   return typeof value === "string" ? value : undefined;
 }
 
+async function requireAdminSession(cookie: Record<string, any>) {
+  const token = getCookieString(cookie.session?.value);
+  const result = await sessionService.validateSessionToken(token);
+  if (!result) throw new HttpError(401, "Unauthorized");
+  if (result.user.role !== "admin") throw new HttpError(403, "Forbidden");
+  return result;
+}
+
 function serializeLesson(r: {
   scheduled_at: Date | string;
   cancelled_at: Date | string | null;
@@ -89,11 +97,51 @@ export const adminRoutes = new Elysia({ prefix: "/api/admin" })
       return { error: error.message };
     }
   })
+  .get("/gcal/connect", async ({ cookie, redirect, request }) => {
+    await requireAdminSession(cookie);
+
+    const rootUrl = new URL(request.url).origin;
+    const authorization = googleCalendarService.createAuthorizationRequest(rootUrl);
+    cookie[googleCalendarService.getAuthCookieName()]!.set({
+      value: googleCalendarService.encodeAuthState(authorization.state),
+      ...googleCalendarService.getAuthCookieOptions(rootUrl),
+    });
+
+    return redirect(authorization.url.toString());
+  })
+  .get(
+    "/gcal/callback",
+    async ({ query, cookie, redirect, request }) => {
+      await requireAdminSession(cookie);
+      const rootUrl = new URL(request.url).origin;
+
+      const authCookieName = googleCalendarService.getAuthCookieName();
+      const authState = googleCalendarService.decodeAuthState(cookie[authCookieName]?.value);
+      cookie[authCookieName]?.remove();
+
+      if (query.error) {
+        throw new HttpError(400, `Google Calendar OAuth failed (${query.error})`);
+      }
+      if (!query.code || !query.state) {
+        throw new HttpError(400, "Missing Google Calendar OAuth callback parameters");
+      }
+      if (!authState || authState.state !== query.state) {
+        throw new HttpError(400, "Invalid or expired Google Calendar OAuth state");
+      }
+
+      await googleCalendarService.handleCallback(rootUrl, query.code, authState.codeVerifier);
+      return redirect(googleCalendarService.getConnectRedirectUrl(rootUrl, authState.redirect));
+    },
+    {
+      query: t.Object({
+        code: t.Optional(t.String()),
+        error: t.Optional(t.String()),
+        state: t.Optional(t.String()),
+      }),
+    },
+  )
   .derive(async ({ cookie, headers }) => {
-    const token = getCookieString(cookie.session?.value);
-    const result = await sessionService.validateSessionToken(token);
-    if (!result) throw new HttpError(401, "Unauthorized");
-    if (result.user.role !== "admin") throw new HttpError(403, "Forbidden");
+    const result = await requireAdminSession(cookie);
     if (!headers["x-requested-with"]) throw new HttpError(403, "Missing CSRF header");
     return { auth: result };
   })
@@ -1121,94 +1169,6 @@ export const adminRoutes = new Elysia({ prefix: "/api/admin" })
       calendar_id: calIdRow ? calIdRow.value : null,
     };
   })
-
-  .get("/gcal/auth-url", () => {
-    const clientId = env.GOOGLE_CALENDAR_CLIENT_ID ?? "";
-    const redirectUri = `${env.VITE_ROOT_URL ?? `http://localhost:${env.PORT}`}/api/admin/gcal/callback`;
-    const scope = "https://www.googleapis.com/auth/calendar.events";
-    const url = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${encodeURIComponent(clientId)}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=${encodeURIComponent(scope)}&access_type=offline&prompt=consent`;
-    return { url };
-  })
-
-  .get(
-    "/gcal/callback",
-    async ({ query, set }) => {
-      const { code } = query;
-
-      const clientId = env.GOOGLE_CALENDAR_CLIENT_ID ?? "";
-      const clientSecret = env.GOOGLE_CALENDAR_CLIENT_SECRET ?? "";
-      const redirectUri = `${env.VITE_ROOT_URL ?? `http://localhost:${env.PORT}`}/api/admin/gcal/callback`;
-
-      // Exchange code for tokens
-      const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: new URLSearchParams({
-          code,
-          client_id: clientId,
-          client_secret: clientSecret,
-          redirect_uri: redirectUri,
-          grant_type: "authorization_code",
-        }),
-      });
-
-      if (!tokenRes.ok) {
-        const text = await tokenRes.text();
-        throw new HttpError(400, `Google OAuth error: ${text}`);
-      }
-
-      const tokenData = await tokenRes.json();
-      const accessToken = tokenData.access_token;
-      const refreshToken = tokenData.refresh_token;
-      const expiresIn = tokenData.expires_in;
-
-      if (typeof accessToken !== "string") {
-        throw new HttpError(400, "No access_token in response");
-      }
-
-      // Store refresh token
-      if (typeof refreshToken === "string") {
-        await rootDb
-          .insertInto("app_private.admin_settings")
-          .values({ key: "gcal_refresh_token", value: toJson(refreshToken) })
-          .onConflict((oc) => oc.column("key").doUpdateSet({ value: toJson(refreshToken) }))
-          .execute();
-      }
-
-      // Store access token + expiry
-      await rootDb
-        .insertInto("app_private.admin_settings")
-        .values({ key: "gcal_access_token", value: toJson(accessToken) })
-        .onConflict((oc) => oc.column("key").doUpdateSet({ value: toJson(accessToken) }))
-        .execute();
-
-      const expiresAt = new Date(
-        Date.now() + (typeof expiresIn === "number" ? expiresIn : 3600) * 1000,
-      ).toISOString();
-      await rootDb
-        .insertInto("app_private.admin_settings")
-        .values({
-          key: "gcal_access_token_expires_at",
-          value: toJson(expiresAt),
-        })
-        .onConflict((oc) => oc.column("key").doUpdateSet({ value: toJson(expiresAt) }))
-        .execute();
-
-      // Default calendar to "primary"
-      await rootDb
-        .insertInto("app_private.admin_settings")
-        .values({ key: "gcal_calendar_id", value: toJson("primary") })
-        .onConflict((oc) => oc.column("key").doNothing())
-        .execute();
-
-      return { success: true as const };
-    },
-    {
-      query: t.Object({
-        code: t.String(),
-      }),
-    },
-  )
 
   .post("/gcal/disconnect", async () => {
     await rootDb

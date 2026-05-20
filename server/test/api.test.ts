@@ -13,6 +13,7 @@ let testValkey: Redis | null = null;
 let adminCookie: string;
 let studentCookie: string;
 let studentId: string;
+const testApplePrivateKey = "-----BEGIN PRIVATE KEY-----\\nAQAB\\n-----END PRIVATE KEY-----";
 
 function loadDotEnvFile() {
   const envPath = `${process.cwd()}/.env`;
@@ -68,14 +69,17 @@ function withRedisDatabase(connectionString: string, databaseIndex: number): str
 }
 
 // -- Helpers --
+const TEST_ROOT_URL = "http://localhost:3000";
+
 function req(
   method: string,
   path: string,
-  opts: { body?: unknown; cookie?: string } = {},
+  opts: { body?: unknown; cookie?: string; csrf?: boolean } = {},
 ): Promise<Response> {
-  const headers: Record<string, string> = {
-    "X-Requested-With": "dfg",
-  };
+  const headers: Record<string, string> = {};
+  if (opts.csrf !== false) {
+    headers["X-Requested-With"] = "dfg";
+  }
   if (opts.cookie) headers["Cookie"] = `session=${opts.cookie}`;
 
   const body =
@@ -89,7 +93,7 @@ function req(
         : undefined;
 
   return handler(
-    new Request(`http://localhost${path}`, {
+    new Request(`${TEST_ROOT_URL}${path}`, {
       method,
       headers,
       body,
@@ -120,6 +124,16 @@ describe("DFG Portal API", () => {
       PORT: "0",
       VITE_ROOT_URL: process.env.VITE_ROOT_URL || "http://localhost:3000",
       ADMIN_EMAIL: process.env.ADMIN_EMAIL || "admin@test.com",
+      GOOGLE_CALENDAR_CLIENT_ID:
+        process.env.GOOGLE_CALENDAR_CLIENT_ID || "gcal-client-id",
+      GOOGLE_CALENDAR_CLIENT_SECRET:
+        process.env.GOOGLE_CALENDAR_CLIENT_SECRET || "gcal-client-secret",
+      GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID || "google-client-id",
+      GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET || "google-client-secret",
+      APPLE_CLIENT_ID: process.env.APPLE_CLIENT_ID || "apple-client-id",
+      APPLE_TEAM_ID: process.env.APPLE_TEAM_ID || "apple-team-id",
+      APPLE_KEY_ID: process.env.APPLE_KEY_ID || "apple-key-id",
+      APPLE_PRIVATE_KEY: process.env.APPLE_PRIVATE_KEY || testApplePrivateKey,
     };
 
     mkdirSync("generated", { recursive: true });
@@ -281,6 +295,90 @@ describe("DFG Portal API", () => {
     const me2 = await req("GET", "/api/me", { cookie: studentCookie });
     expect(me2.status).toBe(200);
     expect((await me2.json()).user.username).toBe("student1");
+  });
+
+  it("auth: oauth start routes redirect and callbacks require valid state", async () => {
+    const googleStart = await req("GET", "/api/oauth/google?redirect=%2Fsettings");
+    expect(googleStart.status).toBe(302);
+    expect(googleStart.headers.get("location")).toMatch(
+      /^https:\/\/accounts\.google\.com\/o\/oauth2\/v2\/auth\?/,
+    );
+    const googleLocation = new URL(googleStart.headers.get("location")!);
+    expect(googleLocation.searchParams.get("client_id")).toBe(process.env.GOOGLE_CLIENT_ID);
+    expect(googleLocation.searchParams.get("access_type")).toBe("offline");
+    expect(googleLocation.searchParams.get("redirect_uri")).toBe(
+      `${TEST_ROOT_URL}/api/oauth/google/callback`,
+    );
+    expect(googleLocation.searchParams.get("code_challenge")).toBeTruthy();
+    expect(googleLocation.searchParams.get("state")).toBeTruthy();
+    const googleSetCookie = googleStart.headers.get("set-cookie");
+    expect(googleSetCookie).toContain("oauth_google=");
+    expect(googleSetCookie).toContain("oauth_google_redirect=");
+    expect(googleSetCookie).toContain("SameSite=Lax");
+
+    const googleCallback = await req(
+      "GET",
+      `/api/oauth/google/callback?code=fake-code&state=${googleLocation.searchParams.get("state")!}`,
+    );
+    expect(googleCallback.status).toBe(400);
+    expect(await googleCallback.json()).toEqual({ error: "Invalid or expired Google OAuth state" });
+
+    const appleStart = await req("GET", "/api/oauth/apple?redirect=%2Fdashboard");
+    expect(appleStart.status).toBe(302);
+    expect(appleStart.headers.get("location")).toMatch(/^https:\/\/appleid\.apple\.com\/auth\/authorize\?/);
+    const appleLocation = new URL(appleStart.headers.get("location")!);
+    expect(appleLocation.searchParams.get("client_id")).toBe(process.env.APPLE_CLIENT_ID);
+    expect(appleLocation.searchParams.get("redirect_uri")).toBe(
+      `${TEST_ROOT_URL}/api/oauth/apple/callback`,
+    );
+    expect(appleLocation.searchParams.get("response_mode")).toBe("form_post");
+    expect(appleLocation.searchParams.get("state")).toBeTruthy();
+    const appleSetCookie = appleStart.headers.get("set-cookie");
+    expect(appleSetCookie).toContain("oauth_apple=");
+    expect(appleSetCookie).toContain("oauth_apple_redirect=");
+    expect(appleSetCookie).toContain("SameSite=None");
+
+    const appleCallback = await req("POST", "/api/oauth/apple/callback", {
+      body: { code: "fake-code", state: appleLocation.searchParams.get("state") },
+    });
+    expect(appleCallback.status).toBe(400);
+    expect(await appleCallback.json()).toEqual({ error: "Invalid or expired Apple OAuth state" });
+  });
+
+  it("admin: gcal connect redirects and callback requires valid state", async () => {
+    const connect = await req("GET", "/api/admin/gcal/connect", {
+      cookie: adminCookie,
+      csrf: false,
+    });
+    expect(connect.status).toBe(302);
+    const location = connect.headers.get("location");
+    expect(location).toBeTruthy();
+    const authUrl = new URL(location!);
+    expect(authUrl.origin).toBe("https://accounts.google.com");
+    expect(authUrl.pathname).toBe("/o/oauth2/v2/auth");
+    expect(authUrl.searchParams.get("client_id")).toBe(process.env.GOOGLE_CALENDAR_CLIENT_ID);
+    expect(authUrl.searchParams.get("access_type")).toBe("offline");
+    expect(authUrl.searchParams.get("redirect_uri")).toBe(
+      `${TEST_ROOT_URL}/api/admin/gcal/callback`,
+    );
+    expect(authUrl.searchParams.get("code_challenge")).toBeTruthy();
+    expect(authUrl.searchParams.get("state")).toBeTruthy();
+    const setCookie = connect.headers.get("set-cookie");
+    expect(setCookie).toContain("gcal_oauth=");
+    expect(setCookie).toContain("SameSite=Lax");
+
+    const callback = await req(
+      "GET",
+      `/api/admin/gcal/callback?code=fake-code&state=${authUrl.searchParams.get("state")!}`,
+      {
+        cookie: adminCookie,
+        csrf: false,
+      },
+    );
+    expect(callback.status).toBe(400);
+    expect(await callback.json()).toEqual({
+      error: "Invalid or expired Google Calendar OAuth state",
+    });
   });
 
   // -- Test 3: Testimonials --

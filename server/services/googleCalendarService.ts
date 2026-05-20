@@ -1,3 +1,10 @@
+import {
+  ArcticFetchError,
+  Google,
+  OAuth2RequestError,
+  generateCodeVerifier,
+  generateState,
+} from "arctic";
 import { rootDb } from "../db.js";
 import { env } from "../assertEnv.js";
 import { HttpError } from "../pgErrors.js";
@@ -48,8 +55,9 @@ const defaultWorkingHours: WorkingHours = {
 
 const GCAL_BASE = "https://www.googleapis.com/calendar/v3";
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
-const AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 const SCOPE = "https://www.googleapis.com/auth/calendar.events";
+const CONNECT_REDIRECT_PATH = "/settings";
+const GCAL_AUTH_COOKIE_NAME = "gcal_oauth";
 
 /** Buffer before actual expiry to avoid edge-case rejections */
 const TOKEN_EXPIRY_BUFFER_MS = 60_000;
@@ -58,10 +66,71 @@ const TOKEN_EXPIRY_BUFFER_MS = 60_000;
 
 const getClientId = () => env.GOOGLE_CALENDAR_CLIENT_ID ?? "";
 const getClientSecret = () => env.GOOGLE_CALENDAR_CLIENT_SECRET ?? "";
-const getRedirectUri = () => {
-  const root = env.VITE_ROOT_URL ?? "http://localhost:3000";
-  return `${root}/api/admin/gcal/callback`;
+const getRedirectUri = (rootUrl: string) => `${rootUrl}/api/admin/gcal/callback`;
+
+type GoogleCalendarAuthState = {
+  codeVerifier: string;
+  redirect: string;
+  state: string;
 };
+
+function getGoogleCalendarClient(rootUrl: string): Google {
+  const clientId = getClientId();
+  const clientSecret = getClientSecret();
+  if (!clientId || !clientSecret) {
+    throw new HttpError(503, "Google Calendar OAuth is not configured");
+  }
+
+  return new Google(clientId, clientSecret, getRedirectUri(rootUrl));
+}
+
+function encodeAuthState(value: GoogleCalendarAuthState): string {
+  return Buffer.from(JSON.stringify(value), "utf8").toString("base64url");
+}
+
+function decodeAuthState(value: unknown): GoogleCalendarAuthState | null {
+  if (typeof value !== "string" || !value) return null;
+
+  try {
+    const parsed = JSON.parse(Buffer.from(value, "base64url").toString("utf8")) as {
+      codeVerifier?: unknown;
+      redirect?: unknown;
+      state?: unknown;
+    };
+    if (
+      typeof parsed.codeVerifier !== "string" ||
+      typeof parsed.redirect !== "string" ||
+      typeof parsed.state !== "string"
+    ) {
+      return null;
+    }
+
+    return {
+      codeVerifier: parsed.codeVerifier,
+      redirect: parsed.redirect,
+      state: parsed.state,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function getConnectRedirectUrl(rootUrl: string, redirectPath = CONNECT_REDIRECT_PATH): string {
+  return new URL(redirectPath, rootUrl).toString();
+}
+
+function mapGoogleCalendarAuthError(error: unknown): HttpError {
+  if (error instanceof HttpError) {
+    return error;
+  }
+  if (error instanceof OAuth2RequestError) {
+    return new HttpError(400, `Google Calendar OAuth request failed (${error.code})`);
+  }
+  if (error instanceof ArcticFetchError) {
+    return new HttpError(502, "Google Calendar OAuth request failed");
+  }
+  return new HttpError(502, "Google Calendar OAuth failed");
+}
 
 // ---- admin_settings helpers ----
 
@@ -112,6 +181,9 @@ async function getAccessToken(): Promise<string> {
   }
 
   // refresh
+  if (!getClientId() || !getClientSecret()) {
+    throw new HttpError(503, "Google Calendar OAuth is not configured");
+  }
   const refreshToken = await getRefreshToken();
   const body = new URLSearchParams({
     client_id: getClientId(),
@@ -135,6 +207,10 @@ async function getAccessToken(): Promise<string> {
 
   const newToken = json.access_token;
   const newExpiry = Date.now() + json.expires_in * 1000;
+
+  if (typeof newToken !== "string" || typeof json.expires_in !== "number") {
+    throw new HttpError(502, "Token refresh response was invalid");
+  }
 
   await setSetting("gcal_access_token", newToken);
   await setSetting("gcal_access_token_expires_at", newExpiry);
@@ -331,47 +407,72 @@ async function incrementalSyncImpl(): Promise<{
 // ---- public service interface ----
 
 export const googleCalendarService = {
-  getAuthUrl() {
-    const params = new URLSearchParams({
-      client_id: getClientId(),
-      redirect_uri: getRedirectUri(),
-      response_type: "code",
-      scope: SCOPE,
-      access_type: "offline",
-      prompt: "consent",
-    });
-    return `${AUTH_URL}?${params.toString()}`;
+  createAuthorizationRequest(rootUrl: string) {
+    const state = generateState();
+    const codeVerifier = generateCodeVerifier();
+    const url = getGoogleCalendarClient(rootUrl).createAuthorizationURL(state, codeVerifier, [
+      SCOPE,
+    ]);
+    url.searchParams.set("access_type", "offline");
+    url.searchParams.set("prompt", "consent");
+
+    return {
+      state: {
+        codeVerifier,
+        redirect: CONNECT_REDIRECT_PATH,
+        state,
+      },
+      url,
+    };
   },
 
-  async handleCallback(code: string) {
-    const body = new URLSearchParams({
-      code,
-      client_id: getClientId(),
-      client_secret: getClientSecret(),
-      redirect_uri: getRedirectUri(),
-      grant_type: "authorization_code",
-    });
+  decodeAuthState,
 
-    const res = await fetch(TOKEN_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body,
-    });
+  encodeAuthState,
 
-    if (!res.ok) {
-      const text = await res.text();
-      throw new HttpError(res.status, `Token exchange failed: ${text}`);
+  getAuthCookieName() {
+    return GCAL_AUTH_COOKIE_NAME;
+  },
+
+  getAuthCookieOptions(rootUrl: string) {
+    const root = new URL(rootUrl);
+    return {
+      httpOnly: true,
+      maxAge: 60 * 10,
+      path: "/api/admin/gcal",
+      sameSite: "lax" as const,
+      secure: env.NODE_ENV === "production" || root.protocol === "https:",
+    };
+  },
+
+  getConnectRedirectUrl,
+
+  async handleCallback(rootUrl: string, code: string, codeVerifier: string) {
+    let tokens;
+    try {
+      tokens = await getGoogleCalendarClient(rootUrl).validateAuthorizationCode(
+        code,
+        codeVerifier,
+      );
+    } catch (error) {
+      throw mapGoogleCalendarAuthError(error);
     }
 
-    const json = await res.json();
+    const existingRefreshToken = await getSetting("gcal_refresh_token");
+    const refreshToken = tokens.hasRefreshToken()
+      ? tokens.refreshToken()
+      : typeof existingRefreshToken === "string"
+        ? existingRefreshToken
+        : undefined;
 
-    if (!json.refresh_token) {
+    if (!refreshToken) {
       throw new HttpError(400, "No refresh token received. Re-authorize with prompt=consent.");
     }
 
-    await setSetting("gcal_refresh_token", json.refresh_token);
-    await setSetting("gcal_access_token", json.access_token);
-    await setSetting("gcal_access_token_expires_at", Date.now() + json.expires_in * 1000);
+    await setSetting("gcal_refresh_token", refreshToken);
+    await setSetting("gcal_access_token", tokens.accessToken());
+    await setSetting("gcal_access_token_expires_at", tokens.accessTokenExpiresAt().getTime());
+    await setSetting("gcal_calendar_id", "primary");
   },
 
   async isConnected() {

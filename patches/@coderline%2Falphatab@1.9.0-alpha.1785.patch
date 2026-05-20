@@ -1,5 +1,5 @@
 diff --git a/dist/alphaTab.core.mjs b/dist/alphaTab.core.mjs
-index 2a4e638abbdd1afc59727e8c2ea213bd5ced672b..c42dcd83809952a15e0c8513e0b18805a64fc016 100644
+index 2a4e638..cf9e105 100644
 --- a/dist/alphaTab.core.mjs
 +++ b/dist/alphaTab.core.mjs
 @@ -34679,14 +34679,44 @@ class HtmlElementContainer {
@@ -90,7 +90,7 @@ index 2a4e638abbdd1afc59727e8c2ea213bd5ced672b..c42dcd83809952a15e0c8513e0b18805
                  };
              },
              off: (_) => {
-@@ -40372,14 +40415,21 @@ class MidiFileSequencer {
+@@ -40329,15 +40372,22 @@ class MidiFileSequencer {
          let bpm = 120;
          let timeSignatureNumerator = 4;
          let timeSignatureDenominator = 4;
@@ -123,7 +123,7 @@ index 2a4e638abbdd1afc59727e8c2ea213bd5ced672b..c42dcd83809952a15e0c8513e0b18805
          state.tempoChanges.push(new MidiFileSequencerTempoChange(bpm, 0, 0));
          const metronomeLengthInTicks = (state.division * (4.0 / timeSignatureDenominator)) | 0;
 diff --git a/dist/alphaTab.js b/dist/alphaTab.js
-index 1b6566747116456705a0e1f0f7d46956d247bc45..dfdd8c7cb725742fc945d4402fa94fd287d880e2 100644
+index 1b65667..e7c140f 100644
 --- a/dist/alphaTab.js
 +++ b/dist/alphaTab.js
 @@ -34685,14 +34685,44 @@
@@ -214,7 +214,7 @@ index 1b6566747116456705a0e1f0f7d46956d247bc45..dfdd8c7cb725742fc945d4402fa94fd2
                      };
                  },
                  off: (_) => {
-@@ -40378,14 +40425,21 @@
+@@ -40335,15 +40378,22 @@
              let bpm = 120;
              let timeSignatureNumerator = 4;
              let timeSignatureDenominator = 4;

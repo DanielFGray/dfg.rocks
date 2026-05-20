@@ -67,4 +67,17 @@ test.describe("authentication", () => {
     await expect(page).toHaveURL(/\/settings$/);
     await expect(page.getByTestId("settings")).toBeVisible();
   });
+
+  test("oauth buttons preserve redirect target", async ({ page, testing }) => {
+    await testing.login({ username: "test_oauth_redirects", role: "student" });
+    await page.context().clearCookies();
+
+    await page.goto("/settings");
+    await expect(page).toHaveURL(/\/login\?redirect=%2Fsettings$/);
+    await expect(page.getByTestId("google-oauth")).toHaveAttribute(
+      "href",
+      "/api/oauth/google?redirect=%2Fsettings",
+    );
+    await expect(page.getByTestId("apple-oauth")).toHaveCount(0);
+  });
 });

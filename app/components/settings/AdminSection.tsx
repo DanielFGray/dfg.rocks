@@ -110,11 +110,8 @@ export function AdminSection({
     },
   });
 
-  const handleConnect = async () => {
-    const { data, error } = await api.admin.gcal["auth-url"].get();
-    if (error) throw error;
-    if ("error" in data) throw new Error(data.error);
-    window.location.href = data.url;
+  const handleConnect = () => {
+    window.location.assign("/api/admin/gcal/connect");
   };
 
   const toggleDay = (index: string) => {
