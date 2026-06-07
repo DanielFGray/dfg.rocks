@@ -27,6 +27,7 @@ import { FileService } from "./services/fileService.js";
 import { GoogleCalendarService } from "./services/googleCalendarService.js";
 import { NotationService } from "./services/notationService.js";
 import { PublicRouteService } from "./services/publicRouteService.js";
+import { RateLimiterLayer } from "./services/rateLimiter.js";
 import { realtimeService } from "./services/realtimeService.js";
 import { SessionService } from "./services/sessionService.js";
 import { StorageService } from "./services/storageService.js";
@@ -71,6 +72,7 @@ async function createHandler() {
     FetchHttpClient.layer,
     PgRootDB.Live,
     PgAuthDB.Live,
+    RateLimiterLayer,
   );
   const baseServicesLayer = Layer.mergeAll(
     PublicRouteService.Default,

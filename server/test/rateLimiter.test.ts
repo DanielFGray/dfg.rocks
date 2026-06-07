@@ -1,6 +1,6 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import Redis from "ioredis";
-import { Effect } from "effect";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { Effect, Layer } from "effect";
+import { RateLimiter } from "@effect/experimental";
 import { loadEnvFile } from "node:process";
 
 loadEnvFile();
@@ -11,24 +11,13 @@ type ClientIdentifierFromHeaders =
 
 let checkRateLimit: CheckRateLimit;
 let clientIdentifierFromHeaders: ClientIdentifierFromHeaders;
-let moduleValkey: Redis;
 
 describe("rateLimiter", () => {
-  beforeAll(async () => {
+  beforeEach(async () => {
     vi.resetModules();
 
     const rateLimiter = await import("../services/rateLimiter.js");
     ({ checkRateLimit, clientIdentifierFromHeaders } = rateLimiter);
-    moduleValkey = (await import("../valkey.js")).valkey;
-    await moduleValkey.flushdb();
-  });
-
-  beforeEach(async () => {
-    await moduleValkey.flushdb();
-  });
-
-  afterAll(async () => {
-    await moduleValkey.quit();
   });
 
   it("extracts the first client hop from trusted proxy headers", () => {
@@ -46,20 +35,28 @@ describe("rateLimiter", () => {
     ).toBe("198.51.100.8");
   });
 
-  it("stores counters in valkey and expires them with the fixed window", async () => {
+  it("stores counters in memory and expires them with the fixed window", async () => {
+    // Fresh in-memory store per test
+    const rateLimiterLayer = RateLimiter.layer.pipe(
+      Layer.provide(RateLimiter.layerStoreMemory),
+    );
+
+    const run = (scope: string, headers: Record<string, string | undefined>, max: number, windowMs: number) =>
+      Effect.runPromise(
+        checkRateLimit(scope, headers, max, windowMs).pipe(
+          Effect.provide(rateLimiterLayer),
+        ),
+      );
+
     const headers = { "x-real-ip": "203.0.113.7" };
 
-    await Effect.runPromise(checkRateLimit("login", headers, 2, 50));
-    await Effect.runPromise(checkRateLimit("login", headers, 2, 50));
+    await run("login", headers, 2, 50);
+    await run("login", headers, 2, 50);
 
-    await expect(Effect.runPromise(checkRateLimit("login", headers, 2, 50))).rejects.toThrow(
-      "Too many requests",
-    );
+    await expect(run("login", headers, 2, 50)).rejects.toThrow("Too many requests");
 
     await new Promise((resolve) => setTimeout(resolve, 75));
 
-    await expect(
-      Effect.runPromise(checkRateLimit("login", headers, 2, 50)),
-    ).resolves.toBeUndefined();
+    await expect(run("login", headers, 2, 50)).resolves.toBeUndefined();
   });
 });

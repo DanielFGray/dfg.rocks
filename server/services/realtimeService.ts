@@ -3,7 +3,7 @@ import { Effect, Option } from "effect";
 import { PgRootDB } from "../db.js";
 import { env } from "../assertEnv.js";
 import { serverRuntime } from "../runtime.js";
-import { valkey } from "../valkey.js";
+import { realtimeBus } from "./realtimeBus.js";
 
 type RealtimePayload = {
   event?: string;
@@ -188,8 +188,17 @@ class RealtimeService {
       queryKeys,
     });
 
-    await Promise.all(
-      userIds.map((userId) => valkey.publish(`rt:user:${userId}`, message)),
+    await runDb(
+      Effect.forEach(userIds, (userId) =>
+        Effect.sync(() =>
+          realtimeBus.publish({
+            userId,
+            event: payload.event ?? channel,
+            subject,
+            queryKeys,
+          }),
+        ),
+      ),
     );
   }
 

@@ -3,7 +3,6 @@ import * as S from "effect/Schema";
 export const envSchema = S.Struct({
   DATABASE_URL: S.String,
   AUTH_DATABASE_URL: S.String,
-  VALKEY_URL: S.String,
   SECRET: S.Redacted(S.String),
   PORT: S.String,
   ADMIN_EMAIL: S.String,

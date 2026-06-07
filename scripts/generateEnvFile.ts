@@ -68,7 +68,6 @@ const fields: [string, FieldDef][] = [
   ["PORT", { default: "3000" }],
   ["VITE_ROOT_URL", { derive: (c) => `http://localhost:${c.PORT}` }],
   ["SECRET", { generate: genSecret }],
-  ["VALKEY_URL", { derive: (c) => `redis://${c.DATABASE_HOST}:6380` }],
   ["RESEND_API_KEY", { default: "" }],
   ["ADMIN_EMAIL", { default: "danielfgray@gmail.com" }],
   ["GOOGLE_CALENDAR_CLIENT_ID", { default: "" }],

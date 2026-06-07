@@ -2,14 +2,13 @@ import * as HttpApi from "@effect/platform/HttpApi";
 import * as HttpApiBuilder from "@effect/platform/HttpApiBuilder";
 import * as HttpApiEndpoint from "@effect/platform/HttpApiEndpoint";
 import * as HttpServerResponse from "@effect/platform/HttpServerResponse";
-import { Effect } from "effect";
+import { Effect, Stream } from "effect";
 import {
   authenticatedClientGroup,
   type AuthenticatedClientEndpoint,
 } from "../../shared/httpApi.js";
-import Redis from "ioredis";
-import { env } from "../assertEnv.js";
 import { HttpError } from "../pgErrors.js";
+import { realtimeBus, type RealtimeMessage } from "../services/realtimeBus.js";
 import { AuthenticatedRouteService } from "../services/authenticatedRouteService.js";
 import { GoogleCalendarService } from "../services/googleCalendarService.js";
 import { SessionService, type SessionResult } from "../services/sessionService.js";
@@ -699,42 +698,34 @@ export function makeAuthenticatedLayer() {
             const auth = yield* requireAuth(request);
             const userId = auth.user.id;
             const encoder = new TextEncoder();
-            let subscriber: Redis | null = null;
-            let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
-            const stream = new ReadableStream({
-              async start(controller) {
-                subscriber = new Redis(env.VALKEY_URL);
-                await subscriber.subscribe(`rt:user:${userId}`);
-                subscriber.on("message", (_channel: string, message: string) => {
-                  try {
-                    controller.enqueue(encoder.encode(`data: ${message}\n\n`));
-                  } catch {
-                    // Stream closed
-                  }
-                });
-                heartbeatTimer = setInterval(() => {
-                  try {
-                    controller.enqueue(encoder.encode(`:heartbeat\n\n`));
-                  } catch {
-                    // Stream closed
-                  }
-                }, 30000);
-              },
-              cancel() {
-                if (heartbeatTimer) {
-                  clearInterval(heartbeatTimer);
-                }
-                if (subscriber) {
-                  subscriber
-                    .unsubscribe()
-                    .then(() => subscriber!.quit())
-                    .catch(() => {});
-                  subscriber = null;
-                }
-              },
-            });
+
+            const eventStream: Stream.Stream<RealtimeMessage> = Stream.asyncPush(
+              (emit) =>
+                Effect.acquireRelease(
+                  Effect.sync(() => {
+                    realtimeBus.on("message", emit.single);
+                  }),
+                  () =>
+                    Effect.sync(() => {
+                      realtimeBus.off("message", emit.single);
+                    }),
+                ),
+            );
+
+            const heartbeat = Stream.repeatValue(encoder.encode(":heartbeat\n\n"));
+
+            const sseStream = eventStream.pipe(
+              Stream.filter((msg) => msg.userId === userId),
+              Stream.map((msg) =>
+                encoder.encode(
+                  `data: ${JSON.stringify({ event: msg.event, subject: msg.subject, queryKeys: msg.queryKeys })}\n\n`,
+                ),
+              ),
+              Stream.merge(heartbeat),
+            );
+
             return HttpServerResponse.fromWeb(
-              new Response(stream, {
+              new Response(Stream.toReadableStream(sseStream), {
                 headers: {
                   "Content-Type": "text/event-stream",
                   "Cache-Control": "no-cache",

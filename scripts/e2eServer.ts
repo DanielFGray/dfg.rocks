@@ -14,14 +14,6 @@ function withDatabaseSuffix(connectionString: string, suffix: string): string {
   return url.toString();
 }
 
-function withRedisDatabase(connectionString: string, databaseIndex: number): string {
-  const url = new URL(connectionString);
-  url.pathname = `/${databaseIndex}`;
-  return url.toString();
-}
-
-const vitePort = process.env.VITE_PORT || process.env.PLAYWRIGHT_VITE_PORT || "4174";
-
 function forceIpv4(urlString: string): string {
   const url = new URL(urlString);
   if (url.hostname === "localhost" || url.hostname === "::1") {
@@ -30,11 +22,12 @@ function forceIpv4(urlString: string): string {
   return url.toString();
 }
 
+const vitePort = process.env.VITE_PORT || process.env.PLAYWRIGHT_VITE_PORT || "4174";
+
 const childEnv: Record<string, string> = {
   ...process.env,
   DATABASE_URL: forceIpv4(withDatabaseSuffix(env.DATABASE_URL, "_test")),
   AUTH_DATABASE_URL: forceIpv4(withDatabaseSuffix(env.AUTH_DATABASE_URL, "_test")),
-  VALKEY_URL: forceIpv4(withRedisDatabase(env.VALKEY_URL, 14)),
   ROOT_DATABASE_URL: forceIpv4(env.ROOT_DATABASE_URL),
   DATABASE_HOST: "127.0.0.1",
   VITE_ROOT_URL: `http://127.0.0.1:${vitePort}`,

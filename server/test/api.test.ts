@@ -3,7 +3,6 @@ import * as Command from "@effect/platform/Command";
 import * as FileSystem from "@effect/platform/FileSystem";
 import * as NodeContext from "@effect/platform-node/NodeContext";
 import pg from "pg";
-import Redis from "ioredis";
 import { Effect } from "effect";
 import { Logger, consoleLogFactory, type Job } from "graphile-worker";
 import { loadEnvFile } from "process";
@@ -11,7 +10,6 @@ import { loadEnvFile } from "process";
 // -- Shared state --
 let handler: (request: Request) => Promise<Response>;
 let testDb: pg.Client;
-let testValkey: Redis | null = null;
 
 let adminCookie: string;
 let studentCookie: string;
@@ -38,12 +36,6 @@ function withDatabaseSuffix(connectionString: string, suffix: string): string {
   }
 
   url.pathname = `/${databaseName}${suffix}`;
-  return url.toString();
-}
-
-function withRedisDatabase(connectionString: string, databaseIndex: number): string {
-  const url = new URL(connectionString);
-  url.pathname = `/${databaseIndex}`;
   return url.toString();
 }
 
@@ -132,7 +124,6 @@ describe("DFG Portal API", () => {
     const { env } = await import("../assertEnv.js");
     const dbUrl = forceIpv4(withDatabaseSuffix(requiredEnv("DATABASE_URL"), "_test"));
     const authDbUrl = forceIpv4(withDatabaseSuffix(requiredEnv("AUTH_DATABASE_URL"), "_test"));
-    const testValkeyUrl = forceIpv4(withRedisDatabase(requiredEnv("VALKEY_URL"), 15));
     const childEnv = Object.fromEntries(
       Object.entries({
         ...process.env,
@@ -140,7 +131,6 @@ describe("DFG Portal API", () => {
         AUTH_DATABASE_URL: authDbUrl,
         ROOT_DATABASE_URL: forceIpv4(process.env.ROOT_DATABASE_URL || ""),
         DATABASE_HOST: "127.0.0.1",
-        VALKEY_URL: testValkeyUrl,
         NOCONFIRM: "1",
         NODE_ENV: "test",
         PORT: "0",
@@ -174,9 +164,6 @@ describe("DFG Portal API", () => {
 
     Object.assign(process.env, childEnv);
     vi.resetModules();
-
-    testValkey = new Redis(testValkeyUrl);
-    await testValkey.flushdb();
 
     testDb = new pg.Client({ connectionString: dbUrl });
     await testDb.connect();
@@ -221,11 +208,6 @@ describe("DFG Portal API", () => {
       const { disposeApiHandler } = await import("../app.js");
       await disposeApiHandler();
     } catch {}
-    try {
-      const { valkey } = await import("../valkey.js");
-      valkey.disconnect();
-    } catch {}
-    await testValkey?.quit();
     await testDb?.end();
   }, 30_000);
 

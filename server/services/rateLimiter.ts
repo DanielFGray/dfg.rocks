@@ -1,16 +1,11 @@
 import net from "node:net";
-import { Effect } from "effect";
+import { Effect, Duration, Layer } from "effect";
+import { RateLimiter } from "@effect/experimental";
 import { HttpError } from "../pgErrors.js";
-import { valkey } from "../valkey.js";
 
-const RATE_LIMIT_KEY_PREFIX = "dfg:rl";
-const WINDOW_COUNTER_LUA = `
-local count = redis.call("INCR", KEYS[1])
-if count == 1 then
-  redis.call("PEXPIRE", KEYS[1], ARGV[1])
-end
-return count
-`;
+export const RateLimiterLayer = RateLimiter.layer.pipe(
+  Layer.provide(RateLimiter.layerStoreMemory),
+);
 
 export class RateLimitError extends HttpError {
   constructor() {
@@ -81,44 +76,41 @@ export function clientIdentifierFromHeaders(
   );
 }
 
-function rateLimitKey(
-  scope: string,
-  headers: Record<string, string | undefined>,
-): string | undefined {
-  const clientId = clientIdentifierFromHeaders(headers);
-  if (!clientId) {
-    return undefined;
-  }
-
-  return `${RATE_LIMIT_KEY_PREFIX}:${scope}:${clientId}`;
-}
-
 export function checkRateLimit(
   scope: string,
   headers: Record<string, string | undefined>,
   max: number,
   windowMs: number,
-): Effect.Effect<void, unknown, never> {
-  if (disabled) {
-    return Effect.void;
-  }
+): Effect.Effect<void, RateLimitError | RateLimiter.RateLimiterError, RateLimiter.RateLimiter> {
+  if (disabled) return Effect.void;
 
-  const key = rateLimitKey(scope, headers);
-  if (!key) {
-    return Effect.void;
-  }
+  const ip = clientIdentifierFromHeaders(headers);
+  if (!ip) return Effect.void;
 
-  return Effect.tryPromise({
-    try: () => valkey.eval(WINDOW_COUNTER_LUA, 1, key, String(windowMs)),
-    catch: (error) => error,
-  }).pipe(
-    Effect.flatMap((count) =>
-      Number(count) > max ? Effect.fail(new RateLimitError()) : Effect.void,
-    ),
-  );
+  return Effect.gen(function* () {
+    const limiter = yield* RateLimiter.RateLimiter;
+
+    yield* limiter
+      .consume({
+        key: `dfg:rl:${scope}:${ip}`,
+        algorithm: "fixed-window",
+        window: Duration.millis(windowMs),
+        limit: max,
+        onExceeded: "fail",
+      })
+      .pipe(
+        Effect.mapError((error) =>
+          error instanceof RateLimiter.RateLimitExceeded ? new RateLimitError() : error,
+        ),
+      );
+
+    return undefined as void;
+  });
 }
 
 /** Disable rate limiting (for tests). */
 export function disableRateLimiting(): void {
   disabled = true;
 }
+
+export { RateLimiter };
