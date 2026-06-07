@@ -1,8 +1,8 @@
 /*
  * The sessions table tracks who is logged in. The primary key is a
- * cryptographically secure random uuid; its value should be secret
- * and only shared with the user themself (via an HTTP-only cookie
- * backed by Valkey).
+ * cryptographically secure random uuid used internally by the app
+ * and RLS. Browser cookies carry a separate public lookup identifier
+ * plus bearer secret; only the secret hash is stored in Postgres.
  *
  * current_user_id() resolves the user by joining through sessions
  * rather than trusting a direct setting — even if an attacker could
@@ -12,6 +12,8 @@
 
 create table app_private.sessions (
   id uuid not null default gen_random_uuid() primary key,
+  cookie_id text not null unique default encode(gen_random_bytes(32), 'hex'),
+  secret_hash bytea not null default gen_random_bytes(32),
   user_id uuid not null,
   created_at timestamptz not null default now(),
   expires_at timestamptz not null default now() + interval '30 days'
@@ -19,6 +21,12 @@ create table app_private.sessions (
 alter table app_private.sessions enable row level security;
 
 create index on app_private.sessions (user_id);
+
+comment on column app_private.sessions.cookie_id is
+  E'Public session lookup identifier stored in the browser cookie. Separate from the internal session UUID used by RLS.';
+
+comment on column app_private.sessions.secret_hash is
+  E'SHA-256 hash of the bearer secret paired with cookie_id. The raw secret is never stored.';
 
 -- Reads the session id set by withAuthContext via set_config('my.session_id', ...).
 create function app_public.current_session_id() returns uuid as $$

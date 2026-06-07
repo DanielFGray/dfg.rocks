@@ -7,6 +7,7 @@ import nodemailer from "nodemailer";
 import { fileURLToPath } from "url";
 import { dirname } from "path";
 import getTransport from "../transport.js";
+import { env } from "../../server/assertEnv.ts";
 import packageJson from "../../package.json" with { type: "json" };
 
 const __filename = fileURLToPath(import.meta.url);
@@ -27,8 +28,8 @@ if (!projectName)
 // @ts-expect-error json import assertions were a mistake
 const legalText = packageJson.legalText ?? "";
 
-const isTest = process.env.NODE_ENV === "test";
-const isDev = process.env.NODE_ENV !== "production";
+const isTest = env.NODE_ENV === "test";
+const isDev = env.NODE_ENV !== "production";
 
 /** @typedef {{
   options: {
@@ -37,9 +38,7 @@ const isDev = process.env.NODE_ENV !== "production";
     subject: string;
   };
   template: string;
-  variables: {
-    [varName: string]: any;
-  };
+  variables: Record<string, unknown>;
 }} SendEmailPayload */
 
 /** @typedef {import("graphile-worker").Task} Task */

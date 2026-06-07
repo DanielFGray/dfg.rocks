@@ -1,7 +1,8 @@
+import { Effect } from "effect";
 import { useEffect, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { api } from "../../lib/api.js";
-import type { WorkingHours } from "../../lib/types.js";
+import type { Testimonial, WorkingHours } from "../../../shared/schemas.js";
 import { Button } from "../ui/Button.js";
 import { Card } from "../ui/Card.js";
 
@@ -48,20 +49,30 @@ export function AdminSection({
   gcalStatus,
   workingHoursData,
   testimonialReminderIntervalDays,
+  testimonials,
   onRefresh,
 }: {
   gcalStatus: { connected: boolean; calendar_id?: string | null };
   workingHoursData: WorkingHours;
   testimonialReminderIntervalDays: number;
+  testimonials: Testimonial[];
   onRefresh: () => void;
 }) {
   const [workingHours, setWorkingHours] = useState<WorkingHoursMap>(() =>
-    workingHoursData ? toWorkingHoursMap(workingHoursData) : defaultWorkingHours,
+    workingHoursData
+      ? toWorkingHoursMap(workingHoursData)
+      : defaultWorkingHours,
   );
-  const [intervalDays, setIntervalDays] = useState(() => String(testimonialReminderIntervalDays));
+  const [intervalDays, setIntervalDays] = useState(() =>
+    String(testimonialReminderIntervalDays),
+  );
 
   useEffect(() => {
-    setWorkingHours(workingHoursData ? toWorkingHoursMap(workingHoursData) : defaultWorkingHours);
+    setWorkingHours(
+      workingHoursData
+        ? toWorkingHoursMap(workingHoursData)
+        : defaultWorkingHours,
+    );
   }, [workingHoursData]);
 
   useEffect(() => {
@@ -69,42 +80,57 @@ export function AdminSection({
   }, [testimonialReminderIntervalDays]);
 
   const disconnectMutation = useMutation({
-    mutationFn: async () => {
-      const { data } = await api.admin.gcal.disconnect.post();
-      return data;
-    },
+    mutationFn: () => Effect.runPromise(api.admin.gcalDisconnect()),
     onSettled: () => {
       onRefresh();
     },
   });
 
   const saveHoursMutation = useMutation({
-    mutationFn: async (hours: WorkingHoursMap) => {
-      const { data, error } = await api.admin["working-hours"].post({
-        0: hours["0"] ?? null,
-        1: hours["1"] ?? null,
-        2: hours["2"] ?? null,
-        3: hours["3"] ?? null,
-        4: hours["4"] ?? null,
-        5: hours["5"] ?? null,
-        6: hours["6"] ?? null,
-      });
-      if (error) throw error;
-      return data;
-    },
+    mutationFn: (hours: WorkingHoursMap) =>
+      Effect.runPromise(
+        api.admin.saveWorkingHours({
+          payload: {
+            0: hours["0"] ?? null,
+            1: hours["1"] ?? null,
+            2: hours["2"] ?? null,
+            3: hours["3"] ?? null,
+            4: hours["4"] ?? null,
+            5: hours["5"] ?? null,
+            6: hours["6"] ?? null,
+          },
+        }),
+      ),
     onSettled: () => {
       onRefresh();
     },
   });
 
   const saveReminderIntervalMutation = useMutation({
-    mutationFn: async (nextIntervalDays: number) => {
-      const { data, error } = await api.admin["testimonial-reminder-interval"].post({
-        interval_days: nextIntervalDays,
-      });
-      if (error) throw error;
-      return data;
+    mutationFn: (nextIntervalDays: number) =>
+      Effect.runPromise(
+        api.admin.saveTestimonialReminderInterval({
+          payload: { interval_days: nextIntervalDays },
+        }),
+      ),
+    onSettled: () => {
+      onRefresh();
     },
+  });
+  const reviewTestimonialMutation = useMutation({
+    mutationFn: ({
+      testimonialId,
+      isApproved,
+    }: {
+      testimonialId: string;
+      isApproved: boolean;
+    }) =>
+      Effect.runPromise(
+        api.admin.updateTestimonialApproval({
+          path: { id: testimonialId },
+          payload: { is_approved: isApproved },
+        }),
+      ),
     onSettled: () => {
       onRefresh();
     },
@@ -121,7 +147,11 @@ export function AdminSection({
     }));
   };
 
-  const updateDayTime = (index: string, field: "start" | "end", value: string) => {
+  const updateDayTime = (
+    index: string,
+    field: "start" | "end",
+    value: string,
+  ) => {
     setWorkingHours((prev) => {
       const current = prev[index];
       if (!current) return prev;
@@ -139,16 +169,20 @@ export function AdminSection({
 
   return (
     <section className="mb-12" data-testid="gcal-section">
-      <h2 className="text-xl font-semibold mb-4">Google Calendar</h2>
+      <h2 className="mb-4 text-xl font-semibold">Google Calendar</h2>
 
       {gcalStatus.connected ? (
         <Card>
-          <div className="sm:flex-row sm:items-center sm:justify-between gap-3 flex flex-col">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <p className="text-primary dark:text-primary-dark font-medium">Connected</p>
+              <p className="font-medium text-primary dark:text-primary-dark">
+                Connected
+              </p>
               <p className="text-sm text-muted dark:text-muted-dark">
                 Calendar:{" "}
-                {"calendar_id" in gcalStatus ? (gcalStatus.calendar_id ?? "primary") : "primary"}
+                {"calendar_id" in gcalStatus
+                  ? (gcalStatus.calendar_id ?? "primary")
+                  : "primary"}
               </p>
             </div>
             <Button
@@ -163,14 +197,18 @@ export function AdminSection({
         </Card>
       ) : (
         <Card>
-          <div className="sm:flex-row sm:items-center sm:justify-between gap-3 flex flex-col">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <p className="text-muted dark:text-muted-dark">Not connected</p>
               <p className="text-sm text-muted/60 dark:text-muted-dark/60">
                 Connect your Google Calendar to enable scheduling
               </p>
             </div>
-            <Button variant="primary" onClick={handleConnect} data-testid="gcal-connect">
+            <Button
+              variant="primary"
+              onClick={handleConnect}
+              data-testid="gcal-connect"
+            >
               Connect Calendar
             </Button>
           </div>
@@ -178,29 +216,33 @@ export function AdminSection({
       )}
 
       {/* Working Hours */}
-      <h3 className="text-lg font-semibold mt-8 mb-4">Working Hours</h3>
-      <div className="gap-2 flex flex-col">
+      <h3 className="mt-8 mb-4 text-lg font-semibold">Working Hours</h3>
+      <div className="flex flex-col gap-2">
         {days.map((day) => (
           <Card key={day.index}>
-            <div className="sm:flex-row sm:items-center sm:justify-between gap-3 flex flex-col">
-              <span className="font-medium text-primary dark:text-primary-dark w-24">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <span className="w-24 font-medium text-primary dark:text-primary-dark">
                 {day.label}
               </span>
               {workingHours[day.index] ? (
-                <div className="gap-2 flex flex-wrap items-center">
+                <div className="flex flex-wrap items-center gap-2">
                   <input
                     type="time"
                     value={workingHours[day.index]!.start}
-                    onChange={(e) => updateDayTime(day.index, "start", e.target.value)}
-                    className="bg-surface dark:bg-surface-dark border-border rounded-sm px-2 py-1 text-sm text-primary dark:text-primary-dark border"
+                    onChange={(e) =>
+                      updateDayTime(day.index, "start", e.target.value)
+                    }
+                    className="border-border rounded-sm border bg-surface px-2 py-1 text-sm text-primary dark:bg-surface-dark dark:text-primary-dark"
                     data-testid={`hours-start-${day.index}`}
                   />
                   <span className="text-muted dark:text-muted-dark">to</span>
                   <input
                     type="time"
                     value={workingHours[day.index]!.end}
-                    onChange={(e) => updateDayTime(day.index, "end", e.target.value)}
-                    className="bg-surface dark:bg-surface-dark border-border rounded-sm px-2 py-1 text-sm text-primary dark:text-primary-dark border"
+                    onChange={(e) =>
+                      updateDayTime(day.index, "end", e.target.value)
+                    }
+                    className="border-border rounded-sm border bg-surface px-2 py-1 text-sm text-primary dark:bg-surface-dark dark:text-primary-dark"
                     data-testid={`hours-end-${day.index}`}
                   />
                   <Button
@@ -213,8 +255,10 @@ export function AdminSection({
                   </Button>
                 </div>
               ) : (
-                <div className="gap-2 flex items-center">
-                  <span className="text-muted dark:text-muted-dark text-sm">Not working</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-muted dark:text-muted-dark">
+                    Not working
+                  </span>
                   <Button
                     variant="ghost"
                     onClick={() => toggleDay(day.index)}
@@ -239,17 +283,20 @@ export function AdminSection({
         </div>
       </div>
 
-      <h3 className="text-lg font-semibold mt-8 mb-4">Testimonial Reminders</h3>
+      <h3 className="mt-8 mb-4 text-lg font-semibold">Testimonial Reminders</h3>
       <Card>
-        <div className="gap-4 sm:flex-row sm:items-end sm:justify-between flex flex-col">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div className="flex-1">
-            <p className="font-medium text-primary dark:text-primary-dark">Reminder interval</p>
+            <p className="font-medium text-primary dark:text-primary-dark">
+              Reminder interval
+            </p>
             <p className="text-sm text-muted dark:text-muted-dark">
-              New students and parents will see the dashboard testimonial prompt after this many
-              days, and reminder emails will repeat on the same cadence until they submit one.
+              New students and parents will see the dashboard testimonial prompt
+              after this many days, and reminder emails will repeat on the same
+              cadence until they submit one.
             </p>
           </div>
-          <div className="gap-2 sm:min-w-56 flex flex-col">
+          <div className="flex flex-col gap-2 sm:min-w-56">
             <label
               htmlFor="testimonial-reminder-interval"
               className="text-sm font-medium text-primary dark:text-primary-dark"
@@ -263,20 +310,89 @@ export function AdminSection({
               max={365}
               value={intervalDays}
               onChange={(e) => setIntervalDays(e.target.value)}
-              className="bg-surface dark:bg-surface-dark border-border rounded-sm px-3 py-2 text-sm text-primary dark:text-primary-dark border"
+              className="border-border rounded-sm border bg-surface px-3 py-2 text-sm text-primary dark:bg-surface-dark dark:text-primary-dark"
               data-testid="testimonial-reminder-interval-input"
             />
             <Button
               variant="primary"
-              onClick={() => saveReminderIntervalMutation.mutate(parsedIntervalDays)}
+              onClick={() =>
+                saveReminderIntervalMutation.mutate(parsedIntervalDays)
+              }
               disabled={!canSaveInterval}
               data-testid="save-testimonial-reminder-interval"
             >
-              {saveReminderIntervalMutation.isPending ? "Saving..." : "Save Reminder Interval"}
+              {saveReminderIntervalMutation.isPending
+                ? "Saving..."
+                : "Save Reminder Interval"}
             </Button>
           </div>
         </div>
       </Card>
+
+      <h3 className="mt-8 mb-4 text-lg font-semibold">Testimonial Review</h3>
+      <div className="flex flex-col gap-3" data-testid="testimonial-review-section">
+        {testimonials.length > 0 ? (
+          testimonials.map((testimonial) => {
+            const isSavingReview =
+              reviewTestimonialMutation.isPending &&
+              reviewTestimonialMutation.variables?.testimonialId === testimonial.id;
+            return (
+              <Card key={testimonial.id}>
+                <div className="flex flex-col gap-4">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                    <div>
+                      <p className="font-medium text-primary dark:text-primary-dark">
+                        {testimonial.display_name}
+                      </p>
+                      <p className="text-sm text-muted dark:text-muted-dark">
+                        {testimonial.role_label}
+                      </p>
+                    </div>
+                    <span className="text-sm font-medium text-muted dark:text-muted-dark">
+                      {testimonial.is_approved ? "Approved" : "Pending review"}
+                    </span>
+                  </div>
+                  <p className="text-sm text-primary dark:text-primary-dark">
+                    {testimonial.body}
+                  </p>
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-xs text-muted dark:text-muted-dark">
+                      Updated{" "}
+                      {new Date(testimonial.updated_at).toLocaleDateString("en-US", {
+                        month: "short",
+                        day: "numeric",
+                        year: "numeric",
+                      })}
+                    </p>
+                    <Button
+                      variant={testimonial.is_approved ? "outline" : "primary"}
+                      onClick={() =>
+                        reviewTestimonialMutation.mutate({
+                          testimonialId: testimonial.id,
+                          isApproved: !testimonial.is_approved,
+                        })
+                      }
+                      disabled={isSavingReview}
+                    >
+                      {isSavingReview
+                        ? "Saving..."
+                        : testimonial.is_approved
+                          ? "Hide from site"
+                          : "Approve for site"}
+                    </Button>
+                  </div>
+                </div>
+              </Card>
+            );
+          })
+        ) : (
+          <Card>
+            <p className="text-sm text-muted dark:text-muted-dark">
+              No testimonials have been submitted yet.
+            </p>
+          </Card>
+        )}
+      </div>
     </section>
   );
 }

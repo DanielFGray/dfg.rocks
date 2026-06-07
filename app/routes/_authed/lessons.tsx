@@ -1,8 +1,10 @@
+import { Effect } from "effect";
 import { useState } from "react";
 import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { useMutation } from "@tanstack/react-query";
 import { api } from "../../lib/api.js";
-import type { Lesson, User, LocationType } from "../../lib/types.js";
+import { getErrorMessage } from "../../lib/errors.js";
+import type { Lesson, User, LocationType } from "../../../shared/schemas.js";
 import { getLessonNote, getLessonsPageData } from "../../lib/routeData.js";
 import { Button } from "../../components/ui/Button.js";
 import { EmptyState } from "../../components/ui/EmptyState.js";
@@ -51,15 +53,12 @@ function LessonsPage() {
   /* -- Mutations -- */
 
   const createLessonMutation = useMutation({
-    mutationFn: async (payload: {
+    mutationFn: (payload: {
       student_id: string;
       scheduled_at: string;
       duration_minutes: number;
       location_type: LocationType;
-    }) => {
-      const { data } = await api.admin.lessons.post(payload);
-      return data;
-    },
+    }) => Effect.runPromise(api.admin.createLesson({ payload })),
     onSettled: () => {
       setFormOpen(false);
       void router.invalidate();
@@ -67,28 +66,20 @@ function LessonsPage() {
   });
 
   const completeLessonMutation = useMutation({
-    mutationFn: async (id: string) => {
-      const { data, error } = await api.admin.lessons({ id }).patch({ status: "completed" });
-      if (error) throw error;
-      if (!data || "error" in data) {
-        throw new Error(data?.error ?? "Failed to complete lesson");
-      }
-      return data;
-    },
+    mutationFn: (id: string) =>
+      Effect.runPromise(
+        api.admin.updateLesson({ path: { id }, payload: { status: "completed" } }),
+      ),
     onSettled: () => {
       void router.invalidate();
     },
   });
 
   const cancelLessonMutation = useMutation({
-    mutationFn: async (id: string) => {
-      const { data, error } = await api.admin.lessons({ id }).patch({ status: "cancelled" });
-      if (error) throw error;
-      if (!data || "error" in data) {
-        throw new Error(data?.error ?? "Failed to cancel lesson");
-      }
-      return data;
-    },
+    mutationFn: (id: string) =>
+      Effect.runPromise(
+        api.admin.updateLesson({ path: { id }, payload: { status: "cancelled" } }),
+      ),
     onSettled: () => {
       void router.invalidate();
     },
@@ -106,22 +97,17 @@ function LessonsPage() {
       };
       publish: boolean;
     }) => {
-      const { data, error } = await api.admin
-        .lessons({ id: params.lessonId })
-        .notes.post(params.payload);
-      if (error) throw error;
-      if (!data || "error" in data) {
-        throw new Error(data?.error ?? "Failed to save lesson note");
-      }
+      const data = await Effect.runPromise(
+        api.admin.saveLessonNote({
+          path: { id: params.lessonId },
+          payload: params.payload,
+        }),
+      );
       if (params.publish) {
-        const { data: pubData, error: publishError } = await api.admin
-          .lessons({ id: params.lessonId })
-          .notes.publish.patch();
-        if (publishError) throw publishError;
-        if (!pubData || "error" in pubData) {
-          throw new Error(pubData?.error ?? "Failed to publish lesson note");
-        }
-        return { data: { ...data, ...pubData } };
+        const pubData = await Effect.runPromise(
+          api.admin.publishLessonNote({ path: { id: params.lessonId } }),
+        );
+        return { ...data, ...pubData };
       }
       return data;
     },
@@ -159,10 +145,7 @@ function LessonsPage() {
         notes: data.notes ?? "",
       });
     } catch (error) {
-      if (
-        !(error instanceof Error) ||
-        !error.message.toLowerCase().includes("lesson note not found")
-      ) {
+      if (!getErrorMessage(error, "").toLowerCase().includes("lesson note not found")) {
         return;
       }
 
@@ -194,7 +177,7 @@ function LessonsPage() {
   };
 
   return (
-    <main data-testid="lessons" className="px-5 md:px-8 pt-20 pb-16 mx-auto max-w-[1100px]">
+    <main data-testid="lessons" className="mx-auto max-w-275 px-5 pt-20 pb-16 md:px-8">
       <div className="mb-8 flex items-center justify-between">
         <h1 className="text-3xl font-bold tracking-tight">Lessons</h1>
         <Button data-testid="new-lesson" onClick={openNewLesson}>
@@ -208,7 +191,7 @@ function LessonsPage() {
           action={{ label: "New Lesson", onClick: openNewLesson }}
         />
       ) : (
-        <div className="gap-3 flex flex-col">
+        <div className="flex flex-col gap-3">
           {lessons.map((lesson) => {
             const student = studentMap.get(lesson.student_id);
             const studentName = student ? student.name : "Unknown Student";

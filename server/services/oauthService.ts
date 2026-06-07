@@ -6,7 +6,10 @@ import {
   generateCodeVerifier,
   generateState,
 } from "arctic";
-import { createRemoteJWKSet, jwtVerify, type JWTPayload } from "jose";
+import { Effect } from "effect";
+import * as Redacted from "effect/Redacted";
+import * as S from "effect/Schema";
+import { createRemoteJWKSet, jwtVerify } from "jose";
 import { env } from "../assertEnv.js";
 import { HttpError } from "../pgErrors.js";
 
@@ -18,26 +21,36 @@ const oauthScopeByProvider = {
 export const oauthConfig = {
   google: {
     clientId: env.GOOGLE_CLIENT_ID ?? "",
-    clientSecret: env.GOOGLE_CLIENT_SECRET ?? "",
+    clientSecret: env.GOOGLE_CLIENT_SECRET ? Redacted.value(env.GOOGLE_CLIENT_SECRET) : "",
   },
   apple: {
     clientId: env.APPLE_CLIENT_ID ?? "",
     teamId: env.APPLE_TEAM_ID ?? "",
     keyId: env.APPLE_KEY_ID ?? "",
-    privateKey: env.APPLE_PRIVATE_KEY ?? "",
+    privateKey: env.APPLE_PRIVATE_KEY ? Redacted.value(env.APPLE_PRIVATE_KEY) : "",
   },
 } as const;
 
 export type OAuthProvider = keyof typeof oauthScopeByProvider;
-
 type OAuthRequestState = {
   state: string;
   redirect?: string;
   codeVerifier?: string;
 };
 
+const OAuthRequestStateSchema = S.Struct({
+  state: S.String,
+  redirect: S.optional(S.String),
+  codeVerifier: S.optional(S.String),
+});
+
 const appleIssuer = "https://appleid.apple.com";
+
 const appleJwks = createRemoteJWKSet(new URL(`${appleIssuer}/auth/keys`));
+
+function runSync<A, E>(effect: Effect.Effect<A, E>): A {
+  return Effect.runSync(effect);
+}
 
 function normalizeRedirect(value: unknown): string | undefined {
   if (typeof value !== "string") return undefined;
@@ -53,60 +66,56 @@ function providerName(provider: OAuthProvider): string {
   return provider === "google" ? "Google" : "Apple";
 }
 
-function assertGoogleConfigured(): void {
+const googleConfig = Effect.fnUntraced(function* () {
   if (!oauthConfig.google.clientId || !oauthConfig.google.clientSecret) {
-    throw new HttpError(503, "Google OAuth is not configured");
+    return yield* new HttpError(503, "Google OAuth is not configured");
   }
-}
+  return oauthConfig.google;
+});
 
-function normalizeApplePrivateKey(privateKey: string): Uint8Array {
-  const normalizedPem = privateKey.replaceAll("\\n", "\n").trim();
-  if (!normalizedPem) {
-    throw new HttpError(503, "Apple OAuth is not configured");
-  }
-
-  const base64 = normalizedPem
-    .replace("-----BEGIN PRIVATE KEY-----", "")
-    .replace("-----END PRIVATE KEY-----", "")
-    .replace(/\s+/g, "");
-
-  if (!base64) {
-    throw new HttpError(500, "Apple OAuth private key is invalid");
-  }
-
-  return Uint8Array.from(Buffer.from(base64, "base64"));
-}
-
-function assertAppleConfigured(): void {
+const appleConfigEffect = Effect.sync(() => {
   if (
     !oauthConfig.apple.clientId ||
     !oauthConfig.apple.teamId ||
     !oauthConfig.apple.keyId ||
     !oauthConfig.apple.privateKey
   ) {
-    throw new HttpError(503, "Apple OAuth is not configured");
+    throw HttpError.make(503, "Apple OAuth is not configured");
   }
-}
+  return oauthConfig.apple;
+});
 
-function getGoogleClient(rootUrl: string): Google {
-  assertGoogleConfigured();
-  return new Google(
-    oauthConfig.google.clientId,
-    oauthConfig.google.clientSecret,
-    `${rootUrl}/api/oauth/google/callback`,
-  );
-}
+const normalizeApplePrivateKey = Effect.fnUntraced(function* (privateKey: string) {
+  const normalizedPem = privateKey.replaceAll("\\n", "\n").trim();
+  if (!normalizedPem) {
+    return yield* new HttpError(503, "Apple OAuth is not configured");
+  }
+  const base64 = normalizedPem
+    .replace("-----BEGIN PRIVATE KEY-----", "")
+    .replace("-----END PRIVATE KEY-----", "")
+    .replace(/\s+/g, "");
+  if (!base64) {
+    return yield* new HttpError(500, "Apple OAuth private key is invalid");
+  }
+  return Uint8Array.from(Buffer.from(base64, "base64"));
+});
 
-function getAppleClient(rootUrl: string): Apple {
-  assertAppleConfigured();
+const getGoogleClientEffect = Effect.fnUntraced(function* (rootUrl: string) {
+  const config = yield* googleConfig();
+  return new Google(config.clientId, config.clientSecret, `${rootUrl}/api/oauth/google/callback`);
+});
+
+const getAppleClientEffect = Effect.fnUntraced(function* (rootUrl: string) {
+  const appleConfig = yield* appleConfigEffect;
+  const privateKey = yield* normalizeApplePrivateKey(appleConfig.privateKey);
   return new Apple(
-    oauthConfig.apple.clientId,
-    oauthConfig.apple.teamId,
-    oauthConfig.apple.keyId,
-    normalizeApplePrivateKey(oauthConfig.apple.privateKey),
+    appleConfig.clientId,
+    appleConfig.teamId,
+    appleConfig.keyId,
+    privateKey,
     `${rootUrl}/api/oauth/apple/callback`,
   );
-}
+});
 
 export function createAuthorizationRequest(
   provider: "google",
@@ -116,6 +125,7 @@ export function createAuthorizationRequest(
   state: OAuthRequestState;
   url: URL;
 };
+
 export function createAuthorizationRequest(
   provider: "apple",
   rootUrl: string,
@@ -124,77 +134,69 @@ export function createAuthorizationRequest(
   state: OAuthRequestState;
   url: URL;
 };
+
 export function createAuthorizationRequest(
   provider: OAuthProvider,
   rootUrl: string,
   redirect?: string,
 ) {
-  const normalizedRedirect = normalizeRedirect(redirect);
-  const state = generateState();
-
-  if (provider === "google") {
-    const codeVerifier = generateCodeVerifier();
-    const url = getGoogleClient(rootUrl).createAuthorizationURL(state, codeVerifier, [
-      ...oauthScopeByProvider.google,
-    ]);
-    url.searchParams.set("access_type", "offline");
-    return {
-      state: { state, redirect: normalizedRedirect, codeVerifier },
-      url,
-    };
-  }
-
-  const url = getAppleClient(rootUrl).createAuthorizationURL(state, [
-    ...oauthScopeByProvider.apple,
-  ]);
-  url.searchParams.set("response_mode", "form_post");
-  return {
-    state: { state, redirect: normalizedRedirect },
-    url,
-  };
+  return runSync(
+    Effect.fnUntraced(function* (provider: OAuthProvider, rootUrl: string, redirect?: string) {
+      const normalizedRedirect = normalizeRedirect(redirect);
+      const state = generateState();
+      if (provider === "google") {
+        const codeVerifier = generateCodeVerifier();
+        const url = (yield* getGoogleClientEffect(rootUrl)).createAuthorizationURL(
+          state,
+          codeVerifier,
+          [...oauthScopeByProvider.google],
+        );
+        url.searchParams.set("access_type", "offline");
+        return {
+          state: { state, redirect: normalizedRedirect, codeVerifier },
+          url,
+        };
+      }
+      const url = (yield* getAppleClientEffect(rootUrl)).createAuthorizationURL(state, [
+        ...oauthScopeByProvider.apple,
+      ]);
+      url.searchParams.set("response_mode", "form_post");
+      return {
+        state: { state, redirect: normalizedRedirect },
+        url,
+      };
+    })(provider, rootUrl, redirect),
+  );
 }
 
 export function encodeOAuthState(value: OAuthRequestState): string {
-  return Buffer.from(JSON.stringify(value), "utf8").toString("base64url");
+  return runSync(
+    Effect.sync(() => Buffer.from(JSON.stringify(value), "utf8").toString("base64url")),
+  );
 }
 
 export function decodeOAuthState(value: unknown): OAuthRequestState | null {
-  if (typeof value !== "string" || !value) return null;
-
-  try {
-    const parsed = JSON.parse(
-      Buffer.from(value, "base64url").toString("utf8"),
-    ) as {
-      state?: unknown;
-      redirect?: unknown;
-      codeVerifier?: unknown;
-    };
-
-    if (typeof parsed.state !== "string" || !parsed.state) {
-      return null;
-    }
-
-    if (
-      parsed.codeVerifier !== undefined &&
-      typeof parsed.codeVerifier !== "string"
-    ) {
-      return null;
-    }
-
-    const redirect = normalizeRedirect(parsed.redirect);
-    return {
-      state: parsed.state,
-      redirect,
-      codeVerifier: parsed.codeVerifier,
-    };
-  } catch {
+  if (typeof value !== "string" || !value) {
     return null;
   }
+  return runSync(
+    Effect.try({
+      try: () => {
+        const parsed = S.decodeUnknownSync(OAuthRequestStateSchema)(
+          JSON.parse(Buffer.from(value, "base64url").toString("utf8")),
+        );
+        return {
+          state: parsed.state,
+          redirect: normalizeRedirect(parsed.redirect),
+          codeVerifier: parsed.codeVerifier,
+        };
+      },
+      catch: () => null,
+    }),
+  );
 }
 
-export function getOAuthCookieName(
-  provider: OAuthProvider,
-): `oauth_${OAuthProvider}` {
+export function getOAuthCookieName(provider: OAuthProvider): `oauth_${OAuthProvider}` {
   return `oauth_${provider}`;
 }
 
@@ -206,12 +208,10 @@ export function getOAuthRedirectCookieName(
 
 export function getOAuthCookieOptions(provider: OAuthProvider, rootUrl: string) {
   const rootOrigin = getRootOrigin(rootUrl);
-  const isLocalhost =
-    rootOrigin.hostname === "localhost" || rootOrigin.hostname === "127.0.0.1";
+  const isLocalhost = rootOrigin.hostname === "localhost" || rootOrigin.hostname === "127.0.0.1";
   const secureCookies =
     env.NODE_ENV === "production" || rootOrigin.protocol === "https:" || isLocalhost;
-  const standardSecureCookies =
-    env.NODE_ENV === "production" || rootOrigin.protocol === "https:";
+  const standardSecureCookies = env.NODE_ENV === "production" || rootOrigin.protocol === "https:";
   return {
     httpOnly: true,
     sameSite: provider === "apple" ? ("none" as const) : ("lax" as const),
@@ -226,62 +226,62 @@ export function encodeOAuthRedirect(value: string): string {
 }
 
 export function decodeOAuthRedirect(value: unknown): string | undefined {
-  if (typeof value !== "string" || !value) return undefined;
-
-  try {
-    return normalizeRedirect(Buffer.from(value, "base64url").toString("utf8"));
-  } catch {
+  if (typeof value !== "string" || !value) {
     return undefined;
   }
+  return runSync(
+    Effect.try({
+      try: () => normalizeRedirect(Buffer.from(value, "base64url").toString("utf8")),
+      catch: () => undefined,
+    }),
+  );
 }
 
 export function getOAuthRedirectTarget(value: unknown): string {
   return normalizeRedirect(value) ?? "/dashboard";
 }
 
-export async function exchangeGoogleCode(rootUrl: string, code: string, codeVerifier: string) {
-  try {
-    return await getGoogleClient(rootUrl).validateAuthorizationCode(
-      code,
-      codeVerifier,
-    );
-  } catch (error) {
-    throw mapOAuthError("google", error);
-  }
-}
+export const exchangeGoogleCode = Effect.fnUntraced(function* (
+  rootUrl: string,
+  code: string,
+  codeVerifier: string,
+) {
+  const client = yield* getGoogleClientEffect(rootUrl);
+  return yield* Effect.tryPromise({
+    try: () => client.validateAuthorizationCode(code, codeVerifier),
+    catch: (error) => mapOAuthError("google", error),
+  });
+});
 
-export async function exchangeAppleCode(rootUrl: string, code: string) {
-  try {
-    return await getAppleClient(rootUrl).validateAuthorizationCode(code);
-  } catch (error) {
-    throw mapOAuthError("apple", error);
-  }
-}
+export const exchangeAppleCode = Effect.fnUntraced(function* (rootUrl: string, code: string) {
+  const client = yield* getAppleClientEffect(rootUrl);
+  return yield* Effect.tryPromise({
+    try: () => client.validateAuthorizationCode(code),
+    catch: (error) => mapOAuthError("apple", error),
+  });
+});
 
-export async function verifyAppleIdToken(idToken: string): Promise<JWTPayload> {
-  try {
-    const verified = await jwtVerify(idToken, appleJwks, {
-      issuer: appleIssuer,
-      audience: oauthConfig.apple.clientId,
-    });
-    return verified.payload;
-  } catch {
-    throw new HttpError(400, "Invalid Apple id_token");
-  }
-}
+export const verifyAppleIdToken = Effect.fnUntraced(function* (idToken: string) {
+  const appleConfig = yield* appleConfigEffect;
+  return yield* Effect.tryPromise({
+    try: () =>
+      jwtVerify(idToken, appleJwks, {
+        issuer: appleIssuer,
+        audience: appleConfig.clientId,
+      }).then((verified) => verified.payload),
+    catch: () => HttpError.make(400, "Invalid Apple id_token"),
+  });
+});
 
 function mapOAuthError(provider: OAuthProvider, error: unknown): HttpError {
   if (error instanceof HttpError) {
     return error;
   }
   if (error instanceof OAuth2RequestError) {
-    return new HttpError(
-      400,
-      `${providerName(provider)} OAuth request failed (${error.code})`,
-    );
+    return HttpError.make(400, `${providerName(provider)} OAuth request failed (${error.code})`);
   }
   if (error instanceof ArcticFetchError) {
-    return new HttpError(502, `${providerName(provider)} OAuth request failed`);
+    return HttpError.make(502, `${providerName(provider)} OAuth request failed`);
   }
-  return new HttpError(502, `${providerName(provider)} OAuth failed`);
+  return HttpError.make(502, `${providerName(provider)} OAuth failed`);
 }

@@ -1,30 +1,34 @@
+import { Effect } from "effect";
 import { useEffect, useState } from "react";
-import { createFileRoute, useRouter } from "@tanstack/react-router";
-import { useMutation } from "@tanstack/react-query";
-import { api, uploadMaterial } from "../../lib/api.js";
-import type { Material } from "../../lib/types.js";
-import { getLibraryPageData } from "../../lib/routeData.js";
+import { createFileRoute, redirect } from "@tanstack/react-router";
+import { useMutation, useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
+import { api } from "../../lib/api.js";
+import { fetchAuthUser, libraryQuery } from "../../lib/queries.js";
+import type { Material } from "../../../shared/schemas.js";
 import { Button } from "../../components/ui/Button.js";
 import { Modal } from "../../components/ui/Modal.js";
 import { ConfirmDialog } from "../../components/ui/ConfirmDialog.js";
 import { EmptyState } from "../../components/ui/EmptyState.js";
 import { MaterialCard } from "../../components/library/MaterialCard.js";
 import { UploadMaterialForm } from "../../components/library/UploadMaterialForm.js";
+import { Main } from "../../components/ui/Container.js";
 
 export const Route = createFileRoute("/_authed/library")({
-  loader: () => getLibraryPageData(),
+  beforeLoad: async ({ context }) => {
+    const result = await fetchAuthUser(context.queryClient);
+    if (result.user?.role !== "admin") {
+      throw redirect({ to: "/dashboard" });
+    }
+  },
+  loader: ({ context }) => context.queryClient.ensureQueryData(libraryQuery),
   head: () => ({ meta: [{ title: "Library | DFG Portal" }] }),
   component: LibraryPage,
-  pendingComponent: () => (
-    <main className="px-5 md:px-8 pt-20 pb-16 text-muted dark:text-muted-dark mx-auto max-w-[1100px]">
-      Loading...
-    </main>
-  ),
+  pendingComponent: () => <Main className="text-muted dark:text-muted-dark">Loading...</Main>,
 });
 
 function LibraryPage() {
-  const router = useRouter();
-  const { materials: loaderMaterials, isAdmin } = Route.useLoaderData();
+  const queryClient = useQueryClient();
+  const { data: loaderMaterials } = useSuspenseQuery(libraryQuery);
 
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -50,34 +54,14 @@ function LibraryPage() {
     );
   }, [loaderMaterials]);
 
-  const uploadMutation = useMutation({
-    mutationFn: async ({ file, title }: { file: File; title: string }) =>
-      uploadMaterial(file, title, true),
-    onSuccess: (material: Material) => {
-      setUploadModalOpen(false);
-      setPendingCreated((current) => [
-        material,
-        ...current.filter((item) => item.id !== material.id),
-      ]);
-      setPendingDeletedIds((current) => current.filter((id) => id !== material.id));
-      void router.invalidate();
-    },
-  });
-
   const deleteMutation = useMutation({
-    mutationFn: async (id: string) => {
-      const { data, error } = await api.admin.materials({ id }).delete();
-      if (error) throw error;
-      if (!data || "error" in data) {
-        throw new Error(data?.error ?? "Failed to delete material");
-      }
-      return data;
-    },
+    mutationFn: (id: string) =>
+      Effect.runPromise(api.admin.deleteMaterial({ path: { id } })),
     onSuccess: (_, id) => {
       setDeleteTarget(null);
       setPendingCreated((current) => current.filter((item) => item.id !== id));
       setPendingDeletedIds((current) => [...current, id]);
-      void router.invalidate();
+      void queryClient.invalidateQueries({ queryKey: libraryQuery.queryKey });
     },
   });
 
@@ -86,47 +70,57 @@ function LibraryPage() {
   };
 
   const handleUpload = (file: File, title: string) => {
-    uploadMutation.mutate({ file, title });
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("title", title);
+    formData.append("is_global", "true");
+    return Effect.runPromise(api.admin.uploadMaterial({ payload: formData }));
+  };
+
+  const handleUploadComplete = (uploadedMaterials: Material[], hadErrors: boolean) => {
+    if (uploadedMaterials.length > 0) {
+      const uploadedIds = new Set(uploadedMaterials.map((material) => material.id));
+      setPendingCreated((current) => [
+        ...uploadedMaterials,
+        ...current.filter((item) => !uploadedIds.has(item.id)),
+      ]);
+      setPendingDeletedIds((current) => current.filter((id) => !uploadedIds.has(id)));
+      void queryClient.invalidateQueries({ queryKey: libraryQuery.queryKey });
+    }
+
+    if (!hadErrors) {
+      setUploadModalOpen(false);
+    }
   };
 
   return (
-    <main data-testid="library" className="px-5 md:px-8 pt-20 pb-16 mx-auto max-w-[1100px]">
+    <Main data-testid="library">
       {/* ---- Header ---- */}
       <div className="mb-8 flex items-center justify-between">
         <h1 className="text-3xl font-bold tracking-tight">Library</h1>
-        {isAdmin ? (
-          <Button onClick={() => setUploadModalOpen(true)} data-testid="upload-material">
-            Upload Material
-          </Button>
-        ) : null}
+        <Button onClick={() => setUploadModalOpen(true)} data-testid="upload-material">
+          Upload Material
+        </Button>
       </div>
 
       {/* ---- Materials ---- */}
       {materials.length === 0 ? (
         <EmptyState
-          message={
-            isAdmin
-              ? "No materials in the library yet. Upload your first file."
-              : "No materials in the library yet."
-          }
-          action={
-            isAdmin
-              ? {
-                  label: "Upload Material",
-                  onClick: () => setUploadModalOpen(true),
-                }
-              : undefined
-          }
+          message="No materials in the library yet. Upload your first file."
+          action={{
+            label: "Upload Material",
+            onClick: () => setUploadModalOpen(true),
+          }}
         />
       ) : (
-        <div className="gap-2 flex flex-col">
+        <div className="flex flex-col gap-2">
           {materials.map((m) => (
             <MaterialCard
               key={m.id}
               material={m}
               expanded={expandedId === m.id}
               onToggle={() => toggleExpand(m.id)}
-              admin={isAdmin}
+              admin={true}
               onDelete={() => setDeleteTarget(m)}
             />
           ))}
@@ -134,33 +128,30 @@ function LibraryPage() {
       )}
 
       {/* ---- Upload Modal ---- */}
-      {isAdmin ? (
-        <Modal
-          open={uploadModalOpen}
-          onClose={() => setUploadModalOpen(false)}
-          title="Upload Material"
-        >
-          <UploadMaterialForm
-            onSubmit={handleUpload}
-            onCancel={() => setUploadModalOpen(false)}
-            isPending={uploadMutation.isPending}
-          />
-        </Modal>
-      ) : null}
-
-      {isAdmin ? (
-        <ConfirmDialog
-          open={deleteTarget !== null}
-          onCancel={() => setDeleteTarget(null)}
-          onConfirm={() => {
-            if (deleteTarget) deleteMutation.mutate(deleteTarget.id);
-          }}
-          title="Delete Material"
-          message={`Are you sure you want to delete "${deleteTarget?.title ?? ""}"? This cannot be undone.`}
-          confirmLabel="Delete"
-          variant="danger"
+      <Modal
+        open={uploadModalOpen}
+        onClose={() => setUploadModalOpen(false)}
+        title="Upload Material"
+        className="w-full max-w-3xl outline-hidden"
+      >
+        <UploadMaterialForm
+          onUpload={handleUpload}
+          onComplete={handleUploadComplete}
+          onCancel={() => setUploadModalOpen(false)}
         />
-      ) : null}
-    </main>
+      </Modal>
+
+      <ConfirmDialog
+        open={deleteTarget !== null}
+        onCancel={() => setDeleteTarget(null)}
+        onConfirm={() => {
+          if (deleteTarget) deleteMutation.mutate(deleteTarget.id);
+        }}
+        title="Delete Material"
+        message={`Are you sure you want to delete "${deleteTarget?.title ?? ""}"? This cannot be undone.`}
+        confirmLabel="Delete"
+        variant="danger"
+      />
+    </Main>
   );
 }

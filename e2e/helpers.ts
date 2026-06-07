@@ -2,7 +2,7 @@ import { test as base, expect, type Page } from "@playwright/test";
 import type { UserRole } from "../shared/schemas.js";
 
 const vitePort = process.env.PLAYWRIGHT_VITE_PORT || process.env.VITE_PORT || "4174";
-const api_url = process.env.API_URL || `http://localhost:${vitePort}`;
+const api_url = process.env.API_URL || `http://127.0.0.1:${vitePort}`;
 
 type TestingApi = {
   login(opts?: {
@@ -95,6 +95,13 @@ const loginViaUi = async (page: Page, username: string, password: string) => {
     await expect(page.getByTestId("dashboard")).toBeVisible({ timeout: 15_000 });
     return;
   }
+};
+
+const logoutViaUi = async (page: Page) => {
+  await page.evaluate(() => window.scrollTo(0, 0));
+  const logoutButton = page.locator('[data-testid="logout"]:visible').first();
+  await expect(logoutButton).toBeVisible();
+  await logoutButton.click();
 };
 
 export const test = base.extend<{ testing: TestingApi }>({
@@ -194,4 +201,4 @@ export const test = base.extend<{ testing: TestingApi }>({
   },
 });
 
-export { expect, loginViaUi };
+export { expect, loginViaUi, logoutViaUi };

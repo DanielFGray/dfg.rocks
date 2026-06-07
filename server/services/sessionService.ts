@@ -1,15 +1,13 @@
 import crypto from "crypto";
-import type { UserRole } from "../../shared/schemas.js";
-import { parseWith, UserRoleSchema } from "../../shared/validation.js";
-import { rootDb } from "../db.js";
-import { valkey } from "../valkey.js";
+import { Effect, Option } from "effect";
+import * as S from "effect/Schema";
+import { sql } from "kysely";
+import { UserRole } from "../../shared/schemas.js";
+import { PgRootDB } from "../db.js";
 
 export const SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 30; // 30 days
-const SESSION_TTL_SECONDS = 30 * 24 * 60 * 60;
 
-function sessionKey(id: string) {
-  return `dfg:session:${id}`;
-}
+const decodeUserRole = S.decodeUnknownSync(UserRole);
 
 function generateSecureRandomString(length = 32) {
   return crypto.randomBytes(length).toString("hex");
@@ -21,9 +19,35 @@ function hashSecret(secret: string) {
 
 function constantTimeEqual(a: Uint8Array, b: Uint8Array) {
   if (a.length !== b.length) return false;
-  let result = 0;
-  for (let i = 0; i < a.length; i++) result |= (a[i] ?? 0) ^ (b[i] ?? 0);
-  return result === 0;
+  return crypto.timingSafeEqual(a, b);
+}
+
+function parseSessionToken(token?: string) {
+  if (!token) {
+    return null;
+  }
+
+  const separatorIndex = token.indexOf(".");
+  if (separatorIndex <= 0 || separatorIndex === token.length - 1) {
+    return null;
+  }
+
+  return {
+    cookieId: token.slice(0, separatorIndex),
+    secret: token.slice(separatorIndex + 1),
+  };
+}
+
+function buildToken() {
+  const cookieId = generateSecureRandomString();
+  const secret = generateSecureRandomString();
+
+  return {
+    cookieId,
+    secret,
+    secretHash: hashSecret(secret),
+    expiresAt: new Date(Date.now() + SESSION_TTL_MS),
+  };
 }
 
 export type SessionUser = {
@@ -41,95 +65,151 @@ export type SessionInfo = {
 
 export type SessionResult = { user: SessionUser; session: SessionInfo } | null;
 
-export const sessionService = {
-  async createSession(userId: string): Promise<{ token: string; expiresAt: Date }> {
-    const user = await rootDb
-      .selectFrom("app_public.users")
-      .select(["id", "username", "role", "name"])
-      .where("id", "=", userId)
-      .executeTakeFirst();
+class SessionUserNotFoundError extends S.TaggedError<SessionUserNotFoundError>()(
+  "SessionUserNotFoundError",
+  { userId: S.String },
+) {
+  get message(): string {
+    return `User ${this.userId} not found`;
+  }
+}
 
-    if (!user) throw new Error(`User ${userId} not found`);
+class SessionNotFoundError extends S.TaggedError<SessionNotFoundError>()("SessionNotFoundError", {
+  sessionId: S.String,
+}) {
+  get message(): string {
+    return `Session ${this.sessionId} not found`;
+  }
+}
 
-    const id = generateSecureRandomString();
-    const secret = generateSecureRandomString();
-    const secretHash = hashSecret(secret).toString("hex");
-    const sessionUuid = crypto.randomUUID();
-    const expiresAt = new Date(Date.now() + SESSION_TTL_MS);
+type LiveSessionRecord = {
+  session_id: string;
+  cookie_id: string;
+  secret_hash_hex: string;
+  user_id: string;
+  username: string;
+  name: string | null;
+  role: UserRole;
+  expires_at: Date;
+};
 
-    const key = sessionKey(id);
-    await valkey.hset(key, {
-      secret_hash: secretHash,
-      session_uuid: sessionUuid,
-      user_id: user.id,
-      username: user.username,
-      name: user.name ?? "",
-      role: user.role,
-    });
-    await valkey.expire(key, SESSION_TTL_SECONDS);
+const loadLiveSessionByCookieIdEffect = Effect.fnUntraced(function* (cookieId: string) {
+  const rootDb = yield* PgRootDB;
+  return yield* rootDb
+    .selectFrom("app_private.sessions as s")
+    .innerJoin("app_public.users as u", "u.id", "s.user_id")
+    .select([
+      "s.id as session_id",
+      "s.cookie_id",
+      "s.user_id",
+      "s.expires_at",
+      "u.username",
+      "u.name",
+      "u.role",
+    ])
+    .select(sql<string>`encode(${sql.ref("s.secret_hash")}, 'hex')`.as("secret_hash_hex"))
+    .where("s.cookie_id", "=", cookieId)
+    .pipe(
+      Effect.head,
+      Effect.option,
+      Effect.map((row) => Option.getOrNull(row) as LiveSessionRecord | null),
+    );
+});
 
-    await rootDb
-      .insertInto("app_private.sessions")
-      .values({
-        id: sessionUuid,
-        user_id: user.id,
-        expires_at: expiresAt,
-      })
-      .execute();
-
-    return { token: `${id}.${secret}`, expiresAt };
-  },
-
-  async validateSessionToken(token?: string): Promise<SessionResult> {
-    if (!token) return null;
-
-    const [id, secret] = token.split(".");
-    if (!id || !secret) return null;
-
-    const data = await valkey.hgetall(sessionKey(id));
-    if (!data?.secret_hash) return null;
-
-    const incomingHash = hashSecret(secret);
-    const storedHash = Buffer.from(data.secret_hash, "hex");
-    if (!constantTimeEqual(incomingHash, storedHash)) return null;
-
+export class SessionService extends Effect.Service<SessionService>()("SessionService", {
+  accessors: true,
+  effect: Effect.gen(function* () {
+    const db = yield* PgRootDB;
     return {
-      user: {
-        id: data.user_id!,
-        username: data.username!,
-        name: data.name ?? "",
-        role: parseWith(UserRoleSchema, data.role),
-      },
-      session: {
-        id: data.session_uuid!,
-        cookie_id: id,
-        user_id: data.user_id!,
-      },
+      createSession: Effect.fnUntraced(function* (userId: string) {
+        const user = yield* db
+          .selectFrom("app_public.users")
+          .select(["id"])
+          .where("id", "=", userId)
+          .pipe(Effect.head, Effect.option);
+
+        if (Option.isNone(user)) {
+          return yield* Effect.fail(new SessionUserNotFoundError({ userId }));
+        }
+
+        const { cookieId, secret, secretHash, expiresAt } = buildToken();
+
+        yield* db.insertInto("app_private.sessions").values({
+          user_id: userId,
+          cookie_id: cookieId,
+          secret_hash: secretHash,
+          expires_at: expiresAt,
+        });
+
+        return { token: `${cookieId}.${secret}`, expiresAt };
+      }),
+      issueTokenForSession: Effect.fnUntraced(function* (sessionId: string) {
+        const { cookieId, secret, secretHash, expiresAt } = buildToken();
+
+        const row = yield* db
+          .updateTable("app_private.sessions")
+          .set({
+            cookie_id: cookieId,
+            secret_hash: secretHash,
+            expires_at: expiresAt,
+          })
+          .where("id", "=", sessionId)
+          .returning(["id"])
+          .pipe(Effect.head, Effect.option);
+
+        if (Option.isNone(row)) {
+          return yield* Effect.fail(new SessionNotFoundError({ sessionId }));
+        }
+
+        return { token: `${cookieId}.${secret}`, expiresAt };
+      }),
+      validateSessionToken: Effect.fnUntraced(function* (token?: string) {
+        const parsed = parseSessionToken(token);
+        if (!parsed) {
+          return null;
+        }
+
+        const liveSession = yield* loadLiveSessionByCookieIdEffect(parsed.cookieId);
+        if (!liveSession) {
+          return null;
+        }
+
+        if (
+          !constantTimeEqual(
+            hashSecret(parsed.secret),
+            Buffer.from(liveSession.secret_hash_hex, "hex"),
+          )
+        ) {
+          return null;
+        }
+
+        if (liveSession.expires_at <= new Date()) {
+          yield* db.deleteFrom("app_private.sessions").where("id", "=", liveSession.session_id);
+          return null;
+        }
+
+        return {
+          user: {
+            id: liveSession.user_id,
+            username: liveSession.username,
+            name: liveSession.name ?? "",
+            role: decodeUserRole(liveSession.role),
+          },
+          session: {
+            id: liveSession.session_id,
+            cookie_id: liveSession.cookie_id,
+            user_id: liveSession.user_id,
+          },
+        } satisfies Exclude<SessionResult, null>;
+      }),
+
+      deleteSession: Effect.fnUntraced(function* (cookieId: string) {
+        yield* db.deleteFrom("app_private.sessions").where("cookie_id", "=", cookieId);
+      }),
+
+      deleteAllUserSessions: Effect.fnUntraced(function* (userId: string) {
+        yield* db.deleteFrom("app_private.sessions").where("user_id", "=", userId);
+      }),
     };
-  },
-
-  async deleteSession(cookieId: string): Promise<void> {
-    const key = sessionKey(cookieId);
-    const sessionUuid = await valkey.hget(key, "session_uuid");
-    await valkey.del(key);
-    if (sessionUuid) {
-      await rootDb.deleteFrom("app_private.sessions").where("id", "=", sessionUuid).execute();
-    }
-  },
-
-  /** Delete all Valkey session keys for a user. PG sessions are handled by
-   *  the reset_password SQL function via cascade or direct delete. */
-  async deleteAllUserSessionsFromCache(userId: string): Promise<void> {
-    let cursor = "0";
-    do {
-      const [next, keys] = await valkey.scan(cursor, "MATCH", "dfg:session:*", "COUNT", 100);
-      await Promise.all(
-        keys.map(async (key) => {
-          const uid = await valkey.hget(key, "user_id");
-          if (uid === userId) await valkey.del(key);
-        }),
-      );
-      cursor = next;
-    } while (cursor !== "0");
-  },
-} as const;
+  }),
+}) {}

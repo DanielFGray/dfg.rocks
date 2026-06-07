@@ -1,14 +1,6 @@
 #!/usr/bin/env bun
 import { execSync, spawn } from "node:child_process";
-
-function requiredEnv(name: string): string {
-  const value = process.env[name];
-  if (!value) {
-    throw new Error(`Missing env: ${name}`);
-  }
-
-  return value;
-}
+import { env } from "../server/assertEnv.js";
 
 function withDatabaseSuffix(connectionString: string, suffix: string): string {
   const url = new URL(connectionString);
@@ -28,11 +20,26 @@ function withRedisDatabase(connectionString: string, databaseIndex: number): str
   return url.toString();
 }
 
+const vitePort = process.env.VITE_PORT || process.env.PLAYWRIGHT_VITE_PORT || "4174";
+
+function forceIpv4(urlString: string): string {
+  const url = new URL(urlString);
+  if (url.hostname === "localhost" || url.hostname === "::1") {
+    url.hostname = "127.0.0.1";
+  }
+  return url.toString();
+}
+
 const childEnv: Record<string, string> = {
   ...process.env,
-  DATABASE_URL: withDatabaseSuffix(requiredEnv("DATABASE_URL"), "_test"),
-  AUTH_DATABASE_URL: withDatabaseSuffix(requiredEnv("AUTH_DATABASE_URL"), "_test"),
-  VALKEY_URL: withRedisDatabase(requiredEnv("VALKEY_URL"), 14),
+  DATABASE_URL: forceIpv4(withDatabaseSuffix(env.DATABASE_URL, "_test")),
+  AUTH_DATABASE_URL: forceIpv4(withDatabaseSuffix(env.AUTH_DATABASE_URL, "_test")),
+  VALKEY_URL: forceIpv4(withRedisDatabase(env.VALKEY_URL, 14)),
+  ROOT_DATABASE_URL: forceIpv4(env.ROOT_DATABASE_URL),
+  DATABASE_HOST: "127.0.0.1",
+  VITE_ROOT_URL: `http://127.0.0.1:${vitePort}`,
+  HOST: "127.0.0.1",
+  VITE_PORT: vitePort,
   NODE_ENV: "test",
 };
 

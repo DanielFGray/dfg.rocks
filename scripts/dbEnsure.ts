@@ -14,6 +14,12 @@ const run = (scripts: string[]) =>
     silent: true,
   }) as Promise<void>;
 
+function getErrorCode(error: unknown): string | undefined {
+  return typeof error === "object" && error !== null && "code" in error
+    ? String(error.code)
+    : undefined;
+}
+
 async function testConnection(url: string, retries = 7) {
   for (let i = 0; i <= retries; i++) {
     const pool = new pg.Pool({ connectionString: url, connectionTimeoutMillis: 3000 });
@@ -21,10 +27,10 @@ async function testConnection(url: string, retries = 7) {
       await pool.query('SELECT true AS "ok"');
       await pool.end();
       return;
-    } catch (e: any) {
+    } catch (error) {
       await pool.end();
-      if (e?.code === "28P01") throw e; // don't retry auth failures
-      if (i === retries) throw e;
+      if (getErrorCode(error) === "28P01") throw error; // don't retry auth failures
+      if (i === retries) throw error;
       await new Promise((r) => setTimeout(r, 200 * Math.pow(1.8, i)));
     }
   }

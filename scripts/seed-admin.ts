@@ -5,46 +5,72 @@
  *
  * Reads ADMIN_USERNAME, ADMIN_EMAIL, ADMIN_NAME, ADMIN_PASSWORD from env.
  */
+import { Effect, Option } from "effect";
+import * as Redacted from "effect/Redacted";
 import { sql } from "kysely";
-import { rootDb } from "../server/db.js";
+import { env } from "../server/assertEnv.js";
+import { PgRootDB } from "../server/db.js";
+import { serverRuntime } from "../server/runtime.js";
+
+async function getRootDb() {
+  return serverRuntime.runPromise(
+    Effect.gen(function* () {
+      return yield* PgRootDB;
+    }),
+  );
+}
 
 async function seedAdmin() {
-  const username = process.env.ADMIN_USERNAME;
-  const email = process.env.ADMIN_EMAIL;
-  const name = process.env.ADMIN_NAME ?? "Admin";
-  const password = process.env.ADMIN_PASSWORD;
+  const username = env.ADMIN_USERNAME;
+  const email = env.ADMIN_EMAIL;
+  const name = env.ADMIN_NAME ?? "Admin";
+  const password = env.ADMIN_PASSWORD;
 
   if (!username || !email || !password) {
     console.error("Required env vars: ADMIN_USERNAME, ADMIN_EMAIL, ADMIN_PASSWORD");
     process.exit(1);
   }
 
-  const existing = await rootDb
-    .selectFrom("app_public.users")
-    .select("id")
-    .where("username", "=", username)
-    .executeTakeFirst();
+  const rootDb = await getRootDb();
+  const existing = await serverRuntime.runPromise(
+    rootDb
+      .selectFrom("app_public.users")
+      .select("id")
+      .where("username", "=", username)
+      .pipe(Effect.head, Effect.option),
+  );
 
-  if (existing) {
+  if (Option.isSome(existing)) {
     console.log(`Admin user '${username}' already exists, skipping.`);
     return;
   }
 
-  const user = await rootDb
-    .selectFrom(
-      sql<{ id: string }>`
-        app_private.create_user(
-          ${username}::citext,
-          ${email}::citext,
-          ${name},
-          'admin'::app_public.user_role
-        )
-      `.as("u"),
-    )
-    .select("id")
-    .executeTakeFirstOrThrow();
+  const user = await serverRuntime.runPromise(
+    rootDb
+      .selectFrom(
+        sql<{ id: string }>`
+          app_private.create_user(
+            ${username}::citext,
+            ${email}::citext,
+            ${name},
+            'admin'::app_public.user_role
+          )
+        `.as("u"),
+      )
+      .select("id")
+      .pipe(Effect.head),
+  );
 
-  await sql`select app_private.set_password(${user.id}::uuid, ${password})`.execute(rootDb);
+  await serverRuntime.runPromise(
+    rootDb.selectNoFrom((eb) =>
+      eb
+        .fn<void>("app_private.set_password", [
+          sql`${user.id}::uuid`,
+          eb.val(Redacted.value(password)),
+        ])
+        .as("set_password"),
+    ),
+  );
 
   console.log(`Created admin user '${username}' (${email})`);
 }

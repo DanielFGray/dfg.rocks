@@ -1,5 +1,5 @@
 import { createContext, useContext } from "react";
-import type { Material } from "../../lib/types.js";
+import type { Material } from "../../../shared/schemas.js";
 
 export const MaterialsContext = createContext<Map<string, Material>>(new Map());
 

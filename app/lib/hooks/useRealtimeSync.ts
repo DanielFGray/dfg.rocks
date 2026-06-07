@@ -19,7 +19,8 @@ export function useRealtimeSync(enabled = true) {
     es.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
-        for (const key of data.queryKeys) {
+        const queryKeys = Array.isArray(data.queryKeys) ? data.queryKeys : [];
+        for (const key of queryKeys) {
           queryClient.invalidateQueries({ queryKey: key });
         }
         void router.invalidate();

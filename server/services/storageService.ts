@@ -3,6 +3,7 @@ import { createReadStream } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { Readable } from "node:stream";
+import { Effect } from "effect";
 import { env } from "../assertEnv.js";
 
 export type StorageBackend = "local";
@@ -14,80 +15,140 @@ export type StorageLocation = {
 
 const uploadsDir = env.UPLOADS_DIR || "./uploads";
 
-await fs.mkdir(uploadsDir, { recursive: true });
-
 function resolveLocalPath(storageKey: string): string {
-  return path.isAbsolute(storageKey) ? storageKey : path.join(uploadsDir, storageKey);
+  return path.isAbsolute(storageKey)
+    ? storageKey
+    : path.join(uploadsDir, storageKey);
 }
 
 function getExtension(filename: string): string {
   return path.extname(filename).toLowerCase();
 }
 
-export const storageService = {
-  hashBytes(bytes: Uint8Array): string {
+function assertLocal(location: StorageLocation): void {
+  if (location.storageBackend !== "local") {
+    throw new Error(`Unsupported storage backend: ${location.storageBackend}`);
+  }
+}
+
+const existsEffect = Effect.fnUntraced(function* (location: StorageLocation) {
+  assertLocal(location);
+  return yield* Effect.tryPromise({
+    try: () =>
+      fs
+        .access(resolveLocalPath(location.storageKey))
+        .then(() => true as const),
+    catch: (error) => error,
+  }).pipe(
+    Effect.catchAll((error) => {
+      const code = (error as { code?: string }).code;
+      return code === "ENOENT"
+        ? Effect.succeed(false as const)
+        : Effect.fail(error);
+    }),
+  );
+});
+
+const putEffect = Effect.fnUntraced(function* (
+  location: StorageLocation,
+  bytes: Uint8Array,
+) {
+  assertLocal(location);
+  const filePath = resolveLocalPath(location.storageKey);
+  yield* Effect.tryPromise({
+    // Creates the directory path (including uploadsDir) on first write
+    try: () => fs.mkdir(path.dirname(filePath), { recursive: true }),
+    catch: (error) => error,
+  });
+  yield* Effect.tryPromise({
+    try: () => fs.writeFile(filePath, bytes),
+    catch: (error) => error,
+  });
+});
+
+const deleteEffect = Effect.fnUntraced(function* (location: StorageLocation) {
+  assertLocal(location);
+  yield* Effect.tryPromise({
+    try: () => fs.unlink(resolveLocalPath(location.storageKey)),
+    catch: (error) => error,
+  });
+});
+
+const openEffect = Effect.fnUntraced(function* (location: StorageLocation) {
+  assertLocal(location);
+  return yield* Effect.try({
+    try: () => {
+      const nodeStream = createReadStream(
+        resolveLocalPath(location.storageKey),
+      );
+      return Readable.toWeb(
+        nodeStream,
+      ) as unknown as ReadableStream<Uint8Array>;
+    },
+    catch: (error) => error,
+  });
+});
+
+/**
+ * Local filesystem storage service. Sync helpers (hashBytes, createMaterialLocation,
+ * createTestingLocation) are plain functions; IO operations return Effects.
+ * The top-level mkdir is removed — putEffect creates directories on first write.
+ */
+export class StorageService extends Effect.Service<StorageService>()(
+  "StorageService",
+  {
+    sync: () => ({
+      hashBytes: (bytes: Uint8Array) =>
+        createHash("sha256").update(bytes).digest("hex"),
+      createMaterialLocation: (contentHash: string): StorageLocation => ({
+        storageBackend: "local",
+        storageKey: path.posix.join(
+          "materials",
+          contentHash.slice(0, 2),
+          contentHash,
+        ),
+      }),
+      createTestingLocation: (filename: string): StorageLocation => ({
+        storageBackend: "local",
+        storageKey: path.posix.join(
+          "test",
+          `${randomUUID()}${getExtension(filename)}`,
+        ),
+      }),
+      exists: existsEffect,
+      put: putEffect,
+      delete: deleteEffect,
+      open: openEffect,
+    }),
+  },
+) {
+  static hashBytes(bytes: Uint8Array): string {
     return createHash("sha256").update(bytes).digest("hex");
-  },
+  }
 
-  createMaterialLocation(contentHash: string): StorageLocation {
+  static createMaterialLocation(contentHash: string): StorageLocation {
     return {
       storageBackend: "local",
-      storageKey: path.posix.join("materials", contentHash.slice(0, 2), contentHash),
+      storageKey: path.posix.join(
+        "materials",
+        contentHash.slice(0, 2),
+        contentHash,
+      ),
     };
-  },
+  }
 
-  createTestingLocation(filename: string): StorageLocation {
+  static createTestingLocation(filename: string): StorageLocation {
     return {
       storageBackend: "local",
-      storageKey: path.posix.join("test", `${randomUUID()}${getExtension(filename)}`),
+      storageKey: path.posix.join(
+        "test",
+        `${randomUUID()}${getExtension(filename)}`,
+      ),
     };
-  },
+  }
 
-  async exists(location: StorageLocation): Promise<boolean> {
-    if (location.storageBackend !== "local") {
-      throw new Error(`Unsupported storage backend: ${location.storageBackend}`);
-    }
-
-    try {
-      await fs.access(resolveLocalPath(location.storageKey));
-      return true;
-    } catch (error) {
-      if (
-        typeof error === "object" &&
-        error !== null &&
-        "code" in error &&
-        error.code === "ENOENT"
-      ) {
-        return false;
-      }
-      throw error;
-    }
-  },
-
-  async put(location: StorageLocation, bytes: Uint8Array): Promise<void> {
-    if (location.storageBackend !== "local") {
-      throw new Error(`Unsupported storage backend: ${location.storageBackend}`);
-    }
-
-    const filePath = resolveLocalPath(location.storageKey);
-    await fs.mkdir(path.dirname(filePath), { recursive: true });
-    await fs.writeFile(filePath, bytes);
-  },
-
-  async delete(location: StorageLocation): Promise<void> {
-    if (location.storageBackend !== "local") {
-      throw new Error(`Unsupported storage backend: ${location.storageBackend}`);
-    }
-
-    await fs.unlink(resolveLocalPath(location.storageKey));
-  },
-
-  async open(location: StorageLocation): Promise<ReadableStream<Uint8Array>> {
-    if (location.storageBackend !== "local") {
-      throw new Error(`Unsupported storage backend: ${location.storageBackend}`);
-    }
-
-    const nodeStream = createReadStream(resolveLocalPath(location.storageKey));
-    return Readable.toWeb(nodeStream) as unknown as ReadableStream<Uint8Array>;
-  },
-} as const;
+  static readonly exists = existsEffect;
+  static readonly put = putEffect;
+  static readonly delete = deleteEffect;
+  static readonly open = openEffect;
+}

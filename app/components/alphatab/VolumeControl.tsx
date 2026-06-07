@@ -7,7 +7,11 @@ interface VolumeControlProps {
   onVolumeChange: (volume: number) => void;
 }
 
-export function VolumeControl({ volume, disabled, onVolumeChange }: VolumeControlProps) {
+export function VolumeControl({
+  volume,
+  disabled,
+  onVolumeChange,
+}: VolumeControlProps) {
   const [open, setOpen] = useState(false);
   const [popupStyle, setPopupStyle] = useState<{
     top: number;
@@ -20,7 +24,11 @@ export function VolumeControl({ volume, disabled, onVolumeChange }: VolumeContro
   const percentage = Math.round(volume * 100);
 
   const updatePopupPosition = useCallback(() => {
-    if (typeof window === "undefined" || !buttonRef.current || !popupRef.current) {
+    if (
+      typeof window === "undefined" ||
+      !buttonRef.current ||
+      !popupRef.current
+    ) {
       return;
     }
 
@@ -103,7 +111,9 @@ export function VolumeControl({ volume, disabled, onVolumeChange }: VolumeContro
                 : { top: "-9999px", left: "-9999px" }
             }
           >
-            <span className="font-medium text-muted dark:text-muted-dark text-[11px]">Track</span>
+            <span className="font-medium text-muted dark:text-muted-dark text-[11px]">
+              Track
+            </span>
             <input
               type="range"
               min={0}
@@ -114,7 +124,9 @@ export function VolumeControl({ volume, disabled, onVolumeChange }: VolumeContro
               data-testid="alphatab-track-volume-slider"
               className="m-0 h-28 w-5 cursor-pointer accent-[rgb(190,117,48)] [direction:rtl] [writing-mode:vertical-lr]"
             />
-            <span className="text-muted dark:text-muted-dark text-[11px]">{percentage}%</span>
+            <span className="text-muted dark:text-muted-dark text-[11px]">
+              {percentage}%
+            </span>
           </div>,
           document.body,
         )

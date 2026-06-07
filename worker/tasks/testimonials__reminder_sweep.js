@@ -1,4 +1,5 @@
 /** @typedef {import("graphile-worker").Task} Task */
+import { env } from "../../server/assertEnv.ts";
 
 const DEFAULT_INTERVAL_DAYS = 30;
 const DEFAULT_ROOT_URL = "http://localhost:3000";
@@ -20,7 +21,7 @@ export default async (_payload, { addJob, logger, withPgClient }) => {
   );
 
   const intervalDays = normalizeIntervalDays(settingsRow?.value);
-  const rootUrl = process.env.VITE_ROOT_URL ?? DEFAULT_ROOT_URL;
+  const rootUrl = env.VITE_ROOT_URL ?? DEFAULT_ROOT_URL;
 
   const { rows: dueUsers } = await withPgClient((pgClient) =>
     pgClient.query(

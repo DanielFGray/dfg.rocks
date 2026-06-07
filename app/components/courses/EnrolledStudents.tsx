@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import type { User } from "../../lib/types.js";
+import type { User } from "../../../shared/schemas.js";
 import { Button } from "../ui/Button.js";
 import { EmptyState } from "../ui/EmptyState.js";
 
@@ -15,7 +15,7 @@ export function EnrolledStudents({
   onUnenroll: (student: User) => void;
 }) {
   return (
-    <section className="mt-10 pt-8 border-overlay/6 dark:border-overlay-dark/6 border-t">
+    <section className="mt-10 border-t border-overlay/6 pt-8 dark:border-overlay-dark/6">
       <div className="mb-4 flex items-center justify-between">
         <h2 className="text-xl font-semibold text-primary dark:text-primary-dark">
           Enrolled Students
@@ -25,7 +25,7 @@ export function EnrolledStudents({
             variant="outline"
             onClick={onEnroll}
             data-testid="enroll-student-course"
-            className="text-xs px-3 py-1.5"
+            className="px-3 py-1.5 text-xs"
           >
             + Enroll Student
           </Button>
@@ -41,26 +41,28 @@ export function EnrolledStudents({
           }
         />
       ) : (
-        <div className="gap-2 flex flex-col">
+        <div className="flex flex-col gap-2">
           {enrolledStudents.map((s) => (
             <div
               key={s.id}
-              className="rounded-lg bg-card dark:bg-card-dark border-overlay/6 dark:border-overlay-dark/6 px-4 py-3 text-sm flex items-center justify-between border"
+              className="flex items-center justify-between rounded-lg border border-overlay/6 bg-card px-4 py-3 text-sm dark:border-overlay-dark/6 dark:bg-card-dark"
             >
               <div>
                 <Link
                   to="/students/$id"
                   params={{ id: s.id }}
-                  className="font-semibold text-primary dark:text-primary-dark hover:text-accent no-underline transition-colors"
+                  className="font-semibold text-primary no-underline transition-colors hover:text-accent dark:text-primary-dark"
                 >
                   {s.name}
                 </Link>
-                <span className="text-muted dark:text-muted-dark text-xs ml-3">@{s.username}</span>
+                <span className="ml-3 text-xs text-muted dark:text-muted-dark">
+                  @{s.username}
+                </span>
               </div>
               <button
                 type="button"
                 onClick={() => onUnenroll(s)}
-                className="text-xs text-red-600 hover:text-red-500 dark:text-red-400 dark:hover:text-red-300 cursor-pointer transition-colors"
+                className="cursor-pointer text-xs text-red-600 transition-colors hover:text-red-500 dark:text-red-400 dark:hover:text-red-300"
               >
                 Unenroll
               </button>

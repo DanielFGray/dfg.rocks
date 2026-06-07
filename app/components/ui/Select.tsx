@@ -51,7 +51,9 @@ export const Select = ({
     onBlur={onBlur}
     className="gap-1.5 flex flex-col"
   >
-    <Label className="text-sm font-medium text-muted dark:text-muted-dark">{label}</Label>
+    <Label className="text-sm font-medium text-muted dark:text-muted-dark">
+      {label}
+    </Label>
     <Button
       id={id}
       data-testid={pwid}
@@ -86,7 +88,10 @@ export const Select = ({
       </ListBox>
     </Popover>
     {error ? (
-      <Text slot="errorMessage" className="text-sm text-red-600 dark:text-red-400 mt-0.5">
+      <Text
+        slot="errorMessage"
+        className="text-sm text-red-600 dark:text-red-400 mt-0.5"
+      >
         {error}
       </Text>
     ) : null}

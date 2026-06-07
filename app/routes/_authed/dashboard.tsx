@@ -1,3 +1,4 @@
+import { Effect } from "effect";
 import { useState } from "react";
 import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { useMutation } from "@tanstack/react-query";
@@ -25,11 +26,7 @@ export const Route = createFileRoute("/_authed/dashboard")({
 function EmailVerificationBanner() {
   const [sent, setSent] = useState(false);
   const resend = useMutation({
-    mutationFn: async () => {
-      const { data, error } = await api["resend-verification"].post();
-      if (error) throw error;
-      return data;
-    },
+    mutationFn: () => Effect.runPromise(api.auth.resendVerification()),
     onSuccess: () => setSent(true),
   });
 
@@ -42,7 +39,9 @@ function EmailVerificationBanner() {
         Verify your email address to receive lesson reminders and updates.
       </p>
       {sent ? (
-        <span className="text-sm text-amber-300 shrink-0">Verification email sent</span>
+        <span className="text-sm text-amber-300 shrink-0">
+          Verification email sent
+        </span>
       ) : (
         <button
           type="button"
@@ -64,7 +63,10 @@ function DashboardPage() {
   const data = Route.useLoaderData();
 
   return (
-    <main data-testid="dashboard" className="px-5 md:px-8 pt-20 pb-16 mx-auto max-w-[1100px]">
+    <main
+      data-testid="dashboard"
+      className="px-5 md:px-8 pt-20 pb-16 mx-auto max-w-[1100px]"
+    >
       {user && !user.is_verified ? <EmailVerificationBanner /> : null}
       {isAdmin && data.kind === "admin" ? (
         <AdminDashboard
@@ -72,6 +74,7 @@ function DashboardPage() {
           weekLessons={data.weekLessons}
           messages={data.messages}
           students={data.students}
+          courses={data.courses}
         />
       ) : (
         <StudentDashboard
@@ -80,7 +83,9 @@ function DashboardPage() {
           assignments={data.kind === "student" ? data.assignments : []}
           courses={data.kind === "student" ? data.courses : []}
           testimonial={data.kind === "student" ? data.testimonial : null}
-          canShowTestimonialPrompt={data.kind === "student" ? data.canShowTestimonialPrompt : false}
+          canShowTestimonialPrompt={
+            data.kind === "student" ? data.canShowTestimonialPrompt : false
+          }
           onRefresh={() => void router.invalidate()}
         />
       )}

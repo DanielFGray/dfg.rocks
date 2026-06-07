@@ -6,7 +6,7 @@ import { MaterialEmbedNode } from "./MaterialEmbedNode.js";
 import { MaterialsContext } from "./MaterialsContext.js";
 import { EditorToolbar } from "./EditorToolbar.js";
 import { AttachMaterialModal } from "../courses/AttachMaterialModal.js";
-import type { Material } from "../../lib/types.js";
+import type { Material } from "../../../shared/schemas.js";
 import { isTipTapNode } from "../../../shared/tiptap.js";
 
 export function ModuleEditor({
@@ -19,8 +19,15 @@ export function ModuleEditor({
   allMaterials: Material[];
 }) {
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [locallyUploadedMaterials, setLocallyUploadedMaterials] = useState<Material[]>([]);
 
-  const materialMap = new Map(allMaterials.map((m) => [m.id, m]));
+  const knownMaterials = [
+    ...locallyUploadedMaterials.filter(
+      (material) => !allMaterials.some((existing) => existing.id === material.id),
+    ),
+    ...allMaterials,
+  ];
+  const materialMap = new Map(knownMaterials.map((m) => [m.id, m]));
 
   const editor = useEditor({
     extensions: [StarterKit, Link.configure({ openOnClick: false }), MaterialEmbedNode],
@@ -44,7 +51,7 @@ export function ModuleEditor({
       node.content.forEach(walk);
     }
   });
-  const availableMaterials = allMaterials.filter((m) => !embeddedIds.has(m.id));
+  const availableMaterials = knownMaterials.filter((m) => !embeddedIds.has(m.id));
 
   const handleAttach = (materialId: string) => {
     editor.chain().focus().insertContent({ type: "materialEmbed", attrs: { materialId } }).run();
@@ -53,20 +60,27 @@ export function ModuleEditor({
 
   return (
     <MaterialsContext.Provider value={materialMap}>
-      <div className="rounded-lg border-overlay/6 bg-card dark:border-overlay-dark/6 dark:bg-card-dark border">
+      <div className="rounded-lg border border-overlay/6 bg-card dark:border-overlay-dark/6 dark:bg-card-dark">
         <EditorToolbar editor={editor} onEmbedMaterial={() => setPickerOpen(true)} />
         <EditorContent
           editor={editor}
-          className="prose px-5 py-4 dark:prose-invert [&_.ProseMirror_p.is-editor-empty:first-child]:before:h-0 [&_.ProseMirror_p.is-editor-empty:first-child]:before:text-muted dark:[&_.ProseMirror_p.is-editor-empty:first-child]:before:text-muted-dark max-w-none [&_.ProseMirror]:min-h-[300px] [&_.ProseMirror]:outline-hidden [&_.ProseMirror_p.is-editor-empty:first-child]:before:pointer-events-none [&_.ProseMirror_p.is-editor-empty:first-child]:before:float-left [&_.ProseMirror_p.is-editor-empty:first-child]:before:content-['Start_writing...']"
+          className="prose max-w-none px-5 py-4 dark:prose-invert [&_.ProseMirror]:min-h-[300px] [&_.ProseMirror]:outline-hidden [&_.ProseMirror_p.is-editor-empty:first-child]:before:pointer-events-none [&_.ProseMirror_p.is-editor-empty:first-child]:before:float-left [&_.ProseMirror_p.is-editor-empty:first-child]:before:h-0 [&_.ProseMirror_p.is-editor-empty:first-child]:before:text-muted [&_.ProseMirror_p.is-editor-empty:first-child]:before:content-['Start_writing...'] dark:[&_.ProseMirror_p.is-editor-empty:first-child]:before:text-muted-dark"
         />
       </div>
       <AttachMaterialModal
         open={pickerOpen}
         title="Embed Material"
         availableMaterials={availableMaterials}
-        allMaterialsCount={allMaterials.length}
+        allMaterialsCount={knownMaterials.length}
         onClose={() => setPickerOpen(false)}
         onAttach={handleAttach}
+        onUploaded={(uploadedMaterials) => {
+          const uploadedIds = new Set(uploadedMaterials.map((material) => material.id));
+          setLocallyUploadedMaterials((current) => [
+            ...uploadedMaterials,
+            ...current.filter((material) => !uploadedIds.has(material.id)),
+          ]);
+        }}
       />
     </MaterialsContext.Provider>
   );

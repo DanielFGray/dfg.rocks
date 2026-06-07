@@ -1,6 +1,6 @@
-import { useState, useEffect, useRef } from "react";
+import { useEffect, useRef } from "react";
 import type { useMutation } from "@tanstack/react-query";
-import type { Message } from "../../lib/types.js";
+import type { Message } from "../../../shared/schemas.js";
 import { Button } from "../ui/Button.js";
 import { formatTime } from "./helpers.js";
 import { Link } from "@tanstack/react-router";
@@ -24,14 +24,17 @@ export function MessageThread({
   sendMessageMutation: ReturnType<
     typeof useMutation<Message, Error, { recipient_id?: string; body: string }>
   >;
-  markReadMutation: ReturnType<typeof useMutation<{ success: true }, Error, string>>;
+  markReadMutation: ReturnType<
+    typeof useMutation<{ success: true }, Error, string>
+  >;
 }) {
   const markedRef = useRef(new Set<string>());
 
   // Mark unread messages as read
   useEffect(() => {
     const unread = thread.filter(
-      (m) => m.recipient_id === myId && !m.is_read && !markedRef.current.has(m.id),
+      (m) =>
+        m.recipient_id === myId && !m.is_read && !markedRef.current.has(m.id),
     );
     unread.forEach((m) => {
       markedRef.current.add(m.id);
@@ -58,7 +61,7 @@ export function MessageThread({
   return (
     <div className="flex h-full flex-col">
       {/* Header */}
-      <div className="px-5 py-3 border-overlay/6 dark:border-overlay-dark/6 shrink-0 border-b">
+      <div className="shrink-0 border-b border-overlay/6 px-5 py-3 dark:border-overlay-dark/6">
         <h2 className="text-lg font-semibold text-primary dark:text-primary-dark">
           <Link to="/students/$id" params={{ id: partnerId }}>
             {partnerName}
@@ -67,11 +70,14 @@ export function MessageThread({
       </div>
 
       {/* Messages */}
-      <div className="px-5 py-4 gap-3 flex flex-1 flex-col overflow-y-auto">
+      <div className="flex flex-1 flex-col gap-3 overflow-y-auto px-5 py-4">
         {thread.map((msg) => {
           const isMine = msg.sender_id === myId;
           return (
-            <div key={msg.id} className={`flex ${isMine ? "justify-end" : "justify-start"}`}>
+            <div
+              key={msg.id}
+              className={`flex ${isMine ? "justify-end" : "justify-start"}`}
+            >
               <div
                 className={[
                   "max-w-[75%] rounded-xl px-4 py-2.5 text-sm leading-relaxed",
@@ -80,9 +86,11 @@ export function MessageThread({
                     : "bg-overlay/6 dark:bg-overlay-dark/6 text-primary dark:text-primary-dark",
                 ].join(" ")}
               >
-                <p className="wrap-break-word whitespace-pre-wrap">{msg.body}</p>
+                <p className="wrap-break-word whitespace-pre-wrap">
+                  {msg.body}
+                </p>
                 <p
-                  className={`text-xs mt-1 ${isMine ? "text-accent/50" : "text-muted/40 dark:text-muted-dark/40"}`}
+                  className={`mt-1 text-xs ${isMine ? "text-accent/50" : "text-muted/40 dark:text-muted-dark/40"}`}
                 >
                   {formatTime(msg.created_at)}
                 </p>
@@ -93,8 +101,8 @@ export function MessageThread({
       </div>
 
       {/* Compose */}
-      <div className="px-5 py-3 border-overlay/6 dark:border-overlay-dark/6 shrink-0 border-t">
-        <div className="gap-3 flex items-end">
+      <div className="shrink-0 border-t border-overlay/6 px-5 py-3 dark:border-overlay-dark/6">
+        <div className="flex items-end gap-3">
           <textarea
             data-testid="compose-input"
             value={composeText}
@@ -102,7 +110,7 @@ export function MessageThread({
             onKeyDown={onKeyDown}
             placeholder="Type a message..."
             rows={2}
-            className="rounded-lg border-overlay/10 dark:border-overlay-dark/10 bg-card dark:bg-card-dark px-4 py-3 text-primary dark:text-primary-dark placeholder:text-muted/50 dark:placeholder:text-muted-dark/50 focus:border-accent focus:ring-accent/50 text-sm flex-1 resize-none border transition-colors outline-hidden focus:ring-1"
+            className="flex-1 resize-none rounded-lg border border-overlay/10 bg-card px-4 py-3 text-sm text-primary outline-hidden transition-colors placeholder:text-muted/50 focus:border-accent focus:ring-1 focus:ring-accent/50 dark:border-overlay-dark/10 dark:bg-card-dark dark:text-primary-dark dark:placeholder:text-muted-dark/50"
           />
           <Button
             data-testid="send-btn"

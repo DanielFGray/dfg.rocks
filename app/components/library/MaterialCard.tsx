@@ -1,6 +1,12 @@
-import type { Material } from "../../lib/types.js";
+import type { Material } from "../../../shared/schemas.js";
 import { MaterialPreview } from "./MaterialPreview.js";
-import { categorize, categoryLabel, categoryColor, formatSize, downloadUrl } from "./helpers.js";
+import {
+  categorize,
+  categoryLabel,
+  categoryColor,
+  formatSize,
+  downloadUrl,
+} from "./helpers.js";
 
 export const MaterialCard = ({
   material,
@@ -19,35 +25,37 @@ export const MaterialCard = ({
 
   return (
     <div
-      className={`rounded-xl border-overlay/6 bg-card hover:border-overlay/10 dark:border-overlay-dark/6 dark:bg-card-dark dark:hover:border-overlay-dark/10 border transition-colors ${
-        cat === "notation" && expanded ? "md:overflow-hidden overflow-visible" : "overflow-hidden"
+      className={`rounded-xl border border-overlay/6 bg-card transition-colors hover:border-overlay/10 dark:border-overlay-dark/6 dark:bg-card-dark dark:hover:border-overlay-dark/10 ${
+        cat === "notation" && expanded
+          ? "overflow-visible md:overflow-hidden"
+          : "overflow-hidden"
       }`}
     >
       <button
         type="button"
         onClick={onToggle}
-        className="gap-3 px-4 py-3 hover:bg-overlay/2 dark:hover:bg-overlay-dark/2 flex w-full cursor-pointer items-center text-left transition-colors"
+        className="flex w-full cursor-pointer items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-overlay/2 dark:hover:bg-overlay-dark/2"
         data-testid="material-row"
       >
         {/* Type badge */}
         <span
-          className={`rounded-md px-2 py-0.5 font-semibold tracking-wider shrink-0 text-[11px] uppercase ${categoryColor[cat]}`}
+          className={`shrink-0 rounded-md px-2 py-0.5 text-[11px] font-semibold tracking-wider uppercase ${categoryColor[cat]}`}
         >
           {categoryLabel[cat]}
         </span>
 
         {/* Title + filename */}
         <div className="min-w-0 flex-1">
-          <span className="text-sm font-medium text-primary dark:text-primary-dark block truncate">
+          <span className="block truncate text-sm font-medium text-primary dark:text-primary-dark">
             {material.title}
           </span>
-          <span className="text-xs text-muted/50 dark:text-muted-dark/50 block truncate">
+          <span className="block truncate text-xs text-muted/50 dark:text-muted-dark/50">
             {material.original_filename}
           </span>
         </div>
 
         {/* Size */}
-        <span className="text-xs text-muted/40 dark:text-muted-dark/40 shrink-0">
+        <span className="shrink-0 text-xs text-muted/40 dark:text-muted-dark/40">
           {formatSize(material.file_size)}
         </span>
 
@@ -60,7 +68,7 @@ export const MaterialCard = ({
           stroke="currentColor"
           strokeWidth="2"
           strokeLinecap="round"
-          className={`text-muted/40 dark:text-muted-dark/40 shrink-0 transition-transform ${expanded ? "rotate-180" : ""}`}
+          className={`shrink-0 text-muted/40 transition-transform dark:text-muted-dark/40 ${expanded ? "rotate-180" : ""}`}
         >
           <polyline points="6 9 12 15 18 9" />
         </svg>
@@ -68,13 +76,13 @@ export const MaterialCard = ({
 
       {/* Expanded content */}
       {expanded ? (
-        <div className="gap-3 px-4 pb-4 flex flex-col">
+        <div className="flex flex-col gap-3 px-4 pb-4">
           <MaterialPreview material={material} />
-          <div className="gap-3 flex items-center">
+          <div className="flex items-center gap-3">
             <a
               href={downloadUrl(material.id)}
               download
-              className="gap-1.5 text-xs text-accent hover:text-accent-hover inline-flex items-center transition-colors"
+              className="inline-flex items-center gap-1.5 text-xs text-accent transition-colors hover:text-accent-hover"
               data-testid="material-download"
             >
               <svg
@@ -99,7 +107,7 @@ export const MaterialCard = ({
                   e.stopPropagation();
                   onDelete();
                 }}
-                className="gap-1.5 text-xs text-red-600/70 hover:text-red-600 dark:text-red-400/70 dark:hover:text-red-400 ml-auto inline-flex cursor-pointer items-center transition-colors"
+                className="ml-auto inline-flex cursor-pointer items-center gap-1.5 text-xs text-red-600/70 transition-colors hover:text-red-600 dark:text-red-400/70 dark:hover:text-red-400"
                 data-testid="material-delete"
               >
                 <svg

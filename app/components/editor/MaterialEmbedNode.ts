@@ -22,7 +22,10 @@ export const MaterialEmbedNode = Node.create({
   },
 
   renderHTML({ HTMLAttributes }) {
-    return ["div", mergeAttributes({ "data-type": "material-embed" }, HTMLAttributes)];
+    return [
+      "div",
+      mergeAttributes({ "data-type": "material-embed" }, HTMLAttributes),
+    ];
   },
 
   addNodeView() {

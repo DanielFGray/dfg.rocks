@@ -58,7 +58,11 @@ export function EditorToolbar({
         title="Blockquote"
       />
       <div className="h-5 bg-overlay/8 dark:bg-overlay-dark/8 mx-1 w-px" />
-      <Button variant="ghost" onClick={onEmbedMaterial} className="text-xs px-2.5 py-1 text-accent">
+      <Button
+        variant="ghost"
+        onClick={onEmbedMaterial}
+        className="text-xs px-2.5 py-1 text-accent"
+      >
         + Material
       </Button>
     </div>

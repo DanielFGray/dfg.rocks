@@ -49,6 +49,69 @@ test.describe("assignments management", () => {
     await expect(studentCard.getByText("Bass")).toBeVisible();
   });
 
+  test("student assignments refresh in realtime after an admin assignment", async ({
+    browser,
+    testing,
+  }) => {
+    await testing.login();
+    await testing.login({
+      username: "test_assignment_student_realtime",
+      role: "student",
+      name: "Realtime Assignment Student",
+    });
+    await testing.seedMaterial({
+      title: "Realtime Assignment Material",
+      original_filename: "realtime-assignment.pdf",
+      is_global: false,
+    });
+
+    const studentContext = await browser.newContext();
+    const adminContext = await browser.newContext();
+    const studentPage = await studentContext.newPage();
+    const adminPage = await adminContext.newPage();
+
+    try {
+      await loginViaUi(studentPage, "test_assignment_student_realtime", "testpassword123");
+      await studentPage.getByTestId("nav-assignments").click();
+      await expect(studentPage.getByRole("heading", { name: "My Assignments" })).toBeVisible();
+      await expect(
+        studentPage.getByText(
+          "No assignments yet. Your teacher will assign materials here.",
+        ),
+      ).toBeVisible();
+
+      await loginViaUi(adminPage, "test_admin", "testpassword123");
+      await adminPage.getByTestId("nav-assignments").click();
+
+      const studentCard = adminPage
+        .getByTestId("assignment-student-card")
+        .filter({ hasText: "Realtime Assignment Student" });
+      await expect(studentCard).toBeVisible();
+
+      await studentCard.getByRole("button", { name: /\+ Assign/ }).click();
+
+      const form = adminPage.getByTestId("staff-assign-form");
+      await expect(form).toBeVisible();
+      await form.locator("#staff-assign-material").click();
+      await adminPage
+        .getByRole("option", { name: /Realtime Assignment Material/ })
+        .first()
+        .click();
+      await form.locator('button[type="submit"]').click();
+
+      await expect(studentCard.getByText("Realtime Assignment Material")).toBeVisible({
+        timeout: 10_000,
+      });
+      await expect(
+        studentPage
+          .getByTestId("assignment-material-card")
+          .filter({ hasText: "Realtime Assignment Material" }),
+      ).toBeVisible({ timeout: 15_000 });
+    } finally {
+      await Promise.all([studentContext.close(), adminContext.close()]);
+    }
+  });
+
   test("teacher sees staff assignment UI and can assign a material", async ({ page, testing }) => {
     await testing.login();
     await testing.login({

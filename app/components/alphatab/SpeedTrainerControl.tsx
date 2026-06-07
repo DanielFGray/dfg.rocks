@@ -60,10 +60,11 @@ export function SpeedTrainerControl({
           disabled={isLoading}
           aria-pressed={isLooping}
           data-testid="alphatab-trainer-open"
-          className={`rounded-sm px-1.5 py-0.5 text-[11px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${isLooping
+          className={`rounded-sm px-1.5 py-0.5 text-[11px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+            isLooping
               ? "border border-accent bg-accent text-white hover:bg-accent-hover"
               : "border border-overlay/10 bg-card text-primary hover:bg-overlay/4 dark:border-overlay-dark/10 dark:bg-card-dark dark:text-primary-dark dark:hover:bg-overlay-dark/4"
-            }`}
+          }`}
         >
           Speed Trainer
         </button>
@@ -72,8 +73,9 @@ export function SpeedTrainerControl({
       <Modal open={open} onClose={() => setOpen(false)} title="Speed Trainer">
         <div data-testid="alphatab-trainer-modal" className="space-y-4">
           <p className="text-sm text-muted dark:text-muted-dark">
-            Drag directly across the score to loop any passage, including partial measures, or leave
-            the selection empty to train the full piece.
+            Drag directly across the score to loop any passage, including
+            partial measures, or leave the selection empty to train the full
+            piece.
           </p>
 
           <div className="grid gap-3 sm:grid-cols-2">
@@ -113,16 +115,19 @@ export function SpeedTrainerControl({
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <span className="text-sm text-primary dark:text-primary-dark">Loop playback</span>
+            <span className="text-sm text-primary dark:text-primary-dark">
+              Loop playback
+            </span>
             <button
               type="button"
               onClick={onLoopToggle}
               disabled={isLoading}
               data-testid="alphatab-loop-toggle"
-              className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${isLooping
+              className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+                isLooping
                   ? "bg-accent text-white hover:bg-accent-hover"
                   : "border border-overlay/10 bg-card text-primary hover:bg-overlay/4 dark:border-overlay-dark/10 dark:bg-card-dark dark:text-primary-dark dark:hover:bg-overlay-dark/4"
-                }`}
+              }`}
             >
               {isLooping ? "On" : "Off"}
             </button>
@@ -139,25 +144,33 @@ export function SpeedTrainerControl({
                 min={1}
                 step={1}
                 value={loopCount}
-                onChange={(e) => onLoopCountChange(Number.parseFloat(e.target.value))}
+                onChange={(e) =>
+                  onLoopCountChange(Number.parseFloat(e.target.value))
+                }
                 disabled={isLoading}
                 data-testid="alphatab-trainer-loop-count"
                 className="w-16 rounded-md border border-overlay/10 bg-card px-2 py-1.5 text-sm text-primary disabled:opacity-50 dark:border-overlay-dark/10 dark:bg-card-dark dark:text-primary-dark"
               />
-              <span>{loopCount === 1 ? "time," : "times,"} increase tempo by</span>
+              <span>
+                {loopCount === 1 ? "time," : "times,"} increase tempo by
+              </span>
               <input
                 type="number"
                 min={0}
                 step={stepMode === "bpm" ? 1 : 0.5}
                 value={stepValue}
-                onChange={(e) => onStepValueChange(Number.parseFloat(e.target.value))}
+                onChange={(e) =>
+                  onStepValueChange(Number.parseFloat(e.target.value))
+                }
                 disabled={isLoading}
                 data-testid="alphatab-trainer-step-input"
                 className="w-20 rounded-md border border-overlay/10 bg-card px-2 py-1.5 text-sm text-primary disabled:opacity-50 dark:border-overlay-dark/10 dark:bg-card-dark dark:text-primary-dark"
               />
               <select
                 value={stepMode}
-                onChange={(e) => onStepModeChange(e.target.value === "bpm" ? "bpm" : "percent")}
+                onChange={(e) =>
+                  onStepModeChange(e.target.value === "bpm" ? "bpm" : "percent")
+                }
                 disabled={isLoading}
                 data-testid="alphatab-trainer-step-mode"
                 className="rounded-md border border-overlay/10 bg-card px-2 py-1.5 text-sm text-primary disabled:opacity-50 dark:border-overlay-dark/10 dark:bg-card-dark dark:text-primary-dark"

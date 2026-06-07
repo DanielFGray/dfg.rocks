@@ -1,4 +1,4 @@
-import { test, expect, loginViaUi } from "./helpers.js";
+import { test, expect, loginViaUi, logoutViaUi } from "./helpers.js";
 
 test.describe("settings page", () => {
   test("displays primary email with badges", async ({ page, testing }) => {
@@ -108,5 +108,41 @@ test.describe("settings page", () => {
     });
     await loginViaUi(page, "test_student_nav", "testpassword123");
     await expect(page.getByTestId("nav-settings")).toBeVisible();
+  });
+
+  test("testimonials stay hidden until an admin approves them", async ({
+    page,
+    testing,
+  }) => {
+    const body =
+      "Lessons have been organized, encouraging, and much easier to stay consistent with every week.";
+
+    await testing.login({
+      username: "test_pending_testimonial",
+      role: "student",
+      name: "Pending Student",
+    });
+    await loginViaUi(page, "test_pending_testimonial", "testpassword123");
+    await page.getByTestId("nav-settings").click();
+
+    await page.getByTestId("testimonial-textarea").fill(body);
+    await page.getByTestId("save-testimonial").click();
+    await expect(page.getByText("Pending admin approval")).toBeVisible();
+
+    await logoutViaUi(page);
+    await page.goto("/");
+    await expect(page.getByText(body)).toHaveCount(0);
+
+    await testing.login();
+    await loginViaUi(page, "test_admin", "testpassword123");
+    await page.getByTestId("nav-settings").click();
+    await expect(page.getByTestId("testimonial-review-section")).toBeVisible();
+    await expect(page.getByText(body)).toBeVisible();
+    await page.getByRole("button", { name: "Approve for site" }).click();
+    await expect(page.getByText("Approved")).toBeVisible();
+
+    await logoutViaUi(page);
+    await page.goto("/");
+    await expect(page.getByText(body)).toBeVisible();
   });
 });

@@ -1,48 +1,54 @@
-import { queryOptions } from "@tanstack/react-query";
+import { Effect } from "effect";
+import { queryOptions, type QueryClient } from "@tanstack/react-query";
 import { api } from "./api.js";
+import { getAuthUser } from "./auth.js";
 
-/**
- * Strip Eden treaty's `{ error: string } | null` phantom variants from `data`.
- * Safe because the client is configured with `throwHttpError: true`.
- */
-type EdenData<T> = Exclude<NonNullable<T>, { error: string }>;
-export function unwrap<T>(data: T): EdenData<T> {
-  return data as EdenData<T>;
+export const authUserQuery = queryOptions({
+  queryKey: ["auth", "user"],
+  queryFn: () => getAuthUser(),
+});
+
+export function fetchAuthUser(queryClient: QueryClient) {
+  return queryClient.fetchQuery({
+    ...authUserQuery,
+    staleTime: 0,
+  });
 }
 
 // ---- Admin queries ----
 
 export const adminStudentsQuery = queryOptions({
   queryKey: ["admin", "students"],
-  queryFn: async () => unwrap((await api.admin.students.get()).data),
+  queryFn: () => Effect.runPromise(api.admin.students()),
 });
 
 export const adminCoursesQuery = queryOptions({
   queryKey: ["admin", "courses"],
-  queryFn: async () => unwrap((await api.admin.courses.get()).data),
+  queryFn: () => Effect.runPromise(api.admin.courses()),
 });
 
 export const adminFamiliesQuery = queryOptions({
   queryKey: ["admin", "families"],
-  queryFn: async () => unwrap((await api.admin.families.get()).data),
+  queryFn: () => Effect.runPromise(api.admin.families()),
 });
 
 export const adminLessonsQuery = queryOptions({
   queryKey: ["admin-lessons"],
-  queryFn: async () => unwrap((await api.admin.lessons.get()).data),
+  queryFn: () => Effect.runPromise(api.admin.lessons({ urlParams: {} })),
 });
 
 export const adminTodayLessonsQuery = () => {
   const todayStr = new Date().toISOString().slice(0, 10);
   return queryOptions({
     queryKey: ["admin", "lessons", "today", todayStr],
-    queryFn: async () =>
-      unwrap(
-        (
-          await api.admin.lessons.get({
-            query: { from: `${todayStr}T00:00:00.000Z`, to: `${todayStr}T23:59:59.999Z` },
-          })
-        ).data,
+    queryFn: () =>
+      Effect.runPromise(
+        api.admin.lessons({
+          urlParams: {
+            from: `${todayStr}T00:00:00.000Z`,
+            to: `${todayStr}T23:59:59.999Z`,
+          },
+        }),
       ),
   });
 };
@@ -58,95 +64,104 @@ export const adminWeekLessonsQuery = () => {
   const weekEnd = sunday.toISOString().slice(0, 10) + "T23:59:59.999Z";
   return queryOptions({
     queryKey: ["admin", "lessons", "week", weekStart],
-    queryFn: async () =>
-      unwrap((await api.admin.lessons.get({ query: { from: weekStart, to: weekEnd } })).data),
+    queryFn: () =>
+      Effect.runPromise(
+        api.admin.lessons({ urlParams: { from: weekStart, to: weekEnd } }),
+      ),
   });
 };
 
 export const adminSubmissionsQuery = queryOptions({
   queryKey: ["admin", "submissions"],
-  queryFn: async () => unwrap((await api.admin.submissions.get()).data),
+  queryFn: () => Effect.runPromise(api.admin.submissions({ urlParams: {} })),
 });
 
 export const courseStudentsQuery = (id: string) =>
   queryOptions({
     queryKey: ["admin", "courses", id, "students"],
-    queryFn: async () => unwrap((await api.admin.courses({ id }).students.get()).data),
+    queryFn: () => Effect.runPromise(api.admin.courseStudents({ path: { id } })),
   });
 
 export const studentDetailQuery = (id: string) =>
   queryOptions({
     queryKey: ["admin", "students", id],
-    queryFn: async () => unwrap((await api.admin.students({ id }).get()).data),
+    queryFn: () => Effect.runPromise(api.admin.student({ path: { id } })),
   });
 
 // ---- Shared / student queries ----
 
 export const libraryQuery = queryOptions({
   queryKey: ["library"],
-  queryFn: async () => unwrap((await api.library.get()).data),
+  queryFn: () => Effect.runPromise(api.authenticated.library({ urlParams: {} })),
 });
 
 export const messagesQuery = queryOptions({
   queryKey: ["messages"],
-  queryFn: async () => unwrap((await api.messages.get()).data),
+  queryFn: () => Effect.runPromise(api.authenticated.messages({ urlParams: {} })),
 });
 
 export const assignmentsQuery = queryOptions({
   queryKey: ["assignments"],
-  queryFn: async () => unwrap((await api.assignments.get()).data),
+  queryFn: () => Effect.runPromise(api.authenticated.assignments()),
 });
 
 export const practiceLogsQuery = queryOptions({
   queryKey: ["practice-logs"],
-  queryFn: async () => unwrap((await api["practice-logs"].get()).data),
+  queryFn: () => Effect.runPromise(api.authenticated.practiceLogs({ urlParams: {} })),
 });
 
 export const coursesQuery = queryOptions({
   queryKey: ["courses"],
-  queryFn: async () => unwrap((await api.courses.get()).data),
+  queryFn: () => Effect.runPromise(api.authenticated.courses()),
 });
 
 export const courseDetailQuery = (id: string) =>
   queryOptions({
     queryKey: ["courses", id],
-    queryFn: async () => unwrap((await api.courses({ id }).get()).data),
+    queryFn: () => Effect.runPromise(api.authenticated.courseById({ path: { id } })),
   });
 
 export const scheduledLessonsQuery = queryOptions({
   queryKey: ["my-lessons", "scheduled"],
-  queryFn: async () =>
-    unwrap((await api["my-lessons"].get({ query: { status: "scheduled", limit: 5 } })).data),
+  queryFn: () =>
+    Effect.runPromise(
+      api.authenticated.myLessons({ urlParams: { status: "scheduled", limit: 5 } }),
+    ),
 });
 
 export const myLessonsQuery = queryOptions({
   queryKey: ["my-lessons"],
-  queryFn: async () => unwrap((await api["my-lessons"].get()).data),
+  queryFn: () => Effect.runPromise(api.authenticated.myLessons({ urlParams: {} })),
 });
 
 export const myLessonNotesQuery = queryOptions({
   queryKey: ["my-lesson-notes"],
-  queryFn: async () => unwrap((await api["my-lesson-notes"].get({ query: { limit: 100 } })).data),
+  queryFn: () =>
+    Effect.runPromise(
+      api.authenticated.myLessonNotesList({ urlParams: { limit: 100 } }),
+    ),
 });
 
 export const myEmailsQuery = queryOptions({
   queryKey: ["my-emails"],
-  queryFn: async () => unwrap((await api.me.emails.get()).data),
+  queryFn: () => Effect.runPromise(api.authenticated.myEmails()),
 });
 
 export const gcalStatusQuery = queryOptions({
   queryKey: ["gcal-status"],
-  queryFn: async () => unwrap((await api.admin.gcal.status.get()).data),
+  queryFn: () => Effect.runPromise(api.admin.gcalStatus()),
 });
 
 export const workingHoursQuery = queryOptions({
   queryKey: ["working-hours"],
-  queryFn: async () => unwrap((await api.admin["working-hours"].get()).data),
+  queryFn: () => Effect.runPromise(api.admin.workingHours()),
 });
 
 export const availableSlotsQuery = (date: string) =>
   queryOptions({
     queryKey: ["available-slots", date],
-    queryFn: async () =>
-      unwrap((await api["available-slots"].get({ query: { date, days: 7, duration: 60 } })).data),
+    queryFn: () =>
+      Effect.runPromise(
+        api.authenticated.availableSlots({ urlParams: { date, days: 7, duration: 60 } }),
+      ),
   });

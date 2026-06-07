@@ -1,9 +1,12 @@
-import { describe, beforeAll, afterAll, expect, it } from "vitest";
+import { describe, beforeAll, afterAll, expect, it, vi } from "vitest";
+import * as Command from "@effect/platform/Command";
+import * as FileSystem from "@effect/platform/FileSystem";
+import * as NodeContext from "@effect/platform-node/NodeContext";
 import pg from "pg";
-import { execSync } from "child_process";
-import { mkdirSync, readFileSync } from "fs";
 import Redis from "ioredis";
+import { Effect } from "effect";
 import { Logger, consoleLogFactory, type Job } from "graphile-worker";
+import { loadEnvFile } from "process";
 
 // -- Shared state --
 let handler: (request: Request) => Promise<Response>;
@@ -15,31 +18,7 @@ let studentCookie: string;
 let studentId: string;
 const testApplePrivateKey = "-----BEGIN PRIVATE KEY-----\\nAQAB\\n-----END PRIVATE KEY-----";
 
-function loadDotEnvFile() {
-  const envPath = `${process.cwd()}/.env`;
-  const contents = readFileSync(envPath, "utf8");
-
-  for (const line of contents.split(/\r?\n/u)) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith("#")) {
-      continue;
-    }
-
-    const separatorIndex = trimmed.indexOf("=");
-    if (separatorIndex < 0) {
-      continue;
-    }
-
-    const key = trimmed.slice(0, separatorIndex).trim();
-    if (!key || process.env[key] !== undefined) {
-      continue;
-    }
-
-    process.env[key] = trimmed.slice(separatorIndex + 1);
-  }
-}
-
-loadDotEnvFile();
+loadEnvFile();
 
 function requiredEnv(name: string): string {
   const value = process.env[name];
@@ -68,8 +47,43 @@ function withRedisDatabase(connectionString: string, databaseIndex: number): str
   return url.toString();
 }
 
+function forceIpv4(urlString: string): string {
+  const url = new URL(urlString);
+  if (url.hostname === "localhost" || url.hostname === "::1") {
+    url.hostname = "127.0.0.1";
+  }
+  return url.toString();
+}
+
+function runPlatform<A, E>(
+  effect: Effect.Effect<A, E, NodeContext.NodeContext>,
+): Promise<A> {
+  return Effect.runPromise(effect.pipe(Effect.provide(NodeContext.layer)));
+}
+
+function runCommand(
+  command: string,
+  args: ReadonlyArray<string>,
+  environment: Record<string, string>,
+) {
+  return Effect.gen(function* () {
+    const exitCode = yield* Command.make(command, ...args).pipe(
+      Command.env(environment),
+      Command.workingDirectory(process.cwd()),
+      Command.exitCode,
+    );
+
+    if (exitCode !== 0) {
+      throw new Error(`Command failed (${exitCode}): ${[command, ...args].join(" ")}`);
+    }
+  });
+}
+
 // -- Helpers --
-const TEST_ROOT_URL = "http://localhost:3000";
+const TEST_ROOT_URL = "http://127.0.0.1:3000";
+type TitledItem = { title: string };
+type SubmissionSummary = { id: string; email: string; is_read: boolean };
+type StudentSummary = { username: string };
 
 function req(
   method: string,
@@ -108,52 +122,58 @@ function getCookie(res: Response): string | null {
   return match?.[1] ?? null;
 }
 
+function cookieIdFromToken(token: string): string {
+  return token.split(".")[0] ?? "";
+}
+
 // -- Setup / Teardown --
 describe("DFG Portal API", () => {
   beforeAll(async () => {
-    const dbUrl = withDatabaseSuffix(requiredEnv("DATABASE_URL"), "_test");
-    const authDbUrl = withDatabaseSuffix(requiredEnv("AUTH_DATABASE_URL"), "_test");
-    const testValkeyUrl = withRedisDatabase(requiredEnv("VALKEY_URL"), 15);
-    const childEnv: Record<string, string> = {
-      ...process.env,
-      DATABASE_URL: dbUrl,
-      AUTH_DATABASE_URL: authDbUrl,
-      VALKEY_URL: testValkeyUrl,
-      NOCONFIRM: "1",
-      NODE_ENV: "test",
-      PORT: "0",
-      VITE_ROOT_URL: process.env.VITE_ROOT_URL || "http://localhost:3000",
-      ADMIN_EMAIL: process.env.ADMIN_EMAIL || "admin@test.com",
-      GOOGLE_CALENDAR_CLIENT_ID:
-        process.env.GOOGLE_CALENDAR_CLIENT_ID || "gcal-client-id",
-      GOOGLE_CALENDAR_CLIENT_SECRET:
-        process.env.GOOGLE_CALENDAR_CLIENT_SECRET || "gcal-client-secret",
-      GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID || "google-client-id",
-      GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET || "google-client-secret",
-      APPLE_CLIENT_ID: process.env.APPLE_CLIENT_ID || "apple-client-id",
-      APPLE_TEAM_ID: process.env.APPLE_TEAM_ID || "apple-team-id",
-      APPLE_KEY_ID: process.env.APPLE_KEY_ID || "apple-key-id",
-      APPLE_PRIVATE_KEY: process.env.APPLE_PRIVATE_KEY || testApplePrivateKey,
-    };
+    const { env } = await import("../assertEnv.js");
+    const dbUrl = forceIpv4(withDatabaseSuffix(requiredEnv("DATABASE_URL"), "_test"));
+    const authDbUrl = forceIpv4(withDatabaseSuffix(requiredEnv("AUTH_DATABASE_URL"), "_test"));
+    const testValkeyUrl = forceIpv4(withRedisDatabase(requiredEnv("VALKEY_URL"), 15));
+    const childEnv = Object.fromEntries(
+      Object.entries({
+        ...process.env,
+        DATABASE_URL: dbUrl,
+        AUTH_DATABASE_URL: authDbUrl,
+        ROOT_DATABASE_URL: forceIpv4(process.env.ROOT_DATABASE_URL || ""),
+        DATABASE_HOST: "127.0.0.1",
+        VALKEY_URL: testValkeyUrl,
+        NOCONFIRM: "1",
+        NODE_ENV: "test",
+        PORT: "0",
+        VITE_ROOT_URL: forceIpv4(env.VITE_ROOT_URL),
+        ADMIN_EMAIL: env.ADMIN_EMAIL || "admin@test.com",
+        GOOGLE_CALENDAR_CLIENT_ID: env.GOOGLE_CALENDAR_CLIENT_ID || "gcal-client-id",
+        GOOGLE_CALENDAR_CLIENT_SECRET:
+          env.GOOGLE_CALENDAR_CLIENT_SECRET || "gcal-client-secret",
+        GOOGLE_CLIENT_ID: env.GOOGLE_CLIENT_ID || "google-client-id",
+        GOOGLE_CLIENT_SECRET: env.GOOGLE_CLIENT_SECRET || "google-client-secret",
+        APPLE_CLIENT_ID: env.APPLE_CLIENT_ID || "apple-client-id",
+        APPLE_TEAM_ID: env.APPLE_TEAM_ID || "apple-team-id",
+        APPLE_KEY_ID: env.APPLE_KEY_ID || "apple-key-id",
+        APPLE_PRIVATE_KEY: env.APPLE_PRIVATE_KEY || testApplePrivateKey,
+      }).filter((entry): entry is [string, string] => entry[1] !== undefined),
+    );
 
-    mkdirSync("generated", { recursive: true });
-    execSync("bun -b graphile-migrate reset --erase", {
-      env: childEnv,
-      stdio: "pipe",
-      cwd: process.cwd(),
-    });
-    execSync("cd worker && bun -b graphile-worker --schema-only", {
-      env: childEnv,
-      stdio: "pipe",
-      cwd: process.cwd(),
-    });
-    execSync("bun -b graphile-migrate watch --once", {
-      env: childEnv,
-      stdio: "pipe",
-      cwd: process.cwd(),
-    });
+    await runPlatform(
+      Effect.gen(function* () {
+        const fileSystem = yield* FileSystem.FileSystem;
+        yield* fileSystem.makeDirectory("generated", { recursive: true });
+        yield* runCommand("bun", ["-b", "graphile-migrate", "reset", "--erase"], childEnv);
+        yield* runCommand(
+          "bun",
+          ["-b", "--cwd=worker", "graphile-worker", "--schema-only"],
+          childEnv,
+        );
+        yield* runCommand("bun", ["-b", "graphile-migrate", "watch", "--once"], childEnv);
+      }),
+    );
 
     Object.assign(process.env, childEnv);
+    vi.resetModules();
 
     testValkey = new Redis(testValkeyUrl);
     await testValkey.flushdb();
@@ -168,8 +188,8 @@ describe("DFG Portal API", () => {
       adminResult.rows[0].id,
     ]);
 
-    const { app } = await import("../app.js");
-    handler = (request: Request) => Promise.resolve(app.fetch(request));
+    const { handleApiRequest } = await import("../app.js");
+    handler = handleApiRequest;
 
     const loginRes = await req("POST", "/api/login", {
       body: { id: "admin", password: "admin123" },
@@ -198,13 +218,8 @@ describe("DFG Portal API", () => {
 
   afterAll(async () => {
     try {
-      const { realtimeService } = await import("../services/realtimeService.js");
-      await realtimeService.stop();
-    } catch {}
-    try {
-      const db = await import("../db.js");
-      await db.rootDb.destroy();
-      await db.authDb.destroy();
+      const { disposeApiHandler } = await import("../app.js");
+      await disposeApiHandler();
     } catch {}
     try {
       const { valkey } = await import("../valkey.js");
@@ -297,6 +312,51 @@ describe("DFG Portal API", () => {
     expect((await me2.json()).user.username).toBe("student1");
   });
 
+  it("auth: admin authorization follows live DB session and role state", async () => {
+    const loginRes = await req("POST", "/api/login", {
+      body: { id: "admin", password: "admin123" },
+    });
+    const freshAdminCookie = getCookie(loginRes);
+    expect(freshAdminCookie).toBeTruthy();
+
+    const cookieId = cookieIdFromToken(freshAdminCookie!);
+    const sessionRows = await testDb.query(
+      "select id, user_id from app_private.sessions where cookie_id = $1",
+      [cookieId],
+    );
+    expect(sessionRows.rows[0]?.id).toBeTruthy();
+    expect(sessionRows.rows[0]?.user_id).toBeTruthy();
+
+    await testDb.query("delete from app_private.sessions where id = $1", [sessionRows.rows[0].id]);
+
+    const revoked = await req("GET", "/api/admin/courses", {
+      cookie: freshAdminCookie!,
+    });
+    expect(revoked.status).toBe(401);
+    const deletedRows = await testDb.query(
+      "select 1 from app_private.sessions where cookie_id = $1",
+      [cookieId],
+    );
+    expect(deletedRows.rowCount).toBe(0);
+
+    const reloginRes = await req("POST", "/api/login", {
+      body: { id: "admin", password: "admin123" },
+    });
+    const roleChangeCookie = getCookie(reloginRes);
+    expect(roleChangeCookie).toBeTruthy();
+
+    try {
+      await testDb.query("update app_public.users set role = 'student' where username = 'admin'");
+
+      const forbidden = await req("GET", "/api/admin/courses", {
+        cookie: roleChangeCookie!,
+      });
+      expect(forbidden.status).toBe(403);
+    } finally {
+      await testDb.query("update app_public.users set role = 'admin' where username = 'admin'");
+    }
+  });
+
   it("auth: oauth start routes redirect and callbacks require valid state", async () => {
     const googleStart = await req("GET", "/api/oauth/google?redirect=%2Fsettings");
     expect(googleStart.status).toBe(302);
@@ -321,11 +381,15 @@ describe("DFG Portal API", () => {
       `/api/oauth/google/callback?code=fake-code&state=${googleLocation.searchParams.get("state")!}`,
     );
     expect(googleCallback.status).toBe(400);
-    expect(await googleCallback.json()).toEqual({ error: "Invalid or expired Google OAuth state" });
+    expect(await googleCallback.json()).toEqual({
+      error: "Invalid or expired Google OAuth state",
+    });
 
     const appleStart = await req("GET", "/api/oauth/apple?redirect=%2Fdashboard");
     expect(appleStart.status).toBe(302);
-    expect(appleStart.headers.get("location")).toMatch(/^https:\/\/appleid\.apple\.com\/auth\/authorize\?/);
+    expect(appleStart.headers.get("location")).toMatch(
+      /^https:\/\/appleid\.apple\.com\/auth\/authorize\?/,
+    );
     const appleLocation = new URL(appleStart.headers.get("location")!);
     expect(appleLocation.searchParams.get("client_id")).toBe(process.env.APPLE_CLIENT_ID);
     expect(appleLocation.searchParams.get("redirect_uri")).toBe(
@@ -338,11 +402,16 @@ describe("DFG Portal API", () => {
     expect(appleSetCookie).toContain("oauth_apple_redirect=");
     expect(appleSetCookie).toContain("SameSite=None");
 
+    const appleCallbackForm = new FormData();
+    appleCallbackForm.append("code", "fake-code");
+    appleCallbackForm.append("state", appleLocation.searchParams.get("state")!);
     const appleCallback = await req("POST", "/api/oauth/apple/callback", {
-      body: { code: "fake-code", state: appleLocation.searchParams.get("state") },
+      body: appleCallbackForm,
     });
     expect(appleCallback.status).toBe(400);
-    expect(await appleCallback.json()).toEqual({ error: "Invalid or expired Apple OAuth state" });
+    expect(await appleCallback.json()).toEqual({
+      error: "Invalid or expired Apple OAuth state",
+    });
   });
 
   it("admin: gcal connect redirects and callback requires valid state", async () => {
@@ -394,12 +463,30 @@ describe("DFG Portal API", () => {
     expect(created.body).toContain("lessons fun");
     expect(created.display_name).toBe("Test Student");
     expect(created.role_label).toBe("Student");
+    expect(created.is_approved).toBe(false);
 
     const current = await req("GET", "/api/testimonials", {
       cookie: studentCookie,
     });
     expect(current.status).toBe(200);
-    expect((await current.json()).body).toContain("lessons fun");
+    const currentJson = await current.json();
+    expect(currentJson.body).toContain("lessons fun");
+    expect(currentJson.is_approved).toBe(false);
+
+    const approve = await req("PATCH", `/api/admin/testimonials/${created.id}`, {
+      body: { is_approved: true },
+      cookie: adminCookie,
+    });
+    expect(approve.status).toBe(200);
+    expect(await approve.json()).toEqual({ success: true });
+
+    const { rows: approvedRows } = await testDb.query(
+      `select is_approved
+       from app_public.testimonials
+       where id = $1`,
+      [created.id],
+    );
+    expect(approvedRows[0].is_approved).toBe(true);
 
     const update = await req("PUT", "/api/testimonials", {
       body: {
@@ -408,7 +495,9 @@ describe("DFG Portal API", () => {
       cookie: studentCookie,
     });
     expect(update.status).toBe(200);
-    expect((await update.json()).body).toContain("look forward");
+    const updated = await update.json();
+    expect(updated.body).toContain("look forward");
+    expect(updated.is_approved).toBe(false);
 
     const adminAttempt = await req("GET", "/api/testimonials", {
       cookie: adminCookie,
@@ -567,17 +656,21 @@ describe("DFG Portal API", () => {
     ).rows[0];
     expect(firstRow.content_hash).toBeTruthy();
 
-    const { storageService } = await import("../services/storageService.js");
-    await storageService.delete({
-      storageBackend: firstRow.storage_backend,
-      storageKey: firstRow.storage_key,
-    });
+    const { StorageService } = await import("../services/storageService.js");
+    await Effect.runPromise(
+      StorageService.delete({
+        storageBackend: firstRow.storage_backend,
+        storageKey: firstRow.storage_key,
+      }),
+    );
 
     const missingDownload = await req("GET", `/api/materials/${firstMaterial.id}/download`, {
       cookie: adminCookie,
     });
     expect(missingDownload.status).toBe(500);
-    expect(await missingDownload.json()).toEqual({ error: "Material blob missing from storage" });
+    expect(await missingDownload.json()).toEqual({
+      error: "Material blob missing from storage",
+    });
 
     const secondUpload = await uploadMaterial("Conflicting Title", "renamed-upload.pdf", false);
     expect(secondUpload.status).toBe(200);
@@ -595,11 +688,36 @@ describe("DFG Portal API", () => {
     );
     expect(matchingRows.rows[0]?.count).toBe(1);
     expect(
-      await storageService.exists({
-        storageBackend: firstRow.storage_backend,
-        storageKey: firstRow.storage_key,
-      }),
+      await Effect.runPromise(
+        StorageService.exists({
+          storageBackend: firstRow.storage_backend,
+          storageKey: firstRow.storage_key,
+        }),
+      ),
     ).toBe(true);
+  });
+
+  it("messages: student can send a message to staff", async () => {
+    const create = await req("POST", "/api/messages", {
+      body: { body: "Can we move this week's lesson to Friday?" },
+      cookie: studentCookie,
+    });
+    expect(create.status).toBe(200);
+    const created = await create.json();
+    expect(created.sender_id).toBe(studentId);
+    expect(created.body).toBe("Can we move this week's lesson to Friday?");
+    expect(created.recipient_id).toBeTruthy();
+
+    const { rows } = await testDb.query(
+      `select m.sender_id, m.body, u.role as recipient_role
+       from app_public.messages m
+       join app_public.users u on u.id = m.recipient_id
+       where m.id = $1`,
+      [created.id],
+    );
+    expect(rows[0]?.sender_id).toBe(studentId);
+    expect(rows[0]?.body).toBe("Can we move this week's lesson to Friday?");
+    expect(["admin", "teacher"]).toContain(rows[0]?.recipient_role);
   });
 
   it("assignments: tracks playback time and self-reviews", async () => {
@@ -827,16 +945,16 @@ describe("DFG Portal API", () => {
     // Library (global materials)
     const library = await req("GET", "/api/library", { cookie: studentCookie });
     expect(library.status).toBe(200);
-    const libraryList = await library.json();
-    expect(libraryList.some((m: any) => m.title === "Chord Chart")).toBe(true);
+    const libraryList = (await library.json()) as TitledItem[];
+    expect(libraryList.some((material) => material.title === "Chord Chart")).toBe(true);
 
     // Assignments
     const assignments = await req("GET", "/api/assignments", {
       cookie: studentCookie,
     });
     expect(assignments.status).toBe(200);
-    const assignList = await assignments.json();
-    expect(assignList.some((m: any) => m.title === "Private Notes")).toBe(true);
+    const assignList = (await assignments.json()) as TitledItem[];
+    expect(assignList.some((material) => material.title === "Private Notes")).toBe(true);
 
     // Cleanup
     expect(
@@ -880,10 +998,13 @@ describe("DFG Portal API", () => {
       cookie: adminCookie,
     });
     expect(subs.status).toBe(200);
-    const subList = await subs.json();
+    const subList = (await subs.json()) as SubmissionSummary[];
     expect(subList.length).toBeGreaterThanOrEqual(1);
-    const sub = subList.find((s: any) => s.email === "jane@example.com");
+    const sub = subList.find((submission) => submission.email === "jane@example.com");
     expect(sub).toBeTruthy();
+    if (!sub) {
+      throw new Error("Expected seeded submission to exist");
+    }
     expect(sub.is_read).toBe(false);
 
     const patch = await req("PATCH", `/api/admin/submissions/${sub.id}`, {
@@ -896,8 +1017,8 @@ describe("DFG Portal API", () => {
       cookie: adminCookie,
     });
     expect(students.status).toBe(200);
-    const studentList = await students.json();
-    expect(studentList.some((s: any) => s.username === "student1")).toBe(true);
+    const studentList = (await students.json()) as StudentSummary[];
+    expect(studentList.some((student) => student.username === "student1")).toBe(true);
   });
 
   // -- Test 6: Authorization --

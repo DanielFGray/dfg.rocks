@@ -1,20 +1,23 @@
+import { Link } from "@tanstack/react-router";
 import { Button } from "./Button.js";
 
-type EmptyStateProps = {
+export const EmptyState = ({
+  message,
+  action,
+}: {
   message: string;
-  action?: {
-    label: string;
-    onClick: () => void;
-  };
-};
-
-export const EmptyState = ({ message, action }: EmptyStateProps) => (
-  <div className="gap-4 rounded-xl border-overlay/6 dark:border-overlay-dark/6 bg-card dark:bg-card-dark px-6 py-12 flex flex-col items-center justify-center border text-center">
+  action?: { label: string; onClick: () => void } | { label: string; href: string };
+}) => (
+  <div className="flex flex-col items-center justify-center gap-4 rounded-xl border border-overlay/6 bg-card px-6 py-12 text-center dark:border-overlay-dark/6 dark:bg-card-dark">
     <p className="text-muted dark:text-muted-dark">{message}</p>
-    {action ? (
+    {!action ? null : "onClick" in action ? (
       <Button variant="outline" onClick={action.onClick}>
         {action.label}
       </Button>
+    ) : "href" in action ? (
+      <Link to={action.href}>
+        <Button variant="outline">{action.label}</Button>
+      </Link>
     ) : null}
   </div>
 );

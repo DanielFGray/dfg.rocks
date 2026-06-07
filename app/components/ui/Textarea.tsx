@@ -1,4 +1,9 @@
-import { TextField, Label, TextArea as AriaTextArea, Text } from "react-aria-components";
+import {
+  TextField,
+  Label,
+  TextArea as AriaTextArea,
+  Text,
+} from "react-aria-components";
 
 type TextareaProps = {
   id: string;
@@ -41,7 +46,9 @@ export const Textarea = ({
     onChange={onChange}
     className="gap-1.5 flex flex-col"
   >
-    <Label className="text-sm font-medium text-muted dark:text-muted-dark">{label}</Label>
+    <Label className="text-sm font-medium text-muted dark:text-muted-dark">
+      {label}
+    </Label>
     <AriaTextArea
       id={id}
       rows={rows}
@@ -51,7 +58,10 @@ export const Textarea = ({
       className={`rounded-lg bg-card dark:bg-card-dark px-4 py-3 text-primary dark:text-primary-dark placeholder:text-muted/50 dark:placeholder:text-muted-dark/50 data-focused:border-accent data-focused:ring-accent/50 resize-y border transition-colors outline-hidden data-focused:ring-1 ${error ? "border-red-500/50" : "border-overlay/10 dark:border-overlay-dark/10"}`}
     />
     {error ? (
-      <Text slot="errorMessage" className="text-sm text-red-600 dark:text-red-400 mt-0.5">
+      <Text
+        slot="errorMessage"
+        className="text-sm text-red-600 dark:text-red-400 mt-0.5"
+      >
         {error}
       </Text>
     ) : null}

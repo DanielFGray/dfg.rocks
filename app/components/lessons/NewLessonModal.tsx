@@ -4,11 +4,16 @@ import { Modal } from "../ui/Modal.js";
 import { Input } from "../ui/Input.js";
 import { Select } from "../ui/Select.js";
 import { Button } from "../ui/Button.js";
-import type { LocationType } from "../../lib/types.js";
-import { requiredValidator, durationOptions, locationOptions } from "./helpers.js";
+import type { LocationType } from "../../../shared/schemas.js";
+import {
+  requiredValidator,
+  durationOptions,
+  locationOptions,
+} from "./helpers.js";
 
 const requiredLocationValidator = {
-  onChange: ({ value }: { value: "" | LocationType }) => (value ? undefined : "Required"),
+  onChange: ({ value }: { value: "" | LocationType }) =>
+    value ? undefined : "Required",
 };
 
 export function NewLessonModal({
@@ -99,13 +104,18 @@ export function NewLessonModal({
             />
           )}
         </lessonForm.Field>
-        <lessonForm.Field name="location_type" validators={requiredLocationValidator}>
+        <lessonForm.Field
+          name="location_type"
+          validators={requiredLocationValidator}
+        >
           {(field) => (
             <Select
               id="lesson-location"
               name="location_type"
               label="Location"
-              options={locationOptions as Array<{ value: string; label: string }>}
+              options={
+                locationOptions as Array<{ value: string; label: string }>
+              }
               value={field.state.value}
               onChange={(v) => field.handleChange(v as "" | LocationType)}
               onBlur={() => field.handleBlur()}

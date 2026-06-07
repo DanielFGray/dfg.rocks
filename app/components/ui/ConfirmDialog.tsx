@@ -44,7 +44,10 @@ export const ConfirmDialog = ({
           <Button variant="ghost" onClick={onCancel}>
             Cancel
           </Button>
-          <Button variant={variant === "danger" ? "danger" : "primary"} onClick={onConfirm}>
+          <Button
+            variant={variant === "danger" ? "danger" : "primary"}
+            onClick={onConfirm}
+          >
             {confirmLabel}
           </Button>
         </div>

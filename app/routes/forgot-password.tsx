@@ -1,3 +1,4 @@
+import { Effect } from "effect";
 import { useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation } from "@tanstack/react-query";
@@ -14,10 +15,8 @@ function ForgotPasswordPage() {
   const [email, setEmail] = useState("");
 
   const forgot = useMutation({
-    mutationFn: async () => {
-      const { error } = await api["forgot-password"].post({ email });
-      if (error) throw error;
-    },
+    mutationFn: () =>
+      Effect.runPromise(api.auth.forgotPassword({ payload: { email } })),
   });
 
   // Always show success after submit -- don't reveal if email exists
@@ -30,10 +29,12 @@ function ForgotPasswordPage() {
         className="px-4 flex min-h-screen items-center justify-center"
       >
         <div className="max-w-sm w-full text-center">
-          <h1 className="mb-4 text-3xl font-bold tracking-tight">Check Your Email</h1>
+          <h1 className="mb-4 text-3xl font-bold tracking-tight">
+            Check Your Email
+          </h1>
           <p className="text-sm text-muted dark:text-muted-dark">
-            If an account exists with that email, we've sent a password reset link. Check your
-            inbox.
+            If an account exists with that email, we've sent a password reset
+            link. Check your inbox.
           </p>
           <Link
             to="/login"

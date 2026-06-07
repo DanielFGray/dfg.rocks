@@ -1,35 +1,25 @@
-import { treaty } from "@elysiajs/eden";
-import type { App } from "../../server/app.js";
-import type { Material } from "./types.js";
+import * as FetchHttpClient from "@effect/platform/FetchHttpClient";
+import * as HttpApiClient from "@effect/platform/HttpApiClient";
+import * as HttpClient from "@effect/platform/HttpClient";
+import * as HttpClientRequest from "@effect/platform/HttpClientRequest";
+import { Layer, ManagedRuntime } from "effect";
+import { clientApi } from "../../shared/httpApi.js";
 
-export const { api } = treaty<App>(
-  typeof window !== "undefined" ? window.location.origin : "http://localhost",
-  {
-    fetch: { credentials: "include" },
-    headers: { "X-Requested-With": "dfg" },
-    // throwHttpError: true,
-  },
+const clientLayer = Layer.mergeAll(
+  FetchHttpClient.layer,
+  Layer.succeed(FetchHttpClient.RequestInit, {
+    credentials: "include",
+  } satisfies RequestInit),
 );
 
-// File upload (multipart — can't go through Eden)
-export async function uploadMaterial(
-  file: File,
-  title: string,
-  isGlobal: boolean,
-): Promise<Material> {
-  const formData = new FormData();
-  formData.append("file", file);
-  formData.append("title", title);
-  formData.append("is_global", isGlobal ? "true" : "false");
-  const res = await fetch("/api/admin/materials/upload", {
-    method: "POST",
-    body: formData,
-    credentials: "include",
-    headers: { "X-Requested-With": "dfg" },
-  });
-  if (!res.ok) {
-    const data = await res.json().catch(() => ({ error: "Upload failed" }));
-    throw new Error(data.error ?? "Upload failed");
-  }
-  return res.json() as Promise<Material>;
-}
+const clientRuntime = ManagedRuntime.make(clientLayer);
+
+export const api = clientRuntime.runSync(
+  HttpApiClient.make(clientApi, {
+    transformClient: HttpClient.mapRequest(
+      HttpClientRequest.setHeader("X-Requested-With", "dfg"),
+    ),
+  }),
+);
+
+export type ApiClient = typeof api;

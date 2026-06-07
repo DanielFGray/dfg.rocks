@@ -3,7 +3,7 @@ import { useForm } from "@tanstack/react-form";
 import { Modal } from "../ui/Modal.js";
 import { Textarea } from "../ui/Textarea.js";
 import { Button } from "../ui/Button.js";
-import type { Lesson, User } from "../../lib/types.js";
+import type { Lesson, User } from "../../../shared/schemas.js";
 import { formatDateTime } from "./helpers.js";
 
 export type NoteEditorState = {
@@ -66,7 +66,7 @@ export function NoteEditorModal({
 
   return (
     <Modal open={state !== null} onClose={onClose} title={title}>
-      <div className="gap-4 flex flex-col" data-testid="note-editor">
+      <div className="flex flex-col gap-4" data-testid="note-editor">
         <noteForm.Field name="topics_covered">
           {(field) => (
             <Textarea
@@ -123,7 +123,7 @@ export function NoteEditorModal({
             />
           )}
         </noteForm.Field>
-        <div className="gap-3 pt-2 flex justify-end">
+        <div className="flex justify-end gap-3 pt-2">
           <Button variant="ghost" onClick={onClose}>
             Cancel
           </Button>

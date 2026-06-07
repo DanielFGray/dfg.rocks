@@ -1,20 +1,27 @@
 import { Link } from "@tanstack/react-router";
-import type { Message, Lesson, User } from "../../lib/types.js";
+import type { Course, Message, Lesson, User } from "../../../shared/schemas.js";
 import { useAuth } from "../../lib/hooks/useAuth.js";
 import { Button } from "../ui/Button.js";
 import { Card } from "../ui/Card.js";
-import { formatTime, statusBadgeClass, statusLabels, locationLabels } from "./helpers.js";
+import {
+  formatTime,
+  statusBadgeClass,
+  statusLabels,
+  locationLabels,
+} from "./helpers.js";
 
 export function AdminDashboard({
   todayLessons,
   weekLessons,
   messages,
   students,
+  courses,
 }: {
   todayLessons: Lesson[];
   weekLessons: Lesson[];
   messages: Message[];
   students: User[];
+  courses: Course[];
 }) {
   const { user } = useAuth();
 
@@ -25,19 +32,29 @@ export function AdminDashboard({
 
   // Today's lessons sorted by time
   const todayScheduled = [...todayLessons].sort(
-    (a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime(),
+    (a, b) =>
+      new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime(),
   );
 
   // Week stats
   const weekAll = weekLessons;
-  const weekScheduledCount = weekAll.filter((l) => l.status === "scheduled").length;
-  const weekCompletedCount = weekAll.filter((l) => l.status === "completed").length;
-  const weekCancelledCount = weekAll.filter((l) => l.status === "cancelled").length;
+  const weekScheduledCount = weekAll.filter(
+    (l) => l.status === "scheduled",
+  ).length;
+  const weekCompletedCount = weekAll.filter(
+    (l) => l.status === "completed",
+  ).length;
+  const weekCancelledCount = weekAll.filter(
+    (l) => l.status === "cancelled",
+  ).length;
 
   // Unread messages (not sent by me)
-  const unreadMessages = messages.filter((m) => !m.is_read && m.sender_id !== user?.id);
+  const unreadMessages = messages.filter(
+    (m) => !m.is_read && m.sender_id !== user?.id,
+  );
 
   const firstName = user?.name ? user.name.split(" ")[0] : null;
+  const showCoursesPreview = students.length === 0;
 
   return (
     <>
@@ -46,7 +63,7 @@ export function AdminDashboard({
         <h1 className="text-3xl font-bold tracking-tight">
           {firstName ? `Welcome back, ${firstName}` : "Dashboard"}
         </h1>
-        <p className="text-muted dark:text-muted-dark mt-1">
+        <p className="mt-1 text-muted dark:text-muted-dark">
           {today.toLocaleDateString("en-US", {
             weekday: "long",
             month: "long",
@@ -69,14 +86,15 @@ export function AdminDashboard({
             <p className="text-muted dark:text-muted-dark">No lessons today</p>
           </Card>
         ) : (
-          <div className="gap-3 flex flex-col">
+          <div className="flex flex-col gap-3">
             {todayScheduled.map((lesson) => {
               const student = studentMap.get(lesson.student_id);
               const badge =
                 statusBadgeClass[lesson.status] ??
                 "bg-overlay/10 dark:bg-overlay-dark/10 text-muted dark:text-muted-dark";
               const label = statusLabels[lesson.status] ?? lesson.status;
-              const location = locationLabels[lesson.location_type] ?? lesson.location_type;
+              const location =
+                locationLabels[lesson.location_type] ?? lesson.location_type;
 
               return (
                 <Card key={lesson.id}>
@@ -86,11 +104,14 @@ export function AdminDashboard({
                         {student?.name ?? "Unknown"}
                       </p>
                       <p className="text-sm text-muted dark:text-muted-dark">
-                        {formatTime(lesson.scheduled_at)} &middot; {String(lesson.duration_minutes)}{" "}
-                        min &middot; {location}
+                        {formatTime(lesson.scheduled_at)} &middot;{" "}
+                        {String(lesson.duration_minutes)} min &middot;{" "}
+                        {location}
                       </p>
                     </div>
-                    <span className={`px-2 py-0.5 text-xs font-semibold rounded-full ${badge}`}>
+                    <span
+                      className={`rounded-full px-2 py-0.5 text-xs font-semibold ${badge}`}
+                    >
                       {label}
                     </span>
                   </div>
@@ -103,8 +124,8 @@ export function AdminDashboard({
 
       {/* ---- This Week ---- */}
       <section className="mb-8">
-        <h2 className="text-lg font-semibold mb-4">This Week</h2>
-        <div className="sm:grid-cols-4 gap-3 grid grid-cols-2">
+        <h2 className="mb-4 text-lg font-semibold">This Week</h2>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <Card>
             <p className="text-2xl font-bold text-primary dark:text-primary-dark">
               {String(weekScheduledCount)}
@@ -112,7 +133,9 @@ export function AdminDashboard({
             <p className="text-xs text-muted dark:text-muted-dark">Scheduled</p>
           </Card>
           <Card>
-            <p className="text-2xl font-bold text-green-400">{String(weekCompletedCount)}</p>
+            <p className="text-2xl font-bold text-green-400">
+              {String(weekCompletedCount)}
+            </p>
             <p className="text-xs text-muted dark:text-muted-dark">Completed</p>
           </Card>
           <Card>
@@ -122,11 +145,57 @@ export function AdminDashboard({
             <p className="text-xs text-muted dark:text-muted-dark">Cancelled</p>
           </Card>
           <Card>
-            <p className="text-2xl font-bold text-accent">{String(students.length)}</p>
+            <p className="text-2xl font-bold text-accent">
+              {String(students.length)}
+            </p>
             <p className="text-xs text-muted dark:text-muted-dark">Students</p>
           </Card>
         </div>
       </section>
+
+      {/* ---- Courses ---- */}
+      {showCoursesPreview ? (
+        <section className="mb-8">
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="text-lg font-semibold">Courses</h2>
+            <Link to="/courses" className="text-sm text-accent hover:underline">
+              View All
+            </Link>
+          </div>
+          {courses.length === 0 ? (
+            <Card>
+              <p className="text-muted dark:text-muted-dark">No courses yet</p>
+            </Card>
+          ) : (
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              {courses.slice(0, 4).map((course) => (
+                <Link
+                  key={course.id}
+                  to="/courses/$id"
+                  params={{ id: course.id }}
+                  className="no-underline"
+                >
+                  <Card>
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="font-medium text-primary dark:text-primary-dark">
+                          {course.title}
+                        </p>
+                        <p className="mt-1 text-sm text-muted dark:text-muted-dark">
+                          {course.description}
+                        </p>
+                      </div>
+                      <span className="shrink-0 rounded-full bg-accent/12 px-2 py-0.5 text-xs font-semibold text-accent">
+                        {course.instrument}
+                      </span>
+                    </div>
+                  </Card>
+                </Link>
+              ))}
+            </div>
+          )}
+        </section>
+      ) : null}
 
       {/* ---- Unread Messages ---- */}
       {unreadMessages.length > 0 ? (
@@ -134,15 +203,18 @@ export function AdminDashboard({
           <div className="mb-4 flex items-center justify-between">
             <h2 className="text-lg font-semibold">
               Unread Messages
-              <span className="ml-2 bg-accent/20 px-2 py-0.5 text-xs font-semibold text-accent rounded-full">
+              <span className="ml-2 rounded-full bg-accent/20 px-2 py-0.5 text-xs font-semibold text-accent">
                 {String(unreadMessages.length)}
               </span>
             </h2>
-            <Link to="/messages" className="text-sm text-accent hover:underline">
+            <Link
+              to="/messages"
+              className="text-sm text-accent hover:underline"
+            >
               View All
             </Link>
           </div>
-          <div className="gap-3 flex flex-col">
+          <div className="flex flex-col gap-3">
             {unreadMessages.slice(0, 3).map((m) => {
               const sender = studentMap.get(m.sender_id);
               return (
@@ -153,11 +225,11 @@ export function AdminDashboard({
                         <p className="text-sm font-medium text-primary dark:text-primary-dark">
                           {sender?.name ?? "Student"}
                         </p>
-                        <p className="text-sm text-muted dark:text-muted-dark line-clamp-1">
+                        <p className="line-clamp-1 text-sm text-muted dark:text-muted-dark">
                           {m.body}
                         </p>
                       </div>
-                      <span className="text-xs text-muted dark:text-muted-dark ml-3 shrink-0">
+                      <span className="ml-3 shrink-0 text-xs text-muted dark:text-muted-dark">
                         {new Date(m.created_at).toLocaleDateString("en-US", {
                           month: "short",
                           day: "numeric",
@@ -174,8 +246,8 @@ export function AdminDashboard({
 
       {/* ---- Quick Actions ---- */}
       <section>
-        <h2 className="text-lg font-semibold mb-4">Quick Actions</h2>
-        <div className="gap-3 flex flex-wrap">
+        <h2 className="mb-4 text-lg font-semibold">Quick Actions</h2>
+        <div className="flex flex-wrap gap-3">
           <Link to="/courses" className="no-underline">
             <Button variant="outline">Courses</Button>
           </Link>

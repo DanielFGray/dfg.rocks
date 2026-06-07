@@ -1,24 +1,31 @@
+import { Effect } from "effect";
 import { useEffect, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { api } from "../../lib/api.js";
+import { getErrorMessage } from "../../lib/errors.js";
 import { useAuth } from "../../lib/hooks/useAuth.js";
 import type {
   AssignedMaterial,
   AssignmentProgress,
   AssignmentReview,
   Material,
-} from "../../lib/types.js";
-import { findNotationTrack, formatNotationTrackLabel } from "../../../shared/notationTracks.js";
+} from "../../../shared/schemas.js";
+import {
+  findNotationTrack,
+  formatNotationTrackLabel,
+} from "../../../shared/notationTracks.js";
 import { MaterialPreview } from "../library/MaterialPreview.js";
 import { categorize } from "../library/helpers.js";
 import { Button } from "../ui/Button.js";
-import { Card } from "../ui/Card.js";
 
 export function getAssignedTrackLabel(material: {
   notation_tracks: Material["notation_tracks"];
-  assigned_track_index: number | null;
+  assigned_track_index: number | null | undefined;
 }): string | null {
-  const track = findNotationTrack(material.notation_tracks, material.assigned_track_index);
+  const track = findNotationTrack(
+    material.notation_tracks,
+    material.assigned_track_index,
+  );
 
   return track ? formatNotationTrackLabel(track) : null;
 }
@@ -47,7 +54,7 @@ export function formatDuration(totalSeconds: number): string {
 }
 
 function mutationErrorMessage(error: unknown, fallback: string): string {
-  return error instanceof Error ? error.message : fallback;
+  return getErrorMessage(error, fallback);
 }
 
 function StarIcon({ filled }: { filled: boolean }) {
@@ -57,7 +64,9 @@ function StarIcon({ filled }: { filled: boolean }) {
       height="18"
       viewBox="0 0 20 20"
       fill={filled ? "currentColor" : "none"}
-      className={filled ? "text-amber-400" : "text-muted/40 dark:text-muted-dark/40"}
+      className={
+        filled ? "text-amber-400" : "text-muted/40 dark:text-muted-dark/40"
+      }
     >
       <path
         d="M10 2.5L12.318 7.196L17.5 7.949L13.75 11.603L14.635 16.761L10 14.324L5.365 16.761L6.25 11.603L2.5 7.949L7.682 7.196L10 2.5Z"
@@ -103,7 +112,10 @@ function RatingSelector({
 
 function StarsDisplay({ stars }: { stars: number }) {
   return (
-    <div className="flex items-center gap-1" aria-label={`${stars} out of 5 stars`}>
+    <div
+      className="flex items-center gap-1"
+      aria-label={`${stars} out of 5 stars`}
+    >
       {Array.from({ length: 5 }, (_, index) => (
         <StarIcon key={index} filled={index < stars} />
       ))}
@@ -123,7 +135,9 @@ export function StudentAssignmentDetail({
   const { user } = useAuth();
   const canTrackAssignments = user?.role === "student";
   const category = categorize(material.mime_type, material.original_filename);
-  const [progress, setProgress] = useState<AssignmentProgress | null>(initialProgress);
+  const [progress, setProgress] = useState<AssignmentProgress | null>(
+    initialProgress,
+  );
   const [reviews, setReviews] = useState<AssignmentReview[]>(initialReviews);
   const [selectedStars, setSelectedStars] = useState<number | null>(null);
   const [durationSeconds, setDurationSeconds] = useState<number | null>(null);
@@ -146,36 +160,32 @@ export function StudentAssignmentDetail({
   }, [material.id]);
 
   const playbackMutation = useMutation({
-    mutationFn: async (seconds: number) => {
-      const { data, error } = await api.assignments({ materialId: material.id }).playback.post({
-        seconds,
-      });
-      if (error) throw error;
-      if (!data || "error" in data) {
-        throw new Error(data?.error ?? "Failed to save playback time");
-      }
-      return data;
-    },
+    mutationFn: (seconds: number) =>
+      Effect.runPromise(
+        api.authenticated.recordAssignmentPlayback({
+          path: { materialId: material.id },
+          payload: { seconds },
+        }),
+      ),
     onSuccess: (data) => {
       setPlaybackError(null);
       setProgress(data);
     },
     onError: (error) => {
-      setPlaybackError(mutationErrorMessage(error, "Failed to save playback time"));
+      setPlaybackError(
+        mutationErrorMessage(error, "Failed to save playback time"),
+      );
     },
   });
 
   const reviewMutation = useMutation({
-    mutationFn: async (stars: number) => {
-      const { data, error } = await api.assignments({ materialId: material.id }).reviews.post({
-        stars,
-      });
-      if (error) throw error;
-      if (!data || "error" in data) {
-        throw new Error(data?.error ?? "Failed to save self-review");
-      }
-      return data;
-    },
+    mutationFn: (stars: number) =>
+      Effect.runPromise(
+        api.authenticated.createAssignmentReview({
+          path: { materialId: material.id },
+          payload: { stars },
+        }),
+      ),
     onSuccess: (data) => {
       setReviewError(null);
       setSelectedStars(null);
@@ -200,22 +210,26 @@ export function StudentAssignmentDetail({
         notationPlayerProps={
           category === "notation"
             ? {
-              defaultTrackIndex: material.assigned_track_index,
-              onDurationSeconds: (seconds) => {
-                setDurationSeconds((current) => (current === seconds ? current : seconds));
-              },
-              onPlaybackSeconds: (seconds) => {
-                if (!canTrackAssignments) return;
-                playbackMutation.mutate(seconds);
-              },
-            }
+                defaultTrackIndex: material.assigned_track_index,
+                onDurationSeconds: (seconds) => {
+                  setDurationSeconds((current) =>
+                    current === seconds ? current : seconds,
+                  );
+                },
+                onPlaybackSeconds: (seconds) => {
+                  if (!canTrackAssignments) return;
+                  playbackMutation.mutate(seconds);
+                },
+              }
             : undefined
         }
       />
 
       <div className="px-6 py-6">
         {playbackError ? (
-          <p className="mt-4 text-sm text-red-600 dark:text-red-400">{playbackError}</p>
+          <p className="mt-4 text-sm text-red-600 dark:text-red-400">
+            {playbackError}
+          </p>
         ) : null}
 
         <div className="flex flex-col gap-2 text-sm text-muted md:flex-row md:items-center md:justify-between md:text-right dark:text-muted-dark">
@@ -247,7 +261,9 @@ export function StudentAssignmentDetail({
               </Button>
 
               {reviewError ? (
-                <p className="mt-3 text-sm text-red-600 dark:text-red-400">{reviewError}</p>
+                <p className="mt-3 text-sm text-red-600 dark:text-red-400">
+                  {reviewError}
+                </p>
               ) : null}
             </>
           )

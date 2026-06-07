@@ -10,14 +10,20 @@ type SidebarProps = {
   footer?: ReactNode;
 };
 
-export const Sidebar = ({ open, onClose, title, children, footer }: SidebarProps) => (
+export const Sidebar = ({
+  open,
+  onClose,
+  title,
+  children,
+  footer,
+}: SidebarProps) => (
   <ModalOverlay
     isOpen={open}
     onOpenChange={(isOpen) => {
       if (!isOpen) onClose();
     }}
     isDismissable
-    className="inset-0 md:hidden data-[entering]:animate-in data-[entering]:fade-in data-[exiting]:animate-out data-[exiting]:fade-out fixed z-200"
+    className="fixed inset-0 z-200 data-[entering]:animate-in data-[entering]:fade-in data-[exiting]:animate-out data-[exiting]:fade-out lg:hidden"
   >
     <Modal className="top-0 right-0 w-72 absolute h-full outline-hidden">
       <Dialog className="bg-card dark:bg-card-dark border-overlay/6 dark:border-overlay-dark/6 shadow-2xl flex h-full flex-col border-l outline-hidden">

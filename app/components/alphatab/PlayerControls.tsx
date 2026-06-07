@@ -34,7 +34,13 @@ export function PlayerControls({
         className="rounded-full bg-accent p-1.5 text-white transition-colors hover:bg-accent-hover disabled:cursor-not-allowed disabled:bg-muted dark:disabled:bg-muted-dark"
         title={isPlaying ? "Pause" : "Play"}
       >
-        {isLoading ? <LoadingSpinner /> : isPlaying ? <PauseIcon /> : <PlayIcon />}
+        {isLoading ? (
+          <LoadingSpinner />
+        ) : isPlaying ? (
+          <PauseIcon />
+        ) : (
+          <PlayIcon />
+        )}
       </button>
 
       <button

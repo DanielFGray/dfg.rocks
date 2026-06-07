@@ -1,3 +1,5 @@
+import { Effect } from "effect";
+import * as S from "effect/Schema";
 import { createFileRoute, Link, useNavigate, useRouter } from "@tanstack/react-router";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "../lib/api.js";
@@ -6,11 +8,14 @@ import { resetAuthClientState } from "../lib/authClientState.js";
 import { getErrorMessage } from "../lib/errors.js";
 import { Button } from "../components/ui/Button.js";
 import { Card } from "../components/ui/Card.js";
-import { TokenSearch, parseWith } from "../../shared/validation.js";
+import { TokenSearch } from "../../shared/schemas.js";
 
 export const Route = createFileRoute("/confirm-delete-account")({
   head: () => ({ meta: [{ title: "Confirm Delete Account | DFG Portal" }] }),
-  validateSearch: (search: Record<string, unknown>) => parseWith(TokenSearch, search),
+  validateSearch: (
+    search: Record<string, unknown>,
+  ): S.Schema.Type<typeof TokenSearch> =>
+    S.decodeUnknownSync(TokenSearch)(search),
   loader: () => getAuthUser(),
   component: ConfirmDeleteAccountPage,
 });
@@ -23,10 +28,11 @@ function ConfirmDeleteAccountPage() {
   const queryClient = useQueryClient();
 
   const confirmDelete = useMutation({
-    mutationFn: async () => {
+    mutationFn: () => {
       if (!token) throw new Error("Missing deletion token");
-      const { error } = await api["confirm-delete-account"].post({ token });
-      if (error) throw error;
+      return Effect.runPromise(
+        api.authenticated.confirmDeleteAccount({ payload: { token } }),
+      );
     },
     onSuccess: async () => {
       await resetAuthClientState({ queryClient, router });
@@ -55,7 +61,6 @@ function ConfirmDeleteAccountPage() {
   }
 
   const redirectTo = `/confirm-delete-account?token=${encodeURIComponent(token)}`;
-  const loginHref = `/login?redirect=${encodeURIComponent(redirectTo)}`;
 
   if (!user) {
     return (
@@ -81,10 +86,6 @@ function ConfirmDeleteAccountPage() {
     );
   }
 
-  const serverError = confirmDelete.isError
-    ? getErrorMessage(confirmDelete.error, "Could not delete your account")
-    : null;
-
   return (
     <main
       data-testid="confirm-delete-account-page"
@@ -106,13 +107,13 @@ function ConfirmDeleteAccountPage() {
             </p>
           </div>
 
-          {serverError ? (
+          {confirmDelete.isError ? (
             <div
               data-testid="confirm-delete-account-error"
               role="alert"
               className="mt-6 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-600 dark:text-red-400"
             >
-              {serverError}
+              {getErrorMessage(confirmDelete.error, "Could not delete your account")}
             </div>
           ) : null}
 

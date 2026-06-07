@@ -1,3 +1,4 @@
+import { Effect } from "effect";
 import { useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -21,23 +22,18 @@ export function AssignmentNotesPanel({ materialId }: { materialId: string }) {
 
   const { data: note } = useQuery({
     queryKey: ["assignment-note", materialId],
-    queryFn: async () => {
-      const { data, error } = await api.assignments({ materialId }).notes.get();
-      if (error) throw error;
-      if (data && "error" in data) throw data.error;
-      return data;
-    },
+    queryFn: () =>
+      Effect.runPromise(api.authenticated.assignmentNotes({ path: { materialId } })),
   });
 
   const upsertMutation = useMutation({
-    mutationFn: async (body: string) => {
-      const { data, error } = await api.assignments({ materialId }).notes.put({
-        body,
-      });
-      if (error) throw error;
-      if (data && "error" in data) throw data.error;
-      return data;
-    },
+    mutationFn: (body: string) =>
+      Effect.runPromise(
+        api.authenticated.upsertAssignmentNotes({
+          path: { materialId },
+          payload: { body },
+        }),
+      ),
     onMutate: () => setSaving(true),
     onSettled: () => {
       setSaving(false);
@@ -94,8 +90,14 @@ export function AssignmentNotesPanel({ materialId }: { materialId: string }) {
     return (
       <div className="gap-2 rounded-xl border-overlay/6 dark:border-overlay-dark/6 bg-card dark:bg-card-dark p-4 flex flex-col border">
         <div className="flex items-center justify-between">
-          <span className="text-sm font-medium text-muted dark:text-muted-dark">Notes</span>
-          <Button variant="ghost" onClick={startEditing} className="text-xs px-3 py-1">
+          <span className="text-sm font-medium text-muted dark:text-muted-dark">
+            Notes
+          </span>
+          <Button
+            variant="ghost"
+            onClick={startEditing}
+            className="text-xs px-3 py-1"
+          >
             Edit
           </Button>
         </div>
@@ -108,8 +110,14 @@ export function AssignmentNotesPanel({ materialId }: { materialId: string }) {
 
   return (
     <div className="rounded-xl border-overlay/6 dark:border-overlay-dark/6 bg-card/50 dark:bg-card-dark/50 px-4 py-3 flex items-center justify-between border border-dashed">
-      <span className="text-sm text-muted/60 dark:text-muted-dark/60">No notes yet</span>
-      <Button variant="ghost" onClick={startEditing} className="text-xs px-3 py-1">
+      <span className="text-sm text-muted/60 dark:text-muted-dark/60">
+        No notes yet
+      </span>
+      <Button
+        variant="ghost"
+        onClick={startEditing}
+        className="text-xs px-3 py-1"
+      >
         Add Note
       </Button>
     </div>
@@ -126,8 +134,12 @@ function AssignmentNotesPage() {
       data-testid="assignment-notes"
       className="px-5 md:px-8 pt-20 pb-16 mx-auto max-w-[1100px]"
     >
-      <h1 className="text-3xl font-bold tracking-tight mb-8">Assignment Notes</h1>
-      <p className="text-muted dark:text-muted-dark">Select an assignment to view or edit notes.</p>
+      <h1 className="text-3xl font-bold tracking-tight mb-8">
+        Assignment Notes
+      </h1>
+      <p className="text-muted dark:text-muted-dark">
+        Select an assignment to view or edit notes.
+      </p>
     </main>
   );
 }

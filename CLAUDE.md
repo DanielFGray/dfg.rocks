@@ -1,6 +1,6 @@
 # dfg.rocks
 
-Music lessons business site + student/admin portal. React + TanStack Start frontend, Elysia API backend (in-process), PostgreSQL with RLS enforcement.
+Music lessons business site + student/admin portal. React + TanStack Start frontend, Effect HttpApi backend (in-process), PostgreSQL with RLS enforcement.
 
 ## Commands
 
@@ -18,13 +18,13 @@ bun run test:e2e         # Playwright E2E tests (18 specs)
 
 ## Architecture
 
-### Single-process: TanStack Start + Elysia
+### Single-process: TanStack Start + Effect HttpApi
 
 ```
 TanStack Start (Vite)
   ├── app/routes/          React pages (file-based routing, SSR)
-  └── app/routes/api.$.ts  Catch-all server route → Elysia
-        └── server/app.ts  Elysia app with /api/* routes
+  └── app/routes/api.$.ts  Catch-all server route → Effect web handler
+        └── server/app.ts  Effect HttpApi app with /api/* routes
               ├── server/routes/public.ts
               ├── server/routes/auth.ts
               ├── server/routes/authenticated.ts
@@ -32,7 +32,7 @@ TanStack Start (Vite)
               └── server/routes/testing.ts (non-production)
 ```
 
-No separate API server process. Elysia runs in-process via TanStack Start's server route handlers.
+No separate API server process. Effect HttpApi runs in-process via TanStack Start's server route handlers.
 
 ### Client: Typed Fetch API
 
@@ -44,14 +44,14 @@ import { api } from "../lib/api.js";
 // In React component with TanStack Query:
 const { data: courses } = useSuspenseQuery({
   queryKey: ["courses"],
-  queryFn: api.authenticated.courses,
+  queryFn: async () => (await api.courses.get()).data,
 });
 
 // Mutations:
-const mutation = useMutation({ mutationFn: (p) => api.admin.createCourse(p) });
+const mutation = useMutation({ mutationFn: (p) => api.admin.courses.post(p) });
 ```
 
-**Endpoint groups**: `api.public.*`, `api.auth.*`, `api.authenticated.*`, `api.admin.*`
+**Endpoint groups**: top-level user routes (`api.courses.*`, `api.messages.*`, etc.) plus `api.admin.*`
 
 ### Routing: TanStack Start (file-based)
 
@@ -64,9 +64,9 @@ Routes live in `app/routes/`. Auth-guarded routes under `app/routes/_authed/` (l
 - **Auth**: `useAuth()` hook backed by `useQuery(["me"])` — returns `{ user, isAdmin }`
 - **Data refresh**: `queryClient.invalidateQueries({ queryKey: [...] })`
 
-### Server: Elysia + Kysely + RLS
+### Server: Effect HttpApi + Kysely + RLS
 
-Backend uses Elysia for routing/middleware, Kysely for type-safe SQL, and PostgreSQL RLS for row-level security.
+Backend uses Effect HttpApi for routing/handlers, Kysely for type-safe SQL, and PostgreSQL RLS for row-level security.
 
 **DB connections** (`server/db.ts`):
 
@@ -84,7 +84,7 @@ Backend uses Elysia for routing/middleware, Kysely for type-safe SQL, and Postgr
 
 **Don't filter by user_id in TypeScript** — RLS handles it.
 
-**Elysia middleware** (derive/guard):
+**Effect auth/layer flow**:
 
 - Session validation via `sessionService.validateSessionToken(cookie)`
 - Auth guard throws `HttpError(401)` if no session
@@ -112,7 +112,7 @@ RLS policies derive user context from `current_setting('my.session_id')` joined 
 ### Server
 
 - Plain async/await, Kysely queries, throw `HttpError` for errors
-- Elysia route groups with derive/guard middleware
+- Effect HttpApi route groups with shared auth/raw-handler helpers
 - `mapPgError()` for mapping PostgreSQL errcodes to HTTP errors
 
 ### Client
@@ -132,9 +132,9 @@ RLS policies derive user context from `current_setting('my.session_id')` joined 
 | `app/lib/hooks/useAuth.ts`                 | Auth hook (useQuery + isAdmin)                        |
 | `app/routes/__root.tsx`                    | Root layout (html, head, providers)                   |
 | `app/routes/_authed.tsx`                   | Auth guard layout route (ssr: false)                  |
-| `app/routes/api.$.ts`                      | Catch-all route mounting Elysia                       |
+| `app/routes/api.$.ts`                      | Catch-all route mounting the Effect web handler       |
 | `app/config.ts`                            | Site metadata (name, city, testimonials, etc.)        |
-| `server/app.ts`                            | Elysia app composition                                |
+| `server/app.ts`                            | Effect HttpApi app composition                        |
 | `server/db.ts`                             | rootDb, authDb, withAuthContext                       |
 | `server/routes/public.ts`                  | Public endpoints (health, contact, OAuth)             |
 | `server/routes/auth.ts`                    | Auth endpoints (login, logout, me, password)          |

@@ -7,9 +7,10 @@ type ModalProps = {
   onClose: () => void;
   title: string;
   children: ReactNode;
+  className?: string;
 };
 
-export const Modal = ({ open, onClose, title, children }: ModalProps) => (
+export const Modal = ({ open, onClose, title, children, className }: ModalProps) => (
   <ModalOverlay
     isOpen={open}
     onOpenChange={(isOpen) => {
@@ -18,7 +19,7 @@ export const Modal = ({ open, onClose, title, children }: ModalProps) => (
     isDismissable
     className="data-[entering]:animate-in data-[entering]:fade-in data-[exiting]:animate-out data-[exiting]:fade-out fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs duration-500"
   >
-    <AriaModal className="w-full max-w-lg outline-hidden">
+    <AriaModal className={className ?? "w-full max-w-lg outline-hidden"}>
       <Dialog className="relative rounded-xl border border-overlay/6 bg-card p-6 shadow-2xl outline-hidden dark:border-overlay-dark/6 dark:bg-card-dark">
         <div className="mb-4 flex items-center justify-between">
           <Heading

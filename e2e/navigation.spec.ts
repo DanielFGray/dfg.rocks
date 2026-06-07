@@ -1,10 +1,10 @@
-import { test, expect, loginViaUi } from "./helpers.js";
+import { test, expect, loginViaUi, logoutViaUi } from "./helpers.js";
 
 test.describe("navigation", () => {
   test("logout returns to login page", async ({ page, testing }) => {
     await testing.login();
     await loginViaUi(page, "test_admin", "testpassword123");
-    await page.getByTestId("logout").click();
+    await logoutViaUi(page);
     await expect(page.getByTestId("login-page")).toBeVisible();
   });
 
@@ -63,5 +63,26 @@ test.describe("mobile sidebar", () => {
 
     // Sidebar should be closed
     await expect(sidebar).not.toBeVisible();
+  });
+});
+
+test.describe("tablet sidebar", () => {
+  test.use({ viewport: { width: 820, height: 1180 } });
+
+  test("student can open the sidebar at tablet width", async ({ page, testing }) => {
+    await testing.login({
+      username: "test_student_tablet_nav",
+      role: "student",
+      name: "Tablet Student",
+    });
+
+    await loginViaUi(page, "test_student_tablet_nav", "testpassword123");
+    await expect(page.getByTestId("nav-menu-toggle")).toBeVisible();
+
+    await page.getByTestId("nav-menu-toggle").click();
+
+    const sidebar = page.getByRole("dialog", { name: "Menu" });
+    await expect(sidebar).toBeVisible();
+    await expect(sidebar.getByTestId("nav-messages")).toBeVisible();
   });
 });

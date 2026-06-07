@@ -1,6 +1,10 @@
-import { useState } from "react";
+import { type FormEvent, useState } from "react";
+import { Effect } from "effect";
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { useMutation } from "@tanstack/react-query";
 import { getHomePageData } from "../lib/routeData.js";
+import { api } from "../lib/api.js";
+import { getErrorMessage } from "../lib/errors.js";
 import {
   site,
   nav,
@@ -11,6 +15,7 @@ import {
   contact,
 } from "../config.js";
 import { Sidebar } from "../components/ui/Sidebar.js";
+import { Button } from "../components/ui/Button.js";
 
 const [logoBefore, logoAfter] = site.logo.split(site.logoDot);
 
@@ -28,7 +33,8 @@ export const Route = createFileRoute("/")({
       },
       {
         property: "og:description",
-        content: "Private drum, guitar, piano & bass lessons for all ages. First lesson free.",
+        content:
+          "Private drum, guitar, piano & bass lessons for all ages. First lesson free.",
       },
       { property: "og:url", content: "https://dfg.rocks/" },
       { property: "og:type", content: "website" },
@@ -78,18 +84,18 @@ function SiteNav() {
 
   return (
     <>
-      <nav className="top-0 px-6 md:px-8 py-3 md:py-4 bg-surface/90 dark:bg-surface-dark/90 backdrop-blur-md border-overlay/5 dark:border-overlay-dark/5 fixed z-100 flex w-full items-center justify-between border-b">
-        <div className="font-bold text-xl tracking-tight">
+      <nav className="fixed top-0 z-100 flex w-full items-center justify-between border-b border-overlay/5 bg-surface/90 px-6 py-3 backdrop-blur-md md:px-8 md:py-4 dark:border-overlay-dark/5 dark:bg-surface-dark/90">
+        <div className="text-xl font-bold tracking-tight">
           {logoBefore}
           <span className="text-accent">{site.logoDot}</span>
           {logoAfter}
         </div>
 
-        <ul className="md:flex gap-8 hidden list-none items-center">
+        <ul className="hidden list-none items-center gap-8 md:flex">
           {nav.links.map((link) => (
             <li key={link.href}>
               <a
-                className="text-muted dark:text-muted-dark hover:text-primary dark:hover:text-primary-dark text-[0.95rem] no-underline transition-colors"
+                className="text-[0.95rem] text-muted no-underline transition-colors hover:text-primary dark:text-muted-dark dark:hover:text-primary-dark"
                 href={link.href}
               >
                 {link.label}
@@ -100,7 +106,7 @@ function SiteNav() {
             <Link
               to="/login"
               search={{ redirect: undefined }}
-              className="rounded-lg bg-overlay/5 dark:bg-overlay-dark/5 border-overlay/10 dark:border-overlay-dark/10 px-4 py-1.5 text-sm font-medium text-muted dark:text-muted-dark hover:border-accent/40 hover:text-accent border no-underline transition-all"
+              className="rounded-lg border border-overlay/10 bg-overlay/5 px-4 py-1.5 text-sm font-medium text-muted no-underline transition-all hover:border-accent/40 hover:text-accent dark:border-overlay-dark/10 dark:bg-overlay-dark/5 dark:text-muted-dark"
             >
               Student Portal
             </Link>
@@ -110,7 +116,7 @@ function SiteNav() {
         <button
           type="button"
           onClick={() => setOpen(!open)}
-          className="md:hidden p-2 text-muted dark:text-muted-dark hover:text-primary dark:hover:text-primary-dark cursor-pointer transition-colors"
+          className="cursor-pointer p-2 text-muted transition-colors hover:text-primary md:hidden dark:text-muted-dark dark:hover:text-primary-dark"
           aria-label="Toggle menu"
         >
           <svg
@@ -130,15 +136,15 @@ function SiteNav() {
       </nav>
 
       <Sidebar open={open} onClose={() => setOpen(false)} title="Menu">
-        <div className="px-6 py-2 flex flex-col">
+        <div className="flex flex-col px-6 py-2">
           {nav.links.map((link) => (
             <a
               key={link.href}
               href={link.href}
               onClick={() => setOpen(false)}
-              className="text-muted dark:text-muted-dark text-base hover:text-primary dark:hover:text-primary-dark no-underline transition-colors"
+              className="text-base text-muted no-underline transition-colors hover:text-primary dark:text-muted-dark dark:hover:text-primary-dark"
             >
-              <div className="py-3 border-overlay/5 dark:border-overlay-dark/5 border-b">
+              <div className="border-b border-overlay/5 py-3 dark:border-overlay-dark/5">
                 {link.label}
               </div>
             </a>
@@ -147,7 +153,7 @@ function SiteNav() {
             to="/login"
             search={{ redirect: undefined }}
             onClick={() => setOpen(false)}
-            className="text-accent text-base font-medium hover:text-accent-hover no-underline transition-colors"
+            className="text-base font-medium text-accent no-underline transition-colors hover:text-accent-hover"
           >
             <div className="py-3">Student Portal</div>
           </Link>
@@ -159,17 +165,17 @@ function SiteNav() {
 
 function Hero() {
   return (
-    <section className="px-5 md:px-8 pb-16 md:pb-24 pt-20 md:min-h-screen mx-auto flex min-h-[85vh] max-w-[1100px] flex-col justify-center">
-      <div className="text-accent mb-4 font-semibold text-[0.85rem] tracking-[0.15em] uppercase">
+    <section className="mx-auto flex min-h-[85vh] max-w-275 flex-col justify-center px-5 pt-20 pb-16 md:min-h-screen md:px-8 md:pb-24">
+      <div className="mb-4 text-[0.85rem] font-semibold tracking-[0.15em] text-accent uppercase">
         {hero.eyebrow}
       </div>
-      <h1 className="font-bold tracking-tight mb-6 text-[clamp(2.5rem,6vw,4.5rem)] leading-[1.1]">
+      <h1 className="mb-6 text-[clamp(2.5rem,6vw,4.5rem)] leading-[1.1] font-bold tracking-tight">
         {hero.headline}
       </h1>
-      <p className="text-muted dark:text-muted-dark mb-10 max-w-[540px] text-[1.2rem]">
+      <p className="mb-10 max-w-135 text-[1.2rem] text-muted dark:text-muted-dark">
         {hero.subtitle}
       </p>
-      <div className="gap-3 md:flex-row md:items-center md:gap-4 flex flex-col items-start">
+      <div className="flex flex-col items-start gap-3 md:flex-row md:items-center md:gap-4">
         {hero.cta.map((c) => (
           <a
             key={c.label}
@@ -191,18 +197,27 @@ function Hero() {
 
 function About() {
   return (
-    <section id="about" className="px-5 md:px-8 py-16 md:py-24 mx-auto max-w-[1100px]">
-      <div className="md:grid-cols-2 gap-10 md:gap-16 grid grid-cols-1 items-center">
-        <div className="rounded-xl max-h-[50vh] w-full overflow-hidden">
-          <img className="block h-full w-full object-cover" src={site.gravatar} alt={site.name} />
+    <section
+      id="about"
+      className="mx-auto max-w-275 px-5 py-16 md:px-8 md:py-24"
+    >
+      <div className="grid grid-cols-1 items-center gap-10 md:grid-cols-2 md:gap-16">
+        <div className="max-h-[50vh] w-full overflow-hidden rounded-xl">
+          <img
+            className="block h-full w-full object-cover"
+            src={site.gravatar}
+            alt={site.name}
+          />
         </div>
         <div>
-          <div className="text-accent mb-3 font-semibold text-[0.8rem] tracking-[0.15em] uppercase">
+          <div className="mb-3 text-[0.8rem] font-semibold tracking-[0.15em] text-accent uppercase">
             {about.sectionLabel}
           </div>
-          <h2 className="text-4xl font-bold tracking-tight mb-5 leading-[1.15]">{about.heading}</h2>
+          <h2 className="mb-5 text-4xl leading-[1.15] font-bold tracking-tight">
+            {about.heading}
+          </h2>
           {about.paragraphs.map((p, i) => (
-            <p key={i} className="text-muted dark:text-muted-dark mb-4">
+            <p key={i} className="mb-4 text-muted dark:text-muted-dark">
               {p}
             </p>
           ))}
@@ -214,25 +229,32 @@ function About() {
 
 function LessonsSection() {
   return (
-    <section id="lessons" className="px-5 py-16 md:px-8 md:py-24 mx-auto max-w-[1100px]">
-      <div className="mb-3 font-semibold text-accent text-[0.8rem] tracking-[0.15em] uppercase">
+    <section
+      id="lessons"
+      className="mx-auto max-w-275 px-5 py-16 md:px-8 md:py-24"
+    >
+      <div className="mb-3 text-[0.8rem] font-semibold tracking-[0.15em] text-accent uppercase">
         {lessons.sectionLabel}
       </div>
-      <h2 className="mb-5 text-4xl font-bold tracking-tight leading-[1.15]">{lessons.heading}</h2>
-      <div className="mt-10 gap-6 grid grid-cols-[repeat(auto-fit,minmax(280px,1fr))]">
+      <h2 className="mb-5 text-4xl leading-[1.15] font-bold tracking-tight">
+        {lessons.heading}
+      </h2>
+      <div className="mt-10 grid grid-cols-[repeat(auto-fit,minmax(280px,1fr))] gap-6">
         {lessons.items.map((lesson) => (
           <div
             key={lesson.title}
-            className="rounded-xl border-overlay/6 dark:border-overlay-dark/6 bg-card dark:bg-card-dark p-8 hover:-translate-y-0.5 hover:border-accent/30 border transition-all duration-200"
+            className="rounded-xl border border-overlay/6 bg-card p-8 transition-all duration-200 hover:-translate-y-0.5 hover:border-accent/30 dark:border-overlay-dark/6 dark:bg-card-dark"
           >
             <div className="mb-4 text-[2rem]">{lesson.icon}</div>
             <h3 className="mb-2 text-xl font-semibold">{lesson.title}</h3>
-            <p className="text-muted dark:text-muted-dark text-[0.95rem]">{lesson.description}</p>
-            <div className="mt-4 gap-2 flex">
+            <p className="text-[0.95rem] text-muted dark:text-muted-dark">
+              {lesson.description}
+            </p>
+            <div className="mt-4 flex gap-2">
               {lesson.formats.map((f) => (
                 <span
                   key={f}
-                  className="bg-accent/12 px-3 py-1 text-xs font-semibold text-accent rounded-full"
+                  className="rounded-full bg-accent/12 px-3 py-1 text-xs font-semibold text-accent"
                 >
                   {f}
                 </span>
@@ -248,23 +270,30 @@ function LessonsSection() {
 function Testimonials() {
   const { testimonials } = Route.useLoaderData();
   return testimonials.length > 0 ? (
-    <section id="testimonials" className="px-5 py-16 md:px-8 md:py-24 mx-auto max-w-[1100px]">
-      <div className="mb-3 font-semibold text-accent text-[0.8rem] tracking-[0.15em] uppercase">
+    <section
+      id="testimonials"
+      className="mx-auto max-w-275 px-5 py-16 md:px-8 md:py-24"
+    >
+      <div className="mb-3 text-[0.8rem] font-semibold tracking-[0.15em] text-accent uppercase">
         {testimonialsSection.sectionLabel}
       </div>
-      <h2 className="mb-5 text-4xl font-bold tracking-tight leading-[1.15]">
+      <h2 className="mb-5 text-4xl leading-[1.15] font-bold tracking-tight">
         {testimonialsSection.heading}
       </h2>
-      <div className="mt-10 gap-6 md:grid-cols-3 grid grid-cols-1">
+      <div className="mt-10 grid grid-cols-1 gap-6 md:grid-cols-3">
         {testimonials.map((t) => (
           <div
             key={t.id}
-            className="rounded-xl border-overlay/6 dark:border-overlay-dark/6 bg-card dark:bg-card-dark p-8 border"
+            className="rounded-xl border border-overlay/6 bg-card p-8 dark:border-overlay-dark/6 dark:bg-card-dark"
           >
-            <p className="mb-6 text-muted dark:text-muted-dark italic">&ldquo;{t.body}&rdquo;</p>
+            <p className="mb-6 text-muted italic dark:text-muted-dark">
+              &ldquo;{t.body}&rdquo;
+            </p>
             <div>
               <div className="font-semibold">{t.display_name}</div>
-              <div className="text-sm text-muted dark:text-muted-dark">{t.role_label}</div>
+              <div className="text-sm text-muted dark:text-muted-dark">
+                {t.role_label}
+              </div>
             </div>
           </div>
         ))}
@@ -274,22 +303,220 @@ function Testimonials() {
 }
 
 function Contact() {
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+  const [instrument, setInstrument] = useState("");
+  const [format, setFormat] = useState("");
+  const [message, setMessage] = useState("");
+
+  const contactMutation = useMutation({
+    mutationFn: () =>
+      Effect.runPromise(
+        api.public.contact({
+          payload: {
+            name,
+            email,
+            phone: phone || undefined,
+            instrument,
+            format,
+            message: message || undefined,
+            website: undefined,
+          },
+        }),
+      ),
+    onSuccess: () => {
+      setName("");
+      setEmail("");
+      setPhone("");
+      setInstrument("");
+      setFormat("");
+      setMessage("");
+    },
+  });
+
+  const handleSubmit = (e: FormEvent) => {
+    e.preventDefault();
+    contactMutation.mutate();
+  };
+
+  const inputClass =
+    "w-full rounded-lg border bg-card px-4 py-3 text-left text-primary outline-hidden transition-colors placeholder:text-muted/50 focus:border-accent focus:ring-1 focus:ring-accent/50 dark:bg-card-dark dark:text-primary-dark dark:placeholder:text-muted-dark/50 border-overlay/10 dark:border-overlay-dark/10";
+  const labelClass =
+    "mb-1.5 block text-left text-sm font-medium text-muted dark:text-muted-dark";
+
   return (
-    <section id="contact" className="px-5 py-16 md:px-8 md:py-24 mx-auto max-w-[1100px]">
-      <div className="max-w-2xl mx-auto text-center">
-        <div className="mb-3 font-semibold text-accent text-[0.8rem] tracking-[0.15em] uppercase">
+    <section
+      id="contact"
+      className="mx-auto max-w-275 px-5 py-16 md:px-8 md:py-24"
+    >
+      <div className="mx-auto max-w-2xl text-center">
+        <div className="mb-3 text-[0.8rem] font-semibold tracking-[0.15em] text-accent uppercase">
           {contact.sectionLabel}
         </div>
-        <h2 className="mb-5 text-4xl font-bold tracking-tight leading-[1.15]">{contact.heading}</h2>
-        <p className="mb-10 text-muted dark:text-muted-dark">{contact.description}</p>
+        <h2 className="mb-5 text-4xl leading-[1.15] font-bold tracking-tight">
+          {contact.heading}
+        </h2>
+        <p className="mb-10 text-muted dark:text-muted-dark">
+          {contact.description}
+        </p>
 
-        <div className="mb-10 gap-4 sm:flex-row flex flex-col justify-center">
+        {contactMutation.isSuccess ? (
+          <div className="mb-10 rounded-xl border border-green-500/30 bg-green-500/5 p-8 text-center dark:border-green-500/20 dark:bg-green-500/5">
+            <div className="mb-3 text-3xl">&#x2714;</div>
+            <h3 className="mb-2 text-xl font-semibold text-primary dark:text-primary-dark">
+              Message Sent!
+            </h3>
+            <p className="text-sm text-muted dark:text-muted-dark">
+              Thanks for reaching out. I'll get back to you within 24 hours.
+            </p>
+          </div>
+        ) : (
+          <form
+            onSubmit={handleSubmit}
+            className="mb-10"
+            data-testid="contact-form"
+          >
+            <div className="flex flex-col gap-5 text-left">
+              <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+                <div>
+                  <label htmlFor="contact-name" className={labelClass}>
+                    Name *
+                  </label>
+                  <input
+                    id="contact-name"
+                    type="text"
+                    required
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="Your name"
+                    className={inputClass}
+                  />
+                </div>
+                <div>
+                  <label htmlFor="contact-email" className={labelClass}>
+                    Email *
+                  </label>
+                  <input
+                    id="contact-email"
+                    type="email"
+                    required
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="you@example.com"
+                    className={inputClass}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label htmlFor="contact-phone" className={labelClass}>
+                  Phone
+                </label>
+                <input
+                  id="contact-phone"
+                  type="tel"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  placeholder="(optional)"
+                  className={inputClass}
+                />
+              </div>
+
+              <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+                <div>
+                  <label htmlFor="contact-instrument" className={labelClass}>
+                    Instrument *
+                  </label>
+                  <select
+                    id="contact-instrument"
+                    required
+                    value={instrument}
+                    onChange={(e) => setInstrument(e.target.value)}
+                    className={inputClass + " cursor-pointer"}
+                  >
+                    <option value="" disabled>
+                      Select an instrument...
+                    </option>
+                    {contact.instruments.map((inst) => (
+                      <option key={inst.value} value={inst.value}>
+                        {inst.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label htmlFor="contact-format" className={labelClass}>
+                    Format *
+                  </label>
+                  <select
+                    id="contact-format"
+                    required
+                    value={format}
+                    onChange={(e) => setFormat(e.target.value)}
+                    className={inputClass + " cursor-pointer"}
+                  >
+                    <option value="" disabled>
+                      Select format...
+                    </option>
+                    {contact.formats.map((fmt) => (
+                      <option key={fmt.value} value={fmt.value}>
+                        {fmt.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label htmlFor="contact-message" className={labelClass}>
+                  Message
+                </label>
+                <textarea
+                  id="contact-message"
+                  rows={4}
+                  value={message}
+                  onChange={(e) => setMessage(e.target.value)}
+                  placeholder="Tell me about yourself, your goals, or any questions you have..."
+                  className={inputClass + " resize-y"}
+                />
+              </div>
+
+              <input
+                type="text"
+                name="website"
+                style={{ display: "none" }}
+                tabIndex={-1}
+                autoComplete="off"
+              />
+
+              {contactMutation.isError ? (
+                <div className="rounded-lg border border-red-500/30 bg-red-500/5 px-4 py-3 text-sm text-red-600 dark:text-red-400">
+                  {getErrorMessage(
+                    contactMutation.error,
+                    "Failed to send message. Please try again.",
+                  )}
+                </div>
+              ) : null}
+
+              <Button
+                type="submit"
+                disabled={contactMutation.isPending}
+                className="w-full py-4 text-base"
+              >
+                {contactMutation.isPending ? "Sending..." : "Send Message"}
+              </Button>
+            </div>
+          </form>
+        )}
+
+        <div className="mb-10 flex flex-col justify-center gap-4 sm:flex-row">
           <a
             href={site.calendar}
-            className="gap-3 rounded-xl bg-accent px-9 py-4 text-base font-semibold text-white hover:bg-accent-hover inline-flex items-center justify-center no-underline transition-all hover:-translate-y-px"
+            className="inline-flex items-center justify-center gap-3 rounded-xl bg-accent px-9 py-4 text-base font-semibold text-white no-underline transition-all hover:-translate-y-px hover:bg-accent-hover"
           >
             <svg
-              className="w-5 h-5"
+              className="h-5 w-5"
               fill="none"
               viewBox="0 0 24 24"
               stroke="currentColor"
@@ -305,10 +532,10 @@ function Contact() {
           </a>
           <a
             href={`tel:${site.phone}`}
-            className="gap-3 rounded-xl border-overlay/20 dark:border-overlay-dark/20 px-9 py-4 text-base font-semibold text-primary dark:text-primary-dark hover:border-accent hover:text-accent inline-flex items-center justify-center border bg-transparent no-underline transition-all hover:-translate-y-px"
+            className="inline-flex items-center justify-center gap-3 rounded-xl border border-overlay/20 bg-transparent px-9 py-4 text-base font-semibold text-primary no-underline transition-all hover:-translate-y-px hover:border-accent hover:text-accent dark:border-overlay-dark/20 dark:text-primary-dark"
           >
             <svg
-              className="w-5 h-5"
+              className="h-5 w-5"
               fill="none"
               viewBox="0 0 24 24"
               stroke="currentColor"
@@ -324,10 +551,10 @@ function Contact() {
           </a>
           <a
             href={`mailto:${site.email}`}
-            className="gap-3 rounded-xl border-overlay/20 dark:border-overlay-dark/20 px-9 py-4 text-base font-semibold text-primary dark:text-primary-dark hover:border-accent hover:text-accent inline-flex items-center justify-center border bg-transparent no-underline transition-all hover:-translate-y-px"
+            className="inline-flex items-center justify-center gap-3 rounded-xl border border-overlay/20 bg-transparent px-9 py-4 text-base font-semibold text-primary no-underline transition-all hover:-translate-y-px hover:border-accent hover:text-accent dark:border-overlay-dark/20 dark:text-primary-dark"
           >
             <svg
-              className="w-5 h-5"
+              className="h-5 w-5"
               fill="none"
               viewBox="0 0 24 24"
               stroke="currentColor"
@@ -343,13 +570,18 @@ function Contact() {
           </a>
         </div>
 
-        <div className="gap-x-8 gap-y-3 text-sm text-muted dark:text-muted-dark flex flex-wrap justify-center">
+        <div className="flex flex-wrap justify-center gap-x-8 gap-y-3 text-sm text-muted dark:text-muted-dark">
           <span>
-            <strong className="text-primary dark:text-primary-dark">Location:</strong> {site.city},{" "}
-            {site.state}
+            <strong className="text-primary dark:text-primary-dark">
+              Location:
+            </strong>{" "}
+            {site.city}, {site.state}
           </span>
           <span>
-            <strong className="text-primary dark:text-primary-dark">Hours:</strong> {site.hours}
+            <strong className="text-primary dark:text-primary-dark">
+              Hours:
+            </strong>{" "}
+            {site.hours}
           </span>
         </div>
       </div>
@@ -359,7 +591,7 @@ function Contact() {
 
 function Footer() {
   return (
-    <footer className="px-8 py-12 text-muted dark:text-muted-dark border-overlay/5 dark:border-overlay-dark/5 border-t text-center text-[0.85rem]">
+    <footer className="border-t border-overlay/5 px-8 py-12 text-center text-[0.85rem] text-muted dark:border-overlay-dark/5 dark:text-muted-dark">
       <p>
         &copy; {site.year} {site.business}. All rights reserved.
       </p>

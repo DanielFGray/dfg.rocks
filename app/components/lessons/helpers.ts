@@ -1,9 +1,5 @@
-import * as v from "valibot";
-import type { LocationType } from "../../lib/types.js";
-
-export const requiredValidator = {
-  onChange: v.pipe(v.string(), v.minLength(1, "Required")),
-};
+import type { LocationType } from "../../../shared/schemas.js";
+export { requiredValidator } from "../../lib/validators.js";
 
 export const durationOptions = [
   { value: "30", label: "30 minutes" },

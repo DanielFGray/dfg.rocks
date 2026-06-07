@@ -7,7 +7,12 @@ interface ProgressBarProps {
   onSeek: (e: React.ChangeEvent<HTMLInputElement>) => void;
 }
 
-export function ProgressBar({ currentTimeMs, endTimeMs, isLoading, onSeek }: ProgressBarProps) {
+export function ProgressBar({
+  currentTimeMs,
+  endTimeMs,
+  isLoading,
+  onSeek,
+}: ProgressBarProps) {
   const progressPercent = endTimeMs > 0 ? (currentTimeMs / endTimeMs) * 100 : 0;
 
   return (
@@ -18,7 +23,10 @@ export function ProgressBar({ currentTimeMs, endTimeMs, isLoading, onSeek }: Pro
 
       <div className="min-w-0 relative flex-1">
         <div className="h-1.5 bg-overlay/15 md:h-2 dark:bg-overlay-dark/15 overflow-hidden rounded-full">
-          <div className="bg-accent h-full" style={{ width: `${progressPercent}%` }} />
+          <div
+            className="bg-accent h-full"
+            style={{ width: `${progressPercent}%` }}
+          />
         </div>
         <input
           type="range"

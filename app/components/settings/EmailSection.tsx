@@ -1,7 +1,8 @@
+import { Effect } from "effect";
 import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { api } from "../../lib/api.js";
-import type { UserEmail } from "../../lib/types.js";
+import type { UserEmail } from "../../../shared/schemas.js";
 import { Button } from "../ui/Button.js";
 import { Card } from "../ui/Card.js";
 import { Input } from "../ui/Input.js";
@@ -18,41 +19,31 @@ export function EmailSection({
   const [deleteTarget, setDeleteTarget] = useState<UserEmail | null>(null);
 
   const addEmailMutation = useMutation({
-    mutationFn: async (email: string) => {
-      const { data, error } = await api.me.emails.post({ email });
-      if (error) throw error;
-      return data;
-    },
+    mutationFn: (email: string) =>
+      Effect.runPromise(api.authenticated.addMyEmail({ payload: { email } })),
     onSettled: () => {
       onRefresh();
     },
   });
 
   const makePrimaryMutation = useMutation({
-    mutationFn: async (id: string) => {
-      const { data, error } = await api.me.emails({ id })["make-primary"].post();
-      if (error) throw error;
-      return data;
-    },
+    mutationFn: (id: string) =>
+      Effect.runPromise(api.authenticated.makePrimaryEmail({ path: { id } })),
     onSettled: () => {
       onRefresh();
     },
   });
 
   const resendVerificationMutation = useMutation({
-    mutationFn: async (id: string) => {
-      const { data, error } = await api.me.emails({ id })["resend-verification"].post();
-      if (error) throw error;
-      return data;
-    },
+    mutationFn: (id: string) =>
+      Effect.runPromise(
+        api.authenticated.resendEmailVerification({ path: { id } }),
+      ),
   });
 
   const deleteEmailMutation = useMutation({
-    mutationFn: async (id: string) => {
-      const { data, error } = await api.me.emails({ id }).delete();
-      if (error) throw error;
-      return data;
-    },
+    mutationFn: (id: string) =>
+      Effect.runPromise(api.authenticated.deleteMyEmail({ path: { id } })),
     onSettled: () => {
       onRefresh();
     },
@@ -74,40 +65,40 @@ export function EmailSection({
   return (
     <>
       <section data-testid="email-section">
-        <h2 className="text-xl font-semibold mb-4">Email Addresses</h2>
+        <h2 className="mb-4 text-xl font-semibold">Email Addresses</h2>
 
-        <div className="gap-3 mb-6 flex flex-col">
+        <div className="mb-6 flex flex-col gap-3">
           {emails.map((em) => (
             <Card key={em.id}>
-              <div className="sm:flex-row sm:items-center sm:justify-between gap-3 flex flex-col">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="min-w-0">
-                  <div className="gap-2 flex flex-wrap items-center">
-                    <span className="font-medium text-primary dark:text-primary-dark break-all">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-medium break-all text-primary dark:text-primary-dark">
                       {em.email}
                     </span>
                     {em.is_primary ? (
-                      <span className="px-2 py-0.5 text-xs font-semibold bg-accent/20 text-accent rounded-full">
+                      <span className="rounded-full bg-accent/20 px-2 py-0.5 text-xs font-semibold text-accent">
                         Primary
                       </span>
                     ) : null}
                     {em.is_verified ? (
-                      <span className="px-2 py-0.5 text-xs font-semibold bg-green-500/20 text-green-400 rounded-full">
+                      <span className="rounded-full bg-green-500/20 px-2 py-0.5 text-xs font-semibold text-green-400">
                         Verified
                       </span>
                     ) : (
-                      <span className="px-2 py-0.5 text-xs font-semibold bg-amber-500/20 text-amber-400 rounded-full">
+                      <span className="rounded-full bg-amber-500/20 px-2 py-0.5 text-xs font-semibold text-amber-400">
                         Unverified
                       </span>
                     )}
                   </div>
                 </div>
 
-                <div className="gap-2 flex shrink-0 flex-wrap">
+                <div className="flex shrink-0 flex-wrap gap-2">
                   {em.is_verified && !em.is_primary ? (
                     <Button
                       variant="ghost"
                       onClick={() => makePrimaryMutation.mutate(em.id)}
-                      className="text-xs px-3 py-1.5"
+                      className="px-3 py-1.5 text-xs"
                       data-testid="make-primary"
                     >
                       Make Primary
@@ -117,7 +108,7 @@ export function EmailSection({
                     <Button
                       variant="ghost"
                       onClick={() => resendVerificationMutation.mutate(em.id)}
-                      className="text-xs px-3 py-1.5 text-amber-400 hover:text-amber-300"
+                      className="px-3 py-1.5 text-xs text-amber-400 hover:text-amber-300"
                       data-testid="resend-verification"
                     >
                       Resend Verification
@@ -127,7 +118,7 @@ export function EmailSection({
                     <Button
                       variant="ghost"
                       onClick={() => setDeleteTarget(em)}
-                      className="text-xs px-3 py-1.5 text-red-600 hover:text-red-500 dark:text-red-400 dark:hover:text-red-300"
+                      className="px-3 py-1.5 text-xs text-red-600 hover:text-red-500 dark:text-red-400 dark:hover:text-red-300"
                       data-testid="remove-email"
                     >
                       Remove
@@ -143,7 +134,7 @@ export function EmailSection({
         <Card>
           <form
             onSubmit={handleAddEmail}
-            className="sm:flex-row gap-3 flex flex-col items-end"
+            className="flex flex-col items-end gap-3 sm:flex-row"
             data-testid="add-email-form"
           >
             <div className="w-full flex-1">
@@ -169,7 +160,9 @@ export function EmailSection({
       <ConfirmDialog
         open={deleteTarget !== null}
         title="Remove Email"
-        message={deleteTarget ? `Remove ${deleteTarget.email} from your account?` : ""}
+        message={
+          deleteTarget ? `Remove ${deleteTarget.email} from your account?` : ""
+        }
         confirmLabel="Remove"
         variant="danger"
         onConfirm={confirmDelete}

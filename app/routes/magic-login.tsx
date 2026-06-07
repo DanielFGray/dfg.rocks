@@ -1,6 +1,7 @@
+import { Effect } from "effect";
+import { useEffect } from "react";
 import { createFileRoute, Link, useNavigate, useRouter } from "@tanstack/react-router";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useEffect } from "react";
 import { api } from "../lib/api.js";
 import { consumeLoginRedirect, normalizeLoginRedirect } from "../lib/loginRedirect.js";
 import { getErrorMessage } from "../lib/errors.js";
@@ -22,11 +23,9 @@ function MagicLoginPage() {
   const queryClient = useQueryClient();
 
   const verify = useMutation({
-    mutationFn: async () => {
+    mutationFn: () => {
       if (!token) throw new Error("Missing magic link token");
-      const { data, error } = await api["magic-link"].verify.post({ token });
-      if (error) throw error;
-      return data;
+      return Effect.runPromise(api.auth.verifyMagicLink({ payload: { token } }));
     },
     onSuccess: async () => {
       await resetAuthClientState({ queryClient, router });
@@ -43,7 +42,6 @@ function MagicLoginPage() {
     if (token) {
       verify.mutate();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
 
   if (!token) {
@@ -56,11 +54,7 @@ function MagicLoginPage() {
           <p className="mb-6 text-sm text-muted dark:text-muted-dark">
             This magic link is missing a token.
           </p>
-          <Link
-            to="/login"
-            search={{ redirect }}
-            className="text-sm text-accent hover:underline"
-          >
+          <Link to="/login" search={{ redirect }} className="text-sm text-accent hover:underline">
             Back to login
           </Link>
         </div>
@@ -69,19 +63,16 @@ function MagicLoginPage() {
   }
 
   if (verify.isError) {
-    const message = getErrorMessage(verify.error, "Link expired");
     return (
       <main className="flex min-h-screen items-center justify-center px-4">
         <div className="text-center">
           <h1 className="mb-4 text-2xl font-bold text-primary dark:text-primary-dark">
             Link Expired
           </h1>
-          <p className="mb-6 text-sm text-muted dark:text-muted-dark">{message}</p>
-          <Link
-            to="/login"
-            search={{ redirect }}
-            className="text-sm text-accent hover:underline"
-          >
+          <p className="mb-6 text-sm text-muted dark:text-muted-dark">
+            {getErrorMessage(verify.error, "Link expired")}
+          </p>
+          <Link to="/login" search={{ redirect }} className="text-sm text-accent hover:underline">
             Back to login
           </Link>
         </div>

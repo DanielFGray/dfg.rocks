@@ -10,8 +10,14 @@ function formatSpeedValue(speed: number): string {
   return Number.parseFloat(speed.toFixed(3)).toString();
 }
 
-export function SpeedControl({ playbackSpeed, isLoading, onSpeedChange }: SpeedControlProps) {
-  const [inputValue, setInputValue] = useState(() => formatSpeedValue(playbackSpeed));
+export function SpeedControl({
+  playbackSpeed,
+  isLoading,
+  onSpeedChange,
+}: SpeedControlProps) {
+  const [inputValue, setInputValue] = useState(() =>
+    formatSpeedValue(playbackSpeed),
+  );
   const isEditingRef = useRef(false);
 
   useEffect(() => {

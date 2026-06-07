@@ -1,302 +1,113 @@
-import Elysia, { t } from "elysia";
-import { sql } from "kysely";
-import { rootDb } from "../db.js";
-import { env } from "../assertEnv.js";
-import { sessionService } from "../services/sessionService.js";
-import { authService } from "../services/authService.js";
+import * as HttpApi from "@effect/platform/HttpApi";
+import * as HttpApiBuilder from "@effect/platform/HttpApiBuilder";
+import * as HttpServerResponse from "@effect/platform/HttpServerResponse";
+import { Effect } from "effect";
+import { authGroup } from "../../shared/httpApi.js";
 import { checkRateLimit } from "../services/rateLimiter.js";
-import { HttpError } from "../pgErrors.js";
-import type { User } from "../../shared/schemas.js";
+import { AuthService } from "../services/authService.js";
+import { AuthRouteService } from "../services/authRouteService.js";
+import { SessionService } from "../services/sessionService.js";
+import { UserService } from "../services/userService.js";
+import { csrfCheck, expireSessionCookie, setSessionCookie, responseForCause } from "./raw.js";
 
-// === Helpers ===
-
-type UserRow = Readonly<Pick<User, "id" | "username" | "name" | "role" | "is_verified">>;
-type UserResponse = Pick<User, "id" | "username" | "name" | "email" | "role" | "is_verified">;
-
-function getCookieString(value: unknown): string | undefined {
-  return typeof value === "string" ? value : undefined;
-}
-
-async function primaryEmailForUser(userId: string): Promise<string> {
-  const row = await rootDb
-    .selectFrom("app_public.user_emails")
-    .select("email")
-    .where("user_id", "=", userId)
-    .where("is_primary", "=", true)
-    .limit(1)
-    .executeTakeFirst();
-  return row?.email ?? "";
-}
-
-function setSessionCookie(
-  cookie: Record<string, { set: (opts: Record<string, unknown>) => unknown }>,
-  token: string,
-  expiresAt: Date,
-): void {
-  cookie.session!.set({
-    value: token,
-    httpOnly: true,
-    sameSite: "lax",
-    secure: env.NODE_ENV === "production",
-    path: "/",
-    expires: expiresAt,
-  });
-}
-
-function expireSessionCookie(
-  cookie: Record<string, { set: (opts: Record<string, unknown>) => unknown }>,
-): void {
-  cookie.session!.set({
-    value: "",
-    httpOnly: true,
-    sameSite: "lax",
-    path: "/",
-    maxAge: 0,
-  });
-}
-
-async function sessionFromUser(
-  user: UserRow,
-  cookie: Record<string, { set: (opts: Record<string, unknown>) => unknown }>,
-): Promise<UserResponse> {
-  const { token, expiresAt } = await sessionService.createSession(user.id);
-  setSessionCookie(cookie, token, expiresAt);
-  const email = await primaryEmailForUser(user.id);
-  return {
-    id: user.id,
-    username: user.username,
-    name: user.name ?? "",
-    email,
-    role: user.role,
-    is_verified: user.is_verified,
-  };
-}
-
-function csrfCheck(headers: Record<string, string | undefined>): void {
-  if (!headers["x-requested-with"]) {
-    throw new HttpError(400, "Missing CSRF header");
-  }
-}
-
-/** Extract the cookie_id portion (before the dot) from a session token. */
 function cookieIdFromToken(token: string): string | undefined {
   return token.split(".")[0] || undefined;
 }
 
-// === Plugin ===
+const authApi = HttpApi.make("dfg").add(authGroup);
 
-export const authRoutes = new Elysia({ prefix: "/api" })
-  .onError(({ error, set }) => {
-    if (error instanceof HttpError) {
-      set.status = error.status;
-      return { error: error.message };
-    }
-  })
-
-  // --- Login ---
-  .post(
-    "/login",
-    async ({ body, headers, cookie }) => {
-      csrfCheck(headers);
-
-      const ip = headers["x-forwarded-for"] ?? "unknown";
-      checkRateLimit(`login:${ip}`, 10, 60_000);
-
-      const { id, password } = body;
-      const result = await authService.login({ id, password });
-
-      setSessionCookie(cookie, result.token, result.expiresAt);
-
-      const email = await primaryEmailForUser(result.user.id);
-      return {
-        id: result.user.id,
-        username: result.user.username,
-        name: result.user.name ?? "",
-        email,
-        role: result.user.role,
-        is_verified: result.user.is_verified ?? false,
-      };
-    },
-    {
-      body: t.Object({
-        id: t.String(),
-        password: t.String(),
-      }),
-    },
-  )
-
-  // --- Request magic link ---
-  .post(
-    "/magic-link",
-    async ({ body, headers }) => {
-      csrfCheck(headers);
-
-      const ip = headers["x-forwarded-for"] ?? "unknown";
-      checkRateLimit(`magic-link:${ip}`, 5, 60_000);
-
-      const { email } = body;
-      await sql`select app_private.generate_magic_link(${email}::citext)`.execute(rootDb);
-
-      return { success: true as const };
-    },
-    {
-      body: t.Object({
-        email: t.String(),
-      }),
-    },
-  )
-
-  // --- Verify magic link ---
-  .post(
-    "/magic-link/verify",
-    async ({ body, headers, cookie }) => {
-      csrfCheck(headers);
-
-      const { token } = body;
-
-      const user = await rootDb
-        .selectFrom(sql<UserRow>`app_private.verify_magic_link(${token})`.as("u"))
-        .selectAll()
-        .executeTakeFirst();
-
-      if (!user) {
-        throw new HttpError(400, "Invalid or expired magic link");
-      }
-
-      // Magic link proves email ownership -- mark user + email as verified
-      await rootDb
-        .updateTable("app_public.user_emails")
-        .set({ is_verified: true })
-        .where("user_id", "=", user.id)
-        .where("is_verified", "=", false)
-        .execute();
-
-      await rootDb
-        .updateTable("app_public.users")
-        .set({ is_verified: true })
-        .where("id", "=", user.id)
-        .where("is_verified", "=", false)
-        .execute();
-
-      return await sessionFromUser({ ...user, is_verified: true }, cookie);
-    },
-    {
-      body: t.Object({
-        token: t.String(),
-      }),
-    },
-  )
-
-  // --- Logout ---
-  .post("/logout", async ({ headers, cookie }) => {
-    csrfCheck(headers);
-
-    const token = getCookieString(cookie.session?.value);
-    const cookieId = token ? cookieIdFromToken(token) : undefined;
-    await authService.logout(cookieId);
-    expireSessionCookie(cookie);
-
-    return { success: true as const };
-  })
-
-  // --- Forgot password ---
-  .post(
-    "/forgot-password",
-    async ({ body, headers }) => {
-      csrfCheck(headers);
-
-      const { email } = body;
-      await authService.forgotPassword({ email });
-
-      return { success: true as const };
-    },
-    {
-      body: t.Object({
-        email: t.String(),
-      }),
-    },
-  )
-
-  // --- Reset password ---
-  .post(
-    "/reset-password",
-    async ({ body, headers, cookie }) => {
-      csrfCheck(headers);
-
-      const { token, password } = body;
-      const result = await authService.resetPassword({ token, password });
-
-      setSessionCookie(cookie, result.token, result.expiresAt);
-
-      return { success: true as const };
-    },
-    {
-      body: t.Object({
-        token: t.String(),
-        password: t.String(),
-      }),
-    },
-  )
-
-  // --- Me (current user, nullable) ---
-  .get("/me", async ({ cookie }) => {
-    const token = getCookieString(cookie.session?.value);
-    const session = await sessionService.validateSessionToken(token);
-
-    if (!session) return { user: null };
-
-    const profile = await rootDb
-      .selectFrom("app_public.users")
-      .select(["id", "username", "name", "role", "is_verified"])
-      .select((eb) =>
-        eb
-          .selectFrom("app_public.user_emails")
-          .select("email")
-          .whereRef("app_public.user_emails.user_id", "=", "app_public.users.id")
-          .where("is_primary", "=", true)
-          .limit(1)
-          .as("email"),
+export function makeAuthLayer() {
+  return HttpApiBuilder.group(authApi, "auth", (handlers) =>
+    handlers
+      .handle(
+        "login",
+        Effect.fnUntraced(function* ({ request, payload }) {
+          csrfCheck(request.headers);
+          yield* checkRateLimit("login", request.headers, 10, 60000);
+          const result = yield* (yield* AuthService).login(payload);
+          const { email } = yield* UserService.primaryEmailForUser(result.user.user_id);
+          let response = HttpServerResponse.unsafeJson({
+            id: result.user.user_id,
+            username: result.user.username,
+            name: result.user.name ?? "",
+            email,
+            role: result.user.role,
+            is_verified: result.user.is_verified ?? false,
+          });
+          response = setSessionCookie(response, result.token, result.expiresAt);
+          return response;
+        }, Effect.catchAllCause(responseForCause)),
       )
-      .where("id", "=", session.user.id)
-      .executeTakeFirst();
-
-    return {
-      user: profile
-        ? {
-            id: profile.id,
-            username: profile.username,
-            name: profile.name ?? "",
-            email: profile.email ?? "",
-            role: profile.role,
-            is_verified: profile.is_verified,
+      .handle(
+        "magicLink",
+        Effect.fnUntraced(function* ({ request, payload }) {
+          csrfCheck(request.headers);
+          yield* checkRateLimit("magic-link", request.headers, 5, 60000);
+          yield* (yield* AuthRouteService).generateMagicLink(payload.email);
+          return { success: true as const };
+        }, Effect.catchAllCause(responseForCause)),
+      )
+      .handle(
+        "verifyMagicLink",
+        Effect.fnUntraced(function* ({ request, payload }) {
+          csrfCheck(request.headers);
+          const session = yield* (yield* AuthRouteService).consumeMagicLink(payload.token);
+          let response = HttpServerResponse.unsafeJson(session.response);
+          response = setSessionCookie(response, session.token, session.expiresAt);
+          return response;
+        }, Effect.catchAllCause(responseForCause)),
+      )
+      .handle(
+        "logout",
+        Effect.fnUntraced(function* ({ request }) {
+          csrfCheck(request.headers);
+          const token = request.cookies.session;
+          const cookieId = token ? cookieIdFromToken(token) : undefined;
+          yield* (yield* AuthService).logout(cookieId);
+          return expireSessionCookie(HttpServerResponse.unsafeJson({ success: true as const }));
+        }, Effect.catchAllCause(responseForCause)),
+      )
+      .handle(
+        "forgotPassword",
+        Effect.fnUntraced(function* ({ request, payload }) {
+          csrfCheck(request.headers);
+          yield* (yield* AuthService).forgotPassword(payload);
+          return { success: true as const };
+        }, Effect.catchAllCause(responseForCause)),
+      )
+      .handle(
+        "resetPassword",
+        Effect.fnUntraced(function* ({ request, payload }) {
+          csrfCheck(request.headers);
+          const result = yield* (yield* AuthService).resetPassword(payload);
+          let response = HttpServerResponse.unsafeJson({
+            success: true as const,
+          });
+          response = setSessionCookie(response, result.token, result.expiresAt);
+          return response;
+        }, Effect.catchAllCause(responseForCause)),
+      )
+      .handle(
+        "me",
+        Effect.fnUntraced(function* ({ request }) {
+          const session = yield* SessionService.validateSessionToken(request.cookies.session);
+          if (!session) {
+            return { user: null };
           }
-        : null,
-    };
-  })
-
-  // --- Resend verification email ---
-  .post("/resend-verification", async ({ headers, cookie }) => {
-    csrfCheck(headers);
-
-    const token = getCookieString(cookie.session?.value);
-    const session = await sessionService.validateSessionToken(token);
-
-    if (!session) return { success: true as const };
-
-    // Find an unverified email for this user and trigger re-send
-    const emailRow = await rootDb
-      .selectFrom("app_public.user_emails")
-      .select("id")
-      .where("user_id", "=", session.user.id)
-      .where("is_verified", "=", false)
-      .limit(1)
-      .executeTakeFirst();
-
-    if (emailRow) {
-      await sql`select graphile_worker.add_job('user_emails__send_verification', ${JSON.stringify({ id: emailRow.id })}::json)`.execute(
-        rootDb,
-      );
-    }
-
-    return { success: true as const };
-  });
+          return yield* (yield* AuthRouteService).me(session.user.id);
+        }, Effect.catchAllCause(responseForCause)),
+      )
+      .handle(
+        "resendVerification",
+        Effect.fnUntraced(function* ({ request }) {
+          csrfCheck(request.headers);
+          const session = yield* SessionService.validateSessionToken(request.cookies.session);
+          if (!session) {
+            return { success: true as const };
+          }
+          yield* (yield* AuthRouteService).resendVerification(session.user.id);
+          return { success: true as const };
+        }, Effect.catchAllCause(responseForCause)),
+      ),
+  );
+}

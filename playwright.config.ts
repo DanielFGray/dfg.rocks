@@ -10,7 +10,7 @@ export default defineConfig({
   workers: 1,
   reporter: "list",
   use: {
-    baseURL: `http://localhost:${vitePort}`,
+    baseURL: `http://127.0.0.1:${vitePort}`,
     trace: "on-first-retry",
   },
   projects: [
@@ -26,7 +26,7 @@ export default defineConfig({
   ],
   webServer: {
     command: `VITE_PORT=${vitePort} bun run e2e:server`,
-    url: `http://localhost:${vitePort}`,
+    url: `http://127.0.0.1:${vitePort}`,
     reuseExistingServer: false,
     timeout: 120_000,
   },

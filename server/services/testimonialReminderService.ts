@@ -1,5 +1,6 @@
 import { sql } from "kysely";
-import { rootDb } from "../db.js";
+import { Effect, Option } from "effect";
+import { PgRootDB } from "../db.js";
 
 const DEFAULT_INTERVAL_DAYS = 30;
 
@@ -11,15 +12,16 @@ function normalizeIntervalDays(value: unknown): number {
   return value >= 1 && value <= 365 ? value : DEFAULT_INTERVAL_DAYS;
 }
 
-async function upsertUserReminderState(
+const upsertUserReminderStateEffect = Effect.fnUntraced(function* (
   userId: string,
   values: {
     testimonial_prompt_enabled: boolean;
     testimonial_next_prompt_at: Date | null;
     testimonial_last_emailed_at?: Date | null;
   },
-): Promise<void> {
-  await rootDb
+) {
+  const rootDb = yield* PgRootDB;
+  yield* rootDb
     .insertInto("app_private.user_secrets")
     .values({
       user_id: userId,
@@ -33,22 +35,25 @@ async function upsertUserReminderState(
         testimonial_next_prompt_at: values.testimonial_next_prompt_at,
         testimonial_last_emailed_at: values.testimonial_last_emailed_at ?? null,
       }),
-    )
-    .execute();
-}
+    );
+});
 
-export async function getTestimonialReminderIntervalDays(): Promise<number> {
-  const row = await rootDb
+const getIntervalDaysEffect = Effect.fnUntraced(function* () {
+  const rootDb = yield* PgRootDB;
+  const row = yield* rootDb
     .selectFrom("app_private.admin_settings")
     .select("value")
     .where("key", "=", "testimonial_reminder_interval_days")
-    .executeTakeFirst();
+    .pipe(Effect.head, Effect.option);
 
-  return normalizeIntervalDays(row?.value);
-}
+  return normalizeIntervalDays(Option.getOrUndefined(row)?.value);
+});
 
-export async function setTestimonialReminderIntervalDays(intervalDays: number): Promise<void> {
-  await rootDb
+const setIntervalDaysEffect = Effect.fnUntraced(function* (
+  intervalDays: number,
+) {
+  const rootDb = yield* PgRootDB;
+  yield* rootDb
     .insertInto("app_private.admin_settings")
     .values({
       key: "testimonial_reminder_interval_days",
@@ -58,62 +63,104 @@ export async function setTestimonialReminderIntervalDays(intervalDays: number): 
       oc.column("key").doUpdateSet({
         value: sql`${JSON.stringify(intervalDays)}::jsonb`,
       }),
-    )
-    .execute();
-}
+    );
+});
 
-export async function getTestimonialPromptEnabled(userId: string): Promise<boolean> {
-  const row = await rootDb
+const getPromptEnabledEffect = Effect.fnUntraced(function* (userId: string) {
+  const rootDb = yield* PgRootDB;
+  const row = yield* rootDb
     .selectFrom("app_private.user_secrets")
     .select("testimonial_prompt_enabled")
     .where("user_id", "=", userId)
-    .executeTakeFirst();
+    .pipe(Effect.head, Effect.option);
 
-  return row?.testimonial_prompt_enabled ?? false;
-}
+  return Option.getOrUndefined(row)?.testimonial_prompt_enabled ?? false;
+});
 
-export async function clearTestimonialReminderState(userId: string): Promise<void> {
-  await upsertUserReminderState(userId, {
+const clearReminderStateEffect = Effect.fnUntraced(function* (userId: string) {
+  yield* upsertUserReminderStateEffect(userId, {
     testimonial_prompt_enabled: false,
     testimonial_next_prompt_at: null,
     testimonial_last_emailed_at: null,
   });
-}
+});
 
-export async function scheduleNextTestimonialReminder(userId: string): Promise<void> {
-  const intervalDays = await getTestimonialReminderIntervalDays();
-  const nextPromptAt = new Date(Date.now() + intervalDays * 24 * 60 * 60 * 1000);
+const scheduleNextReminderEffect = Effect.fnUntraced(function* (
+  userId: string,
+) {
+  const intervalDays = yield* getIntervalDaysEffect();
+  const nextPromptAt = new Date(
+    Date.now() + intervalDays * 24 * 60 * 60 * 1000,
+  );
 
-  await upsertUserReminderState(userId, {
+  yield* upsertUserReminderStateEffect(userId, {
     testimonial_prompt_enabled: false,
     testimonial_next_prompt_at: nextPromptAt,
     testimonial_last_emailed_at: null,
   });
-}
+});
 
-export async function rescheduleTestimonialReminders(intervalDays: number): Promise<void> {
-  await sql`
-    insert into app_private.user_secrets (user_id)
-    select users.id
-    from app_public.users as users
-    on conflict (user_id) do nothing
-  `.execute(rootDb);
+const rescheduleAllEffect = Effect.fnUntraced(function* (intervalDays: number) {
+  const rootDb = yield* PgRootDB;
+  yield* rootDb
+    .insertInto("app_private.user_secrets")
+    .columns(["user_id"])
+    .expression((eb) => eb.selectFrom("app_public.users as users").select("users.id"))
+    .onConflict((oc) => oc.column("user_id").doNothing());
 
-  await sql`
-    update app_private.user_secrets as secrets
-    set testimonial_prompt_enabled = false,
-        testimonial_next_prompt_at = case
-          when users.role in ('student', 'parent') and testimonials.id is null
+  yield* rootDb
+    .updateTable("app_private.user_secrets as secrets")
+    .from("app_public.users as users")
+    .leftJoin("app_public.testimonials as testimonials", "testimonials.user_id", "users.id")
+    .set({
+      testimonial_prompt_enabled: false,
+      testimonial_next_prompt_at: sql`
+        case
+          when users.role in ('student', 'parent')
+            and (testimonials.id is null or testimonials.is_approved = false)
             then now() + make_interval(days => ${intervalDays})
           else null
-        end,
-        testimonial_last_emailed_at = case
-          when testimonials.id is null then secrets.testimonial_last_emailed_at
+        end
+      `,
+      testimonial_last_emailed_at: sql`
+        case
+          when testimonials.id is null or testimonials.is_approved = false
+            then secrets.testimonial_last_emailed_at
           else null
         end
-    from app_public.users as users
-    left join app_public.testimonials as testimonials
-      on testimonials.user_id = users.id
-    where users.id = secrets.user_id
-  `.execute(rootDb);
+      `,
+    })
+    .whereRef("users.id", "=", "secrets.user_id");
+});
+
+/**
+ * Testimonial reminder scheduling service. Static methods return Effects.
+ */
+export class TestimonialReminderService extends Effect.Service<TestimonialReminderService>()(
+  "TestimonialReminderService",
+  {
+    succeed: {
+      getIntervalDays: getIntervalDaysEffect,
+      setIntervalDays: setIntervalDaysEffect,
+      getPromptEnabled: getPromptEnabledEffect,
+      clearReminderState: clearReminderStateEffect,
+      scheduleNextReminder: scheduleNextReminderEffect,
+      rescheduleAll: rescheduleAllEffect,
+    },
+  },
+) {
+  static readonly getIntervalDays = getIntervalDaysEffect;
+  static readonly setIntervalDays = setIntervalDaysEffect;
+  static readonly getPromptEnabled = getPromptEnabledEffect;
+  static readonly clearReminderState = clearReminderStateEffect;
+  static readonly scheduleNextReminder = scheduleNextReminderEffect;
+  static readonly rescheduleAll = rescheduleAllEffect;
 }
+
+// Legacy named-export aliases for call-sites that use the old functional API
+export const getTestimonialReminderIntervalDays = getIntervalDaysEffect;
+export const setTestimonialReminderIntervalDays = setIntervalDaysEffect;
+export const getTestimonialPromptEnabled = getPromptEnabledEffect;
+export const clearTestimonialReminderState = clearReminderStateEffect;
+export const scheduleNextTestimonialReminder = scheduleNextReminderEffect;
+export const rescheduleTestimonialReminders = rescheduleAllEffect;

@@ -1,5 +1,5 @@
 import { lazy, Suspense } from "react";
-import type { Material } from "../../lib/types.js";
+import type { Material } from "../../../shared/schemas.js";
 import { categorize, downloadUrl } from "./helpers.js";
 import type { AlphaTabPlayerProps } from "../alphatab/AlphaTabPlayer.js";
 
@@ -28,7 +28,11 @@ export const MaterialPreview = ({
     case "pdf":
       return (
         <div className={embedded ? "overflow-hidden" : card}>
-          <iframe src={src} className="h-[70vh] min-h-[400px] w-full" title={material.title} />
+          <iframe
+            src={src}
+            className="h-[70vh] min-h-[400px] w-full"
+            title={material.title}
+          />
         </div>
       );
     case "image":
@@ -37,13 +41,13 @@ export const MaterialPreview = ({
           className={
             embedded
               ? "flex items-center justify-center"
-              : `${card} p-4 flex items-center justify-center`
+              : `${card} flex items-center justify-center p-4`
           }
         >
           <img
             src={src}
             alt={material.title}
-            className="rounded-sm max-h-[70vh] max-w-full object-contain"
+            className="max-h-[70vh] max-w-full rounded-sm object-contain"
           />
         </div>
       );
@@ -67,7 +71,7 @@ export const MaterialPreview = ({
       return (
         <Suspense
           fallback={
-            <div className="p-6 text-sm text-muted dark:text-muted-dark text-center">
+            <div className="p-6 text-center text-sm text-muted dark:text-muted-dark">
               Loading...
             </div>
           }
@@ -84,7 +88,7 @@ export const MaterialPreview = ({
           <a
             href={src}
             download
-            className="mt-3 text-sm text-accent hover:text-accent-hover inline-block transition-colors"
+            className="mt-3 inline-block text-sm text-accent transition-colors hover:text-accent-hover"
           >
             Download file
           </a>

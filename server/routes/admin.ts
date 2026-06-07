@@ -1,42 +1,37 @@
-import Elysia, { t } from "elysia";
-import { sql } from "kysely";
-import { rootDb, withAuthContext } from "../db.js";
-import { sessionService } from "../services/sessionService.js";
-import { googleCalendarService } from "../services/googleCalendarService.js";
-import {
-  rescheduleTestimonialReminders,
-  setTestimonialReminderIntervalDays,
-  getTestimonialReminderIntervalDays,
-} from "../services/testimonialReminderService.js";
-import { fileService } from "../services/fileService.js";
-import { resolveAssignedTrackIndex } from "../services/notationService.js";
-import { HttpError, mapPgError } from "../pgErrors.js";
+import * as HttpApi from "@effect/platform/HttpApi";
+import * as HttpApiBuilder from "@effect/platform/HttpApiBuilder";
+import * as HttpApiGroup from "@effect/platform/HttpApiGroup";
+import * as HttpApiEndpoint from "@effect/platform/HttpApiEndpoint";
+import * as HttpServerResponse from "@effect/platform/HttpServerResponse";
+import { Effect } from "effect";
+import { adminClientGroup } from "../../shared/httpApi.js";
 import { env } from "../assertEnv.js";
-import type { UserRole } from "../../shared/schemas.js";
-import { extractMaterialIds } from "../../shared/content.js";
+import { HttpError } from "../pgErrors.js";
+import { AdminRouteService } from "../services/adminRouteService.js";
+import { FileService } from "../services/fileService.js";
+import { GoogleCalendarService } from "../services/googleCalendarService.js";
+import { SessionService } from "../services/sessionService.js";
+import { TestimonialReminderService } from "../services/testimonialReminderService.js";
 import type { LessonStatus, LocationType } from "../../shared/schemas.js";
+import {
+  params,
+  csrfCheck,
+  type RawRequest,
+  normalizeToResponse,
+  responseForCause,
+} from "./raw.js";
 
-// === Shared schemas ===
+type ServerRequest = RawRequest;
+type JsonMap = Record<string, unknown>;
 
-const LocationTypeSchema = t.Union([
-  t.Literal("in_person_teacher_travels"),
-  t.Literal("in_person_student_travels"),
-  t.Literal("studio"),
-  t.Literal("online"),
+const locationTypes = new Set<LocationType>([
+  "in_person_teacher_travels",
+  "in_person_student_travels",
+  "studio",
+  "online",
 ]);
 
-const LessonStatusSchema = t.Union([
-  t.Literal("scheduled"),
-  t.Literal("completed"),
-  t.Literal("cancelled"),
-  t.Literal("no_show"),
-]);
-
-// === Helpers ===
-
-function toJson(value: unknown): string {
-  return JSON.stringify(value);
-}
+const lessonStatuses = new Set<LessonStatus>(["scheduled", "completed", "cancelled", "no_show"]);
 
 function toIsoString(value: Date | string): string {
   return value instanceof Date ? value.toISOString() : value;
@@ -46,17 +41,130 @@ function toIsoStringOrNull(value: Date | string | null): string | null {
   return value ? toIsoString(value) : null;
 }
 
-function getCookieString(value: unknown): string | undefined {
-  return typeof value === "string" ? value : undefined;
+function asObject(value: unknown, message = "Invalid request body"): JsonMap {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw HttpError.make(400, message);
+  }
+  return value as JsonMap;
 }
 
-async function requireAdminSession(cookie: Record<string, any>) {
-  const token = getCookieString(cookie.session?.value);
-  const result = await sessionService.validateSessionToken(token);
-  if (!result) throw new HttpError(401, "Unauthorized");
-  if (result.user.role !== "admin") throw new HttpError(403, "Forbidden");
-  return result;
+function readJsonObject(request: ServerRequest): Effect.Effect<JsonMap, unknown> {
+  return Effect.tryPromise({
+    try: () => (request.source as Request).json(),
+    catch: (cause) => cause,
+  }).pipe(Effect.map((value) => asObject(value)));
 }
+
+function requiredString(value: unknown, field: string): string {
+  if (typeof value !== "string") {
+    throw HttpError.make(400, `${field} must be a string`);
+  }
+  return value;
+}
+
+function optionalString(value: unknown, field: string): string | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (typeof value !== "string") {
+    throw HttpError.make(400, `${field} must be a string`);
+  }
+  return value;
+}
+
+function requiredNumber(value: unknown, field: string): number {
+  if (typeof value !== "number" || Number.isNaN(value)) {
+    throw HttpError.make(400, `${field} must be a number`);
+  }
+  return value;
+}
+
+function requiredIntegerInRange(
+  value: unknown,
+  field: string,
+  minimum: number,
+  maximum: number,
+): number {
+  if (typeof value !== "number" || !Number.isInteger(value) || value < minimum || value > maximum) {
+    throw HttpError.make(400, `${field} must be an integer between ${minimum} and ${maximum}`);
+  }
+  return value;
+}
+
+function parseLocationType(value: unknown, field: string): LocationType {
+  if (typeof value !== "string" || !locationTypes.has(value as LocationType)) {
+    throw HttpError.make(400, `${field} is invalid`);
+  }
+  return value as LocationType;
+}
+
+function parseLessonStatus(value: unknown, field: string): LessonStatus {
+  if (typeof value !== "string" || !lessonStatuses.has(value as LessonStatus)) {
+    throw HttpError.make(400, `${field} is invalid`);
+  }
+  return value as LessonStatus;
+}
+
+function parseQueryNumber(query: URLSearchParams, name: string): number | undefined {
+  const raw = query.get(name);
+  if (raw === null || raw === "") {
+    return undefined;
+  }
+  const parsed = Number.parseInt(raw, 10);
+  if (!Number.isFinite(parsed)) {
+    throw HttpError.make(400, `Invalid ${name}`);
+  }
+  return parsed;
+}
+
+function parseAssignedTrackIndex(value: unknown): number | string | null | undefined {
+  if (
+    value === undefined ||
+    value === null ||
+    typeof value === "string" ||
+    (typeof value === "number" && Number.isFinite(value))
+  ) {
+    return value;
+  }
+  throw HttpError.make(400, "assigned_track_index must be numeric or null");
+}
+
+const defaultWorkingHours = {
+  0: null,
+  1: { start: "09:00", end: "20:00" },
+  2: { start: "09:00", end: "20:00" },
+  3: { start: "09:00", end: "20:00" },
+  4: { start: "09:00", end: "20:00" },
+  5: { start: "09:00", end: "20:00" },
+  6: { start: "10:00", end: "14:00" },
+} as const;
+
+const requireAdminSession = Effect.fnUntraced(function* (
+  request: RawRequest,
+  options: {
+    csrf?: boolean;
+  } = {},
+) {
+  const result = yield* SessionService.validateSessionToken(request.cookies.session);
+  if (!result) {
+    return yield* new HttpError(401, "Unauthorized");
+  }
+  if (result.user.role !== "admin") {
+    return yield* new HttpError(403, "Forbidden");
+  }
+  if (options.csrf !== false) {
+    csrfCheck(request.headers);
+  }
+  return result;
+});
+
+const requireAuthenticatedSession = Effect.fnUntraced(function* (request: RawRequest) {
+  const result = yield* SessionService.validateSessionToken(request.cookies.session);
+  if (!result) {
+    return yield* new HttpError(401, "Not authenticated");
+  }
+  return result;
+});
 
 function serializeLesson(r: {
   scheduled_at: Date | string;
@@ -88,1184 +196,835 @@ function serializeLessonNote(r: {
   };
 }
 
-// === Plugin ===
-
-export const adminRoutes = new Elysia({ prefix: "/api/admin" })
-  .onError(({ error, set }) => {
-    if (error instanceof HttpError) {
-      set.status = error.status;
-      return { error: error.message };
-    }
-  })
-  .get("/gcal/connect", async ({ cookie, redirect, request }) => {
-    await requireAdminSession(cookie);
-
-    const rootUrl = new URL(request.url).origin;
-    const authorization = googleCalendarService.createAuthorizationRequest(rootUrl);
-    cookie[googleCalendarService.getAuthCookieName()]!.set({
-      value: googleCalendarService.encodeAuthState(authorization.state),
-      ...googleCalendarService.getAuthCookieOptions(rootUrl),
-    });
-
-    return redirect(authorization.url.toString());
-  })
-  .get(
-    "/gcal/callback",
-    async ({ query, cookie, redirect, request }) => {
-      await requireAdminSession(cookie);
-      const rootUrl = new URL(request.url).origin;
-
-      const authCookieName = googleCalendarService.getAuthCookieName();
-      const authState = googleCalendarService.decodeAuthState(cookie[authCookieName]?.value);
-      cookie[authCookieName]?.remove();
-
-      if (query.error) {
-        throw new HttpError(400, `Google Calendar OAuth failed (${query.error})`);
-      }
-      if (!query.code || !query.state) {
-        throw new HttpError(400, "Missing Google Calendar OAuth callback parameters");
-      }
-      if (!authState || authState.state !== query.state) {
-        throw new HttpError(400, "Invalid or expired Google Calendar OAuth state");
-      }
-
-      await googleCalendarService.handleCallback(rootUrl, query.code, authState.codeVerifier);
-      return redirect(googleCalendarService.getConnectRedirectUrl(rootUrl, authState.redirect));
-    },
-    {
-      query: t.Object({
-        code: t.Optional(t.String()),
-        error: t.Optional(t.String()),
-        state: t.Optional(t.String()),
-      }),
-    },
+export const adminGroup = adminClientGroup
+  .add(HttpApiEndpoint.get("gcalConnect", "/api/admin/gcal/connect"))
+  .add(HttpApiEndpoint.get("gcalCallback", "/api/admin/gcal/callback"))
+  .add(HttpApiEndpoint.get("module", "/api/admin/modules/:id").setPath(params("id")))
+  .add(HttpApiEndpoint.post("createFamily", "/api/admin/families"))
+  .add(
+    HttpApiEndpoint.get("familyInvitations", "/api/admin/families/:familyId/invitations").setPath(
+      params("familyId"),
+    ),
   )
-  .derive(async ({ cookie, headers }) => {
-    const result = await requireAdminSession(cookie);
-    if (!headers["x-requested-with"]) throw new HttpError(403, "Missing CSRF header");
-    return { auth: result };
-  })
-
-  // --- Submissions ---
-
-  .get(
-    "/submissions",
-    async ({ query }) => {
-      const limit = query.limit || 50;
-      const offset = query.offset || 0;
-
-      const rows = await rootDb
-        .selectFrom("app_public.contact_submissions")
-        .selectAll()
-        .orderBy("created_at", "desc")
-        .limit(limit)
-        .offset(offset)
-        .execute();
-
-      return rows.map((r) => ({
-        ...r,
-        created_at: r.created_at.toISOString(),
-      }));
-    },
-    {
-      query: t.Object({
-        limit: t.Optional(t.Numeric()),
-        offset: t.Optional(t.Numeric()),
-      }),
-    },
+  .add(HttpApiEndpoint.del("deleteLesson", "/api/admin/lessons/:id").setPath(params("id")))
+  .add(HttpApiEndpoint.post("saveStudentRate", "/api/admin/student-rates"))
+  .add(
+    HttpApiEndpoint.get("studentRates", "/api/admin/student-rates/:studentId").setPath(
+      params("studentId"),
+    ),
   )
-
-  .patch(
-    "/submissions/:id",
-    async ({ params, body }) => {
-      const { is_read } = body;
-
-      const row = await rootDb
-        .updateTable("app_public.contact_submissions")
-        .set({ is_read })
-        .where("id", "=", params.id)
-        .returning(["id"])
-        .executeTakeFirst();
-
-      if (!row) throw new HttpError(404, "Submission not found");
-
-      return { success: true as const };
-    },
-    {
-      body: t.Object({
-        is_read: t.Boolean(),
-      }),
-    },
-  )
-
-  // --- Students ---
-
-  .get("/students", async () => {
-    const rows = await rootDb
-      .selectFrom("app_public.users")
-      .select(["id", "username", "name", "role", "is_verified"])
-      .select((eb) =>
-        eb
-          .selectFrom("app_public.user_emails")
-          .select("email")
-          .whereRef("app_public.user_emails.user_id", "=", "app_public.users.id")
-          .where("is_primary", "=", true)
-          .limit(1)
-          .as("email"),
-      )
-      .where("role", "=", "student")
-      .execute();
-
-    return rows.map((r) => ({
-      ...r,
-      name: r.name ?? "",
-      email: r.email ?? "",
-      role: r.role,
-    }));
-  })
-
-  .get("/students/:id", async ({ params }) => {
-    const raw = await rootDb
-      .selectFrom("app_public.users")
-      .select(["id", "username", "name", "role", "is_verified"])
-      .select((eb) =>
-        eb
-          .selectFrom("app_public.user_emails")
-          .select("email")
-          .whereRef("app_public.user_emails.user_id", "=", "app_public.users.id")
-          .where("is_primary", "=", true)
-          .limit(1)
-          .as("email"),
-      )
-      .where("id", "=", params.id)
-      .where("role", "=", "student")
-      .executeTakeFirst();
-
-    if (!raw) throw new HttpError(404, "Student not found");
-
-    const student = {
-      ...raw,
-      name: raw.name ?? "",
-      email: raw.email ?? "",
-      role: raw.role,
-    };
-
-    const enrolled_courses = await rootDb
-      .selectFrom("app_public.enrollments as e")
-      .innerJoin("app_public.courses as c", "c.id", "e.course_id")
-      .where("e.student_id", "=", params.id)
-      .select(["c.id", "c.title", "c.instrument"])
-      .execute();
-
-    const assigned_materials = await rootDb
-      .selectFrom("app_public.student_materials as sm")
-      .innerJoin("app_public.materials as m", "m.id", "sm.material_id")
-      .where("sm.student_id", "=", params.id)
-      .select([
-        "m.id",
-        "m.title",
-        "m.original_filename",
-        "m.mime_type",
-        "m.file_size",
-        "m.is_global",
-      ])
-      .execute();
-
-    return { ...student, enrolled_courses, assigned_materials };
-  })
-
-  // --- Courses ---
-
-  .get("/courses", async () => {
-    return await rootDb
-      .selectFrom("app_public.courses")
-      .select(["id", "title", "description", "instrument"])
-      .execute();
-  })
-
-  .get("/courses/:id/students", async ({ params }) => {
-    const rows = await rootDb
-      .selectFrom("app_public.enrollments as e")
-      .innerJoin("app_public.users as u", "u.id", "e.student_id")
-      .where("e.course_id", "=", params.id)
-      .select(["u.id", "u.username", "u.name", "u.role", "u.is_verified"])
-      .select((eb) =>
-        eb
-          .selectFrom("app_public.user_emails")
-          .select("email")
-          .whereRef("app_public.user_emails.user_id", "=", "u.id")
-          .where("is_primary", "=", true)
-          .limit(1)
-          .as("email"),
-      )
-      .execute();
-
-    return rows.map((r) => ({
-      id: r.id,
-      username: r.username,
-      name: r.name ?? "",
-      email: r.email ?? "",
-      role: r.role,
-      is_verified: r.is_verified,
-    }));
-  })
-
-  .post(
-    "/courses",
-    async ({ body }) => {
-      const { title, description, instrument } = body;
-
-      const course = await rootDb
-        .insertInto("app_public.courses")
-        .values({
-          title,
-          description: description ?? "",
-          instrument,
-        })
-        .returning(["id", "title", "description", "instrument"])
-        .executeTakeFirstOrThrow();
-
-      return course;
-    },
-    {
-      body: t.Object({
-        title: t.String(),
-        description: t.Optional(t.String()),
-        instrument: t.String(),
-      }),
-    },
-  )
-
-  .patch(
-    "/courses/:id",
-    async ({ params, body }) => {
-      const updates: Record<string, string> = {};
-      if (body.title !== undefined) updates.title = body.title;
-      if (body.description !== undefined) updates.description = body.description;
-      if (body.instrument !== undefined) updates.instrument = body.instrument;
-
-      const course = await rootDb
-        .updateTable("app_public.courses")
-        .set(updates)
-        .where("id", "=", params.id)
-        .returning(["id", "title", "description", "instrument"])
-        .executeTakeFirst();
-
-      if (!course) throw new HttpError(404, "Course not found");
-
-      return course;
-    },
-    {
-      body: t.Object({
-        title: t.Optional(t.String()),
-        description: t.Optional(t.String()),
-        instrument: t.Optional(t.String()),
-      }),
-    },
-  )
-
-  .delete("/courses/:id", async ({ params }) => {
-    await rootDb.deleteFrom("app_public.courses").where("id", "=", params.id).execute();
-
-    return { success: true as const };
-  })
-
-  // --- Modules ---
-
-  .get("/modules/:id", async ({ params }) => {
-    const mod = await rootDb
-      .selectFrom("app_public.modules")
-      .select(["id", "course_id", "title", "content", "sort_order"])
-      .where("id", "=", params.id)
-      .executeTakeFirst();
-
-    if (!mod) throw new HttpError(404, "Module not found");
-
-    return mod;
-  })
-
-  .post(
-    "/courses/:id/modules",
-    async ({ params, body }) => {
-      const { title, sort_order } = body;
-
-      const mod = await rootDb
-        .insertInto("app_public.modules")
-        .values({
-          course_id: params.id,
-          title,
-          sort_order: sort_order ?? 0,
-        })
-        .returning(["id", "course_id", "title", "content", "sort_order"])
-        .executeTakeFirstOrThrow();
-
-      return mod;
-    },
-    {
-      body: t.Object({
-        title: t.String(),
-        sort_order: t.Optional(t.Number()),
-      }),
-    },
-  )
-
-  .patch(
-    "/modules/:id",
-    async ({ params, body }) => {
-      const updates: Record<string, unknown> = {};
-      if (body.title !== undefined) updates.title = body.title;
-      if (body.content !== undefined)
-        updates.content = body.content ? JSON.stringify(body.content) : null;
-      if (body.sort_order !== undefined) updates.sort_order = body.sort_order;
-
-      const mod = await rootDb
-        .updateTable("app_public.modules")
-        .set(updates)
-        .where("id", "=", params.id)
-        .returning(["id", "course_id", "title", "content", "sort_order"])
-        .executeTakeFirst();
-
-      if (!mod) throw new HttpError(404, "Module not found");
-
-      // Sync module_materials from content
-      if (body.content !== undefined) {
-        const materialIds = extractMaterialIds(body.content);
-
-        // Remove materials no longer in content
-        if (materialIds.length > 0) {
-          await rootDb
-            .deleteFrom("app_public.module_materials")
-            .where("module_id", "=", params.id)
-            .where("material_id", "not in", materialIds)
-            .execute();
-        } else {
-          await rootDb
-            .deleteFrom("app_public.module_materials")
-            .where("module_id", "=", params.id)
-            .execute();
-        }
-
-        // Insert new materials
-        for (let i = 0; i < materialIds.length; i++) {
-          await rootDb
-            .insertInto("app_public.module_materials")
-            .values({
-              module_id: params.id,
-              material_id: materialIds[i],
-              sort_order: i,
-            })
-            .onConflict((oc) => oc.doNothing())
-            .execute();
-        }
-      }
-
-      return mod;
-    },
-    {
-      body: t.Object({
-        title: t.Optional(t.String()),
-        content: t.Optional(t.Unknown()),
-        sort_order: t.Optional(t.Number()),
-      }),
-    },
-  )
-
-  .delete("/modules/:id", async ({ params }) => {
-    await rootDb.deleteFrom("app_public.modules").where("id", "=", params.id).execute();
-
-    return { success: true as const };
-  })
-
-  // (module_materials now synced automatically from content on PATCH /modules/:id)
-
-  // --- Enrollment ---
-
-  .post(
-    "/students/:id/enroll",
-    async ({ params, body }) => {
-      const { course_id } = body;
-
-      await rootDb
-        .insertInto("app_public.enrollments")
-        .values({
-          student_id: params.id,
-          course_id,
-        })
-        .onConflict((oc) => oc.doNothing())
-        .execute();
-
-      return { success: true as const };
-    },
-    {
-      body: t.Object({
-        course_id: t.String(),
-      }),
-    },
-  )
-
-  .delete("/students/:id/enroll/:courseId", async ({ params }) => {
-    await rootDb
-      .deleteFrom("app_public.enrollments")
-      .where("student_id", "=", params.id)
-      .where("course_id", "=", params.courseId)
-      .execute();
-
-    return { success: true as const };
-  })
-
-  // --- Student materials ---
-
-  .post(
-    "/students/:id/assign",
-    async ({ params, body }) => {
-      const { material_id } = body;
-      const assignedTrackIndex = await resolveAssignedTrackIndex(
-        material_id,
-        body.assigned_track_index,
-      );
-
-      await rootDb
-        .insertInto("app_public.student_materials")
-        .values({
-          student_id: params.id,
-          material_id,
-          assigned_track_index: assignedTrackIndex,
-        })
-        .onConflict((oc) =>
-          oc.columns(["student_id", "material_id"]).doUpdateSet({
-            assigned_track_index: assignedTrackIndex,
-          }),
-        )
-        .execute();
-
-      return { success: true as const };
-    },
-    {
-      body: t.Object({
-        material_id: t.String(),
-        assigned_track_index: t.Optional(t.Nullable(t.Numeric())),
-      }),
-    },
-  )
-
-  .delete("/students/:id/assign/:materialId", async ({ params }) => {
-    await rootDb
-      .deleteFrom("app_public.student_materials")
-      .where("student_id", "=", params.id)
-      .where("material_id", "=", params.materialId)
-      .execute();
-
-    return { success: true as const };
-  })
-
-  // --- Materials ---
-
-  .delete("/materials/:id", async ({ params }) => {
-    const row = await rootDb
-      .deleteFrom("app_public.materials")
-      .where("id", "=", params.id)
-      .returning("id")
-      .executeTakeFirst();
-
-    if (!row) throw new HttpError(404, "Material not found");
-
-    return { success: true as const };
-  })
-
-  // --- File upload (admin only, multipart) ---
-
-  .post("/materials/upload", async ({ request, auth }) => {
-    const formData = await request.formData();
-
-    const file = formData.get("file");
-    if (!file || !(file instanceof File)) {
-      throw new HttpError(400, "No file provided");
-    }
-
-    const title = formData.get("title");
-    if (!title || typeof title !== "string") {
-      throw new HttpError(400, "Title is required");
-    }
-
-    const isGlobalRaw = formData.get("is_global");
-    const isGlobal = isGlobalRaw === "true" || isGlobalRaw === "1";
-
-    const material = await fileService.upload(file, title, isGlobal, auth.user.id);
-    return material;
-  })
-
-  // --- Families ---
-
-  .post(
-    "/families",
-    async ({ body, auth }) => {
-      const { slug, name } = body;
-
-      try {
-        const family = await withAuthContext(auth.session.id, async (trx) => {
-          return await trx
-            .selectFrom(
-              sql<{
-                id: string;
-                slug: string;
-                name: string;
-                description: string | null;
-                created_at: Date;
-              }>`
-              app_public.create_family(${slug}::citext, ${name})
-            `.as("f"),
-            )
-            .selectAll()
-            .executeTakeFirstOrThrow();
-        });
-
-        return {
-          ...family,
-          created_at: family.created_at.toISOString(),
-        };
-      } catch (err) {
-        if (err instanceof HttpError) throw err;
-        mapPgError(err);
-      }
-    },
-    {
-      body: t.Object({
-        slug: t.String(),
-        name: t.String(),
-      }),
-    },
-  )
-
-  .get("/families", async () => {
-    const rows = await rootDb
-      .selectFrom("app_public.families")
-      .select(["id", "slug", "name", "description", "created_at"])
-      .orderBy("created_at", "desc")
-      .execute();
-
-    return rows.map((r) => ({
-      ...r,
-      created_at: r.created_at.toISOString(),
-    }));
-  })
-
-  .post(
-    "/families/:familyId/invite",
-    async ({ params, body, auth }) => {
-      const { username, email } = body;
-
-      try {
-        await withAuthContext(auth.session.id, async (trx) => {
-          await sql`app_public.invite_to_family(
-          ${params.familyId}::uuid,
-          ${username ?? null}::citext,
-          ${email ?? null}::citext
-        )`.execute(trx);
-        });
-      } catch (err) {
-        if (err instanceof HttpError) throw err;
-        mapPgError(err);
-      }
-
-      return { success: true as const };
-    },
-    {
-      body: t.Object({
-        username: t.Optional(t.String()),
-        email: t.Optional(t.String()),
-      }),
-    },
-  )
-
-  .post(
-    "/families/:familyId/qr-invite",
-    async ({ params, body }) => {
-      let familyId = params.familyId;
-
-      if (familyId === "new") {
-        if (!body.name || !body.slug) {
-          throw new HttpError(400, "Name and slug are required when creating a new family");
-        }
-        const family = await rootDb
-          .insertInto("app_public.families")
-          .values({ name: body.name, slug: body.slug })
-          .returning(["id"])
-          .executeTakeFirstOrThrow();
-        familyId = family.id;
-      }
-
-      try {
-        const invitation = await rootDb
-          .selectFrom(
-            sql<{
-              id: string;
-              code: string;
-              expires_at: Date;
-            }>`app_private.create_qr_invite(${familyId}::uuid)`.as("i"),
-          )
-          .select(["id", "code", "expires_at"])
-          .executeTakeFirstOrThrow();
-
-        const rootUrl = env.VITE_ROOT_URL || `http://localhost:${env.PORT}`;
-        const url = `${rootUrl}/accept-invite?id=${invitation.id}&code=${invitation.code}`;
-
-        return {
-          invitationId: invitation.id,
-          code: invitation.code,
-          url,
-          expiresAt: invitation.expires_at.toISOString(),
-        };
-      } catch (err) {
-        if (err instanceof HttpError) throw err;
-        mapPgError(err);
-      }
-    },
-    {
-      body: t.Object({
-        name: t.Optional(t.String()),
-        slug: t.Optional(t.String()),
-      }),
-    },
-  )
-
-  .get("/families/:familyId/invitations", async ({ params }) => {
-    return await rootDb
-      .selectFrom("app_public.family_invitations as fi")
-      .innerJoin("app_public.families as f", "f.id", "fi.family_id")
-      .select([
-        "fi.id",
-        "fi.family_id",
-        "f.name as family_name",
-        "fi.code",
-        "fi.user_id",
-        "fi.email",
-      ])
-      .where("fi.family_id", "=", params.familyId)
-      .execute();
-  })
-
-  // --- Lessons ---
-
-  .post(
-    "/lessons",
-    async ({ body }) => {
-      const lesson = await rootDb
-        .insertInto("app_public.lessons")
-        .values({
-          student_id: body.student_id,
-          scheduled_at: new Date(body.scheduled_at),
-          duration_minutes: body.duration_minutes,
-          location_type: body.location_type,
-          gcal_event_id: body.gcal_event_id ?? null,
-        })
-        .returning([
-          "id",
-          "student_id",
-          "gcal_event_id",
-          "scheduled_at",
-          "duration_minutes",
-          "location_type",
-          "status",
-          "cancellation_reason",
-          "cancelled_at",
-          "completed_at",
-          "created_at",
-        ])
-        .executeTakeFirstOrThrow();
-
-      // Best-effort gcal event creation
-      try {
-        const connected = await googleCalendarService.isConnected();
-        if (connected && lesson.scheduled_at) {
-          const student = await rootDb
-            .selectFrom("app_public.users")
-            .select(["name"])
-            .where("id", "=", lesson.student_id)
-            .executeTakeFirst();
-
-          const studentName = student?.name ?? "Student";
-          const startTime = new Date(String(lesson.scheduled_at));
-          const endTime = new Date(startTime.getTime() + lesson.duration_minutes * 60000);
-
-          const eventId = await googleCalendarService.createEvent({
-            summary: `Lesson: ${studentName}`,
-            description: `${lesson.duration_minutes} min ${lesson.location_type.replace(/_/g, " ")} lesson`,
-            start: startTime.toISOString(),
-            end: endTime.toISOString(),
-          });
-
-          if (eventId) {
-            await rootDb
-              .updateTable("app_public.lessons")
-              .set({ gcal_event_id: eventId })
-              .where("id", "=", lesson.id)
-              .execute();
-          }
-        }
-      } catch {
-        // gcal errors are non-fatal
-      }
-
-      // Re-fetch to get potentially updated gcal_event_id
-      const updated = await rootDb
-        .selectFrom("app_public.lessons")
-        .select([
-          "id",
-          "student_id",
-          "gcal_event_id",
-          "scheduled_at",
-          "duration_minutes",
-          "location_type",
-          "status",
-          "cancellation_reason",
-          "cancelled_at",
-          "completed_at",
-          "created_at",
-        ])
-        .where("id", "=", lesson.id)
-        .executeTakeFirst();
-
-      return serializeLesson(updated ?? lesson);
-    },
-    {
-      body: t.Object({
-        student_id: t.String(),
-        scheduled_at: t.String(),
-        duration_minutes: t.Number(),
-        location_type: LocationTypeSchema,
-        gcal_event_id: t.Optional(t.String()),
-      }),
-    },
-  )
-
-  .patch(
-    "/lessons/:id",
-    async ({ params, body }) => {
-      const updates: Record<string, unknown> = {};
-      if (body.scheduled_at !== undefined) updates.scheduled_at = new Date(body.scheduled_at);
-      if (body.duration_minutes !== undefined) updates.duration_minutes = body.duration_minutes;
-      if (body.location_type !== undefined) updates.location_type = body.location_type;
-      if (body.status !== undefined) {
-        updates.status = body.status;
-        if (body.status === "cancelled") updates.cancelled_at = new Date();
-        if (body.status === "completed") updates.completed_at = new Date();
-      }
-      if (body.cancellation_reason !== undefined)
-        updates.cancellation_reason = body.cancellation_reason;
-
-      const lesson = await rootDb
-        .updateTable("app_public.lessons")
-        .set(updates)
-        .where("id", "=", params.id)
-        .returning([
-          "id",
-          "student_id",
-          "gcal_event_id",
-          "scheduled_at",
-          "duration_minutes",
-          "location_type",
-          "status",
-          "cancellation_reason",
-          "cancelled_at",
-          "completed_at",
-          "created_at",
-        ])
-        .executeTakeFirst();
-
-      if (!lesson) throw new HttpError(404, "Lesson not found");
-
-      // Best-effort gcal cleanup on cancellation
-      if (body.status === "cancelled" && lesson.gcal_event_id) {
-        try {
-          await googleCalendarService.deleteEvent(lesson.gcal_event_id);
-        } catch {
-          // gcal errors are non-fatal
-        }
-      }
-
-      return serializeLesson(lesson);
-    },
-    {
-      body: t.Object({
-        scheduled_at: t.Optional(t.String()),
-        duration_minutes: t.Optional(t.Number()),
-        location_type: t.Optional(LocationTypeSchema),
-        status: t.Optional(LessonStatusSchema),
-        cancellation_reason: t.Optional(t.String()),
-      }),
-    },
-  )
-
-  .delete("/lessons/:id", async ({ params }) => {
-    // Fetch lesson first to check for gcal_event_id
-    const lesson = await rootDb
-      .selectFrom("app_public.lessons")
-      .select(["id", "gcal_event_id"])
-      .where("id", "=", params.id)
-      .executeTakeFirst();
-
-    if (!lesson) throw new HttpError(404, "Lesson not found");
-
-    // Best-effort gcal cleanup
-    if (lesson.gcal_event_id) {
-      try {
-        await googleCalendarService.deleteEvent(lesson.gcal_event_id);
-      } catch {
-        // gcal errors are non-fatal
-      }
-    }
-
-    await rootDb.deleteFrom("app_public.lessons").where("id", "=", params.id).execute();
-
-    return { success: true as const };
-  })
-
-  .get(
-    "/lessons",
-    async ({ query }) => {
-      const limit = query.limit || 50;
-      const offset = query.offset || 0;
-
-      let q = rootDb
-        .selectFrom("app_public.lessons")
-        .select([
-          "id",
-          "student_id",
-          "gcal_event_id",
-          "scheduled_at",
-          "duration_minutes",
-          "location_type",
-          "status",
-          "cancellation_reason",
-          "cancelled_at",
-          "completed_at",
-          "created_at",
-        ])
-        .orderBy("scheduled_at", "desc")
-        .limit(limit)
-        .offset(offset);
-
-      if (query.student_id) q = q.where("student_id", "=", query.student_id);
-      if (query.status) q = q.where("status", "=", query.status as LessonStatus);
-      if (query.from) q = q.where("scheduled_at", ">=", new Date(query.from));
-      if (query.to) q = q.where("scheduled_at", "<=", new Date(query.to));
-
-      const rows = await q.execute();
-
-      return rows.map(serializeLesson);
-    },
-    {
-      query: t.Object({
-        limit: t.Optional(t.Numeric()),
-        offset: t.Optional(t.Numeric()),
-        student_id: t.Optional(t.String()),
-        status: t.Optional(t.String()),
-        from: t.Optional(t.String()),
-        to: t.Optional(t.String()),
-      }),
-    },
-  )
-
-  // --- Student rates ---
-
-  .post(
-    "/student-rates",
-    async ({ body }) => {
-      const rate = await rootDb
-        .insertInto("app_public.student_rates")
-        .values({
-          student_id: body.student_id,
-          rate_cents: body.rate_cents,
-          lesson_duration_minutes: body.lesson_duration_minutes,
-          location_type: body.location_type,
-          notes: body.notes ?? null,
-        })
-        .onConflict((oc) =>
-          oc.columns(["student_id", "location_type"]).doUpdateSet({
-            rate_cents: body.rate_cents,
-            lesson_duration_minutes: body.lesson_duration_minutes,
-            notes: body.notes ?? null,
-          }),
-        )
-        .returning([
-          "id",
-          "student_id",
-          "rate_cents",
-          "lesson_duration_minutes",
-          "location_type",
-          "notes",
-          "created_at",
-        ])
-        .executeTakeFirstOrThrow();
-
-      return {
-        ...rate,
-        created_at: rate.created_at.toISOString(),
-      };
-    },
-    {
-      body: t.Object({
-        student_id: t.String(),
-        rate_cents: t.Number(),
-        lesson_duration_minutes: t.Number(),
-        location_type: LocationTypeSchema,
-        notes: t.Optional(t.String()),
-      }),
-    },
-  )
-
-  .get(
-    "/student-rates/:studentId",
-    async ({ params, query }) => {
-      let q = rootDb
-        .selectFrom("app_public.student_rates")
-        .select([
-          "id",
-          "student_id",
-          "rate_cents",
-          "lesson_duration_minutes",
-          "location_type",
-          "notes",
-          "created_at",
-        ])
-        .where("student_id", "=", params.studentId);
-
-      if (query.location_type) {
-        q = q.where("location_type", "=", query.location_type as LocationType);
-      }
-
-      const rows = await q.execute();
-
-      return rows.map((r) => ({
-        ...r,
-        created_at: r.created_at.toISOString(),
-      }));
-    },
-    {
-      query: t.Object({
-        location_type: t.Optional(t.String()),
-      }),
-    },
-  )
-
-  // --- Lesson notes ---
-
-  .post(
-    "/lessons/:id/notes",
-    async ({ params, body }) => {
-      const note = await rootDb
-        .insertInto("app_public.lesson_notes")
-        .values({
-          lesson_id: params.id,
-          topics_covered: body.topics_covered ?? null,
-          homework: body.homework ?? null,
-          progress_observations: body.progress_observations ?? null,
-          notes: body.notes ?? null,
-          material_ids: body.material_ids ? [...body.material_ids] : null,
-          draft: body.draft ?? true,
-        })
-        .onConflict((oc) =>
-          oc.column("lesson_id").doUpdateSet({
-            topics_covered: body.topics_covered ?? null,
-            homework: body.homework ?? null,
-            progress_observations: body.progress_observations ?? null,
-            notes: body.notes ?? null,
-            material_ids: body.material_ids ? [...body.material_ids] : null,
-            draft: body.draft ?? true,
-          }),
-        )
-        .returning([
-          "id",
-          "lesson_id",
-          "topics_covered",
-          "homework",
-          "progress_observations",
-          "notes",
-          "material_ids",
-          "draft",
-          "created_at",
-          "updated_at",
-        ])
-        .executeTakeFirstOrThrow();
-
-      return serializeLessonNote(note);
-    },
-    {
-      body: t.Object({
-        topics_covered: t.Optional(t.String()),
-        homework: t.Optional(t.String()),
-        progress_observations: t.Optional(t.String()),
-        notes: t.Optional(t.String()),
-        material_ids: t.Optional(t.Array(t.String())),
-        draft: t.Optional(t.Boolean()),
-      }),
-    },
-  )
-
-  .get("/lessons/:id/notes", async ({ params }) => {
-    const note = await rootDb
-      .selectFrom("app_public.lesson_notes")
-      .select([
-        "id",
-        "lesson_id",
-        "topics_covered",
-        "homework",
-        "progress_observations",
-        "notes",
-        "material_ids",
-        "draft",
-        "created_at",
-        "updated_at",
-      ])
-      .where("lesson_id", "=", params.id)
-      .executeTakeFirst();
-
-    if (!note) throw new HttpError(404, "Lesson note not found");
-
-    return serializeLessonNote(note);
-  })
-
-  .patch("/lessons/:id/notes/publish", async ({ params }) => {
-    const note = await rootDb
-      .updateTable("app_public.lesson_notes")
-      .set({ draft: false })
-      .where("lesson_id", "=", params.id)
-      .returning([
-        "id",
-        "lesson_id",
-        "topics_covered",
-        "homework",
-        "progress_observations",
-        "notes",
-        "material_ids",
-        "draft",
-        "created_at",
-        "updated_at",
-      ])
-      .executeTakeFirst();
-
-    if (!note) throw new HttpError(404, "Lesson note not found");
-
-    return serializeLessonNote(note);
-  })
-
-  // --- Google Calendar ---
-
-  .get("/gcal/status", async () => {
-    const tokenRow = await rootDb
-      .selectFrom("app_private.admin_settings")
-      .select("value")
-      .where("key", "=", "gcal_refresh_token")
-      .executeTakeFirst();
-
-    const calIdRow = await rootDb
-      .selectFrom("app_private.admin_settings")
-      .select("value")
-      .where("key", "=", "gcal_calendar_id")
-      .executeTakeFirst();
-
-    return {
-      connected: tokenRow !== undefined,
-      calendar_id: calIdRow ? calIdRow.value : null,
-    };
-  })
-
-  .post("/gcal/disconnect", async () => {
-    await rootDb
-      .deleteFrom("app_private.admin_settings")
-      .where("key", "in", [
-        "gcal_refresh_token",
-        "gcal_access_token",
-        "gcal_access_token_expires_at",
-        "gcal_calendar_id",
-        "gcal_sync_token",
-      ])
-      .execute();
-
-    return { success: true as const };
-  })
-
-  // --- Working hours ---
-
-  .get("/working-hours", async () => {
-    const row = await rootDb
-      .selectFrom("app_private.admin_settings")
-      .select("value")
-      .where("key", "=", "working_hours")
-      .executeTakeFirst();
-
-    return (
-      row?.value ?? {
-        0: null, // Sunday
-        1: { start: "09:00", end: "20:00" },
-        2: { start: "09:00", end: "20:00" },
-        3: { start: "09:00", end: "20:00" },
-        4: { start: "09:00", end: "20:00" },
-        5: { start: "09:00", end: "20:00" },
-        6: { start: "10:00", end: "14:00" },
-      }
-    );
-  })
-
-  .post("/working-hours", async ({ body }) => {
-    await rootDb
-      .insertInto("app_private.admin_settings")
-      .values({ key: "working_hours", value: toJson(body) })
-      .onConflict((oc) => oc.column("key").doUpdateSet({ value: toJson(body) }))
-      .execute();
-
-    return { success: true as const };
-  })
-
-  .get("/testimonial-reminder-interval", async () => {
-    return {
-      interval_days: await getTestimonialReminderIntervalDays(),
-    };
-  })
-
-  .post(
-    "/testimonial-reminder-interval",
-    async ({ body }) => {
-      await setTestimonialReminderIntervalDays(body.interval_days);
-      await rescheduleTestimonialReminders(body.interval_days);
-
-      return {
-        success: true as const,
-        interval_days: body.interval_days,
-      };
-    },
-    {
-      body: t.Object({
-        interval_days: t.Integer({ minimum: 1, maximum: 365 }),
-      }),
-    },
+  .add(
+    HttpApiEndpoint.get("testimonialReminderInterval", "/api/admin/testimonial-reminder-interval"),
   );
 
-// === Download route (auth-only, not admin-only) ===
-// This is a separate plugin because the download route only requires
-// authentication, not admin role. Access control is in fileService.download.
+export const materialDownloadGroup = HttpApiGroup.make("materialDownload")
+  .add(HttpApiEndpoint.get("materialDownload", "/materials/:id/download").setPath(params("id")))
+  .prefix("/api");
 
-export const materialDownloadRoute = new Elysia()
-  .onError(({ error, set }) => {
-    if (error instanceof HttpError) {
-      set.status = error.status;
-      return { error: error.message };
-    }
-  })
-  .get("/api/materials/:id/download", async ({ params, cookie }) => {
-    const token = getCookieString(cookie.session?.value);
-    const result = await sessionService.validateSessionToken(token);
-    if (!result) throw new HttpError(401, "Not authenticated");
+const adminApi = HttpApi.make("dfg").add(adminGroup);
 
-    const fileInfo = await fileService.download(params.id, result.user.id);
+const materialDownloadApi = HttpApi.make("dfg").add(materialDownloadGroup);
 
-    return new Response(fileInfo.stream as unknown as BodyInit, {
-      headers: {
-        "content-type": fileInfo.mimeType,
-        "content-disposition":
-          fileInfo.mimeType === "application/pdf"
-            ? `inline; filename="${encodeURIComponent(fileInfo.filename)}"`
-            : `attachment; filename="${encodeURIComponent(fileInfo.filename)}"`,
-      },
-    });
-  });
+export function makeAdminLayer() {
+  return HttpApiBuilder.group(adminApi, "admin", (handlers) =>
+    handlers
+      .handle(
+        "gcalConnect",
+        Effect.fnUntraced(
+          function* (context) {
+            yield* requireAdminSession(context.request, { csrf: false });
+            const rootUrl = new URL((context.request.source as Request).url).origin;
+            const authorization = yield* GoogleCalendarService.createAuthorizationRequest(rootUrl);
+            let response = HttpServerResponse.redirect(authorization.url.toString());
+            response = Effect.runSync(
+              HttpServerResponse.setCookie(
+                response,
+                GoogleCalendarService.getAuthCookieName(),
+                GoogleCalendarService.encodeAuthState(authorization.state),
+                GoogleCalendarService.getAuthCookieOptions(rootUrl),
+              ),
+            );
+            return response;
+          },
+          Effect.catchAllCause(responseForCause),
+          Effect.map(normalizeToResponse),
+        ),
+      )
+      .handle(
+        "gcalCallback",
+        Effect.fnUntraced(
+          function* ({ request }: { request: RawRequest }) {
+            yield* requireAdminSession(request, { csrf: false });
+            const webRequest = request.source as Request;
+            const rootUrl = new URL(webRequest.url).origin;
+            const query = new URL(webRequest.url).searchParams;
+            const authCookieName = GoogleCalendarService.getAuthCookieName();
+            const cookieOptions = GoogleCalendarService.getAuthCookieOptions(rootUrl);
+            const authState = GoogleCalendarService.decodeAuthState(
+              request.cookies[authCookieName],
+            );
+            const fail = (status: number, message: string) =>
+              HttpServerResponse.expireCookie(
+                HttpServerResponse.unsafeJson({ error: message }, { status }),
+                authCookieName,
+                cookieOptions,
+              );
+            try {
+              const error = query.get("error") ?? undefined;
+              const code = query.get("code") ?? undefined;
+              const state = query.get("state") ?? undefined;
+              if (error) {
+                return fail(400, `Google Calendar OAuth failed (${error})`);
+              }
+              if (!code || !state) {
+                return fail(400, "Missing Google Calendar OAuth callback parameters");
+              }
+              if (!authState || authState.state !== state) {
+                return fail(400, "Invalid or expired Google Calendar OAuth state");
+              }
+              yield* GoogleCalendarService.handleCallback(rootUrl, code, authState.codeVerifier);
+              let response = HttpServerResponse.redirect(
+                GoogleCalendarService.getConnectRedirectUrl(rootUrl, authState.redirect),
+              );
+              response = HttpServerResponse.expireCookie(response, authCookieName, cookieOptions);
+              return response;
+            } catch (error) {
+              if (error instanceof HttpError) {
+                return new HttpError(error.status, error.message);
+              }
+              console.error(error);
+              return new HttpError(500, "Internal Server Error");
+            }
+          },
+          Effect.catchAllCause(responseForCause),
+          Effect.map(normalizeToResponse),
+        ),
+      )
+      .handle(
+        "submissions",
+        Effect.fnUntraced(
+          function* ({ request }) {
+            yield* requireAdminSession(request);
+            const query = new URL((request.source as Request).url).searchParams;
+            const limit = parseQueryNumber(query, "limit") ?? 50;
+            const offset = parseQueryNumber(query, "offset") ?? 0;
+            const rows = yield* AdminRouteService.listSubmissions(limit, offset);
+            return rows.map((row) => ({
+              ...row,
+              created_at: row.created_at.toISOString(),
+            }));
+          },
+          Effect.catchAllCause(responseForCause),
+          Effect.map(normalizeToResponse),
+        ),
+      )
+      .handle(
+        "updateSubmission",
+        Effect.fnUntraced(
+          function* ({ request, path, payload }) {
+            yield* requireAdminSession(request);
+            const row = yield* AdminRouteService.updateSubmissionRead(path.id, payload.is_read);
+            if (!row) {
+              return yield* new HttpError(404, "Submission not found");
+            }
+            return HttpServerResponse.unsafeJson({ success: true as const });
+          },
+          Effect.catchAllCause(responseForCause),
+          Effect.map(normalizeToResponse),
+        ),
+      )
+      .handle(
+        "students",
+        Effect.fnUntraced(
+          function* ({ request }) {
+            yield* requireAdminSession(request);
+            const rows = yield* AdminRouteService.listStudents();
+            return rows.map((row) => ({
+              ...row,
+              name: row.name ?? "",
+              email: row.email ?? "",
+              role: row.role,
+            }));
+          },
+          Effect.catchAllCause(responseForCause),
+          Effect.map(normalizeToResponse),
+        ),
+      )
+      .handle(
+        "student",
+        Effect.fnUntraced(
+          function* (context) {
+            yield* requireAdminSession(context.request);
+            const { path } = context;
+            const raw = yield* AdminRouteService.getStudent(path.id);
+            return {
+              ...raw,
+              name: raw.name ?? "",
+              email: raw.email ?? "",
+              role: raw.role,
+            };
+          },
+          Effect.catchAllCause(responseForCause),
+          Effect.map(normalizeToResponse),
+        ),
+      )
+      .handle(
+        "courses",
+        Effect.fnUntraced(
+          function* (context) {
+            yield* requireAdminSession(context.request);
+            return yield* AdminRouteService.listCourses();
+          },
+          Effect.catchAllCause(responseForCause),
+          Effect.map(normalizeToResponse),
+        ),
+      )
+      .handle(
+        "courseStudents",
+        Effect.fnUntraced(
+          function* (context) {
+            yield* requireAdminSession(context.request);
+            const { path } = context;
+            const rows = yield* AdminRouteService.listCourseStudents(path.id);
+            return rows.map((row) => ({
+              id: row.id,
+              username: row.username,
+              name: row.name ?? "",
+              email: row.email ?? "",
+              role: row.role,
+              is_verified: row.is_verified,
+            }));
+          },
+          Effect.catchAllCause(responseForCause),
+          Effect.map(normalizeToResponse),
+        ),
+      )
+      .handle(
+        "createCourse",
+        Effect.fnUntraced(
+          function* ({ request, payload }) {
+            yield* requireAdminSession(request);
+            return yield* AdminRouteService.createCourse({
+              title: payload.title,
+              description: payload.description ?? "",
+              instrument: payload.instrument,
+            });
+          },
+          Effect.catchAllCause(responseForCause),
+          Effect.map(normalizeToResponse),
+        ),
+      )
+      .handle(
+        "updateCourse",
+        Effect.fnUntraced(
+          function* ({ request, path, payload }) {
+            yield* requireAdminSession(request);
+            const updates: Record<string, string> = {};
+            const title = payload.title;
+            const description = payload.description;
+            const instrument = payload.instrument;
+            if (title !== undefined) updates.title = title;
+            if (description !== undefined) updates.description = description;
+            if (instrument !== undefined) updates.instrument = instrument;
+            const course = yield* AdminRouteService.updateCourse(path.id, updates);
+            if (!course) {
+              return yield* new HttpError(404, "Course not found");
+            }
+            return course;
+          },
+          Effect.catchAllCause(responseForCause),
+          Effect.map(normalizeToResponse),
+        ),
+      )
+      .handle(
+        "deleteCourse",
+        Effect.fnUntraced(
+          function* (context) {
+            yield* requireAdminSession(context.request);
+            const { path } = context;
+            yield* AdminRouteService.deleteCourse(path.id);
+            return HttpServerResponse.unsafeJson({ success: true as const });
+          },
+          Effect.catchAllCause(responseForCause),
+          Effect.map(normalizeToResponse),
+        ),
+      )
+      .handle(
+        "module",
+        Effect.fnUntraced(
+          function* (context) {
+            yield* requireAdminSession(context.request);
+            const { path } = context;
+            const mod = yield* AdminRouteService.getModule(path.id);
+            if (!mod) {
+              return yield* new HttpError(404, "Module not found");
+            }
+            return mod;
+          },
+          Effect.catchAllCause(responseForCause),
+          Effect.map(normalizeToResponse),
+        ),
+      )
+      .handle(
+        "createModule",
+        Effect.fnUntraced(
+          function* ({ request, path, payload }) {
+            yield* requireAdminSession(request);
+            return yield* AdminRouteService.createModule(path.id, {
+              title: payload.title,
+              sort_order: payload.sort_order ?? 0,
+            });
+          },
+          Effect.catchAllCause(responseForCause),
+          Effect.map(normalizeToResponse),
+        ),
+      )
+      .handle(
+        "updateModule",
+        Effect.fnUntraced(
+          function* ({ request, path, payload }) {
+            yield* requireAdminSession(request);
+            const updates: Record<string, unknown> = {};
+            const title = payload.title;
+            const sortOrder = payload.sort_order;
+            if (title !== undefined) {
+              updates.title = title;
+            }
+            if (payload.content !== undefined) {
+              updates.content = payload.content;
+            }
+            if (sortOrder !== undefined) {
+              updates.sort_order = sortOrder;
+            }
+            const mod = yield* AdminRouteService.updateModule(path.id, updates);
+            if (!mod) {
+              return yield* new HttpError(404, "Module not found");
+            }
+            return mod;
+          },
+          Effect.catchAllCause(responseForCause),
+          Effect.map(normalizeToResponse),
+        ),
+      )
+      .handle(
+        "deleteModule",
+        Effect.fnUntraced(
+          function* (context) {
+            yield* requireAdminSession(context.request);
+            const { path } = context;
+            yield* AdminRouteService.deleteModule(path.id);
+            return HttpServerResponse.unsafeJson({ success: true as const });
+          },
+          Effect.catchAllCause(responseForCause),
+          Effect.map(normalizeToResponse),
+        ),
+      )
+      .handle(
+        "enrollStudent",
+        Effect.fnUntraced(
+          function* ({ request, path, payload }) {
+            yield* requireAdminSession(request);
+            yield* AdminRouteService.enrollStudent(path.id, payload.course_id);
+            return HttpServerResponse.unsafeJson({ success: true as const });
+          },
+          Effect.catchAllCause(responseForCause),
+          Effect.map(normalizeToResponse),
+        ),
+      )
+      .handle(
+        "unenrollStudent",
+        Effect.fnUntraced(
+          function* (context) {
+            yield* requireAdminSession(context.request);
+            const { path } = context;
+            yield* AdminRouteService.unenrollStudent(path.id, path.courseId);
+            return HttpServerResponse.unsafeJson({ success: true as const });
+          },
+          Effect.catchAllCause(responseForCause),
+          Effect.map(normalizeToResponse),
+        ),
+      )
+      .handle(
+        "assignMaterial",
+        Effect.fnUntraced(
+          function* ({ request, path, payload }) {
+            yield* requireAdminSession(request);
+            yield* AdminRouteService.assignMaterial({
+              studentId: path.id,
+              materialId: payload.material_id,
+              assignedTrackIndex: parseAssignedTrackIndex(payload.assigned_track_index),
+            });
+            return HttpServerResponse.unsafeJson({ success: true as const });
+          },
+          Effect.catchAllCause(responseForCause),
+          Effect.map(normalizeToResponse),
+        ),
+      )
+      .handle(
+        "unassignMaterial",
+        Effect.fnUntraced(
+          function* (context) {
+            yield* requireAdminSession(context.request);
+            const { path } = context;
+            yield* AdminRouteService.unassignMaterial(path.id, path.materialId);
+            return HttpServerResponse.unsafeJson({ success: true as const });
+          },
+          Effect.catchAllCause(responseForCause),
+          Effect.map(normalizeToResponse),
+        ),
+      )
+      .handle(
+        "deleteMaterial",
+        Effect.fnUntraced(
+          function* (context) {
+            yield* requireAdminSession(context.request);
+            const { path } = context;
+            const row = yield* AdminRouteService.deleteMaterial(path.id);
+            if (!row) {
+              return yield* new HttpError(404, "Material not found");
+            }
+            return HttpServerResponse.unsafeJson({ success: true as const });
+          },
+          Effect.catchAllCause(responseForCause),
+          Effect.map(normalizeToResponse),
+        ),
+      )
+      .handle(
+        "uploadMaterial",
+        Effect.fnUntraced(
+          function* ({ request, payload }) {
+            const auth = yield* requireAdminSession(request);
+            return yield* (yield* FileService).upload(
+              payload.file,
+              payload.title,
+              payload.is_global,
+              auth.user.id,
+            );
+          },
+          Effect.catchAllCause(responseForCause),
+          Effect.map(normalizeToResponse),
+        ),
+      )
+      .handle(
+        "createFamily",
+        Effect.fnUntraced(
+          function* (context) {
+            const auth = yield* requireAdminSession(context.request);
+            const { request } = context;
+            const body = yield* readJsonObject(request);
+            const familyResult = yield* AdminRouteService.createFamily(auth.session.id, {
+              slug: requiredString(body.slug, "slug"),
+              name: requiredString(body.name, "name"),
+            });
+            const family = Array.isArray(familyResult) ? familyResult[0] : familyResult;
+            if (!family) {
+              return yield* new HttpError(500, "Failed to create family");
+            }
+            return {
+              ...family,
+              created_at: family.created_at.toISOString(),
+            };
+          },
+          Effect.catchAllCause(responseForCause),
+          Effect.map(normalizeToResponse),
+        ),
+      )
+      .handle(
+        "families",
+        Effect.fnUntraced(
+          function* (context) {
+            yield* requireAdminSession(context.request);
+            const rows = yield* AdminRouteService.listFamilies();
+            return rows.map((row) => ({
+              ...row,
+              created_at: row.created_at.toISOString(),
+            }));
+          },
+          Effect.catchAllCause(responseForCause),
+          Effect.map(normalizeToResponse),
+        ),
+      )
+      .handle(
+        "inviteFamily",
+        Effect.fnUntraced(
+          function* ({ request, path, payload }) {
+            const auth = yield* requireAdminSession(request);
+            yield* AdminRouteService.inviteFamily(auth.session.id, path.familyId, {
+              username: payload.username,
+              email: payload.email,
+            });
+            return HttpServerResponse.unsafeJson({ success: true as const });
+          },
+          Effect.catchAllCause(responseForCause),
+          Effect.map(normalizeToResponse),
+        ),
+      )
+      .handle(
+        "qrInvite",
+        Effect.fnUntraced(
+          function* ({ request, path, payload }) {
+            yield* requireAdminSession(request);
+            let familyId = path.familyId;
+            if (familyId === "new") {
+              const name = payload.name;
+              const slug = payload.slug;
+              if (!name || !slug) {
+                return yield* new HttpError(
+                  400,
+                  "Name and slug are required when creating a new family",
+                );
+              }
+              const family = yield* AdminRouteService.createQrInviteFamily({
+                name,
+                slug,
+              });
+              familyId = family.id;
+            }
+            const invitation = yield* AdminRouteService.createQrInvite(familyId);
+            const rootUrl = env.VITE_ROOT_URL;
+            return {
+              invitationId: invitation.id,
+              code: invitation.code,
+              url: `${rootUrl}/accept-invite?id=${invitation.id}&code=${invitation.code}`,
+              expiresAt: invitation.expires_at.toISOString(),
+            };
+          },
+          Effect.catchAllCause(responseForCause),
+          Effect.map(normalizeToResponse),
+        ),
+      )
+      .handle(
+        "familyInvitations",
+        Effect.fnUntraced(
+          function* (context) {
+            yield* requireAdminSession(context.request);
+            const { path } = context;
+            return yield* AdminRouteService.listFamilyInvitations(path.familyId);
+          },
+          Effect.catchAllCause(responseForCause),
+          Effect.map(normalizeToResponse),
+        ),
+      )
+      .handle(
+        "createLesson",
+        Effect.fnUntraced(
+          function* ({ request, payload }) {
+            yield* requireAdminSession(request);
+            const lesson = yield* AdminRouteService.createLesson({
+              studentId: payload.student_id,
+              scheduledAt: new Date(payload.scheduled_at),
+              durationMinutes: payload.duration_minutes,
+              locationType: payload.location_type,
+              gcalEventId: null,
+            });
+            return serializeLesson(lesson);
+          },
+          Effect.catchAllCause(responseForCause),
+          Effect.map(normalizeToResponse),
+        ),
+      )
+      .handle(
+        "updateLesson",
+        Effect.fnUntraced(
+          function* ({ request, path, payload }) {
+            yield* requireAdminSession(request);
+            const updates: Record<string, unknown> = {};
+            const scheduledAt = payload.scheduled_at;
+            const durationMinutes = payload.duration_minutes;
+            const locationType = payload.location_type;
+            const status = payload.status;
+            const cancellationReason = payload.cancellation_reason;
+            if (scheduledAt !== undefined) updates.scheduled_at = new Date(scheduledAt);
+            if (durationMinutes !== undefined) updates.duration_minutes = durationMinutes;
+            if (locationType !== undefined) updates.location_type = locationType;
+            if (status !== undefined) {
+              updates.status = status;
+            }
+            if (cancellationReason !== undefined) updates.cancellation_reason = cancellationReason;
+            const lesson = yield* AdminRouteService.updateLesson(path.id, {
+              scheduledAt: updates.scheduled_at as Date | undefined,
+              durationMinutes: updates.duration_minutes as number | undefined,
+              locationType: updates.location_type as LocationType | undefined,
+              status: updates.status as LessonStatus | undefined,
+              cancellationReason: updates.cancellation_reason as string | undefined,
+            });
+            if (!lesson) {
+              return yield* new HttpError(404, "Lesson not found");
+            }
+            return serializeLesson(lesson);
+          },
+          Effect.catchAllCause(responseForCause),
+          Effect.map(normalizeToResponse),
+        ),
+      )
+      .handle(
+        "deleteLesson",
+        Effect.fnUntraced(
+          function* (context) {
+            yield* requireAdminSession(context.request);
+            const { path } = context;
+            const lesson = yield* AdminRouteService.deleteLesson(path.id);
+            if (!lesson) {
+              return yield* new HttpError(404, "Lesson not found");
+            }
+            return HttpServerResponse.unsafeJson({ success: true as const });
+          },
+          Effect.catchAllCause(responseForCause),
+          Effect.map(normalizeToResponse),
+        ),
+      )
+      .handle(
+        "lessons",
+        Effect.fnUntraced(
+          function* (context) {
+            yield* requireAdminSession(context.request);
+            const { request } = context;
+            const query = new URL((request.source as Request).url).searchParams;
+            const limit = parseQueryNumber(query, "limit") ?? 50;
+            const offset = parseQueryNumber(query, "offset") ?? 0;
+            const studentId = query.get("student_id") ?? undefined;
+            const status = query.get("status");
+            const from = query.get("from") ?? undefined;
+            const to = query.get("to") ?? undefined;
+            const lessons = yield* AdminRouteService.listLessons({
+              limit,
+              offset,
+              studentId,
+              status: status ? parseLessonStatus(status, "status") : undefined,
+              from: from ? new Date(from) : undefined,
+              to: to ? new Date(to) : undefined,
+            });
+            return lessons.map(serializeLesson);
+          },
+          Effect.catchAllCause(responseForCause),
+          Effect.map(normalizeToResponse),
+        ),
+      )
+      .handle(
+        "saveStudentRate",
+        Effect.fnUntraced(
+          function* (context) {
+            yield* requireAdminSession(context.request);
+            const { request } = context;
+            const body = yield* readJsonObject(request);
+            const rate = yield* AdminRouteService.saveStudentRate({
+              studentId: requiredString(body.student_id, "student_id"),
+              rateCents: requiredNumber(body.rate_cents, "rate_cents"),
+              lessonDurationMinutes: requiredNumber(
+                body.lesson_duration_minutes,
+                "lesson_duration_minutes",
+              ),
+              locationType: parseLocationType(body.location_type, "location_type"),
+              notes: optionalString(body.notes, "notes") ?? null,
+            });
+            return {
+              ...rate,
+              created_at: rate.created_at.toISOString(),
+            };
+          },
+          Effect.catchAllCause(responseForCause),
+          Effect.map(normalizeToResponse),
+        ),
+      )
+      .handle(
+        "studentRates",
+        Effect.fnUntraced(
+          function* (context) {
+            yield* requireAdminSession(context.request);
+            const { request, path } = context;
+            const query = new URL((request.source as Request).url).searchParams;
+            const locationType = query.get("location_type");
+            return (yield* AdminRouteService.listStudentRates(
+              path.studentId,
+              locationType ? parseLocationType(locationType, "location_type") : undefined,
+            )).map((row) => ({
+              ...row,
+              created_at: row.created_at.toISOString(),
+            }));
+          },
+          Effect.catchAllCause(responseForCause),
+          Effect.map(normalizeToResponse),
+        ),
+      )
+      .handle(
+        "saveLessonNote",
+        Effect.fnUntraced(
+          function* ({ request, path, payload }) {
+            yield* requireAdminSession(request);
+            const note = yield* AdminRouteService.saveLessonNote(path.id, {
+              topicsCovered: payload.topics_covered ?? null,
+              homework: payload.homework ?? null,
+              progressObservations: payload.progress_observations ?? null,
+              notes: payload.notes ?? null,
+              materialIds: payload.material_ids ? [...payload.material_ids] : null,
+              draft: payload.draft ?? true,
+            });
+            return serializeLessonNote(note);
+          },
+          Effect.catchAllCause(responseForCause),
+          Effect.map(normalizeToResponse),
+        ),
+      )
+      .handle(
+        "lessonNote",
+        Effect.fnUntraced(
+          function* (context) {
+            yield* requireAdminSession(context.request);
+            const { path } = context;
+            const note = yield* AdminRouteService.getLessonNote(path.id);
+            if (!note) {
+              return yield* new HttpError(404, "Lesson note not found");
+            }
+            return serializeLessonNote(note);
+          },
+          Effect.catchAllCause(responseForCause),
+          Effect.map(normalizeToResponse),
+        ),
+      )
+      .handle(
+        "publishLessonNote",
+        Effect.fnUntraced(
+          function* (context) {
+            yield* requireAdminSession(context.request);
+            const { path } = context;
+            const note = yield* AdminRouteService.publishLessonNote(path.id);
+            if (!note) {
+              return yield* new HttpError(404, "Lesson note not found");
+            }
+            return serializeLessonNote(note);
+          },
+          Effect.catchAllCause(responseForCause),
+          Effect.map(normalizeToResponse),
+        ),
+      )
+      .handle(
+        "gcalStatus",
+        Effect.fnUntraced(
+          function* (context) {
+            yield* requireAdminSession(context.request);
+            return yield* AdminRouteService.getGoogleCalendarStatus();
+          },
+          Effect.catchAllCause(responseForCause),
+          Effect.map(normalizeToResponse),
+        ),
+      )
+      .handle(
+        "gcalDisconnect",
+        Effect.fnUntraced(
+          function* (context) {
+            yield* requireAdminSession(context.request);
+            yield* AdminRouteService.disconnectGoogleCalendar();
+            return HttpServerResponse.unsafeJson({ success: true as const });
+          },
+          Effect.catchAllCause(responseForCause),
+          Effect.map(normalizeToResponse),
+        ),
+      )
+      .handle(
+        "workingHours",
+        Effect.fnUntraced(
+          function* (context) {
+            yield* requireAdminSession(context.request);
+            return (yield* AdminRouteService.getWorkingHours()) ?? defaultWorkingHours;
+          },
+          Effect.catchAllCause(responseForCause),
+          Effect.map(normalizeToResponse),
+        ),
+      )
+      .handle(
+        "saveWorkingHours",
+        Effect.fnUntraced(
+          function* ({ request, payload }) {
+            yield* requireAdminSession(request);
+            yield* AdminRouteService.saveWorkingHours(payload);
+            return HttpServerResponse.unsafeJson({ success: true as const });
+          },
+          Effect.catchAllCause(responseForCause),
+          Effect.map(normalizeToResponse),
+        ),
+      )
+      .handle(
+        "testimonialReminderInterval",
+        Effect.fnUntraced(
+          function* (context) {
+            yield* requireAdminSession(context.request);
+            return {
+              interval_days: yield* TestimonialReminderService.getIntervalDays(),
+            };
+          },
+          Effect.catchAllCause(responseForCause),
+          Effect.map(normalizeToResponse),
+        ),
+      )
+      .handle(
+        "saveTestimonialReminderInterval",
+        Effect.fnUntraced(
+          function* ({ request, payload }) {
+            yield* requireAdminSession(request);
+            const intervalDays = requiredIntegerInRange(
+              payload.interval_days,
+              "interval_days",
+              1,
+              365,
+            );
+            yield* TestimonialReminderService.setIntervalDays(intervalDays);
+            yield* TestimonialReminderService.rescheduleAll(intervalDays);
+            return HttpServerResponse.unsafeJson({
+              success: true as const,
+              interval_days: intervalDays,
+            });
+          },
+          Effect.catchAllCause(responseForCause),
+          Effect.map(normalizeToResponse),
+        ),
+      )
+      .handle(
+        "updateTestimonialApproval",
+        Effect.fnUntraced(
+          function* ({ request, path, payload }) {
+            yield* requireAdminSession(request);
+            const testimonial = yield* AdminRouteService.updateTestimonialApproval(
+              path.id,
+              payload.is_approved,
+            );
+            if (testimonial.is_approved) {
+              yield* TestimonialReminderService.clearReminderState(testimonial.user_id);
+            } else if (testimonial.role === "student" || testimonial.role === "parent") {
+              yield* TestimonialReminderService.scheduleNextReminder(testimonial.user_id);
+            }
+            return HttpServerResponse.unsafeJson({ success: true as const });
+          },
+          Effect.catchAllCause(responseForCause),
+          Effect.map(normalizeToResponse),
+        ),
+      ),
+  );
+}
+
+export function makeMaterialDownloadLayer() {
+  return HttpApiBuilder.group(materialDownloadApi, "materialDownload", (handlers) =>
+    handlers.handle(
+      "materialDownload",
+      Effect.fnUntraced(
+        function* (context) {
+          const auth = yield* requireAuthenticatedSession(context.request);
+          const { path } = context;
+          const fileInfo = yield* FileService.download(path.id, auth.user.id);
+          return HttpServerResponse.fromWeb(
+            new Response(fileInfo.stream as unknown as BodyInit, {
+              headers: {
+                "content-type": fileInfo.mimeType,
+                "content-disposition":
+                  fileInfo.mimeType === "application/pdf"
+                    ? `inline; filename="${encodeURIComponent(fileInfo.filename)}"`
+                    : `attachment; filename="${encodeURIComponent(fileInfo.filename)}"`,
+              },
+            }),
+          );
+        },
+        Effect.catchAllCause(responseForCause),
+        Effect.map(normalizeToResponse),
+      ),
+    ),
+  );
+}

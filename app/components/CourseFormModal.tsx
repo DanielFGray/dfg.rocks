@@ -1,18 +1,15 @@
+import { Effect } from "effect";
 import { useState } from "react";
 import { useForm } from "@tanstack/react-form";
-import * as v from "valibot";
 import { useMutation } from "@tanstack/react-query";
 import { api } from "../lib/api.js";
 import { fieldError } from "../lib/form.js";
+import { requiredValidator } from "../lib/validators.js";
 import { Modal } from "./ui/Modal.js";
 import { Input } from "./ui/Input.js";
 import { Select } from "./ui/Select.js";
 import { Textarea } from "./ui/Textarea.js";
 import { Button } from "./ui/Button.js";
-
-const requiredValidator = {
-  onChange: v.pipe(v.string(), v.minLength(1, "Required")),
-};
 
 const instrumentOptions = [
   { value: "", label: "Select instrument..." },
@@ -37,13 +34,18 @@ type CourseFormModalProps = {
   onSuccess: () => void;
 };
 
-export function CourseFormModal({ open, onClose, course, onSuccess }: CourseFormModalProps) {
+export function CourseFormModal({
+  open,
+  onClose,
+  course,
+  onSuccess,
+}: CourseFormModalProps) {
   const createMutation = useMutation({
-    mutationFn: async (payload: { title: string; instrument: string; description?: string }) => {
-      const { data, error } = await api.admin.courses.post(payload);
-      if (error) throw error;
-      return data;
-    },
+    mutationFn: (payload: {
+      title: string;
+      instrument: string;
+      description?: string;
+    }) => Effect.runPromise(api.admin.createCourse({ payload })),
   });
 
   const updateMutation = useMutation({
@@ -55,11 +57,7 @@ export function CourseFormModal({ open, onClose, course, onSuccess }: CourseForm
       title: string;
       instrument: string;
       description?: string;
-    }) => {
-      const { data, error } = await api.admin.courses({ id }).patch(payload);
-      if (error) throw error;
-      return data;
-    },
+    }) => Effect.runPromise(api.admin.updateCourse({ path: { id }, payload })),
   });
 
   const form = useForm({
@@ -103,7 +101,11 @@ export function CourseFormModal({ open, onClose, course, onSuccess }: CourseForm
   }
 
   return (
-    <Modal open={open} onClose={onClose} title={course ? "Edit Course" : "New Course"}>
+    <Modal
+      open={open}
+      onClose={onClose}
+      title={course ? "Edit Course" : "New Course"}
+    >
       <form
         data-testid="course-form"
         onSubmit={(e) => {

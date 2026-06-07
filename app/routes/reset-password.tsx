@@ -1,21 +1,22 @@
+import { Effect } from "effect";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useMutation } from "@tanstack/react-query";
 import { useForm } from "@tanstack/react-form";
-import * as v from "valibot";
+import * as S from "effect/Schema";
 import { api } from "../lib/api.js";
 import { getErrorMessage } from "../lib/errors.js";
 import { fieldError } from "../lib/form.js";
+import { passwordValidator } from "../lib/validators.js";
 import { Button } from "../components/ui/Button.js";
 import { Input } from "../components/ui/Input.js";
-import { TokenSearch, parseWith } from "../../shared/validation.js";
-
-const passwordValidator = {
-  onChange: v.pipe(v.string(), v.minLength(6, "Must be at least 6 characters")),
-};
+import { TokenSearch } from "../../shared/schemas.js";
 
 export const Route = createFileRoute("/reset-password")({
   head: () => ({ meta: [{ title: "Reset Password | DFG Portal" }] }),
-  validateSearch: (search: Record<string, unknown>) => parseWith(TokenSearch, search),
+  validateSearch: (
+    search: Record<string, unknown>,
+  ): S.Schema.Type<typeof TokenSearch> =>
+    S.decodeUnknownSync(TokenSearch)(search),
   component: ResetPasswordPage,
 });
 
@@ -26,8 +27,9 @@ function ResetPasswordPage() {
   const reset = useMutation({
     mutationFn: async (password: string) => {
       if (!token) throw new Error("Missing reset token");
-      const { error } = await api["reset-password"].post({ token, password });
-      if (error) throw error;
+      await Effect.runPromise(
+        api.auth.resetPassword({ payload: { token, password } }),
+      );
     },
     onSuccess: () => {
       navigate({ to: "/login", search: { redirect: undefined } });
@@ -45,9 +47,12 @@ function ResetPasswordPage() {
     return (
       <main className="flex min-h-screen items-center justify-center px-4">
         <div className="w-full max-w-sm text-center">
-          <h1 className="mb-4 text-3xl font-bold tracking-tight">Invalid Link</h1>
+          <h1 className="mb-4 text-3xl font-bold tracking-tight">
+            Invalid Link
+          </h1>
           <p className="text-sm text-muted dark:text-muted-dark">
-            This link is missing a token. Please use the link from your reset email.
+            This link is missing a token. Please use the link from your reset
+            email.
           </p>
           <Link
             to="/login"
@@ -61,7 +66,9 @@ function ResetPasswordPage() {
     );
   }
 
-  const serverError = reset.isError ? getErrorMessage(reset.error, "Password reset failed") : null;
+  const serverError = reset.isError
+    ? getErrorMessage(reset.error, "Password reset failed")
+    : null;
 
   return (
     <main
@@ -71,7 +78,9 @@ function ResetPasswordPage() {
       <div className="w-full max-w-sm">
         <div className="mb-8 text-center">
           <h1 className="text-3xl font-bold tracking-tight">Reset Password</h1>
-          <p className="mt-2 text-sm text-muted dark:text-muted-dark">Enter your new password</p>
+          <p className="mt-2 text-sm text-muted dark:text-muted-dark">
+            Enter your new password
+          </p>
         </div>
         <form
           onSubmit={(e) => {
@@ -109,7 +118,8 @@ function ResetPasswordPage() {
             validators={{
               onChangeListenTo: ["password"],
               onChange: ({ value }) => {
-                if (value !== form.getFieldValue("password")) return "Passwords do not match";
+                if (value !== form.getFieldValue("password"))
+                  return "Passwords do not match";
                 return undefined;
               },
             }}
@@ -128,8 +138,8 @@ function ResetPasswordPage() {
               />
             )}
           </form.Field>
-          <form.Subscribe selector={(s) => [s.canSubmit, s.isSubmitting] as const}>
-            {([canSubmit, isSubmitting]) => (
+          <form.Subscribe selector={(s) => [s.canSubmit] as const}>
+            {([canSubmit]) => (
               <Button
                 type="submit"
                 variant="primary"

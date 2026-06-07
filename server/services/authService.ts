@@ -1,7 +1,8 @@
 import { sql } from "kysely";
-import { rootDb } from "../db.js";
-import { HttpError, mapPgError } from "../pgErrors.js";
-import { sessionService } from "./sessionService.js";
+import { Effect, Option } from "effect";
+import { PgRootDB } from "../db.js";
+import { catchPgErrors, HttpError } from "../pgErrors.js";
+import { SessionService } from "./sessionService.js";
 
 export class InvalidCredentialsError extends HttpError {
   constructor() {
@@ -21,94 +22,121 @@ export class AccountLockedError extends HttpError {
   }
 }
 
-export const authService = {
-  async login({ id, password }: { id: string; password: string }) {
-    let session: { id: string; user_id: string; created_at: Date; expires_at: Date };
-    try {
-      const row = await rootDb
+const loginEffect = Effect.fnUntraced(function* ({
+  id,
+  password,
+}: {
+  id: string;
+  password: string;
+}) {
+  const rootDb = yield* PgRootDB;
+  const session = yield* rootDb
+    .with("s", (qb) =>
+      qb
         .selectFrom((eb) =>
           eb
             .fn<{
               id: string;
               user_id: string;
-              created_at: Date;
-              expires_at: Date;
-            }>("app_private.login", [sql`${id}::citext`, eb.val(password)])
+            }>("app_private.login", [eb.val(id), eb.val(password)])
             .as("s"),
         )
-        .selectAll()
-        .where("s.user_id", "is not", null)
-        .executeTakeFirst();
+        .select(["s.id", "s.user_id"])
+        .where("s.user_id", "is not", null),
+    )
+    .selectFrom("s")
+    .innerJoin("app_public.users as u", "u.id", "s.user_id")
+    .select([
+      "s.id",
+      "s.user_id",
+      "u.username",
+      "u.role",
+      "u.name",
+      "u.is_verified",
+    ])
+    .pipe(catchPgErrors, Effect.head, Effect.optionFromOptional);
+  if (Option.isNone(session)) {
+    return yield* new InvalidCredentialsError();
+  }
 
-      if (!row) throw new InvalidCredentialsError();
-      session = row;
-    } catch (err) {
-      if (err instanceof HttpError) throw err;
-      mapPgError(err);
-    }
+  const createdSession = yield* SessionService.issueTokenForSession(session.value.id);
 
-    const user = await rootDb
-      .selectFrom("app_public.users")
-      .select(["id", "username", "role", "name", "is_verified"])
-      .where("id", "=", session.user_id)
-      .executeTakeFirst();
+  return { user: session.value, ...createdSession };
+});
 
-    if (!user) throw new InvalidCredentialsError();
+const logoutEffect = Effect.fnUntraced(function* (cookieId?: string) {
+  if (!cookieId) {
+    return;
+  }
 
-    const { token, expiresAt } = await sessionService.createSession(user.id);
-    return { user, token, expiresAt };
-  },
+  yield* SessionService.deleteSession(cookieId);
+});
 
-  async logout(cookieId?: string): Promise<void> {
-    if (cookieId) await sessionService.deleteSession(cookieId);
-  },
+const forgotPasswordEffect = Effect.fnUntraced(function* ({
+  email,
+}: {
+  email: string;
+}) {
+  const rootDb = yield* PgRootDB;
+  yield* rootDb.selectNoFrom((eb) =>
+    eb
+      .fn<unknown>("app_public.forgot_password", [eb.val(email)])
+      .as("forgot_password"),
+  );
+});
 
-  async forgotPassword({ email }: { email: string }): Promise<void> {
-    await sql`select app_public.forgot_password(${email}::citext)`.execute(rootDb);
-  },
-
-  async resetPassword({ token, password }: { token: string; password: string }) {
-    const secrets = await rootDb
-      .selectFrom("app_private.user_secrets")
-      .select("user_id")
-      .where("reset_password_token", "=", token)
-      .executeTakeFirst();
-
-    if (!secrets) throw new InvalidTokenError();
-
-    let session: { id: string; user_id: string; created_at: Date; expires_at: Date };
-    try {
-      const row = await rootDb
+const resetPasswordEffect = Effect.fnUntraced(function* ({
+  token,
+  password,
+}: {
+  token: string;
+  password: string;
+}) {
+  const rootDb = yield* PgRootDB;
+  const session = yield* rootDb
+    .with("uid", (qb) =>
+      qb
+        .selectFrom("app_private.user_secrets")
+        .select("user_id")
+        .where("reset_password_token", "=", token),
+    )
+    .with("s", (qb) =>
+      qb
         .selectFrom((eb) =>
           eb
             .fn<{
               id: string;
               user_id: string;
-              created_at: Date;
-              expires_at: Date;
             }>("app_private.reset_password", [
-              sql`${secrets.user_id}::uuid`,
+              sql`(SELECT user_id FROM uid)::uuid`,
               eb.val(token),
               eb.val(password),
             ])
             .as("s"),
         )
         .selectAll()
-        .where("s.user_id", "is not", null)
-        .executeTakeFirst();
+        .where("s.user_id", "is not", null),
+    )
+    .selectFrom("s")
+    .select(["id", "user_id"])
+    .pipe(catchPgErrors, Effect.head, Effect.optionFromOptional);
+  if (Option.isNone(session)) {
+    return yield* new InvalidTokenError();
+  }
 
-      if (!row) throw new InvalidTokenError();
-      session = row;
-    } catch (err) {
-      if (err instanceof HttpError) throw err;
-      mapPgError(err);
-    }
+  const freshSession = yield* SessionService.issueTokenForSession(session.value.id);
 
-    // Evict all Valkey sessions (PG sessions already deleted by SQL function)
-    await sessionService.deleteAllUserSessionsFromCache(session.user_id);
+  return { token: freshSession.token, expiresAt: freshSession.expiresAt };
+});
 
-    // Create fresh Valkey-backed session for the user
-    const { token: sessionToken, expiresAt } = await sessionService.createSession(session.user_id);
-    return { token: sessionToken, expiresAt };
+/**
+ * Authentication service.
+ */
+export class AuthService extends Effect.Service<AuthService>()("AuthService", {
+  succeed: {
+    login: loginEffect,
+    logout: logoutEffect,
+    forgotPassword: forgotPasswordEffect,
+    resetPassword: resetPasswordEffect,
   },
-} as const;
+}) {}

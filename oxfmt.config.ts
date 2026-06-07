@@ -3,7 +3,7 @@ import { defineConfig } from "oxfmt";
 export default defineConfig({
   sortTailwindcss: {
     stylesheet: "./app/styles.css",
-    functions: [],
+    functions: ["classed"],
     preserveWhitespace: true,
   },
 });

@@ -1,11 +1,17 @@
 #!/usr/bin/env bun
+import { Redacted } from "effect";
 import pg from "pg";
+import { env } from "../server/assertEnv.js";
 
-const env = (k: string) => {
-  const v = process.env[k];
-  if (!v) throw new Error(`Missing env: ${k}`);
-  return v;
-};
+function getErrorCode(error: unknown): string | undefined {
+  return typeof error === "object" && error !== null && "code" in error
+    ? String(error.code)
+    : undefined;
+}
+
+function getErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
 
 async function connectWithRetry(connectionString: string, retries = 10) {
   for (let i = 0; i <= retries; i++) {
@@ -13,9 +19,9 @@ async function connectWithRetry(connectionString: string, retries = 10) {
     try {
       await client.connect();
       return client;
-    } catch (error: any) {
+    } catch (error) {
       await client.end().catch(() => {});
-      if (error?.code === "28P01") throw error;
+      if (getErrorCode(error) === "28P01") throw error;
       if (i === retries) throw error;
       await new Promise((resolve) => setTimeout(resolve, 200 * Math.pow(1.8, i)));
     }
@@ -25,19 +31,19 @@ async function connectWithRetry(connectionString: string, retries = 10) {
 }
 
 async function main() {
-  const client = await connectWithRetry(env("ROOT_DATABASE_URL"));
+  const client = await connectWithRetry(env.ROOT_DATABASE_URL);
 
-  const dbName = env("DATABASE_NAME");
-  const owner = env("DATABASE_OWNER");
-  const ownerPw = env("DATABASE_OWNER_PASSWORD");
-  const auth = env("DATABASE_AUTHENTICATOR");
-  const authPw = env("DATABASE_AUTHENTICATOR_PASSWORD");
-  const visitor = env("DATABASE_VISITOR");
-  const shadowPw = env("SHADOW_DATABASE_PASSWORD");
+  const dbName = env.DATABASE_NAME;
+  const owner = env.DATABASE_OWNER;
+  const ownerPw = Redacted.value(env.DATABASE_OWNER_PASSWORD);
+  const auth = env.DATABASE_AUTHENTICATOR;
+  const authPw = Redacted.value(env.DATABASE_AUTHENTICATOR_PASSWORD);
+  const visitor = env.DATABASE_VISITOR;
+  const shadowPw = Redacted.value(env.SHADOW_DATABASE_PASSWORD);
 
   const sql = (s: string) =>
-    client.query(s).catch((e: any) => {
-      if (!e.message.includes("does not exist")) throw e;
+    client.query(s).catch((error) => {
+      if (!getErrorMessage(error).includes("does not exist")) throw error;
     });
 
   // Drop existing

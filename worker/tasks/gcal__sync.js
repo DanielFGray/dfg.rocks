@@ -1,5 +1,8 @@
 // @ts-check
 /** @typedef {import("graphile-worker").Task} Task */
+/** @typedef {{ id?: string, status?: string, start?: { dateTime?: string } }} GoogleCalendarEvent */
+/** @typedef {{ items?: Array<GoogleCalendarEvent>, nextSyncToken?: string }} GoogleCalendarEventsResponse */
+import { env } from "../../server/assertEnv.ts";
 
 /**
  * Polls Google Calendar for teacher-initiated changes (event moves, cancellations)
@@ -88,7 +91,7 @@ export default async (_payload, helpers) => {
         return;
       }
 
-      const data = /** @type {{ items?: Array<any>, nextSyncToken?: string }} */ (await res.json());
+      const data = /** @type {GoogleCalendarEventsResponse} */ (await res.json());
       const events = data.items || [];
       const nextSyncToken = data.nextSyncToken;
 
@@ -218,8 +221,8 @@ async function getValidAccessToken(pgClient, logger) {
   if (!rtRow?.value) return null;
   const refreshToken = /** @type {string} */ (rtRow.value);
 
-  const clientId = process.env.GOOGLE_CALENDAR_CLIENT_ID;
-  const clientSecret = process.env.GOOGLE_CALENDAR_CLIENT_SECRET;
+  const clientId = env.GOOGLE_CALENDAR_CLIENT_ID;
+  const clientSecret = env.GOOGLE_CALENDAR_CLIENT_SECRET;
   if (!clientId || !clientSecret) {
     logger.error("gcal__sync: missing GOOGLE_CALENDAR_CLIENT_ID or GOOGLE_CALENDAR_CLIENT_SECRET");
     return null;

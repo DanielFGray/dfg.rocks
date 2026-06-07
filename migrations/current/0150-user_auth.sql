@@ -168,7 +168,7 @@ comment on function app_private.login(username citext, password text) is
 create function app_public.logout() returns void as $$
 begin
   -- Delete the session
-  delete from app_private.sessions where uuid = app_public.current_session_id();
+  delete from app_private.sessions where id = app_public.current_session_id();
   -- Clear the identifier from the transaction
   perform set_config('my.session_id', '', true);
 end;
@@ -523,7 +523,7 @@ begin
   -- Revoke all other sessions
   delete from app_private.sessions
   where sessions.user_id = v_user.id
-  and sessions.uuid <> app_public.current_session_id();
+  and sessions.id <> app_public.current_session_id();
 
   -- Notify user their password was changed
   perform graphile_worker.add_job(

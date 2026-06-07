@@ -2,10 +2,11 @@
 import fs from "fs/promises";
 import * as nodemailer from "nodemailer";
 import { styleText } from "node:util";
+import { env } from "../server/assertEnv.ts";
 
-const isTest = process.env.NODE_ENV === "test";
-const isDev = process.env.NODE_ENV !== "production";
-const awsRegion = process.env.AWS_REGION || "us-east-2";
+const isTest = env.NODE_ENV === "test";
+const isDev = env.NODE_ENV !== "production";
+const awsRegion = env.AWS_REGION || "us-east-2";
 
 /** @type {nodemailer.Transporter} */
 let transporter;
@@ -52,10 +53,10 @@ export default async function getTransport() {
           },
         });
       }
-      if (!process.env.AWS_ACCESS_KEY_ID) {
+      if (!env.AWS_ACCESS_KEY_ID) {
         throw new Error("no AWS_ACCESS_KEY_ID configured");
       }
-      if (!process.env.AWS_SECRET_ACCESS_KEY) {
+      if (!env.AWS_SECRET_ACCESS_KEY) {
         throw new Error("no AWS_SECRET_ACCESS_KEY configured");
       }
       const { SendEmailCommand, SESv2Client } = await import("@aws-sdk/client-sesv2");

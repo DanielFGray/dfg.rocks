@@ -1,3 +1,4 @@
+import { Effect } from "effect";
 import { useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useRouter } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
@@ -20,33 +21,27 @@ const navItems: Array<{
   adminOnly?: boolean;
   nonAdminOnly?: boolean;
 }> = [
-  { to: "/dashboard", id: "nav-dashboard", label: "Dashboard" },
-  { to: "/lessons", id: "nav-lessons", label: "Lessons", adminOnly: true },
-  { to: "/messages", id: "nav-messages", label: "Messages" },
-  { to: "/courses", id: "nav-courses", label: "Courses" },
-  { to: "/library", id: "nav-library", label: "Library" },
-  { to: "/assignments", id: "nav-assignments", label: "Assignments" },
-  {
-    to: "/book-lesson",
-    id: "nav-book-lesson",
-    label: "Book Lesson",
-    nonAdminOnly: true,
-  },
-  {
-    to: "/my-lessons",
-    id: "nav-my-lessons",
-    label: "My Lessons",
-    nonAdminOnly: true,
-  },
-  { to: "/students", id: "nav-students", label: "Students", adminOnly: true },
-  {
-    to: "/submissions",
-    id: "nav-submissions",
-    label: "Submissions",
-    adminOnly: true,
-  },
-  { to: "/settings", id: "nav-settings", label: "Settings" },
-];
+    { to: "/dashboard", id: "nav-dashboard", label: "Dashboard" },
+    { to: "/lessons", id: "nav-lessons", label: "Lessons", adminOnly: true },
+    { to: "/messages", id: "nav-messages", label: "Messages" },
+    { to: "/courses", id: "nav-courses", label: "Courses" },
+    { to: "/library", id: "nav-library", label: "Library", adminOnly: true },
+    { to: "/assignments", id: "nav-assignments", label: "Assignments" },
+    {
+      to: "/my-lessons",
+      id: "nav-my-lessons",
+      label: "My Lessons",
+      nonAdminOnly: true,
+    },
+    { to: "/students", id: "nav-students", label: "Students", adminOnly: true },
+    {
+      to: "/submissions",
+      id: "nav-submissions",
+      label: "Submissions",
+      adminOnly: true,
+    },
+    { to: "/settings", id: "nav-settings", label: "Settings" },
+  ];
 
 // --- PortalNav ---
 
@@ -64,10 +59,8 @@ export function PortalNav() {
   const close = () => setMenuOpen(false);
 
   const onLogout = async () => {
-    const { error } = await api.logout.post();
-    if (error) throw error;
+    await Effect.runPromise(api.auth.logout());
     await resetAuthClientState({ queryClient, router });
-    router.invalidate();
     navigate({ to: "/login", search: { redirect: undefined } });
   };
 
@@ -158,8 +151,8 @@ export function PortalNav() {
       typeof ResizeObserver === "undefined"
         ? null
         : new ResizeObserver(() => {
-            updateNavHeight();
-          });
+          updateNavHeight();
+        });
 
     resizeObserver?.observe(nav);
     window.addEventListener("resize", updateNavHeight);
@@ -179,7 +172,7 @@ export function PortalNav() {
       <nav
         ref={navRef}
         data-testid="portal-nav"
-        className={`top-0 border-overlay/5 bg-surface/90 px-6 py-3 backdrop-blur-md md:px-8 dark:border-overlay-dark/5 dark:bg-surface-dark/90 fixed z-100 flex w-full items-center justify-between border-b transition-transform duration-300 will-change-transform ${menuOpen || navVisible ? "translate-y-0" : "-translate-y-full"}`}
+        className={`fixed top-0 z-100 flex w-full items-center justify-between border-b border-overlay/5 bg-surface/90 px-6 py-3 backdrop-blur-md transition-transform duration-300 will-change-transform md:px-8 dark:border-overlay-dark/5 dark:bg-surface-dark/90 ${menuOpen || navVisible ? "translate-y-0" : "-translate-y-full"}`}
       >
         <div className="text-lg font-bold tracking-tight">
           dfg<span className="text-accent">.</span>rocks
@@ -187,7 +180,7 @@ export function PortalNav() {
         </div>
 
         {/* Desktop nav */}
-        <div className="gap-6 lg:flex hidden items-center">
+        <div className="hidden items-center gap-6 lg:flex">
           {visibleItems.map((it) => (
             <Link key={it.id} to={it.to} className={navLinkClass} data-testid={it.id}>
               {it.label}
@@ -202,7 +195,7 @@ export function PortalNav() {
         <button
           type="button"
           onClick={toggle}
-          className="p-2 text-muted dark:text-muted-dark hover:text-primary dark:hover:text-primary-dark lg:hidden cursor-pointer transition-colors"
+          className="cursor-pointer p-2 text-muted transition-colors hover:text-primary lg:hidden dark:text-muted-dark dark:hover:text-primary-dark"
           data-testid="nav-menu-toggle"
           aria-label="Toggle menu"
         >
@@ -240,7 +233,7 @@ export function PortalNav() {
           </div>
         }
       >
-        <div className="px-6 py-2 flex flex-col">
+        <div className="flex flex-col px-6 py-2">
           {visibleItems.map((it) => (
             <Link
               key={it.id}
@@ -249,7 +242,7 @@ export function PortalNav() {
               className={mobileLinkClass}
               data-testid={it.id}
             >
-              <div className="border-overlay/5 dark:border-overlay-dark/5 py-3 border-b">
+              <div className="border-b border-overlay/5 py-3 dark:border-overlay-dark/5">
                 {it.mobileLabel ?? it.label}
               </div>
             </Link>

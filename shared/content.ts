@@ -1,7 +1,15 @@
 import { isTipTapNode, type TipTapNode } from "./tiptap.js";
 
-function collectMaterialIds(node: TipTapNode, seen: Set<string>, output: string[]): void {
-  if (node.type === "materialEmbed" && node.attrs && typeof node.attrs.materialId === "string") {
+function collectMaterialIds(
+  node: TipTapNode,
+  seen: Set<string>,
+  output: string[],
+): void {
+  if (
+    node.type === "materialEmbed" &&
+    node.attrs &&
+    typeof node.attrs.materialId === "string"
+  ) {
     const materialId = node.attrs.materialId;
     if (!seen.has(materialId)) {
       seen.add(materialId);

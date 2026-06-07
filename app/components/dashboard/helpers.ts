@@ -1,5 +1,8 @@
 export const formatTime = (iso: string) =>
-  new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+  new Date(iso).toLocaleTimeString("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+  });
 
 export const statusBadgeClass: Record<string, string> = {
   scheduled: "bg-blue-500/20 text-blue-400",

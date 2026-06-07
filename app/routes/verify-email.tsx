@@ -1,13 +1,18 @@
+import { Effect } from "effect";
 import { useEffect } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation } from "@tanstack/react-query";
+import * as S from "effect/Schema";
 import { api } from "../lib/api.js";
 import { getErrorMessage } from "../lib/errors.js";
-import { TokenSearch, parseWith } from "../../shared/validation.js";
+import { TokenSearch } from "../../shared/schemas.js";
 
 export const Route = createFileRoute("/verify-email")({
   head: () => ({ meta: [{ title: "Verify Email | DFG Portal" }] }),
-  validateSearch: (search: Record<string, unknown>) => parseWith(TokenSearch, search),
+  validateSearch: (
+    search: Record<string, unknown>,
+  ): S.Schema.Type<typeof TokenSearch> =>
+    S.decodeUnknownSync(TokenSearch)(search),
   component: VerifyEmailPage,
 });
 
@@ -17,8 +22,7 @@ function VerifyEmailPage() {
   const verify = useMutation({
     mutationFn: async () => {
       if (!token) throw new Error("Missing verification token");
-      const { error } = await api["verify-email"].post({ token });
-      if (error) throw error;
+      await Effect.runPromise(api.public.verifyEmail({ payload: { token } }));
     },
   });
 
@@ -59,7 +63,9 @@ function VerifyEmailPage() {
           <h1 className="mb-4 text-2xl font-bold text-primary dark:text-primary-dark">
             Verification Failed
           </h1>
-          <p className="mb-6 text-sm text-muted dark:text-muted-dark">{message}</p>
+          <p className="mb-6 text-sm text-muted dark:text-muted-dark">
+            {message}
+          </p>
           <Link
             to="/login"
             search={{ redirect: undefined }}
@@ -93,7 +99,9 @@ function VerifyEmailPage() {
   return (
     <main className="flex min-h-screen items-center justify-center px-4">
       <div className="text-center">
-        <p className="text-sm text-muted dark:text-muted-dark">Verifying your email...</p>
+        <p className="text-sm text-muted dark:text-muted-dark">
+          Verifying your email...
+        </p>
       </div>
     </main>
   );

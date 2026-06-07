@@ -1,13 +1,15 @@
+import { Effect } from "effect";
 import { useEffect, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { api } from "../../lib/api.js";
-import type { Testimonial } from "../../lib/types.js";
+import { getErrorMessage } from "../../lib/errors.js";
+import type { Testimonial } from "../../../shared/schemas.js";
 import { Button } from "../ui/Button.js";
 import { Card } from "../ui/Card.js";
 import { Textarea } from "../ui/Textarea.js";
 
 function errorMessageFor(error: unknown): string | null {
-  return error instanceof Error ? error.message : null;
+  return getErrorMessage(error, "");
 }
 
 export function TestimonialEditor({
@@ -26,22 +28,17 @@ export function TestimonialEditor({
   }, [testimonial?.id, testimonial?.body]);
 
   const saveMutation = useMutation({
-    mutationFn: async (nextBody: string) => {
-      const { data, error } = await api.testimonials.put({ body: nextBody });
-      if (error) throw error;
-      return data;
-    },
+    mutationFn: (nextBody: string) =>
+      Effect.runPromise(
+        api.authenticated.upsertTestimonial({ payload: { body: nextBody } }),
+      ),
     onSettled: () => {
       onRefresh();
     },
   });
 
   const deleteMutation = useMutation({
-    mutationFn: async () => {
-      const { data, error } = await api.testimonials.delete();
-      if (error) throw error;
-      return data;
-    },
+    mutationFn: () => Effect.runPromise(api.authenticated.deleteTestimonial()),
     onSuccess: () => {
       setBody("");
     },
@@ -59,11 +56,12 @@ export function TestimonialEditor({
     !saveMutation.isPending &&
     !deleteMutation.isPending;
 
-  const title = mode === "dashboard" ? "Share your experience" : "Public Testimonial";
+  const title =
+    mode === "dashboard" ? "Share your experience" : "Public Testimonial";
   const description =
     mode === "dashboard"
       ? "Help future students and parents know what lessons have been like for you."
-      : "This is what appears on the public site. You can update it anytime.";
+      : "Approved testimonials appear on the public site after admin review. You can update yours anytime.";
 
   const saveLabel = testimonial
     ? saveMutation.isPending
@@ -73,17 +71,32 @@ export function TestimonialEditor({
       ? "Posting..."
       : "Post Testimonial";
 
-  const errorMessage = errorMessageFor(saveMutation.error) ?? errorMessageFor(deleteMutation.error);
+  const errorMessage =
+    errorMessageFor(saveMutation.error) ||
+    errorMessageFor(deleteMutation.error) ||
+    null;
+  const approvalMessage = testimonial
+    ? testimonial.is_approved
+      ? "Approved for public display."
+      : "Pending admin approval before it appears on the public site."
+    : "Your testimonial will be reviewed by an admin before it appears on the public site.";
 
   return (
-    <section data-testid={mode === "dashboard" ? "testimonial-prompt" : "testimonial-section"}>
+    <section
+      data-testid={
+        mode === "dashboard" ? "testimonial-prompt" : "testimonial-section"
+      }
+    >
       <Card>
-        <div className="gap-4 flex flex-col">
-          <div className="gap-1 flex flex-col">
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-1">
             <h2 className="text-xl font-semibold">{title}</h2>
-            <p className="text-sm text-muted dark:text-muted-dark">{description}</p>
+            <p className="text-sm text-muted dark:text-muted-dark">
+              {description}
+            </p>
             <p className="text-xs text-muted dark:text-muted-dark">
-              20-2000 characters. Your name and account role will be shown with it publicly.
+              20-2000 characters. Your name and account role will be shown with
+              it publicly.
             </p>
           </div>
 
@@ -98,23 +111,27 @@ export function TestimonialEditor({
             data-testid="testimonial-textarea"
           />
 
-          <div className="gap-3 flex items-center justify-between">
+          <div className="flex items-center justify-between gap-3">
             <div className="text-xs text-muted dark:text-muted-dark">
               {testimonial ? (
                 <span>
+                  {approvalMessage}{" "}
                   Last updated{" "}
-                  {new Date(testimonial.updated_at).toLocaleDateString("en-US", {
-                    month: "short",
-                    day: "numeric",
-                    year: "numeric",
-                  })}
+                  {new Date(testimonial.updated_at).toLocaleDateString(
+                    "en-US",
+                    {
+                      month: "short",
+                      day: "numeric",
+                      year: "numeric",
+                    },
+                  )}
                 </span>
               ) : (
-                <span>Your testimonial will go live as soon as you save it.</span>
+                <span>{approvalMessage}</span>
               )}
             </div>
 
-            <div className="gap-2 flex">
+            <div className="flex gap-2">
               {testimonial ? (
                 <Button
                   variant="ghost"
@@ -136,7 +153,9 @@ export function TestimonialEditor({
           </div>
 
           {errorMessage ? (
-            <p className="text-sm text-red-600 dark:text-red-400">{errorMessage}</p>
+            <p className="text-sm text-red-600 dark:text-red-400">
+              {errorMessage}
+            </p>
           ) : null}
         </div>
       </Card>

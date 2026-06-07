@@ -1,14 +1,19 @@
+import { Effect } from "effect";
 import { useState } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useMutation } from "@tanstack/react-query";
+import {
+  useMutation,
+  useQueryClient,
+  useSuspenseQuery,
+} from "@tanstack/react-query";
 import { api } from "../../lib/api.js";
-import type { LocationType } from "../../lib/types.js";
-import { getBookLessonPageData } from "../../lib/routeData.js";
+import { availableSlotsQuery, myLessonsQuery } from "../../lib/queries.js";
+import type { LocationType } from "../../../shared/schemas.js";
 import { Button } from "../../components/ui/Button.js";
-import { Card } from "../../components/ui/Card.js";
 import { Select } from "../../components/ui/Select.js";
 import { EmptyState } from "../../components/ui/EmptyState.js";
 import { ConfirmDialog } from "../../components/ui/ConfirmDialog.js";
+import { Main } from "../../components/ui/Container.js";
 
 export function getDefaultBookingDate() {
   return new Date().toISOString().slice(0, 10);
@@ -22,13 +27,12 @@ export const Route = createFileRoute("/_authed/book-lesson")({
         : getDefaultBookingDate(),
   }),
   loaderDeps: ({ search }) => ({ date: search.date }),
-  loader: ({ deps }) => getBookLessonPageData({ data: { date: deps.date } }),
+  loader: ({ context, deps }) =>
+    context.queryClient.ensureQueryData(availableSlotsQuery(deps.date)),
   head: () => ({ meta: [{ title: "Book a Lesson | DFG Portal" }] }),
   component: BookLessonPage,
   pendingComponent: () => (
-    <main className="px-5 md:px-8 pt-20 pb-16 text-muted dark:text-muted-dark mx-auto max-w-[1100px]">
-      Loading...
-    </main>
+    <Main className="text-muted dark:text-muted-dark">Loading...</Main>
   ),
 });
 
@@ -84,26 +88,34 @@ function formatConfirmDate(iso: string): string {
 
 function BookLessonPage() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const search = Route.useSearch();
-  const { slots } = Route.useLoaderData();
-  const [selectedLocation, setSelectedLocation] = useState<LocationType>("online");
+  const { data: slots } = useSuspenseQuery(availableSlotsQuery(search.date));
+  const [selectedLocation, setSelectedLocation] =
+    useState<LocationType>("online");
   const [bookingSlot, setBookingSlot] = useState<{
     start: string;
     end: string;
   } | null>(null);
 
   const bookMutation = useMutation({
-    mutationFn: async (slot: { start: string; end: string }) => {
-      const { data, error } = await api["my-lessons"].book.post({
-        scheduled_at: slot.start,
-        duration_minutes: 60,
-        location_type: selectedLocation,
-      });
-      if (error) throw error;
-      if (data && "error" in data) throw data.error;
-      return data;
-    },
+    mutationFn: (slot: { start: string; end: string }) =>
+      Effect.runPromise(
+        api.authenticated.bookLesson({
+          payload: {
+            scheduled_at: slot.start,
+            duration_minutes: 60,
+            location_type: selectedLocation,
+          },
+        }),
+      ),
     onSuccess: () => {
+      void queryClient.invalidateQueries({
+        queryKey: availableSlotsQuery(search.date).queryKey,
+      });
+      void queryClient.invalidateQueries({
+        queryKey: myLessonsQuery.queryKey,
+      });
       setBookingSlot(null);
       navigate({ to: "/my-lessons" });
     },
@@ -146,8 +158,8 @@ function BookLessonPage() {
   };
 
   return (
-    <main data-testid="book-lesson" className="px-5 md:px-8 pt-20 pb-16 mx-auto max-w-[1100px]">
-      <h1 className="text-3xl font-bold tracking-tight mb-6">Book a Lesson</h1>
+    <Main data-testid="book-lesson">
+      <h1 className="mb-6 text-3xl font-bold tracking-tight">Book a Lesson</h1>
 
       {/* Location type selector */}
       <div className="mb-6">
@@ -167,7 +179,7 @@ function BookLessonPage() {
         <Button variant="ghost" onClick={prevWeek} data-testid="prev-week">
           Previous Week
         </Button>
-        <span className="text-muted dark:text-muted-dark font-medium text-sm md:text-base">
+        <span className="text-sm font-medium text-muted md:text-base dark:text-muted-dark">
           Week of {formatWeekLabel(search.date)}
         </span>
         <Button variant="ghost" onClick={nextWeek} data-testid="next-week">
@@ -179,19 +191,19 @@ function BookLessonPage() {
       {slotsByDay.size === 0 ? (
         <EmptyState message="No available slots this week. Try another week." />
       ) : (
-        <div className="gap-6 flex flex-col">
+        <div className="flex flex-col gap-6">
           {Array.from(slotsByDay.entries()).map(([dayLabel, daySlots]) => (
             <div key={dayLabel}>
-              <h3 className="text-sm font-semibold text-muted dark:text-muted-dark tracking-wider mb-2 uppercase">
+              <h3 className="mb-2 text-sm font-semibold tracking-wider text-muted uppercase dark:text-muted-dark">
                 {dayLabel}
               </h3>
-              <div className="gap-2 flex flex-wrap">
+              <div className="flex flex-wrap gap-2">
                 {daySlots.map((slot) => (
                   <button
                     key={slot.start}
                     type="button"
                     onClick={() => setBookingSlot(slot)}
-                    className="px-4 py-2 rounded-lg bg-overlay/5 dark:bg-overlay-dark/5 hover:bg-accent/20 text-primary dark:text-primary-dark text-sm font-medium border-overlay/10 dark:border-overlay-dark/10 hover:border-accent/50 cursor-pointer border transition-colors"
+                    className="cursor-pointer rounded-lg border border-overlay/10 bg-overlay/5 px-4 py-2 text-sm font-medium text-primary transition-colors hover:border-accent/50 hover:bg-accent/20 dark:border-overlay-dark/10 dark:bg-overlay-dark/5 dark:text-primary-dark"
                     data-testid="slot"
                   >
                     {formatTime(slot.start)}
@@ -219,6 +231,6 @@ function BookLessonPage() {
         }}
         onCancel={() => setBookingSlot(null)}
       />
-    </main>
+    </Main>
   );
 }

@@ -9,7 +9,8 @@ export const site = {
   phone: "409-233-3260",
   calendar: "https://calendar.app.google/H23aNfyKcHuu6TkAA",
   hours: "Mon–Sat, 9am–8pm",
-  gravatar: "https://www.gravatar.com/avatar/be9906326e4b79af7ab66a157acced4c?s=800",
+  gravatar:
+    "https://www.gravatar.com/avatar/be9906326e4b79af7ab66a157acced4c?s=800",
   year: new Date().getFullYear().toString(),
 };
 

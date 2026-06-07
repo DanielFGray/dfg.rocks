@@ -1,0 +1,176 @@
+diff --git a/dist/cjs/config.cjs b/dist/cjs/config.cjs
+index a52693c..4b0e8f2 100644
+--- a/dist/cjs/config.cjs
++++ b/dist/cjs/config.cjs
+@@ -3,7 +3,7 @@ const require_config = require("./filesystem/virtual/config.cjs");
+ let node_path = require("node:path");
+ node_path = require_runtime.__toESM(node_path);
+ let node_fs = require("node:fs");
+-let zod = require("zod");
++let zod = require("zod/v3");
+ //#region src/config.ts
+ var tokenJsonRegexSchema = zod.z.object({
+ 	regex: zod.z.string(),
+@@ -51,7 +51,7 @@ var configSchema = baseConfigSchema.extend({
+ 	disableTypes: zod.z.boolean().optional().default(false),
+ 	addExtensions: zod.z.union([zod.z.boolean(), zod.z.string()]).optional().default(false).transform((v) => typeof v === "string" ? v.startsWith(".") ? v : `.${v}` : v),
+ 	enableRouteTreeFormatting: zod.z.boolean().optional().default(true),
+-	routeTreeFileFooter: zod.z.union([zod.z.array(zod.z.string()).optional().default([]), zod.z.function().returns(zod.z.array(zod.z.string()))]).optional(),
++	routeTreeFileFooter: zod.z.union([zod.z.array(zod.z.string()).optional().default([]), zod.z.custom((value) => typeof value === "function")]).optional(),
+ 	autoCodeSplitting: zod.z.boolean().optional(),
+ 	customScaffolding: zod.z.object({
+ 		routeTemplate: zod.z.string().optional(),
+diff --git a/dist/cjs/filesystem/virtual/config.cjs b/dist/cjs/filesystem/virtual/config.cjs
+index 45938a5..0e0caa4 100644
+--- a/dist/cjs/filesystem/virtual/config.cjs
++++ b/dist/cjs/filesystem/virtual/config.cjs
+@@ -1,5 +1,5 @@
+ require("../../_virtual/_rolldown/runtime.cjs");
+-let zod = require("zod");
++let zod = require("zod/v3");
+ //#region src/filesystem/virtual/config.ts
+ var indexRouteSchema = zod.z.object({
+ 	type: zod.z.literal("index"),
+diff --git a/dist/cjs/filesystem/virtual/loadConfigFile.cjs b/dist/cjs/filesystem/virtual/loadConfigFile.cjs
+index 58b353e..aeecb1d 100644
+--- a/dist/cjs/filesystem/virtual/loadConfigFile.cjs
++++ b/dist/cjs/filesystem/virtual/loadConfigFile.cjs
+@@ -2,7 +2,7 @@ require("../../_virtual/_rolldown/runtime.cjs");
+ let jiti = require("jiti");
+ //#region src/filesystem/virtual/loadConfigFile.ts
+ async function loadConfigFile(filePath) {
+-	return await (0, jiti.createJiti)(filePath, { interopDefault: false }).import(filePath);
++	return await jiti(filePath, { interopDefault: false }).import(filePath);
+ }
+ //#endregion
+ exports.loadConfigFile = loadConfigFile;
+diff --git a/dist/cjs/generator.cjs b/dist/cjs/generator.cjs
+index 848c260..49e83c2 100644
+--- a/dist/cjs/generator.cjs
++++ b/dist/cjs/generator.cjs
+@@ -329,7 +329,7 @@ var Generator = class Generator {
+ 					!node.isNonPath || node._fsRouteType === "pathless_layout" && node.cleanedPath ? `path: '${node.cleanedPath}'` : void 0,
+ 					`getParentRoute: () => ${require_utils.findParent(node)}`
+ 				].filter(Boolean).join(",")}
+-          }${config.disableTypes ? "" : "as any"})`,
++          })`,
+ 				loaderNode ? `.updateLoader({ loader: lazyFn(() => import('./${require_utils.replaceBackslash(require_utils.removeExt(node_path.default.relative(node_path.default.dirname(config.generatedRouteTree), node_path.default.resolve(config.routesDirectory, loaderNode.filePath)), config.addExtensions))}'), 'loader') })` : "",
+ 				componentNode || errorComponentNode || notFoundComponentNode || pendingComponentNode ? `.update({
+                 ${[
+diff --git a/dist/esm/config.js b/dist/esm/config.js
+index 6adcab7..b06a5ef 100644
+--- a/dist/esm/config.js
++++ b/dist/esm/config.js
+@@ -1,7 +1,7 @@
+ import { virtualRootRouteSchema } from "./filesystem/virtual/config.js";
+ import path from "node:path";
+ import { existsSync, readFileSync } from "node:fs";
+-import { z } from "zod";
++import { z } from "zod/v3";
+ //#region src/config.ts
+ var tokenJsonRegexSchema = z.object({
+ 	regex: z.string(),
+@@ -49,7 +49,7 @@ var configSchema = baseConfigSchema.extend({
+ 	disableTypes: z.boolean().optional().default(false),
+ 	addExtensions: z.union([z.boolean(), z.string()]).optional().default(false).transform((v) => typeof v === "string" ? v.startsWith(".") ? v : `.${v}` : v),
+ 	enableRouteTreeFormatting: z.boolean().optional().default(true),
+-	routeTreeFileFooter: z.union([z.array(z.string()).optional().default([]), z.function().returns(z.array(z.string()))]).optional(),
++	routeTreeFileFooter: z.union([z.array(z.string()).optional().default([]), z.custom((value) => typeof value === "function")]).optional(),
+ 	autoCodeSplitting: z.boolean().optional(),
+ 	customScaffolding: z.object({
+ 		routeTemplate: z.string().optional(),
+diff --git a/dist/esm/filesystem/virtual/config.js b/dist/esm/filesystem/virtual/config.js
+index 57868ef..100d7f7 100644
+--- a/dist/esm/filesystem/virtual/config.js
++++ b/dist/esm/filesystem/virtual/config.js
+@@ -1,4 +1,4 @@
+-import { z } from "zod";
++import { z } from "zod/v3";
+ //#region src/filesystem/virtual/config.ts
+ var indexRouteSchema = z.object({
+ 	type: z.literal("index"),
+diff --git a/dist/esm/filesystem/virtual/loadConfigFile.js b/dist/esm/filesystem/virtual/loadConfigFile.js
+index 317732b..1bea4f8 100644
+--- a/dist/esm/filesystem/virtual/loadConfigFile.js
++++ b/dist/esm/filesystem/virtual/loadConfigFile.js
+@@ -1,7 +1,7 @@
+-import { createJiti } from "jiti";
++import jiti from "jiti";
+ //#region src/filesystem/virtual/loadConfigFile.ts
+ async function loadConfigFile(filePath) {
+-	return await createJiti(filePath, { interopDefault: false }).import(filePath);
++	return await jiti(filePath, { interopDefault: false }).import(filePath);
+ }
+ //#endregion
+ export { loadConfigFile };
+diff --git a/dist/esm/generator.js b/dist/esm/generator.js
+index 3da9f65..080644a 100644
+--- a/dist/esm/generator.js
++++ b/dist/esm/generator.js
+@@ -325,7 +325,7 @@ var Generator = class Generator {
+ 					!node.isNonPath || node._fsRouteType === "pathless_layout" && node.cleanedPath ? `path: '${node.cleanedPath}'` : void 0,
+ 					`getParentRoute: () => ${findParent(node)}`
+ 				].filter(Boolean).join(",")}
+-          }${config.disableTypes ? "" : "as any"})`,
++          })`,
+ 				loaderNode ? `.updateLoader({ loader: lazyFn(() => import('./${replaceBackslash(removeExt(path.relative(path.dirname(config.generatedRouteTree), path.resolve(config.routesDirectory, loaderNode.filePath)), config.addExtensions))}'), 'loader') })` : "",
+ 				componentNode || errorComponentNode || notFoundComponentNode || pendingComponentNode ? `.update({
+                 ${[
+diff --git a/src/config.ts b/src/config.ts
+index bedb265..f24c3a8 100644
+--- a/src/config.ts
++++ b/src/config.ts
+@@ -1,6 +1,6 @@
+ import path from 'node:path'
+ import { existsSync, readFileSync } from 'node:fs'
+-import { z } from 'zod'
++import { z } from 'zod/v3'
+ import { virtualRootRouteSchema } from './filesystem/virtual/config'
+ import type { GeneratorPlugin } from './plugin/types'
+ 
+@@ -60,7 +60,7 @@ export const configSchema = baseConfigSchema.extend({
+   routeTreeFileFooter: z
+     .union([
+       z.array(z.string()).optional().default([]),
+-      z.function().returns(z.array(z.string())),
++      z.custom<() => string[]>((value) => typeof value === 'function'),
+     ])
+     .optional(),
+   autoCodeSplitting: z.boolean().optional(),
+diff --git a/src/filesystem/virtual/config.ts b/src/filesystem/virtual/config.ts
+index 5960c25..0d61f8c 100644
+--- a/src/filesystem/virtual/config.ts
++++ b/src/filesystem/virtual/config.ts
+@@ -1,4 +1,4 @@
+-import { z } from 'zod'
++import { z } from 'zod/v3'
+ import type {
+   LayoutRoute,
+   PhysicalSubtree,
+diff --git a/src/filesystem/virtual/loadConfigFile.ts b/src/filesystem/virtual/loadConfigFile.ts
+index 477226e..e05361e 100644
+--- a/src/filesystem/virtual/loadConfigFile.ts
++++ b/src/filesystem/virtual/loadConfigFile.ts
+@@ -1,7 +1,6 @@
+-import { createJiti } from 'jiti'
++import jiti from 'jiti'
+ 
+ export async function loadConfigFile(filePath: string) {
+-  const jiti = createJiti(filePath, { interopDefault: false })
+-  const loaded = await jiti.import<any>(filePath)
++  const loaded = await jiti(filePath, { interopDefault: false }).import(filePath)
+   return loaded
+ }
+diff --git a/src/generator.ts b/src/generator.ts
+index f951beb..87c2c18 100644
+--- a/src/generator.ts
++++ b/src/generator.ts
+@@ -683,7 +683,7 @@ export class Generator {
+             ]
+               .filter(Boolean)
+               .join(',')}
+-          }${config.disableTypes ? '' : 'as any'})`,
++          })`,
+           loaderNode
+             ? `.updateLoader({ loader: lazyFn(() => import('./${replaceBackslash(
+                 removeExt(

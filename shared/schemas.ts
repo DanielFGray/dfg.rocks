@@ -1,326 +1,366 @@
-import * as v from "valibot";
+import * as S from "effect/Schema";
 
-export const UserRole = v.picklist(["admin", "student", "parent", "teacher"]);
+export const UserRole = S.Union(
+  S.Literal("admin"),
+  S.Literal("student"),
+  S.Literal("parent"),
+  S.Literal("teacher"),
+);
 
-export type UserRole = v.InferOutput<typeof UserRole>;
+export type UserRole = S.Schema.Type<typeof UserRole>;
 
-export const User = v.object({
-  id: v.string(),
-  username: v.string(),
-  name: v.string(),
-  email: v.string(),
+export const User = S.Struct({
+  id: S.String,
+  username: S.String,
+  name: S.String,
+  email: S.String,
   role: UserRole,
-  is_verified: v.boolean(),
+  is_verified: S.Boolean,
 });
 
-export type User = v.InferOutput<typeof User>;
+export type User = S.Schema.Type<typeof User>;
 
-export const Course = v.object({
-  id: v.string(),
-  title: v.string(),
-  description: v.string(),
-  instrument: v.string(),
+export const Course = S.Struct({
+  id: S.String,
+  title: S.String,
+  description: S.String,
+  instrument: S.String,
 });
 
-export type Course = v.InferOutput<typeof Course>;
+export type Course = S.Schema.Type<typeof Course>;
 
-export const Module = v.object({
-  id: v.string(),
-  course_id: v.string(),
-  title: v.string(),
-  content: v.nullable(v.unknown()),
-  sort_order: v.number(),
+export const Module = S.Struct({
+  id: S.String,
+  course_id: S.String,
+  title: S.String,
+  content: S.NullishOr(S.Unknown),
+  sort_order: S.Number,
 });
 
-export type Module = v.InferOutput<typeof Module>;
+export type Module = S.Schema.Type<typeof Module>;
 
-export const MaterialNotationTrack = v.object({
-  index: v.number(),
-  name: v.string(),
-  short_name: v.string(),
-  is_percussion: v.boolean(),
+export const MaterialNotationTrack = S.Struct({
+  index: S.Number,
+  name: S.String,
+  short_name: S.String,
+  is_percussion: S.Boolean,
 });
 
-export const Material = v.object({
-  id: v.string(),
-  title: v.string(),
-  original_filename: v.string(),
-  mime_type: v.string(),
-  file_size: v.number(),
-  is_global: v.boolean(),
-  notation_tracks: v.nullable(v.array(MaterialNotationTrack)),
+export const Material = S.Struct({
+  id: S.String,
+  title: S.String,
+  original_filename: S.String,
+  mime_type: S.String,
+  file_size: S.Number,
+  is_global: S.Boolean,
+  notation_tracks: S.NullishOr(S.Array(MaterialNotationTrack)),
 });
 
-export type Material = v.InferOutput<typeof Material>;
+export type Material = S.Schema.Type<typeof Material>;
 
-export type MaterialNotationTrack = NonNullable<Material["notation_tracks"]>[number];
+export type MaterialNotationTrack = NonNullable<
+  Material["notation_tracks"]
+>[number];
 
-export const AssignedMaterial = v.object({
-  id: v.string(),
-  title: v.string(),
-  original_filename: v.string(),
-  mime_type: v.string(),
-  file_size: v.number(),
-  is_global: v.boolean(),
-  notation_tracks: v.nullable(v.array(MaterialNotationTrack)),
-  assigned_track_index: v.nullable(v.number()),
+export const AssignedMaterial = S.Struct({
+  id: S.String,
+  title: S.String,
+  original_filename: S.String,
+  mime_type: S.String,
+  file_size: S.Number,
+  is_global: S.Boolean,
+  notation_tracks: S.NullishOr(S.Array(MaterialNotationTrack)),
+  assigned_track_index: S.NullishOr(S.Number),
 });
 
-export type AssignedMaterial = v.InferOutput<typeof AssignedMaterial>;
+export type AssignedMaterial = S.Schema.Type<typeof AssignedMaterial>;
 
-export const ModuleWithMaterials = v.object({
-  id: v.string(),
-  course_id: v.string(),
-  title: v.string(),
-  content: v.nullable(v.unknown()),
-  sort_order: v.number(),
-  materials: v.array(Material),
+export const ModuleWithMaterials = S.Struct({
+  id: S.String,
+  course_id: S.String,
+  title: S.String,
+  content: S.NullishOr(S.Unknown),
+  sort_order: S.Number,
+  materials: S.Array(Material),
 });
 
-export type ModuleWithMaterials = v.InferOutput<typeof ModuleWithMaterials>;
+export type ModuleWithMaterials = S.Schema.Type<typeof ModuleWithMaterials>;
 
-export const CourseDetail = v.object({
-  id: v.string(),
-  title: v.string(),
-  description: v.string(),
-  instrument: v.string(),
-  modules: v.array(ModuleWithMaterials),
+export const CourseDetail = S.Struct({
+  id: S.String,
+  title: S.String,
+  description: S.String,
+  instrument: S.String,
+  modules: S.Array(ModuleWithMaterials),
 });
 
-export type CourseDetail = v.InferOutput<typeof CourseDetail>;
+export type CourseDetail = S.Schema.Type<typeof CourseDetail>;
 
-export const EnrolledCourse = v.object({
-  id: v.string(),
-  title: v.string(),
-  instrument: v.string(),
+export const EnrolledCourse = S.Struct({
+  id: S.String,
+  title: S.String,
+  instrument: S.String,
 });
 
-export type EnrolledCourse = v.InferOutput<typeof EnrolledCourse>;
+export type EnrolledCourse = S.Schema.Type<typeof EnrolledCourse>;
 
-export const StudentDetail = v.object({
-  id: v.string(),
-  username: v.string(),
-  name: v.string(),
-  email: v.string(),
+export const StudentDetail = S.Struct({
+  id: S.String,
+  username: S.String,
+  name: S.String,
+  email: S.String,
   role: UserRole,
-  is_verified: v.boolean(),
-  enrolled_courses: v.array(EnrolledCourse),
-  assigned_materials: v.array(AssignedMaterial),
+  is_verified: S.Boolean,
+  enrolled_courses: S.Array(EnrolledCourse),
+  assigned_materials: S.Array(AssignedMaterial),
 });
 
-export type StudentDetail = v.InferOutput<typeof StudentDetail>;
+export type StudentDetail = S.Schema.Type<typeof StudentDetail>;
 
-export const Submission = v.object({
-  id: v.string(),
-  name: v.string(),
-  email: v.string(),
-  phone: v.nullable(v.string()),
-  instrument: v.string(),
-  format: v.string(),
-  message: v.string(),
-  is_read: v.boolean(),
-  created_at: v.string(),
+export const Submission = S.Struct({
+  id: S.String,
+  name: S.String,
+  email: S.String,
+  phone: S.NullishOr(S.String),
+  instrument: S.String,
+  format: S.String,
+  message: S.String,
+  is_read: S.Boolean,
+  created_at: S.String,
 });
 
-export type Submission = v.InferOutput<typeof Submission>;
+export type Submission = S.Schema.Type<typeof Submission>;
 
-export const PracticeLogStatus = v.picklist(["practiced", "completed"]);
+export const PracticeLogStatus = S.Union(
+  S.Literal("practiced"),
+  S.Literal("completed"),
+);
 
-export type PracticeLogStatus = v.InferOutput<typeof PracticeLogStatus>;
+export type PracticeLogStatus = S.Schema.Type<typeof PracticeLogStatus>;
 
-export const PracticeLog = v.object({
-  id: v.string(),
-  student_id: v.string(),
-  material_id: v.string(),
+export const PracticeLog = S.Struct({
+  id: S.String,
+  student_id: S.String,
+  material_id: S.String,
   status: PracticeLogStatus,
-  notes: v.nullable(v.string()),
-  logged_at: v.string(),
+  notes: S.NullishOr(S.String),
+  logged_at: S.String,
 });
 
-export type PracticeLog = v.InferOutput<typeof PracticeLog>;
+export type PracticeLog = S.Schema.Type<typeof PracticeLog>;
 
-export const AssignmentProgress = v.object({
-  material_id: v.string(),
-  listened_seconds: v.number(),
-  updated_at: v.string(),
+export const AssignmentProgress = S.Struct({
+  material_id: S.String,
+  listened_seconds: S.Number,
+  updated_at: S.String,
 });
 
-export type AssignmentProgress = v.InferOutput<typeof AssignmentProgress>;
+export type AssignmentProgress = S.Schema.Type<typeof AssignmentProgress>;
 
-export const AssignmentNote = v.object({
-  id: v.string(),
-  student_id: v.string(),
-  material_id: v.string(),
-  body: v.string(),
-  created_at: v.string(),
-  updated_at: v.string(),
+export const AssignmentNote = S.Struct({
+  id: S.String,
+  student_id: S.String,
+  material_id: S.String,
+  body: S.String,
+  created_at: S.String,
+  updated_at: S.String,
 });
 
-export type AssignmentNote = v.InferOutput<typeof AssignmentNote>;
+export type AssignmentNote = S.Schema.Type<typeof AssignmentNote>;
 
-export const AssignmentReview = v.object({
-  id: v.string(),
-  material_id: v.string(),
-  stars: v.pipe(v.number(), v.minValue(1), v.maxValue(5)),
-  listened_seconds: v.number(),
-  created_at: v.string(),
+export const AssignmentReview = S.Struct({
+  id: S.String,
+  material_id: S.String,
+  stars: S.Number.pipe(S.between(1, 5)),
+  listened_seconds: S.Number,
+  created_at: S.String,
 });
 
-export type AssignmentReview = v.InferOutput<typeof AssignmentReview>;
+export type AssignmentReview = S.Schema.Type<typeof AssignmentReview>;
 
-export const Message = v.object({
-  id: v.string(),
-  sender_id: v.string(),
-  recipient_id: v.string(),
-  body: v.string(),
-  is_read: v.boolean(),
-  created_at: v.string(),
+export const Message = S.Struct({
+  id: S.String,
+  sender_id: S.String,
+  recipient_id: S.String,
+  body: S.String,
+  is_read: S.Boolean,
+  created_at: S.String,
 });
 
-export type Message = v.InferOutput<typeof Message>;
+export type Message = S.Schema.Type<typeof Message>;
 
-export const Family = v.object({
-  id: v.string(),
-  slug: v.string(),
-  name: v.string(),
-  description: v.nullable(v.string()),
-  created_at: v.string(),
+export const Family = S.Struct({
+  id: S.String,
+  slug: S.String,
+  name: S.String,
+  description: S.NullishOr(S.String),
+  created_at: S.String,
 });
 
-export type Family = v.InferOutput<typeof Family>;
+export type Family = S.Schema.Type<typeof Family>;
 
-export const FamilyInvitation = v.object({
-  id: v.string(),
-  family_id: v.string(),
-  family_name: v.string(),
-  code: v.nullable(v.string()),
-  user_id: v.nullable(v.string()),
-  email: v.nullable(v.string()),
+export const FamilyInvitation = S.Struct({
+  id: S.String,
+  family_id: S.String,
+  family_name: S.String,
+  code: S.NullishOr(S.String),
+  user_id: S.NullishOr(S.String),
+  email: S.NullishOr(S.String),
 });
 
-export type FamilyInvitation = v.InferOutput<typeof FamilyInvitation>;
+export type FamilyInvitation = S.Schema.Type<typeof FamilyInvitation>;
 
-export const LocationType = v.picklist([
-  "in_person_teacher_travels",
-  "in_person_student_travels",
-  "studio",
-  "online",
-]);
+export const LocationType = S.Union(
+  S.Literal("in_person_teacher_travels"),
+  S.Literal("in_person_student_travels"),
+  S.Literal("studio"),
+  S.Literal("online"),
+);
 
-export type LocationType = v.InferOutput<typeof LocationType>;
+export type LocationType = S.Schema.Type<typeof LocationType>;
 
-export const LessonStatus = v.picklist(["scheduled", "completed", "cancelled", "no_show"]);
+export const LessonStatus = S.Union(
+  S.Literal("scheduled"),
+  S.Literal("completed"),
+  S.Literal("cancelled"),
+  S.Literal("no_show"),
+);
 
-export type LessonStatus = v.InferOutput<typeof LessonStatus>;
+export type LessonStatus = S.Schema.Type<typeof LessonStatus>;
 
-export const DepositStatus = v.picklist(["held", "refunded", "captured"]);
+export const DepositStatus = S.Union(
+  S.Literal("held"),
+  S.Literal("refunded"),
+  S.Literal("captured"),
+);
 
-export type DepositStatus = v.InferOutput<typeof DepositStatus>;
+export type DepositStatus = S.Schema.Type<typeof DepositStatus>;
 
-export const Lesson = v.object({
-  id: v.string(),
-  student_id: v.string(),
-  gcal_event_id: v.nullable(v.string()),
-  scheduled_at: v.string(),
-  duration_minutes: v.number(),
+export const Lesson = S.Struct({
+  id: S.String,
+  student_id: S.String,
+  gcal_event_id: S.NullishOr(S.String),
+  scheduled_at: S.String,
+  duration_minutes: S.Number,
   location_type: LocationType,
   status: LessonStatus,
-  cancellation_reason: v.nullable(v.string()),
-  cancelled_at: v.nullable(v.string()),
-  completed_at: v.nullable(v.string()),
-  created_at: v.string(),
+  cancellation_reason: S.NullishOr(S.String),
+  cancelled_at: S.NullishOr(S.String),
+  completed_at: S.NullishOr(S.String),
+  created_at: S.String,
 });
 
-export type Lesson = v.InferOutput<typeof Lesson>;
+export type Lesson = S.Schema.Type<typeof Lesson>;
 
-export const StudentRate = v.object({
-  id: v.string(),
-  student_id: v.string(),
-  rate_cents: v.number(),
-  lesson_duration_minutes: v.number(),
+export const StudentRate = S.Struct({
+  id: S.String,
+  student_id: S.String,
+  rate_cents: S.Number,
+  lesson_duration_minutes: S.Number,
   location_type: LocationType,
-  notes: v.nullable(v.string()),
-  created_at: v.string(),
+  notes: S.NullishOr(S.String),
+  created_at: S.String,
 });
 
-export type StudentRate = v.InferOutput<typeof StudentRate>;
+export type StudentRate = S.Schema.Type<typeof StudentRate>;
 
-export const LessonDeposit = v.object({
-  id: v.string(),
-  lesson_id: v.string(),
-  amount_cents: v.number(),
+export const LessonDeposit = S.Struct({
+  id: S.String,
+  lesson_id: S.String,
+  amount_cents: S.Number,
   status: DepositStatus,
-  created_at: v.string(),
+  created_at: S.String,
 });
 
-export type LessonDeposit = v.InferOutput<typeof LessonDeposit>;
+export type LessonDeposit = S.Schema.Type<typeof LessonDeposit>;
 
-export const UserEmail = v.object({
-  id: v.string(),
-  email: v.string(),
-  is_verified: v.boolean(),
-  is_primary: v.boolean(),
-  created_at: v.string(),
+export const UserEmail = S.Struct({
+  id: S.String,
+  email: S.String,
+  is_verified: S.Boolean,
+  is_primary: S.Boolean,
+  created_at: S.String,
 });
 
-export type UserEmail = v.InferOutput<typeof UserEmail>;
+export type UserEmail = S.Schema.Type<typeof UserEmail>;
 
-export const LessonNote = v.object({
-  id: v.string(),
-  lesson_id: v.string(),
-  topics_covered: v.nullable(v.string()),
-  homework: v.nullable(v.string()),
-  progress_observations: v.nullable(v.string()),
-  notes: v.nullable(v.string()),
-  material_ids: v.nullable(v.array(v.string())),
-  draft: v.boolean(),
-  created_at: v.string(),
-  updated_at: v.string(),
+export const LessonNote = S.Struct({
+  id: S.String,
+  lesson_id: S.String,
+  topics_covered: S.NullishOr(S.String),
+  homework: S.NullishOr(S.String),
+  progress_observations: S.NullishOr(S.String),
+  notes: S.NullishOr(S.String),
+  material_ids: S.NullishOr(S.Array(S.String)),
+  draft: S.Boolean,
+  created_at: S.String,
+  updated_at: S.String,
 });
 
-export type LessonNote = v.InferOutput<typeof LessonNote>;
+export type LessonNote = S.Schema.Type<typeof LessonNote>;
 
-export const TimeSlot = v.object({
-  start: v.string(),
-  end: v.string(),
+export const TimeSlot = S.Struct({
+  start: S.String,
+  end: S.String,
 });
 
-export type TimeSlot = v.InferOutput<typeof TimeSlot>;
+export type TimeSlot = S.Schema.Type<typeof TimeSlot>;
 
-export const WorkingHoursDay = v.object({
-  start: v.string(),
-  end: v.string(),
+export const WorkingHoursDay = S.Struct({
+  start: S.String,
+  end: S.String,
 });
 
-export type WorkingHoursDay = v.InferOutput<typeof WorkingHoursDay>;
+export type WorkingHoursDay = S.Schema.Type<typeof WorkingHoursDay>;
 
-export const WorkingHours = v.object({
-  0: v.nullable(WorkingHoursDay),
-  1: v.nullable(WorkingHoursDay),
-  2: v.nullable(WorkingHoursDay),
-  3: v.nullable(WorkingHoursDay),
-  4: v.nullable(WorkingHoursDay),
-  5: v.nullable(WorkingHoursDay),
-  6: v.nullable(WorkingHoursDay),
+export const WorkingHours = S.Struct({
+  0: S.NullishOr(WorkingHoursDay),
+  1: S.NullishOr(WorkingHoursDay),
+  2: S.NullishOr(WorkingHoursDay),
+  3: S.NullishOr(WorkingHoursDay),
+  4: S.NullishOr(WorkingHoursDay),
+  5: S.NullishOr(WorkingHoursDay),
+  6: S.NullishOr(WorkingHoursDay),
 });
 
-export type WorkingHours = v.InferOutput<typeof WorkingHours>;
+export type WorkingHours = S.Schema.Type<typeof WorkingHours>;
 
-export const GcalStatus = v.object({
-  connected: v.boolean(),
-  calendar_id: v.nullable(v.string()),
+export const GcalStatus = S.Struct({
+  connected: S.Boolean,
+  calendar_id: S.NullishOr(S.String),
 });
 
-export type GcalStatus = v.InferOutput<typeof GcalStatus>;
+export type GcalStatus = S.Schema.Type<typeof GcalStatus>;
 
-export const Testimonial = v.object({
-  id: v.string(),
-  user_id: v.string(),
-  body: v.string(),
-  display_name: v.string(),
-  role_label: v.string(),
-  created_at: v.string(),
-  updated_at: v.string(),
+export const Testimonial = S.Struct({
+  id: S.String,
+  user_id: S.String,
+  body: S.String,
+  display_name: S.String,
+  role_label: S.String,
+  is_approved: S.Boolean,
+  created_at: S.String,
+  updated_at: S.String,
 });
 
-export type Testimonial = v.InferOutput<typeof Testimonial>;
+export type Testimonial = S.Schema.Type<typeof Testimonial>;
+
+export const TokenSearch = S.Struct({
+  token: S.optional(S.String),
+});
+
+export type TokenSearch = S.Schema.Type<typeof TokenSearch>;
+
+export const InviteSearch = S.Struct({
+  id: S.optional(S.String),
+  code: S.optional(S.String),
+});
+
+export type InviteSearch = S.Schema.Type<typeof InviteSearch>;
+
+export const ApiError = S.Struct({
+  error: S.String,
+  status: S.optional(S.Number),
+});
+
+export type ApiError = S.Schema.Type<typeof ApiError>;
