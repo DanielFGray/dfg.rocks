@@ -285,14 +285,7 @@ function lessonsSelect(
 function messagesSelect(db: QueryDb) {
   return db
     .selectFrom("app_public.messages")
-    .select([
-      "id",
-      "sender_id",
-      "recipient_id",
-      "body",
-      "is_read",
-      "created_at",
-    ])
+    .select(["id", "sender_id", "recipient_id", "body", "is_read", "created_at"])
     .orderBy("created_at", "desc")
     .limit(50);
 }
@@ -314,9 +307,7 @@ function assignmentsSelect(db: QueryDb) {
 }
 
 function coursesSelect(db: QueryDb) {
-  return db
-    .selectFrom("app_public.courses")
-    .select(["id", "title", "description", "instrument"]);
+  return db.selectFrom("app_public.courses").select(["id", "title", "description", "instrument"]);
 }
 
 function testimonialsSelect(
@@ -391,18 +382,12 @@ function weekRange() {
 }
 
 async function getRootDb() {
-  return serverRuntime.runPromise(
-    Effect.gen(function* () {
-      return yield* PgRootDB;
-    }),
-  );
+  return serverRuntime.runPromise(PgRootDB);
 }
 
 async function requireSession() {
   const token = getCookie("session");
-  const session = await serverRuntime.runPromise(
-    SessionService.validateSessionToken(token),
-  );
+  const session = await serverRuntime.runPromise(SessionService.validateSessionToken(token));
   if (!session) {
     throw HttpError.make(401, "Unauthorized");
   }
@@ -417,114 +402,109 @@ async function requireAdminSession() {
   return session;
 }
 
-export const getSettingsPageData = createServerFn({ method: "GET" }).handler(
-  async () => {
-    const session = await requireSession();
+export const getSettingsPageData = createServerFn({ method: "GET" }).handler(async () => {
+  const session = await requireSession();
 
-    const emailsPromise = serverRuntime.runPromise(
-      withAuthContext(session.session.id, (db) =>
-        db
-          .selectFrom("app_public.user_emails")
-          .select(["id", "email", "is_verified", "is_primary", "created_at"])
-          .orderBy("is_primary", "desc")
-          .orderBy("created_at", "asc"),
+  const emailsPromise = serverRuntime.runPromise(
+    withAuthContext(session.session.id, (db) =>
+      db
+        .selectFrom("app_public.user_emails")
+        .select(["id", "email", "is_verified", "is_primary", "created_at"])
+        .orderBy("is_primary", "desc")
+        .orderBy("created_at", "asc"),
+    ),
+  );
+
+  if (session.user.role !== "admin") {
+    const [emails, testimonials] = await Promise.all([
+      emailsPromise,
+      serverRuntime.runPromise(
+        withAuthContext(session.session.id, (db) =>
+          testimonialsSelect(db, {
+            userId: session.user.id,
+          }).pipe(Effect.head, Effect.option),
+        ),
       ),
-    );
-
-    if (session.user.role !== "admin") {
-      const [emails, testimonials] = await Promise.all([
-        emailsPromise,
-        serverRuntime.runPromise(
-          withAuthContext(session.session.id, (db) =>
-            testimonialsSelect(db, {
-              userId: session.user.id,
-            }).pipe(Effect.head, Effect.option),
-          ),
-        ),
-      ]);
-
-      return {
-        emails: emails.map(serializeUserEmail),
-        testimonial: Option.match(testimonials, {
-          onNone: () => null,
-          onSome: serializeTestimonial,
-        }),
-        gcalStatus: null,
-        workingHours: null,
-        testimonialReminderIntervalDays: null,
-        adminTestimonials: null,
-      };
-    }
-
-    const rootDb = await getRootDb();
-    const [emails, tokenRows, calIdRows, workingHoursRows, intervalDays, adminTestimonials] =
-      await Promise.all([
-        emailsPromise,
-        serverRuntime.runPromise(
-          rootDb
-            .selectFrom("app_private.admin_settings")
-            .select("value")
-            .where("key", "=", "gcal_refresh_token")
-            .pipe(Effect.head, Effect.option),
-        ),
-        serverRuntime.runPromise(
-          rootDb
-            .selectFrom("app_private.admin_settings")
-            .select("value")
-            .where("key", "=", "gcal_calendar_id")
-            .pipe(Effect.head, Effect.option),
-        ),
-        serverRuntime.runPromise(
-          rootDb
-            .selectFrom("app_private.admin_settings")
-            .select("value")
-            .where("key", "=", "working_hours")
-            .pipe(Effect.head, Effect.option),
-        ),
-        serverRuntime.runPromise(getTestimonialReminderIntervalDays()),
-        serverRuntime.runPromise(testimonialsSelect(rootDb, { pendingFirst: true })),
-      ]);
-
-    return {
-      emails: emails.map(serializeUserEmail),
-      testimonial: null,
-      gcalStatus: decodeRequired(SharedSchemas.GcalStatus, {
-        connected: Option.isSome(tokenRows),
-        calendar_id: decodeJsonValue(
-          S.NullishOr(S.String),
-          (Option.getOrNull(calIdRows)?.value as JsonValue | null | undefined) ?? null,
-          null,
-        ),
-      }),
-      workingHours: decodeWorkingHoursValue(
-        (Option.getOrNull(workingHoursRows)?.value as JsonValue | null | undefined) ??
-          null,
-        defaultWorkingHours,
-      ),
-      testimonialReminderIntervalDays: intervalDays,
-      adminTestimonials: adminTestimonials.map(serializeTestimonial),
-    };
-  },
-);
-
-export const getLessonsPageData = createServerFn({ method: "GET" }).handler(
-  async () => {
-    await requireAdminSession();
-    const rootDb = await getRootDb();
-    const [lessons, students] = await Promise.all([
-      serverRuntime.runPromise(lessonsSelect(rootDb, { limit: 50 })),
-      serverRuntime.runPromise(studentSummarySelect(rootDb)),
     ]);
 
     return {
-      lessons: lessons.map(serializeLesson),
-      students: normalizeStudents(students),
+      emails: emails.map(serializeUserEmail),
+      testimonial: Option.match(testimonials, {
+        onNone: () => null,
+        onSome: serializeTestimonial,
+      }),
+      gcalStatus: null,
+      workingHours: null,
+      testimonialReminderIntervalDays: null,
+      adminTestimonials: null,
     };
-  },
-);
+  }
+
+  const rootDb = await getRootDb();
+  const [emails, tokenRows, calIdRows, workingHoursRows, intervalDays, adminTestimonials] =
+    await Promise.all([
+      emailsPromise,
+      serverRuntime.runPromise(
+        rootDb
+          .selectFrom("app_private.admin_settings")
+          .select("value")
+          .where("key", "=", "gcal_refresh_token")
+          .pipe(Effect.head, Effect.option),
+      ),
+      serverRuntime.runPromise(
+        rootDb
+          .selectFrom("app_private.admin_settings")
+          .select("value")
+          .where("key", "=", "gcal_calendar_id")
+          .pipe(Effect.head, Effect.option),
+      ),
+      serverRuntime.runPromise(
+        rootDb
+          .selectFrom("app_private.admin_settings")
+          .select("value")
+          .where("key", "=", "working_hours")
+          .pipe(Effect.head, Effect.option),
+      ),
+      serverRuntime.runPromise(getTestimonialReminderIntervalDays()),
+      serverRuntime.runPromise(testimonialsSelect(rootDb, { pendingFirst: true })),
+    ]);
+
+  return {
+    emails: emails.map(serializeUserEmail),
+    testimonial: null,
+    gcalStatus: decodeRequired(SharedSchemas.GcalStatus, {
+      connected: Option.isSome(tokenRows),
+      calendar_id: decodeJsonValue(
+        S.NullishOr(S.String),
+        (Option.getOrNull(calIdRows)?.value as JsonValue | null | undefined) ?? null,
+        null,
+      ),
+    }),
+    workingHours: decodeWorkingHoursValue(
+      (Option.getOrNull(workingHoursRows)?.value as JsonValue | null | undefined) ?? null,
+      defaultWorkingHours,
+    ),
+    testimonialReminderIntervalDays: intervalDays,
+    adminTestimonials: adminTestimonials.map(serializeTestimonial),
+  };
+});
+
+export const getLessonsPageData = createServerFn({ method: "GET" }).handler(async () => {
+  await requireAdminSession();
+  const rootDb = await getRootDb();
+  const [lessons, students] = await Promise.all([
+    serverRuntime.runPromise(lessonsSelect(rootDb, { limit: 50 })),
+    serverRuntime.runPromise(studentSummarySelect(rootDb)),
+  ]);
+
+  return {
+    lessons: lessons.map(serializeLesson),
+    students: normalizeStudents(students),
+  };
+});
 
 export const getLessonNote = createServerFn({ method: "GET" })
-  .inputValidator((input: { lessonId: string }) => input)
+  .validator((input: { lessonId: string }) => input)
   .handler(async ({ data }) => {
     await requireAdminSession();
     const rootDb = await getRootDb();
@@ -552,81 +532,73 @@ export const getLessonNote = createServerFn({ method: "GET" })
     return serializeLessonNote(note.value);
   });
 
-export const getDashboardPageData = createServerFn({ method: "GET" }).handler(
-  async () => {
-    const session = await requireSession();
+export const getDashboardPageData = createServerFn({ method: "GET" }).handler(async () => {
+  const session = await requireSession();
 
-    if (session.user.role === "admin") {
-      const rootDb = await getRootDb();
-      const today = todayRange();
-      const week = weekRange();
-      const [students, messages, todayLessons, weekLessons, courses] = await Promise.all([
-        serverRuntime.runPromise(studentSummarySelect(rootDb)),
-        serverRuntime.runPromise(messagesSelect(rootDb)),
-        serverRuntime.runPromise(lessonsSelect(rootDb, { from: today.from, to: today.to })),
-        serverRuntime.runPromise(lessonsSelect(rootDb, { from: week.from, to: week.to })),
-        serverRuntime.runPromise(coursesSelect(rootDb)),
-      ]);
-
-      return {
-        kind: "admin" as const,
-        students: normalizeStudents(students),
-        messages: messages.map(serializeMessage),
-        todayLessons: todayLessons.map(serializeLesson),
-        weekLessons: weekLessons.map(serializeLesson),
-        courses: toMutableArray(
-          decodeRequired(S.Array(SharedSchemas.Course), courses),
-        ),
-      };
-    }
-
-    const [data, canShowTestimonialPrompt] = await Promise.all([
-      serverRuntime.runPromise(
-        withAuthContext(session.session.id, (db) =>
-          Effect.all({
-            messages: messagesSelect(db),
-            assignments: assignmentsSelect(db),
-            scheduledLessons: lessonsSelect(db, { status: "scheduled", limit: 5 }),
-            courses: coursesSelect(db),
-            testimonial: testimonialsSelect(db, {
-              userId: session.user.id,
-            }).pipe(Effect.head, Effect.option),
-          }),
-        ),
-      ),
-      serverRuntime.runPromise(getTestimonialPromptEnabled(session.user.id)),
+  if (session.user.role === "admin") {
+    const rootDb = await getRootDb();
+    const today = todayRange();
+    const week = weekRange();
+    const [students, messages, todayLessons, weekLessons, courses] = await Promise.all([
+      serverRuntime.runPromise(studentSummarySelect(rootDb)),
+      serverRuntime.runPromise(messagesSelect(rootDb)),
+      serverRuntime.runPromise(lessonsSelect(rootDb, { from: today.from, to: today.to })),
+      serverRuntime.runPromise(lessonsSelect(rootDb, { from: week.from, to: week.to })),
+      serverRuntime.runPromise(coursesSelect(rootDb)),
     ]);
 
     return {
-      kind: "student" as const,
-      messages: data.messages.map(serializeMessage),
-      assignments: data.assignments.map((assignment) =>
-        serializeMaterial(assignment),
-      ) as AssignedMaterial[],
-      scheduledLessons: data.scheduledLessons.map(serializeLesson),
-      courses: toMutableArray(
-        decodeRequired(S.Array(SharedSchemas.Course), data.courses),
-      ),
-      testimonial: Option.match(data.testimonial, {
-        onNone: () => null,
-        onSome: serializeTestimonial,
-      }),
-      canShowTestimonialPrompt,
+      kind: "admin" as const,
+      students: normalizeStudents(students),
+      messages: messages.map(serializeMessage),
+      todayLessons: todayLessons.map(serializeLesson),
+      weekLessons: weekLessons.map(serializeLesson),
+      courses: toMutableArray(decodeRequired(S.Array(SharedSchemas.Course), courses)),
     };
-  },
-);
+  }
 
-export const getHomePageData = createServerFn({ method: "GET" }).handler(
-  async () => {
-    const rootDb = await getRootDb();
-    const rows = await serverRuntime.runPromise(
-      testimonialsSelect(rootDb, {
-        limit: 6,
-        approvedOnly: true,
-      }),
-    );
-    return {
-      testimonials: rows.map(serializeTestimonial),
-    };
-  },
-);
+  const [data, canShowTestimonialPrompt] = await Promise.all([
+    serverRuntime.runPromise(
+      withAuthContext(session.session.id, (db) =>
+        Effect.all({
+          messages: messagesSelect(db),
+          assignments: assignmentsSelect(db),
+          scheduledLessons: lessonsSelect(db, { status: "scheduled", limit: 5 }),
+          courses: coursesSelect(db),
+          testimonial: testimonialsSelect(db, {
+            userId: session.user.id,
+          }).pipe(Effect.head, Effect.option),
+        }),
+      ),
+    ),
+    serverRuntime.runPromise(getTestimonialPromptEnabled(session.user.id)),
+  ]);
+
+  return {
+    kind: "student" as const,
+    messages: data.messages.map(serializeMessage),
+    assignments: data.assignments.map((assignment) =>
+      serializeMaterial(assignment),
+    ) as AssignedMaterial[],
+    scheduledLessons: data.scheduledLessons.map(serializeLesson),
+    courses: toMutableArray(decodeRequired(S.Array(SharedSchemas.Course), data.courses)),
+    testimonial: Option.match(data.testimonial, {
+      onNone: () => null,
+      onSome: serializeTestimonial,
+    }),
+    canShowTestimonialPrompt,
+  };
+});
+
+export const getHomePageData = createServerFn({ method: "GET" }).handler(async () => {
+  const rootDb = await getRootDb();
+  const rows = await serverRuntime.runPromise(
+    testimonialsSelect(rootDb, {
+      limit: 6,
+      approvedOnly: true,
+    }),
+  );
+  return {
+    testimonials: rows.map(serializeTestimonial),
+  };
+});

@@ -608,15 +608,11 @@ export class GoogleCalendarService extends Effect.Service<GoogleCalendarService>
   }
 
   static decodeAuthState(value: unknown) {
-    if (typeof value !== "string" || !value) return null;
+    if (typeof value !== "string" || !value) return Effect.succeed(null);
 
-    try {
-      return S.decodeUnknownSync(S.parseJson(GoogleCalendarAuthStateSchema))(
-        Buffer.from(value, "base64url").toString("utf8"),
-      );
-    } catch {
-      return null;
-    }
+    return S.decodeUnknown(S.parseJson(GoogleCalendarAuthStateSchema))(
+      Buffer.from(value, "base64url").toString("utf8"),
+    ).pipe(Effect.catchAll(() => Effect.succeed(null)));
   }
 
   static getAuthCookieOptions(rootUrl: string) {

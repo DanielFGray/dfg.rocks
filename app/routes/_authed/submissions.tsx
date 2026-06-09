@@ -122,6 +122,13 @@ function SubmissionsPage() {
                         {s.format}
                       </span>
                     </div>
+                    {s.location_city ? (
+                      <div className="mb-1 text-xs text-muted/60 dark:text-muted-dark/60">
+                        {[s.location_city, s.location_region, s.location_country]
+                          .filter(Boolean)
+                          .join(", ")}
+                      </div>
+                    ) : null}
                     {s.message ? (
                       <div className="text-sm text-muted dark:text-muted-dark">
                         {s.message.length > 200 &&

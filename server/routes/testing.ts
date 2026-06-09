@@ -13,41 +13,37 @@ import { HttpError } from "../pgErrors.js";
 import { disableRateLimiting } from "../services/rateLimiter.js";
 import { TestingService } from "../services/testingService.js";
 import { setSessionCookie, normalizeToResponse, responseForCause } from "./raw.js";
-import type { LessonStatus, LocationType } from "../../shared/schemas.js";
+import {
+  TestingLoginQuery,
+  TestingTestimonialReminderQuery,
+  SeedCoursePayload,
+  SeedMaterialPayload,
+  TestingAssignMaterialQuery,
+  TestingEnrollQuery,
+  TestingSeedFamilyQuery,
+  TestingSeedFamilyMembershipQuery,
+  TestingSeedInvitationQuery,
+  TestingSeedDeleteAccountQuery,
+  TestingSeedLessonQuery,
+} from "../../shared/httpApi.js";
 
 if (env.NODE_ENV === "production") throw new Error("testing API must not be enabled in production");
 
 disableRateLimiting();
 
-type LoginParams = {
-  username?: string;
-  password?: string;
-  role?: "admin" | "teacher" | "student";
-  name?: string;
-  email?: string;
-};
-
-function boolQuery(value: string | null): boolean {
-  return value === "true";
-}
-
-function numberQuery(value: string | null, fallback: number): number {
-  return value ? Number(value) : fallback;
-}
-
 export const testingGroup = HttpApiGroup.make("testing")
-  .add(HttpApiEndpoint.get("login", "/testing/login"))
-  .add(HttpApiEndpoint.get("testimonialReminder", "/testing/testimonial-reminder"))
+  .add(HttpApiEndpoint.get("login", "/testing/login").setUrlParams(TestingLoginQuery))
+  .add(HttpApiEndpoint.get("testimonialReminder", "/testing/testimonial-reminder").setUrlParams(TestingTestimonialReminderQuery))
   .add(HttpApiEndpoint.get("clear", "/testing/clear"))
-  .add(HttpApiEndpoint.post("seedCourse", "/testing/seed-course"))
-  .add(HttpApiEndpoint.post("seedMaterial", "/testing/seed-material"))
-  .add(HttpApiEndpoint.get("assignMaterial", "/testing/assign-material"))
-  .add(HttpApiEndpoint.get("enroll", "/testing/enroll"))
-  .add(HttpApiEndpoint.get("seedFamily", "/testing/seed-family"))
-  .add(HttpApiEndpoint.get("seedFamilyMembership", "/testing/seed-family-membership"))
-  .add(HttpApiEndpoint.get("seedInvitation", "/testing/seed-invitation"))
-  .add(HttpApiEndpoint.get("seedDeleteAccount", "/testing/seed-delete-account"))
-  .add(HttpApiEndpoint.get("seedLesson", "/testing/seed-lesson"))
+  .add(HttpApiEndpoint.post("seedCourse", "/testing/seed-course").setPayload(SeedCoursePayload))
+  .add(HttpApiEndpoint.post("seedMaterial", "/testing/seed-material").setPayload(SeedMaterialPayload))
+  .add(HttpApiEndpoint.get("assignMaterial", "/testing/assign-material").setUrlParams(TestingAssignMaterialQuery))
+  .add(HttpApiEndpoint.get("enroll", "/testing/enroll").setUrlParams(TestingEnrollQuery))
+  .add(HttpApiEndpoint.get("seedFamily", "/testing/seed-family").setUrlParams(TestingSeedFamilyQuery))
+  .add(HttpApiEndpoint.get("seedFamilyMembership", "/testing/seed-family-membership").setUrlParams(TestingSeedFamilyMembershipQuery))
+  .add(HttpApiEndpoint.get("seedInvitation", "/testing/seed-invitation").setUrlParams(TestingSeedInvitationQuery))
+  .add(HttpApiEndpoint.get("seedDeleteAccount", "/testing/seed-delete-account").setUrlParams(TestingSeedDeleteAccountQuery))
+  .add(HttpApiEndpoint.get("seedLesson", "/testing/seed-lesson").setUrlParams(TestingSeedLessonQuery))
   .prefix("/api");
 
 const testingApi = HttpApi.make("dfg").add(testingGroup);
@@ -55,18 +51,17 @@ const testingApi = HttpApi.make("dfg").add(testingGroup);
 export function makeTestingLayer() {
   return HttpApiBuilder.group(testingApi, "testing", (handlers) =>
     handlers
-      .handleRaw(
+      .handle(
         "login",
         Effect.fnUntraced(
-          function* ({ request }) {
+          function* ({ request, urlParams }) {
             const webRequest = request.source as Request;
-            const query = new URL(webRequest.url).searchParams;
-            const session = yield* (yield* TestingService).login({
-              username: query.get("username") ?? undefined,
-              password: query.get("password") ?? undefined,
-              role: (query.get("role") as LoginParams["role"]) ?? undefined,
-              name: query.get("name") ?? undefined,
-              email: query.get("email") ?? undefined,
+            const session = yield* TestingService.login({
+              username: urlParams.username,
+              password: urlParams.password,
+              role: urlParams.role,
+              name: urlParams.name,
+              email: urlParams.email,
             });
             let response = HttpServerResponse.redirect(
               new URL("/dashboard", webRequest.url).toString(),
@@ -78,22 +73,15 @@ export function makeTestingLayer() {
           Effect.map(normalizeToResponse),
         ),
       )
-      .handleRaw(
+      .handle(
         "testimonialReminder",
         Effect.fnUntraced(
-          function* ({ request }) {
+          function* ({ request, urlParams }) {
             const webRequest = request.source as Request;
-            const query = new URL(webRequest.url).searchParams;
-            const username = query.get("username");
-            if (!username) {
-              return yield* new HttpError(400, "username is required");
-            }
-            yield* (yield* TestingService).setTestimonialReminder({
-              username,
-              promptEnabled: boolQuery(query.get("prompt_enabled")),
-              nextPromptAt: query.get("next_prompt_at")
-                ? new Date(query.get("next_prompt_at")!)
-                : null,
+            yield* TestingService.setTestimonialReminder({
+              username: urlParams.username,
+              promptEnabled: urlParams.prompt_enabled ?? false,
+              nextPromptAt: urlParams.next_prompt_at ? new Date(urlParams.next_prompt_at) : null,
             });
             return HttpServerResponse.redirect(new URL("/dashboard", webRequest.url).toString());
           },
@@ -101,101 +89,53 @@ export function makeTestingLayer() {
           Effect.map(normalizeToResponse),
         ),
       )
-      .handleRaw(
+      .handle(
         "clear",
         Effect.fnUntraced(
           function* ({ request }) {
             const webRequest = request.source as Request;
-            yield* (yield* TestingService).clear();
+            yield* TestingService.clear();
             return HttpServerResponse.redirect(new URL("/login", webRequest.url).toString());
           },
           Effect.catchAllCause(responseForCause),
           Effect.map(normalizeToResponse),
         ),
       )
-      .handleRaw(
+      .handle(
         "seedCourse",
         Effect.fnUntraced(
-          function* ({ request }) {
-            const webRequest = request.source as Request;
-            const body = (yield* Effect.tryPromise({
-              try: () =>
-                webRequest.json() as Promise<{
-                  title: string;
-                  instrument: string;
-                  description?: string;
-                  modules?: Array<{
-                    title: string;
-                    sort_order?: number;
-                  }>;
-                }>,
-              catch: (error) => error,
-            })) as {
-              title: string;
-              instrument: string;
-              description?: string;
-              modules?: Array<{
-                title: string;
-                sort_order?: number;
-              }>;
-            };
-            const courseId = yield* (yield* TestingService).seedCourse(body);
+          function* ({ request, payload }) {
+            const courseId = yield* TestingService.seedCourse(payload);
             return HttpServerResponse.redirect(
-              new URL(`/courses/${courseId}`, webRequest.url).toString(),
+              new URL(`/courses/${courseId}`, (request.source as Request).url).toString(),
             );
           },
           Effect.catchAllCause(responseForCause),
           Effect.map(normalizeToResponse),
         ),
       )
-      .handleRaw(
+      .handle(
         "seedMaterial",
         Effect.fnUntraced(
-          function* ({ request }) {
-            const webRequest = request.source as Request;
-            const body = (yield* Effect.tryPromise({
-              try: () =>
-                webRequest.json() as Promise<{
-                  title: string;
-                  original_filename?: string;
-                  mime_type?: string;
-                  file_size?: number;
-                  is_global?: boolean;
-                  source_file_path?: string;
-                }>,
-              catch: (error) => error,
-            })) as {
-              title: string;
-              original_filename?: string;
-              mime_type?: string;
-              file_size?: number;
-              is_global?: boolean;
-              source_file_path?: string;
-            };
-            const materialId = yield* (yield* TestingService).seedMaterial(body);
+          function* ({ request, payload }) {
+            const materialId = yield* TestingService.seedMaterial(payload);
             return HttpServerResponse.redirect(
-              new URL(`/library#${materialId}`, webRequest.url).toString(),
+              new URL(`/library#${materialId}`, (request.source as Request).url).toString(),
             );
           },
           Effect.catchAllCause(responseForCause),
           Effect.map(normalizeToResponse),
         ),
       )
-      .handleRaw(
+      .handle(
         "assignMaterial",
         Effect.fnUntraced(
-          function* ({ request }) {
+          function* ({ request, urlParams }) {
             const webRequest = request.source as Request;
-            const query = new URL(webRequest.url).searchParams;
-            const username = query.get("username");
-            const materialTitle = query.get("material_title");
-            if (!username || !materialTitle) {
-              return yield* new HttpError(400, "username and material_title are required");
-            }
-            const materialId = yield* (yield* TestingService).assignMaterial({
-              username,
-              materialTitle,
-              assignedTrackIndex: query.get("assigned_track_index"),
+            const materialId = yield* TestingService.assignMaterial({
+              username: urlParams.username,
+              materialTitle: urlParams.material_title,
+              assignedTrackIndex: urlParams.assigned_track_index,
             });
             return HttpServerResponse.redirect(
               new URL(`/assignments#${materialId}`, webRequest.url).toString(),
@@ -205,20 +145,14 @@ export function makeTestingLayer() {
           Effect.map(normalizeToResponse),
         ),
       )
-      .handleRaw(
+      .handle(
         "enroll",
         Effect.fnUntraced(
-          function* ({ request }) {
+          function* ({ request, urlParams }) {
             const webRequest = request.source as Request;
-            const query = new URL(webRequest.url).searchParams;
-            const username = query.get("username");
-            const courseTitle = query.get("course_title");
-            if (!username || !courseTitle) {
-              return yield* new HttpError(400, "username and course_title are required");
-            }
-            const courseId = yield* (yield* TestingService).enroll({
-              username,
-              courseTitle,
+            const courseId = yield* TestingService.enroll({
+              username: urlParams.username,
+              courseTitle: urlParams.course_title,
             });
             return HttpServerResponse.redirect(
               new URL(`/courses/${courseId}`, webRequest.url).toString(),
@@ -228,16 +162,15 @@ export function makeTestingLayer() {
           Effect.map(normalizeToResponse),
         ),
       )
-      .handleRaw(
+      .handle(
         "seedFamily",
         Effect.fnUntraced(
-          function* ({ request }) {
+          function* ({ request, urlParams }) {
             const webRequest = request.source as Request;
-            const query = new URL(webRequest.url).searchParams;
-            yield* (yield* TestingService).seedFamily({
-              slug: query.get("slug"),
-              name: query.get("name"),
-              ownerUsername: query.get("owner_username"),
+            yield* TestingService.seedFamily({
+              slug: urlParams.slug,
+              name: urlParams.name,
+              ownerUsername: urlParams.owner_username,
             });
             return HttpServerResponse.redirect(new URL("/students", webRequest.url).toString());
           },
@@ -245,22 +178,16 @@ export function makeTestingLayer() {
           Effect.map(normalizeToResponse),
         ),
       )
-      .handleRaw(
+      .handle(
         "seedFamilyMembership",
         Effect.fnUntraced(
-          function* ({ request }) {
+          function* ({ request, urlParams }) {
             const webRequest = request.source as Request;
-            const query = new URL(webRequest.url).searchParams;
-            const username = query.get("username");
-            const familySlug = query.get("family_slug");
-            if (!username || !familySlug) {
-              return yield* new HttpError(400, "username and family_slug are required");
-            }
-            yield* (yield* TestingService).seedFamilyMembership({
-              username,
-              familySlug,
-              isOwner: boolQuery(query.get("is_owner")),
-              isBillingContact: boolQuery(query.get("is_billing_contact")),
+            yield* TestingService.seedFamilyMembership({
+              username: urlParams.username,
+              familySlug: urlParams.family_slug,
+              isOwner: urlParams.is_owner ?? false,
+              isBillingContact: urlParams.is_billing_contact ?? false,
             });
             return HttpServerResponse.redirect(new URL("/students", webRequest.url).toString());
           },
@@ -268,20 +195,15 @@ export function makeTestingLayer() {
           Effect.map(normalizeToResponse),
         ),
       )
-      .handleRaw(
+      .handle(
         "seedInvitation",
         Effect.fnUntraced(
-          function* ({ request }) {
+          function* ({ request, urlParams }) {
             const webRequest = request.source as Request;
-            const query = new URL(webRequest.url).searchParams;
-            const email = query.get("email");
-            if (!email) {
-              return yield* new HttpError(400, "email is required");
-            }
-            const invitation = yield* (yield* TestingService).seedInvitation({
-              email,
-              familySlug: query.get("family_slug"),
-              expiresAt: query.get("expires_at") ? new Date(query.get("expires_at")!) : undefined,
+            const invitation = yield* TestingService.seedInvitation({
+              email: urlParams.email,
+              familySlug: urlParams.family_slug,
+              expiresAt: urlParams.expires_at ? new Date(urlParams.expires_at) : undefined,
             });
             return HttpServerResponse.redirect(
               new URL(
@@ -294,17 +216,12 @@ export function makeTestingLayer() {
           Effect.map(normalizeToResponse),
         ),
       )
-      .handleRaw(
+      .handle(
         "seedDeleteAccount",
         Effect.fnUntraced(
-          function* ({ request }) {
+          function* ({ request, urlParams }) {
             const webRequest = request.source as Request;
-            const query = new URL(webRequest.url).searchParams;
-            const username = query.get("username");
-            if (!username) {
-              return yield* new HttpError(400, "username is required");
-            }
-            const token = yield* (yield* TestingService).seedDeleteAccount(username);
+            const token = yield* TestingService.seedDeleteAccount(urlParams.username);
             return HttpServerResponse.redirect(
               new URL(`/confirm-delete-account?token=${token}`, webRequest.url).toString(),
             );
@@ -313,22 +230,17 @@ export function makeTestingLayer() {
           Effect.map(normalizeToResponse),
         ),
       )
-      .handleRaw(
+      .handle(
         "seedLesson",
         Effect.fnUntraced(
-          function* ({ request }) {
+          function* ({ request, urlParams }) {
             const webRequest = request.source as Request;
-            const query = new URL(webRequest.url).searchParams;
-            const username = query.get("username");
-            if (!username) {
-              return yield* new HttpError(400, "username is required");
-            }
-            yield* (yield* TestingService).seedLesson({
-              username,
-              scheduledAt: query.get("scheduled_at"),
-              durationMinutes: numberQuery(query.get("duration_minutes"), 60),
-              locationType: (query.get("location_type") ?? "online") as LocationType,
-              status: (query.get("status") ?? "scheduled") as LessonStatus,
+            yield* TestingService.seedLesson({
+              username: urlParams.username,
+              scheduledAt: urlParams.scheduled_at,
+              durationMinutes: urlParams.duration_minutes ?? 60,
+              locationType: urlParams.location_type ?? "online",
+              status: urlParams.status ?? "scheduled",
             });
             return HttpServerResponse.redirect(new URL("/my-lessons", webRequest.url).toString());
           },

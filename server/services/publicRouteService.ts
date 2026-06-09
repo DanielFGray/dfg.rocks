@@ -8,6 +8,7 @@ import type { UserRow } from "./userService.js";
 import { UserService } from "./userService.js";
 
 export class PublicRouteService extends Effect.Service<PublicRouteService>()("PublicRouteService", {
+  accessors: true,
   effect: Effect.gen(function* () {
     const db = yield* PgRootDB;
 
@@ -18,14 +19,22 @@ export class PublicRouteService extends Effect.Service<PublicRouteService>()("Pu
         .where("id", "=", invitationId);
 
     return {
-      submitContact: Effect.fn("submitContact")(function* (values: {
-        name: string;
-        email: string;
-        phone?: string;
-        instrument: string;
-        format: string;
-        message?: string;
-      }) {
+      submitContact: Effect.fn("submitContact")(function* (
+        values: {
+          name: string;
+          email: string;
+          phone?: string;
+          instrument: string;
+          format: string;
+          message?: string;
+        },
+        geo?: {
+          ip: string;
+          country: string;
+          region: string;
+          city: string;
+        },
+      ) {
         yield* db.insertInto("app_public.contact_submissions").values({
           name: values.name,
           email: values.email,
@@ -33,6 +42,10 @@ export class PublicRouteService extends Effect.Service<PublicRouteService>()("Pu
           instrument: values.instrument,
           format: values.format,
           message: values.message ?? "",
+          ip_address: geo?.ip ?? null,
+          location_country: geo?.country || null,
+          location_region: geo?.region || null,
+          location_city: geo?.city || null,
         });
         yield* EmailService.send({
           to: env.ADMIN_EMAIL,
@@ -97,7 +110,10 @@ export class PublicRouteService extends Effect.Service<PublicRouteService>()("Pu
       invitation: Effect.fn("invitation")(function* (invitationId: string, code: string) {
         const invitation = yield* invitationById(invitationId).pipe(
           Effect.head,
-          Effect.catchTag("NoSuchElementException", () => new HttpError(404, "Invitation not found")),
+          Effect.catchTag(
+            "NoSuchElementException",
+            () => new HttpError(404, "Invitation not found"),
+          ),
         );
         if (invitation.code && invitation.code !== code) {
           return yield* new HttpError(404, "Invalid invitation code");
@@ -135,7 +151,10 @@ export class PublicRouteService extends Effect.Service<PublicRouteService>()("Pu
       }) {
         const invitation = yield* invitationById(values.invitationId).pipe(
           Effect.head,
-          Effect.catchTag("NoSuchElementException", () => new HttpError(400, "Invitation not found")),
+          Effect.catchTag(
+            "NoSuchElementException",
+            () => new HttpError(400, "Invitation not found"),
+          ),
         );
         if (invitation.code && invitation.code !== (values.code ?? "")) {
           return yield* new HttpError(400, "Invalid invitation code");

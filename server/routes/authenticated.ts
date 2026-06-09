@@ -5,6 +5,7 @@ import * as HttpServerResponse from "@effect/platform/HttpServerResponse";
 import { Effect, Stream } from "effect";
 import {
   authenticatedClientGroup,
+  CreatePracticeLogPayload,
   type AuthenticatedClientEndpoint,
 } from "../../shared/httpApi.js";
 import { HttpError } from "../pgErrors.js";
@@ -29,17 +30,6 @@ const testimonialRoleLabels = {
   student: "Student",
   teacher: "Teacher",
 } as const;
-
-const normalizeTestimonialBody = Effect.fnUntraced(function* (body: string) {
-  const normalized = body.trim();
-  if (normalized.length < 20) {
-    return yield* HttpError.make(400, "Testimonial must be at least 20 characters");
-  }
-  if (normalized.length > 2000) {
-    return yield* HttpError.make(400, "Testimonial must be 2000 characters or less");
-  }
-  return normalized;
-});
 
 const assertCanManageTestimonial = Effect.fnUntraced(function* (auth: Auth) {
   if (auth.user.role === "admin") {
@@ -119,7 +109,7 @@ function requireAuth(request: RawRequest) {
   );
 }
 
-const createPracticeLog = HttpApiEndpoint.post("createPracticeLog", "/api/practice-logs");
+const createPracticeLog = HttpApiEndpoint.post("createPracticeLog", "/api/practice-logs").setPayload(CreatePracticeLogPayload);
 const myLessonById = HttpApiEndpoint.get("myLessonById", "/api/my-lessons/:id").setPath(
   params("id"),
 );
@@ -185,14 +175,11 @@ export function makeAuthenticatedLayer() {
       .handle(
         "library",
         Effect.fnUntraced(
-          function* ({ request }) {
-            const query = new URL((request.source as Request).url).searchParams;
-            const limit = Number.parseInt(query.get("limit") ?? "", 10);
-            const offset = Number.parseInt(query.get("offset") ?? "", 10);
+          function* ({ request, urlParams }) {
             const auth = yield* requireAuth(request);
             return yield* AuthenticatedRouteService.library(auth.session.id, {
-              limit: Number.isFinite(limit) ? limit : 50,
-              offset: Number.isFinite(offset) ? offset : 0,
+              limit: urlParams.limit ?? 50,
+              offset: urlParams.offset ?? 0,
             });
           },
           Effect.catchAllCause(responseForCause),
@@ -246,11 +233,9 @@ export function makeAuthenticatedLayer() {
       .handle(
         "practiceLogs",
         Effect.fnUntraced(
-          function* ({ request }) {
-            const query = new URL((request.source as Request).url).searchParams;
-            const materialId = query.get("material_id") ?? undefined;
+          function* ({ request, urlParams }) {
             const auth = yield* requireAuth(request);
-            const rows = yield* AuthenticatedRouteService.practiceLogs(auth.session.id, materialId);
+            const rows = yield* AuthenticatedRouteService.practiceLogs(auth.session.id, urlParams.material_id);
             return rows.map((row) => ({
               ...row,
               logged_at: row.logged_at.toISOString(),
@@ -263,23 +248,14 @@ export function makeAuthenticatedLayer() {
       .handle(
         "createPracticeLog",
         Effect.fnUntraced(
-          function* ({ request }) {
-            const body = yield* Effect.tryPromise({
-              try: () =>
-                (request.source as Request).json() as Promise<{
-                  material_id: string;
-                  status: "practiced" | "completed";
-                  notes?: string;
-                }>,
-              catch: (e) => e,
-            });
+          function* ({ request, payload }) {
             const auth = yield* requireAuth(request);
             const row = yield* AuthenticatedRouteService.createPracticeLog({
               sessionId: auth.session.id,
               studentId: auth.user.id,
-              materialId: body.material_id,
-              status: body.status,
-              notes: body.notes,
+              materialId: payload.material_id,
+              status: payload.status,
+              notes: payload.notes,
             });
             return {
               ...row,
@@ -378,16 +354,12 @@ export function makeAuthenticatedLayer() {
       .handle(
         "messages",
         Effect.fnUntraced(
-          function* ({ request }) {
-            const query = new URL((request.source as Request).url).searchParams;
-            const limit = Number.parseInt(query.get("limit") ?? "", 10);
-            const offset = Number.parseInt(query.get("offset") ?? "", 10);
-            const withUser = query.get("with") ?? undefined;
+          function* ({ request, urlParams }) {
             const auth = yield* requireAuth(request);
             const rows = yield* AuthenticatedRouteService.messages(auth.session.id, {
-              limit: Number.isFinite(limit) ? limit : 50,
-              offset: Number.isFinite(offset) ? offset : 0,
-              withUser,
+              limit: urlParams.limit ?? 50,
+              offset: urlParams.offset ?? 0,
+              withUser: urlParams.with,
             });
             return rows.map((row) => ({
               ...row,
@@ -433,20 +405,14 @@ export function makeAuthenticatedLayer() {
       .handle(
         "myLessons",
         Effect.fnUntraced(
-          function* ({ request }) {
-            const query = new URL((request.source as Request).url).searchParams;
-            const limit = Number.parseInt(query.get("limit") ?? "", 10);
-            const offset = Number.parseInt(query.get("offset") ?? "", 10);
-            const status = query.get("status") ?? undefined;
-            const from = query.get("from") ?? undefined;
-            const to = query.get("to") ?? undefined;
+          function* ({ request, urlParams }) {
             const auth = yield* requireAuth(request);
             const rows = yield* AuthenticatedRouteService.myLessons(auth.session.id, {
-              limit: Number.isFinite(limit) ? limit : 50,
-              offset: Number.isFinite(offset) ? offset : 0,
-              status,
-              from,
-              to,
+              limit: urlParams.limit ?? 50,
+              offset: urlParams.offset ?? 0,
+              status: urlParams.status,
+              from: urlParams.from,
+              to: urlParams.to,
             });
             return rows.map((row) => serializeLesson(row));
           },
@@ -519,14 +485,11 @@ export function makeAuthenticatedLayer() {
       .handle(
         "myLessonNotesList",
         Effect.fnUntraced(
-          function* ({ request }) {
-            const query = new URL((request.source as Request).url).searchParams;
-            const limit = Number.parseInt(query.get("limit") ?? "", 10);
-            const offset = Number.parseInt(query.get("offset") ?? "", 10);
+          function* ({ request, urlParams }) {
             const auth = yield* requireAuth(request);
             const rows = yield* AuthenticatedRouteService.myLessonNotesList(auth.session.id, {
-              limit: Number.isFinite(limit) ? limit : 50,
-              offset: Number.isFinite(offset) ? offset : 0,
+              limit: urlParams.limit ?? 50,
+              offset: urlParams.offset ?? 0,
             });
             return rows.map((row) => ({
               ...row,
@@ -630,7 +593,7 @@ export function makeAuthenticatedLayer() {
             const testimonial = yield* AuthenticatedRouteService.upsertTestimonial(
               auth.session.id,
               auth.user.id,
-              yield* normalizeTestimonialBody(payload.body),
+              payload.body,
             );
             return serializeTestimonial(testimonial);
           },
@@ -654,19 +617,15 @@ export function makeAuthenticatedLayer() {
       .handle(
         "availableSlots",
         Effect.fnUntraced(
-          function* ({ request }) {
+          function* ({ request, urlParams }) {
             yield* requireAuth(request);
-            const query = new URL((request.source as Request).url).searchParams;
-            const date = query.get("date");
-            if (!date) {
+            if (!urlParams.date) {
               return yield* new HttpError(400, "Missing date");
             }
-            const days = Number.parseInt(query.get("days") ?? "", 10);
-            const duration = Number.parseInt(query.get("duration") ?? "", 10);
             return yield* GoogleCalendarService.getAvailableSlots({
-              date,
-              days: Number.isFinite(days) ? days : 7,
-              duration: Number.isFinite(duration) ? duration : 60,
+              date: urlParams.date,
+              days: urlParams.days ?? 7,
+              duration: urlParams.duration ?? 60,
             });
           },
           Effect.catchAllCause(responseForCause),
@@ -699,17 +658,16 @@ export function makeAuthenticatedLayer() {
             const userId = auth.user.id;
             const encoder = new TextEncoder();
 
-            const eventStream: Stream.Stream<RealtimeMessage> = Stream.asyncPush(
-              (emit) =>
-                Effect.acquireRelease(
+            const eventStream: Stream.Stream<RealtimeMessage> = Stream.asyncPush((emit) =>
+              Effect.acquireRelease(
+                Effect.sync(() => {
+                  realtimeBus.on("message", emit.single);
+                }),
+                () =>
                   Effect.sync(() => {
-                    realtimeBus.on("message", emit.single);
+                    realtimeBus.off("message", emit.single);
                   }),
-                  () =>
-                    Effect.sync(() => {
-                      realtimeBus.off("message", emit.single);
-                    }),
-                ),
+              ),
             );
 
             const heartbeat = Stream.repeatValue(encoder.encode(":heartbeat\n\n"));

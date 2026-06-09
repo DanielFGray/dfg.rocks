@@ -4,24 +4,15 @@ import type { MaterialNotationTrack } from "../../shared/schemas.js";
 import { toMaterialNotationTrack } from "../../shared/notationTracks.js";
 import { PgRootDB } from "../db.js";
 import { HttpError } from "../pgErrors.js";
-const NOTATION_EXTENSIONS = new Set([
-  ".gp",
-  ".gp3",
-  ".gp4",
-  ".gp5",
-  ".gpx",
-  ".musicxml",
-  ".mxl",
-]);
+
+const NOTATION_EXTENSIONS = new Set([".gp", ".gp3", ".gp4", ".gp5", ".gpx", ".musicxml", ".mxl"]);
+
 function isNotationFilename(filename: string): boolean {
   const normalized = filename.toLowerCase();
-  return [...NOTATION_EXTENSIONS].some((extension) =>
-    normalized.endsWith(extension),
-  );
+  return [...NOTATION_EXTENSIONS].some((extension) => normalized.endsWith(extension));
 }
-function parseTrackIndex(
-  value: number | string | null | undefined,
-): number | null {
+
+function parseTrackIndex(value: number | string | null | undefined): number | null {
   if (typeof value === "number" && Number.isInteger(value) && value >= 0) {
     return value;
   }
@@ -31,9 +22,8 @@ function parseTrackIndex(
   }
   return null;
 }
-function isMaterialNotationTrack(
-  value: unknown,
-): value is MaterialNotationTrack {
+
+function isMaterialNotationTrack(value: unknown): value is MaterialNotationTrack {
   if (!value || typeof value !== "object") {
     return false;
   }
@@ -45,88 +35,77 @@ function isMaterialNotationTrack(
     typeof candidate.is_percussion === "boolean"
   );
 }
-function normalizeNotationTracks(
-  value: unknown,
-): MaterialNotationTrack[] | null {
+
+function normalizeNotationTracks(value: unknown): MaterialNotationTrack[] | null {
   if (!Array.isArray(value)) {
     return null;
   }
   const tracks = value.filter(isMaterialNotationTrack);
   return tracks.length > 0 ? tracks : null;
 }
-export function extractNotationTracksFromBytes(
+
+export const extractNotationTracksFromBytes = Effect.fnUntraced(function* (
   bytes: Uint8Array,
   filename: string,
-): MaterialNotationTrack[] | null {
+) {
   if (!isNotationFilename(filename)) {
     return null;
   }
-  try {
+  return yield* Effect.sync(() => {
     const score = importer.ScoreLoader.loadScoreFromBytes(bytes);
-    const tracks = Array.isArray(score.tracks)
-      ? score.tracks.map(toMaterialNotationTrack)
-      : [];
-    return tracks.length > 0 ? tracks : null;
-  } catch {
-    return null;
-  }
-}
-const resolveAssignedTrackIndexEffect = Effect.fnUntraced(function* (
-  materialId: string,
-  assignedTrackIndex: number | string | null | undefined,
-) {
-  const rootDb = yield* PgRootDB;
-  const material = yield* rootDb
-    .selectFrom("app_public.materials")
-    .select(["id", "notation_tracks"])
-    .where("id", "=", materialId)
-    .pipe(Effect.head, Effect.option);
-  if (Option.isNone(material)) {
-    throw new HttpError(404, "Material not found");
-  }
-  const tracks = normalizeNotationTracks(material.value.notation_tracks);
-  const normalizedAssignedTrackIndex = parseTrackIndex(assignedTrackIndex);
-  if (!tracks) {
-    if (normalizedAssignedTrackIndex !== null) {
-      throw new HttpError(400, "This material does not have notation tracks");
-    }
-    return null;
-  }
-  if (tracks.length === 1) {
-    const onlyTrackIndex = tracks[0]!.index;
-    if (
-      normalizedAssignedTrackIndex !== null &&
-      normalizedAssignedTrackIndex !== onlyTrackIndex
-    ) {
-      throw new HttpError(400, "Invalid assigned track");
-    }
-    return onlyTrackIndex;
-  }
-  if (normalizedAssignedTrackIndex === null) {
-    throw new HttpError(
-      400,
-      "Choose a track for multi-track notation material",
-    );
-  }
-  const assignedTrack = tracks.find(
-    (track) => track.index === normalizedAssignedTrackIndex,
-  );
-  if (!assignedTrack) {
-    throw new HttpError(400, "Invalid assigned track");
-  }
-  return assignedTrack.index;
+    const tracks = Array.isArray(score.tracks) ? score.tracks.map(toMaterialNotationTrack) : [];
+    return tracks.length > 0 ? (tracks as MaterialNotationTrack[]) : null;
+  }).pipe(Effect.catchAll(() => Effect.succeed(null)));
 });
+
 /**
  * Music notation service. `extractNotationTracksFromBytes` is sync;
  * `resolveAssignedTrackIndex` returns an Effect.
  */
-export class NotationService extends Effect.Service<NotationService>()(
-  "NotationService",
-  {
-    succeed: {
-      resolveAssignedTrackIndex: resolveAssignedTrackIndexEffect,
-    },
-  },
-) {
-  static readonly resolveAssignedTrackIndex = resolveAssignedTrackIndexEffect;
-}
+export class NotationService extends Effect.Service<NotationService>()("NotationService", {
+  accessors: true,
+  effect: Effect.gen(function* () {
+    const rootDb = yield* PgRootDB;
+    return {
+      resolveAssignedTrackIndex: Effect.fnUntraced(function* (
+        materialId: string,
+        assignedTrackIndex: number | string | null | undefined,
+      ) {
+        const material = yield* rootDb
+          .selectFrom("app_public.materials")
+          .select(["id", "notation_tracks"])
+          .where("id", "=", materialId)
+          .pipe(Effect.head, Effect.option);
+        if (Option.isNone(material)) {
+          return yield* new HttpError(404, "Material not found");
+        }
+        const tracks = normalizeNotationTracks(material.value.notation_tracks);
+        const normalizedAssignedTrackIndex = parseTrackIndex(assignedTrackIndex);
+        if (!tracks) {
+          if (normalizedAssignedTrackIndex !== null) {
+            return yield* new HttpError(400, "This material does not have notation tracks");
+          }
+          return null;
+        }
+        if (tracks.length === 1) {
+          const onlyTrackIndex = tracks[0]!.index;
+          if (
+            normalizedAssignedTrackIndex !== null &&
+            normalizedAssignedTrackIndex !== onlyTrackIndex
+          ) {
+            return yield* new HttpError(400, "Invalid assigned track");
+          }
+          return onlyTrackIndex;
+        }
+        if (normalizedAssignedTrackIndex === null) {
+          return yield* new HttpError(400, "Choose a track for multi-track notation material");
+        }
+        const assignedTrack = tracks.find((track) => track.index === normalizedAssignedTrackIndex);
+        if (!assignedTrack) {
+          return yield* new HttpError(400, "Invalid assigned track");
+        }
+        return assignedTrack.index;
+      }),
+    };
+  }),
+}) {}

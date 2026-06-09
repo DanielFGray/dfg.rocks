@@ -1,7 +1,7 @@
 import * as HttpApi from "@effect/platform/HttpApi";
 import * as HttpApiBuilder from "@effect/platform/HttpApiBuilder";
 import * as HttpServerResponse from "@effect/platform/HttpServerResponse";
-import { Effect } from "effect";
+import { Effect, Option } from "effect";
 import { publicGroup } from "../../shared/httpApi.js";
 import { HttpError } from "../pgErrors.js";
 import {
@@ -18,8 +18,9 @@ import {
   getOAuthRedirectTarget,
   verifyAppleIdToken,
 } from "../services/oauthService.js";
+import { GeolocationService } from "../services/geolocation.js";
 import { PublicRouteService } from "../services/publicRouteService.js";
-import { checkRateLimit } from "../services/rateLimiter.js";
+import { checkRateLimit, clientIdentifierFromHeaders } from "../services/rateLimiter.js";
 import { UserService } from "../services/userService.js";
 import { csrfCheck, setSessionCookie, responseForCause } from "./raw.js";
 
@@ -64,43 +65,61 @@ export function makePublicLayer() {
             return yield* new HttpError(400, "Invalid submission");
           }
           yield* checkRateLimit("contact", request.headers, 5, 60000);
-          yield* (yield* PublicRouteService).submitContact(payload);
+          const ip = clientIdentifierFromHeaders(request.headers);
+          if (ip) {
+            const loc = yield* GeolocationService.lookupIp(ip);
+            const isTexas = loc?.country === "US" && loc?.region === "TX";
+
+            if (!isTexas) {
+              return yield* new HttpError(
+                403,
+                "Sorry, I only accept lesson inquiries from the Houston / Galveston area in Texas. If you're outside Texas, I hope you find a great teacher near you!",
+              );
+            }
+            yield* PublicRouteService.submitContact(payload, {
+              ip,
+              country: loc?.country ?? "",
+              region: loc?.region ?? "",
+              city: loc?.city ?? "",
+            });
+          } else {
+            yield* PublicRouteService.submitContact(payload);
+          }
           return { success: true as const };
         }, Effect.catchAllCause(responseForCause)),
       )
 
-      .handleRaw("oauthGoogle", function ({ request }) {
-        const webRequest = request.source as Request;
-        const rootUrl = new URL(webRequest.url).origin;
-        const authorization = createAuthorizationRequest(
-          "google",
-          rootUrl,
-          new URL(webRequest.url).searchParams.get("redirect") ?? undefined,
-        );
-        const oauthCookieName = getOAuthCookieName("google");
-        const redirectCookieName = getOAuthRedirectCookieName("google");
-        const cookieOptions = getOAuthCookieOptions("google", rootUrl);
-        let response = HttpServerResponse.redirect(authorization.url.toString());
-        response = Effect.runSync(
-          HttpServerResponse.setCookie(
+      .handleRaw(
+        "oauthGoogle",
+        Effect.fnUntraced(function* ({ request }) {
+          const webRequest = request.source as Request;
+          const rootUrl = new URL(webRequest.url).origin;
+          const authorization = createAuthorizationRequest(
+            "google",
+            rootUrl,
+            new URL(webRequest.url).searchParams.get("redirect") ?? undefined,
+          );
+          const oauthCookieName = getOAuthCookieName("google");
+          const redirectCookieName = getOAuthRedirectCookieName("google");
+          const cookieOptions = getOAuthCookieOptions("google", rootUrl);
+          let response = HttpServerResponse.redirect(authorization.url.toString());
+          response = yield* HttpServerResponse.setCookie(
             response,
             oauthCookieName,
             encodeOAuthState(authorization.state),
             cookieOptions,
-          ),
-        );
-        response = authorization.state.redirect
-          ? Effect.runSync(
-              HttpServerResponse.setCookie(
+          );
+          response = authorization.state.redirect
+            ? yield* HttpServerResponse.setCookie(
                 response,
                 redirectCookieName,
                 encodeOAuthRedirect(authorization.state.redirect),
                 cookieOptions,
-              ),
-            )
-          : HttpServerResponse.expireCookie(response, redirectCookieName, cookieOptions);
-        return Effect.succeed(response).pipe(Effect.catchAllCause(responseForCause));
-      })
+              )
+            : HttpServerResponse.expireCookie(response, redirectCookieName, cookieOptions);
+          return yield* response;
+        }, Effect.catchAllCause(responseForCause)),
+      )
 
       .handleRaw(
         "oauthGoogleCallback",
@@ -128,7 +147,7 @@ export function makePublicLayer() {
           const codeVerifier = oauthState.codeVerifier;
           const tokens = yield* exchangeGoogleCode(rootUrl, code, codeVerifier);
           const userInfo = yield* fetchGoogleUserInfo(tokens.accessToken());
-          const user = yield* (yield* PublicRouteService).linkOrRegisterOAuthUser({
+          const user = yield* PublicRouteService.linkOrRegisterOAuthUser({
             service: "google",
             identifier: userInfo.sub,
             profile: userInfo,
@@ -153,38 +172,36 @@ export function makePublicLayer() {
         }, Effect.catchAllCause(responseForCause)),
       )
 
-      .handleRaw("oauthApple", function ({ request }) {
-        const webRequest = request.source as Request;
-        const rootUrl = new URL(webRequest.url).origin;
-        const authorization = createAuthorizationRequest(
-          "apple",
-          rootUrl,
-          new URL(webRequest.url).searchParams.get("redirect") ?? undefined,
-        );
-        const oauthCookieName = getOAuthCookieName("apple");
-        const redirectCookieName = getOAuthRedirectCookieName("apple");
-        const cookieOptions = getOAuthCookieOptions("apple", rootUrl);
-        let response = HttpServerResponse.redirect(authorization.url.toString());
-        response = Effect.runSync(
-          HttpServerResponse.setCookie(
-            response,
+      .handleRaw(
+        "oauthApple",
+        Effect.fnUntraced(function* ({ request }) {
+          const webRequest = request.source as Request;
+          const rootUrl = new URL(webRequest.url).origin;
+          const authorization = createAuthorizationRequest(
+            "apple",
+            rootUrl,
+            new URL(webRequest.url).searchParams.get("redirect") ?? undefined,
+          );
+          const oauthCookieName = getOAuthCookieName("apple");
+          const redirectCookieName = getOAuthRedirectCookieName("apple");
+          const cookieOptions = getOAuthCookieOptions("apple", rootUrl);
+          let response = yield* HttpServerResponse.setCookie(
+            HttpServerResponse.redirect(authorization.url.toString()),
             oauthCookieName,
             encodeOAuthState(authorization.state),
             cookieOptions,
-          ),
-        );
-        response = authorization.state.redirect
-          ? Effect.runSync(
-              HttpServerResponse.setCookie(
+          );
+          response = authorization.state.redirect
+            ? yield* HttpServerResponse.setCookie(
                 response,
                 redirectCookieName,
                 encodeOAuthRedirect(authorization.state.redirect),
                 cookieOptions,
-              ),
-            )
-          : HttpServerResponse.expireCookie(response, redirectCookieName, cookieOptions);
-        return Effect.succeed(response).pipe(Effect.catchAllCause(responseForCause));
-      })
+              )
+            : HttpServerResponse.expireCookie(response, redirectCookieName, cookieOptions);
+          return yield* response;
+        }, Effect.catchAllCause(responseForCause)),
+      )
 
       .handle(
         "oauthAppleCallback",
@@ -219,7 +236,7 @@ export function makePublicLayer() {
             email: typeof claims.email === "string" ? claims.email : user?.email,
             name: [firstName, lastName].filter(Boolean).join(" ").trim() || undefined,
           };
-          const linkedUser = yield* (yield* PublicRouteService).linkOrRegisterOAuthUser({
+          const linkedUser = yield* PublicRouteService.linkOrRegisterOAuthUser({
             service: "apple",
             identifier: sub,
             profile,
@@ -248,7 +265,7 @@ export function makePublicLayer() {
         "verifyEmail",
         Effect.fnUntraced(function* ({ request, payload }) {
           csrfCheck(request.headers);
-          yield* (yield* PublicRouteService).verifyEmail(payload.token);
+          yield* PublicRouteService.verifyEmail(payload.token);
           return { success: true as const };
         }, Effect.catchAllCause(responseForCause)),
       )
@@ -256,7 +273,7 @@ export function makePublicLayer() {
       .handleRaw(
         "invitation",
         Effect.fnUntraced(function* ({ path, urlParams }) {
-          return yield* (yield* PublicRouteService).invitation(path.id, urlParams.code ?? "");
+          return yield* PublicRouteService.invitation(path.id, urlParams.code ?? "");
         }, Effect.catchAllCause(responseForCause)),
       )
 
@@ -265,7 +282,7 @@ export function makePublicLayer() {
         Effect.fnUntraced(function* ({ request, path, payload }) {
           csrfCheck(request.headers);
           yield* checkRateLimit("accept-invite", request.headers, 10, 60000);
-          const session = yield* (yield* PublicRouteService).acceptInvitation({
+          const session = yield* PublicRouteService.acceptInvitation({
             invitationId: path.id,
             code: payload.code,
             username: payload.username,

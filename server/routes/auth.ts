@@ -24,7 +24,7 @@ export function makeAuthLayer() {
         Effect.fnUntraced(function* ({ request, payload }) {
           csrfCheck(request.headers);
           yield* checkRateLimit("login", request.headers, 10, 60000);
-          const result = yield* (yield* AuthService).login(payload);
+          const result = yield* AuthService.login(payload);
           const { email } = yield* UserService.primaryEmailForUser(result.user.user_id);
           let response = HttpServerResponse.unsafeJson({
             id: result.user.user_id,
@@ -43,7 +43,7 @@ export function makeAuthLayer() {
         Effect.fnUntraced(function* ({ request, payload }) {
           csrfCheck(request.headers);
           yield* checkRateLimit("magic-link", request.headers, 5, 60000);
-          yield* (yield* AuthRouteService).generateMagicLink(payload.email);
+          yield* AuthRouteService.generateMagicLink(payload.email);
           return { success: true as const };
         }, Effect.catchAllCause(responseForCause)),
       )
@@ -51,7 +51,7 @@ export function makeAuthLayer() {
         "verifyMagicLink",
         Effect.fnUntraced(function* ({ request, payload }) {
           csrfCheck(request.headers);
-          const session = yield* (yield* AuthRouteService).consumeMagicLink(payload.token);
+          const session = yield* AuthRouteService.consumeMagicLink(payload.token);
           let response = HttpServerResponse.unsafeJson(session.response);
           response = setSessionCookie(response, session.token, session.expiresAt);
           return response;
@@ -63,7 +63,7 @@ export function makeAuthLayer() {
           csrfCheck(request.headers);
           const token = request.cookies.session;
           const cookieId = token ? cookieIdFromToken(token) : undefined;
-          yield* (yield* AuthService).logout(cookieId);
+          yield* AuthService.logout(cookieId);
           return expireSessionCookie(HttpServerResponse.unsafeJson({ success: true as const }));
         }, Effect.catchAllCause(responseForCause)),
       )
@@ -71,7 +71,7 @@ export function makeAuthLayer() {
         "forgotPassword",
         Effect.fnUntraced(function* ({ request, payload }) {
           csrfCheck(request.headers);
-          yield* (yield* AuthService).forgotPassword(payload);
+          yield* AuthService.forgotPassword(payload);
           return { success: true as const };
         }, Effect.catchAllCause(responseForCause)),
       )
@@ -79,7 +79,7 @@ export function makeAuthLayer() {
         "resetPassword",
         Effect.fnUntraced(function* ({ request, payload }) {
           csrfCheck(request.headers);
-          const result = yield* (yield* AuthService).resetPassword(payload);
+          const result = yield* AuthService.resetPassword(payload);
           let response = HttpServerResponse.unsafeJson({
             success: true as const,
           });
@@ -94,7 +94,7 @@ export function makeAuthLayer() {
           if (!session) {
             return { user: null };
           }
-          return yield* (yield* AuthRouteService).me(session.user.id);
+          return yield* AuthRouteService.me(session.user.id);
         }, Effect.catchAllCause(responseForCause)),
       )
       .handle(
@@ -105,7 +105,7 @@ export function makeAuthLayer() {
           if (!session) {
             return { success: true as const };
           }
-          yield* (yield* AuthRouteService).resendVerification(session.user.id);
+          yield* AuthRouteService.resendVerification(session.user.id);
           return { success: true as const };
         }, Effect.catchAllCause(responseForCause)),
       ),

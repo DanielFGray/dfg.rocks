@@ -13,11 +13,7 @@ import { PgRootDB } from "../server/db.js";
 import { serverRuntime } from "../server/runtime.js";
 
 async function getRootDb() {
-  return serverRuntime.runPromise(
-    Effect.gen(function* () {
-      return yield* PgRootDB;
-    }),
-  );
+  return serverRuntime.runPromise(PgRootDB);
 }
 
 async function seedAdmin() {

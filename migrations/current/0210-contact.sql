@@ -7,7 +7,11 @@ create table app_public.contact_submissions (
   format text not null,
   message text not null default '',
   is_read boolean not null default false,
-  created_at timestamptz not null default now()
+  created_at timestamptz not null default now(),
+  ip_address text,
+  location_country text,
+  location_region text,
+  location_city text
 );
 
 alter table app_public.contact_submissions enable row level security;

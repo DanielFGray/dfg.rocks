@@ -202,7 +202,8 @@ export class AdminRouteService extends Effect.Service<AdminRouteService>()("Admi
           .updateTable("app_public.courses")
           .set(updates)
           .where("id", "=", id)
-          .returning(["id", "title", "description", "instrument"]);
+          .returning(["id", "title", "description", "instrument"])
+          .pipe(Effect.head, Effect.option, Effect.map(Option.getOrUndefined));
       }),
 
       deleteCourse: Effect.fn("deleteCourse")(function* (id: string) {
@@ -269,19 +270,18 @@ export class AdminRouteService extends Effect.Service<AdminRouteService>()("Admi
           } else {
             yield* rootDb.deleteFrom("app_public.module_materials").where("module_id", "=", id);
           }
-          yield* Effect.forEach(
-            materialIds,
-            (materialId, index) =>
-              rootDb
-                .insertInto("app_public.module_materials")
-                .values({
+          if (materialIds.length > 0) {
+            yield* rootDb
+              .insertInto("app_public.module_materials")
+              .values(
+                materialIds.map((materialId, index) => ({
                   module_id: id,
                   material_id: materialId,
                   sort_order: index,
-                })
-                .onConflict((oc) => oc.doNothing()),
-            { discard: true },
-          );
+                })),
+              )
+              .onConflict((oc) => oc.doNothing());
+          }
         }
         return mod;
       }),

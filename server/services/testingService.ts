@@ -52,9 +52,11 @@ export class TestingService extends Effect.Service<TestingService>()("TestingSer
       }) {
         const name = _name ?? username;
 
-        let userId = yield* queries
-          .userIdByUsername(username)
-          .pipe(Effect.head, Effect.option, Effect.map((row) => Option.getOrNull(row)?.id ?? null));
+        let userId = yield* queries.userIdByUsername(username).pipe(
+          Effect.head,
+          Effect.option,
+          Effect.map((row) => Option.getOrNull(row)?.id ?? null),
+        );
 
         if (!userId) {
           const created = yield* db
@@ -151,12 +153,14 @@ export class TestingService extends Effect.Service<TestingService>()("TestingSer
         );
       }),
 
-      seedCourse: Effect.fnUntraced(function* (body: {
-        title: string;
-        instrument: string;
-        description?: string;
-        modules?: Array<{ title: string; sort_order?: number }>;
-      }) {
+      seedCourse: Effect.fnUntraced(function* (
+        body: Readonly<{
+          title: string;
+          instrument: string;
+          description?: string;
+          modules?: ReadonlyArray<{ title: string; sort_order?: number }>;
+        }>,
+      ) {
         const course = yield* db
           .insertInto("app_public.courses")
           .values({
@@ -167,16 +171,16 @@ export class TestingService extends Effect.Service<TestingService>()("TestingSer
           .returning(["id", "title", "instrument", "description"])
           .pipe(Effect.head);
 
-        yield* Effect.forEach(
-          body.modules ?? [],
-          (mod, index) =>
-            db.insertInto("app_public.modules").values({
+        const mods = body.modules ?? [];
+        if (mods.length > 0) {
+          yield* db.insertInto("app_public.modules").values(
+            mods.map((mod, index) => ({
               course_id: course.id,
               title: mod.title,
               sort_order: mod.sort_order ?? index + 1,
-            }),
-          { discard: true },
-        );
+            })),
+          );
+        }
 
         return course.id;
       }),
@@ -207,7 +211,7 @@ export class TestingService extends Effect.Service<TestingService>()("TestingSer
         yield* StorageService.put(location, bytes);
 
         const notationTracks = body.source_file_path
-          ? extractNotationTracksFromBytes(bytes, originalFilename)
+          ? yield* extractNotationTracksFromBytes(bytes, originalFilename)
           : null;
 
         const material = yield* db

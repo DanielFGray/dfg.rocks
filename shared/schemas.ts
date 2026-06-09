@@ -127,6 +127,10 @@ export const Submission = S.Struct({
   message: S.String,
   is_read: S.Boolean,
   created_at: S.String,
+  ip_address: S.NullishOr(S.String),
+  location_country: S.NullishOr(S.String),
+  location_region: S.NullishOr(S.String),
+  location_city: S.NullishOr(S.String),
 });
 
 export type Submission = S.Schema.Type<typeof Submission>;

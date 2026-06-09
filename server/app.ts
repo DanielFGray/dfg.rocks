@@ -24,30 +24,19 @@ import { AuthRouteService } from "./services/authRouteService.js";
 import { AuthService } from "./services/authService.js";
 import { EmailService } from "./services/emailService.js";
 import { FileService } from "./services/fileService.js";
+import { GeolocationService } from "./services/geolocation.js";
 import { GoogleCalendarService } from "./services/googleCalendarService.js";
 import { NotationService } from "./services/notationService.js";
 import { PublicRouteService } from "./services/publicRouteService.js";
 import { RateLimiterLayer } from "./services/rateLimiter.js";
-import { realtimeService } from "./services/realtimeService.js";
 import { SessionService } from "./services/sessionService.js";
 import { StorageService } from "./services/storageService.js";
 import { UserService } from "./services/userService.js";
+import { serverRuntime } from "./runtime.js";
 
 type WebHandler = ReturnType<typeof HttpApiBuilder.toWebHandler>;
 
 let handlerPromise: Promise<WebHandler> | undefined;
-let realtimeStarted = false;
-
-function startRealtimeOnce() {
-  if (realtimeStarted) {
-    return;
-  }
-
-  realtimeStarted = true;
-  realtimeService.start().catch((error: unknown) => {
-    console.error("Failed to start realtime service:", error);
-  });
-}
 
 async function createHandler() {
   const baseApi = HttpApi.make("dfg")
@@ -82,6 +71,7 @@ async function createHandler() {
     AuthService.Default,
     EmailService.Default,
     FileService.Default,
+    GeolocationService.Default,
     GoogleCalendarService.Default,
     NotationService.Default,
     SessionService.Default,
@@ -120,7 +110,6 @@ async function getWebHandler() {
 }
 
 export async function handleApiRequest(request: Request): Promise<Response> {
-  startRealtimeOnce();
   const { handler } = await getWebHandler();
   return handler(request);
 }
@@ -131,8 +120,7 @@ export async function disposeApiHandler(): Promise<void> {
   }
 
   const { dispose } = await handlerPromise;
-  await realtimeService.stop();
-  realtimeStarted = false;
+  await serverRuntime.dispose();
   await dispose();
   handlerPromise = undefined;
 }

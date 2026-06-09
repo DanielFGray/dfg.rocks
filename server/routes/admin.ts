@@ -4,7 +4,13 @@ import * as HttpApiGroup from "@effect/platform/HttpApiGroup";
 import * as HttpApiEndpoint from "@effect/platform/HttpApiEndpoint";
 import * as HttpServerResponse from "@effect/platform/HttpServerResponse";
 import { Effect } from "effect";
-import { adminClientGroup } from "../../shared/httpApi.js";
+import {
+  adminClientGroup,
+  CreateFamilyPayload,
+  GcalCallbackQuery,
+  SaveStudentRatePayload,
+  StudentRatesQuery,
+} from "../../shared/httpApi.js";
 import { env } from "../assertEnv.js";
 import { HttpError } from "../pgErrors.js";
 import { AdminRouteService } from "../services/adminRouteService.js";
@@ -21,112 +27,12 @@ import {
   responseForCause,
 } from "./raw.js";
 
-type ServerRequest = RawRequest;
-type JsonMap = Record<string, unknown>;
-
-const locationTypes = new Set<LocationType>([
-  "in_person_teacher_travels",
-  "in_person_student_travels",
-  "studio",
-  "online",
-]);
-
-const lessonStatuses = new Set<LessonStatus>(["scheduled", "completed", "cancelled", "no_show"]);
-
 function toIsoString(value: Date | string): string {
   return value instanceof Date ? value.toISOString() : value;
 }
 
 function toIsoStringOrNull(value: Date | string | null): string | null {
   return value ? toIsoString(value) : null;
-}
-
-function asObject(value: unknown, message = "Invalid request body"): JsonMap {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    throw HttpError.make(400, message);
-  }
-  return value as JsonMap;
-}
-
-function readJsonObject(request: ServerRequest): Effect.Effect<JsonMap, unknown> {
-  return Effect.tryPromise({
-    try: () => (request.source as Request).json(),
-    catch: (cause) => cause,
-  }).pipe(Effect.map((value) => asObject(value)));
-}
-
-function requiredString(value: unknown, field: string): string {
-  if (typeof value !== "string") {
-    throw HttpError.make(400, `${field} must be a string`);
-  }
-  return value;
-}
-
-function optionalString(value: unknown, field: string): string | undefined {
-  if (value === undefined) {
-    return undefined;
-  }
-  if (typeof value !== "string") {
-    throw HttpError.make(400, `${field} must be a string`);
-  }
-  return value;
-}
-
-function requiredNumber(value: unknown, field: string): number {
-  if (typeof value !== "number" || Number.isNaN(value)) {
-    throw HttpError.make(400, `${field} must be a number`);
-  }
-  return value;
-}
-
-function requiredIntegerInRange(
-  value: unknown,
-  field: string,
-  minimum: number,
-  maximum: number,
-): number {
-  if (typeof value !== "number" || !Number.isInteger(value) || value < minimum || value > maximum) {
-    throw HttpError.make(400, `${field} must be an integer between ${minimum} and ${maximum}`);
-  }
-  return value;
-}
-
-function parseLocationType(value: unknown, field: string): LocationType {
-  if (typeof value !== "string" || !locationTypes.has(value as LocationType)) {
-    throw HttpError.make(400, `${field} is invalid`);
-  }
-  return value as LocationType;
-}
-
-function parseLessonStatus(value: unknown, field: string): LessonStatus {
-  if (typeof value !== "string" || !lessonStatuses.has(value as LessonStatus)) {
-    throw HttpError.make(400, `${field} is invalid`);
-  }
-  return value as LessonStatus;
-}
-
-function parseQueryNumber(query: URLSearchParams, name: string): number | undefined {
-  const raw = query.get(name);
-  if (raw === null || raw === "") {
-    return undefined;
-  }
-  const parsed = Number.parseInt(raw, 10);
-  if (!Number.isFinite(parsed)) {
-    throw HttpError.make(400, `Invalid ${name}`);
-  }
-  return parsed;
-}
-
-function parseAssignedTrackIndex(value: unknown): number | string | null | undefined {
-  if (
-    value === undefined ||
-    value === null ||
-    typeof value === "string" ||
-    (typeof value === "number" && Number.isFinite(value))
-  ) {
-    return value;
-  }
-  throw HttpError.make(400, "assigned_track_index must be numeric or null");
 }
 
 const defaultWorkingHours = {
@@ -198,20 +104,20 @@ function serializeLessonNote(r: {
 
 export const adminGroup = adminClientGroup
   .add(HttpApiEndpoint.get("gcalConnect", "/api/admin/gcal/connect"))
-  .add(HttpApiEndpoint.get("gcalCallback", "/api/admin/gcal/callback"))
+  .add(HttpApiEndpoint.get("gcalCallback", "/api/admin/gcal/callback").setUrlParams(GcalCallbackQuery))
   .add(HttpApiEndpoint.get("module", "/api/admin/modules/:id").setPath(params("id")))
-  .add(HttpApiEndpoint.post("createFamily", "/api/admin/families"))
+  .add(HttpApiEndpoint.post("createFamily", "/api/admin/families").setPayload(CreateFamilyPayload))
   .add(
     HttpApiEndpoint.get("familyInvitations", "/api/admin/families/:familyId/invitations").setPath(
       params("familyId"),
     ),
   )
   .add(HttpApiEndpoint.del("deleteLesson", "/api/admin/lessons/:id").setPath(params("id")))
-  .add(HttpApiEndpoint.post("saveStudentRate", "/api/admin/student-rates"))
+  .add(HttpApiEndpoint.post("saveStudentRate", "/api/admin/student-rates").setPayload(SaveStudentRatePayload))
   .add(
     HttpApiEndpoint.get("studentRates", "/api/admin/student-rates/:studentId").setPath(
       params("studentId"),
-    ),
+    ).setUrlParams(StudentRatesQuery),
   )
   .add(
     HttpApiEndpoint.get("testimonialReminderInterval", "/api/admin/testimonial-reminder-interval"),
@@ -253,14 +159,12 @@ export function makeAdminLayer() {
       .handle(
         "gcalCallback",
         Effect.fnUntraced(
-          function* ({ request }: { request: RawRequest }) {
+          function* ({ request, urlParams }) {
             yield* requireAdminSession(request, { csrf: false });
-            const webRequest = request.source as Request;
-            const rootUrl = new URL(webRequest.url).origin;
-            const query = new URL(webRequest.url).searchParams;
+            const rootUrl = new URL((request.source as Request).url).origin;
             const authCookieName = GoogleCalendarService.getAuthCookieName();
             const cookieOptions = GoogleCalendarService.getAuthCookieOptions(rootUrl);
-            const authState = GoogleCalendarService.decodeAuthState(
+            const authState = yield* GoogleCalendarService.decodeAuthState(
               request.cookies[authCookieName],
             );
             const fail = (status: number, message: string) =>
@@ -269,32 +173,21 @@ export function makeAdminLayer() {
                 authCookieName,
                 cookieOptions,
               );
-            try {
-              const error = query.get("error") ?? undefined;
-              const code = query.get("code") ?? undefined;
-              const state = query.get("state") ?? undefined;
-              if (error) {
-                return fail(400, `Google Calendar OAuth failed (${error})`);
-              }
-              if (!code || !state) {
-                return fail(400, "Missing Google Calendar OAuth callback parameters");
-              }
-              if (!authState || authState.state !== state) {
-                return fail(400, "Invalid or expired Google Calendar OAuth state");
-              }
-              yield* GoogleCalendarService.handleCallback(rootUrl, code, authState.codeVerifier);
-              let response = HttpServerResponse.redirect(
-                GoogleCalendarService.getConnectRedirectUrl(rootUrl, authState.redirect),
-              );
-              response = HttpServerResponse.expireCookie(response, authCookieName, cookieOptions);
-              return response;
-            } catch (error) {
-              if (error instanceof HttpError) {
-                return new HttpError(error.status, error.message);
-              }
-              console.error(error);
-              return new HttpError(500, "Internal Server Error");
+            if (urlParams.error) {
+              return fail(400, `Google Calendar OAuth failed (${urlParams.error})`);
             }
+            if (!urlParams.code || !urlParams.state) {
+              return fail(400, "Missing Google Calendar OAuth callback parameters");
+            }
+            if (!authState || authState.state !== urlParams.state) {
+              return fail(400, "Invalid or expired Google Calendar OAuth state");
+            }
+            yield* GoogleCalendarService.handleCallback(rootUrl, urlParams.code, authState.codeVerifier);
+            let response = HttpServerResponse.redirect(
+              GoogleCalendarService.getConnectRedirectUrl(rootUrl, authState.redirect),
+            );
+            response = HttpServerResponse.expireCookie(response, authCookieName, cookieOptions);
+            return response;
           },
           Effect.catchAllCause(responseForCause),
           Effect.map(normalizeToResponse),
@@ -303,12 +196,12 @@ export function makeAdminLayer() {
       .handle(
         "submissions",
         Effect.fnUntraced(
-          function* ({ request }) {
+          function* ({ request, urlParams }) {
             yield* requireAdminSession(request);
-            const query = new URL((request.source as Request).url).searchParams;
-            const limit = parseQueryNumber(query, "limit") ?? 50;
-            const offset = parseQueryNumber(query, "offset") ?? 0;
-            const rows = yield* AdminRouteService.listSubmissions(limit, offset);
+            const rows = yield* AdminRouteService.listSubmissions(
+              urlParams.limit ?? 50,
+              urlParams.offset ?? 0,
+            );
             return rows.map((row) => ({
               ...row,
               created_at: row.created_at.toISOString(),
@@ -552,7 +445,7 @@ export function makeAdminLayer() {
             yield* AdminRouteService.assignMaterial({
               studentId: path.id,
               materialId: payload.material_id,
-              assignedTrackIndex: parseAssignedTrackIndex(payload.assigned_track_index),
+              assignedTrackIndex: payload.assigned_track_index,
             });
             return HttpServerResponse.unsafeJson({ success: true as const });
           },
@@ -594,7 +487,7 @@ export function makeAdminLayer() {
         Effect.fnUntraced(
           function* ({ request, payload }) {
             const auth = yield* requireAdminSession(request);
-            return yield* (yield* FileService).upload(
+            return yield* FileService.upload(
               payload.file,
               payload.title,
               payload.is_global,
@@ -608,13 +501,11 @@ export function makeAdminLayer() {
       .handle(
         "createFamily",
         Effect.fnUntraced(
-          function* (context) {
-            const auth = yield* requireAdminSession(context.request);
-            const { request } = context;
-            const body = yield* readJsonObject(request);
+          function* ({ request, payload }) {
+            const auth = yield* requireAdminSession(request);
             const familyResult = yield* AdminRouteService.createFamily(auth.session.id, {
-              slug: requiredString(body.slug, "slug"),
-              name: requiredString(body.name, "name"),
+              slug: payload.slug,
+              name: payload.name,
             });
             const family = Array.isArray(familyResult) ? familyResult[0] : familyResult;
             if (!family) {
@@ -776,23 +667,15 @@ export function makeAdminLayer() {
       .handle(
         "lessons",
         Effect.fnUntraced(
-          function* (context) {
-            yield* requireAdminSession(context.request);
-            const { request } = context;
-            const query = new URL((request.source as Request).url).searchParams;
-            const limit = parseQueryNumber(query, "limit") ?? 50;
-            const offset = parseQueryNumber(query, "offset") ?? 0;
-            const studentId = query.get("student_id") ?? undefined;
-            const status = query.get("status");
-            const from = query.get("from") ?? undefined;
-            const to = query.get("to") ?? undefined;
+          function* ({ request, urlParams }) {
+            yield* requireAdminSession(request);
             const lessons = yield* AdminRouteService.listLessons({
-              limit,
-              offset,
-              studentId,
-              status: status ? parseLessonStatus(status, "status") : undefined,
-              from: from ? new Date(from) : undefined,
-              to: to ? new Date(to) : undefined,
+              limit: urlParams.limit ?? 50,
+              offset: urlParams.offset ?? 0,
+              studentId: urlParams.student_id,
+              status: urlParams.status,
+              from: urlParams.from ? new Date(urlParams.from) : undefined,
+              to: urlParams.to ? new Date(urlParams.to) : undefined,
             });
             return lessons.map(serializeLesson);
           },
@@ -803,19 +686,14 @@ export function makeAdminLayer() {
       .handle(
         "saveStudentRate",
         Effect.fnUntraced(
-          function* (context) {
-            yield* requireAdminSession(context.request);
-            const { request } = context;
-            const body = yield* readJsonObject(request);
+          function* ({ request, payload }) {
+            yield* requireAdminSession(request);
             const rate = yield* AdminRouteService.saveStudentRate({
-              studentId: requiredString(body.student_id, "student_id"),
-              rateCents: requiredNumber(body.rate_cents, "rate_cents"),
-              lessonDurationMinutes: requiredNumber(
-                body.lesson_duration_minutes,
-                "lesson_duration_minutes",
-              ),
-              locationType: parseLocationType(body.location_type, "location_type"),
-              notes: optionalString(body.notes, "notes") ?? null,
+              studentId: payload.student_id,
+              rateCents: payload.rate_cents,
+              lessonDurationMinutes: payload.lesson_duration_minutes,
+              locationType: payload.location_type,
+              notes: payload.notes ?? null,
             });
             return {
               ...rate,
@@ -829,14 +707,11 @@ export function makeAdminLayer() {
       .handle(
         "studentRates",
         Effect.fnUntraced(
-          function* (context) {
-            yield* requireAdminSession(context.request);
-            const { request, path } = context;
-            const query = new URL((request.source as Request).url).searchParams;
-            const locationType = query.get("location_type");
+          function* ({ request, path, urlParams }) {
+            yield* requireAdminSession(request);
             return (yield* AdminRouteService.listStudentRates(
               path.studentId,
-              locationType ? parseLocationType(locationType, "location_type") : undefined,
+              urlParams.location_type,
             )).map((row) => ({
               ...row,
               created_at: row.created_at.toISOString(),
@@ -961,17 +836,11 @@ export function makeAdminLayer() {
         Effect.fnUntraced(
           function* ({ request, payload }) {
             yield* requireAdminSession(request);
-            const intervalDays = requiredIntegerInRange(
-              payload.interval_days,
-              "interval_days",
-              1,
-              365,
-            );
-            yield* TestimonialReminderService.setIntervalDays(intervalDays);
-            yield* TestimonialReminderService.rescheduleAll(intervalDays);
+            yield* TestimonialReminderService.setIntervalDays(payload.interval_days);
+            yield* TestimonialReminderService.rescheduleAll(payload.interval_days);
             return HttpServerResponse.unsafeJson({
               success: true as const,
-              interval_days: intervalDays,
+              interval_days: payload.interval_days,
             });
           },
           Effect.catchAllCause(responseForCause),

@@ -16,8 +16,25 @@
     "allowJs": true,
     "jsx": "react-jsx",
     "jsxImportSource": "react",
-    "types": ["bun", "node"]
+    "types": [
+      "bun",
+      "node"
+    ],
+    "plugins": [
+      {
+        "name": "@effect/language-service"
+      }
+    ]
   },
-  "include": ["app", "server", "shared", "scripts", "e2e"],
-  "exclude": ["node_modules", "dist"]
+  "include": [
+    "app",
+    "server",
+    "shared",
+    "scripts",
+    "e2e"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist"
+  ]
 }

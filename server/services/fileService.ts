@@ -2,7 +2,7 @@ import path from "node:path";
 import * as FileSystem from "@effect/platform/FileSystem";
 import * as Multipart from "@effect/platform/Multipart";
 import { sql } from "kysely";
-import { Effect } from "effect";
+import { Effect, Option } from "effect";
 import { PgRootDB } from "../db.js";
 import { HttpError } from "../pgErrors.js";
 import { extractNotationTracksFromBytes } from "./notationService.js";
@@ -72,7 +72,7 @@ const findMaterialByContentHashEffect = Effect.fnUntraced(function* (contentHash
     .selectFrom("app_public.materials")
     .select([...MATERIAL_RESPONSE_COLUMNS, "storage_backend", "storage_key"])
     .where("content_hash", "=", contentHash)
-    .pipe(Effect.head);
+    .pipe(Effect.head, Effect.option, Effect.map(Option.getOrUndefined));
 });
 
 const ensureStoredBlobEffect = Effect.fnUntraced(function* (
@@ -135,7 +135,7 @@ export class FileService extends Effect.Service<FileService>()("FileService", {
           );
         }
         const contentHash = StorageService.hashBytes(bytes);
-        const notationTracks = extractNotationTracksFromBytes(bytes, file.name);
+        const notationTracks = yield* extractNotationTracksFromBytes(bytes, file.name);
         const existingMaterial = yield* findMaterialByContentHashEffect(contentHash);
         if (existingMaterial) {
           yield* ensureStoredBlobEffect(existingMaterial, bytes);
@@ -181,6 +181,7 @@ export class FileService extends Effect.Service<FileService>()("FileService", {
                 return yield* Effect.fail(error);
               }),
             ),
+            Effect.head,
           );
       }),
 

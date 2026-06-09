@@ -3,7 +3,10 @@ import * as PgKysely from "@effect/sql-kysely/Pg";
 import { PgClient } from "@effect/sql-pg";
 import { Effect, Context, Config, Schedule, Layer, Duration } from "effect";
 import { sql } from "kysely";
+import { EventEmitter } from "node:events";
 import pg from "pg";
+
+EventEmitter.defaultMaxListeners = 20;
 import type { DB } from "../generated/db.js";
 
 pg.types.setTypeParser(20, (val: string) => Number(val));
@@ -54,14 +57,15 @@ export const withAuthContext = Effect.fnUntraced(function* <A, E>(
   cb: (db: AuthKyselyDB) => Effect.Effect<A, E, never>,
 ) {
   const db = yield* PgAuthDB;
+  const databaseVisitor = yield* Config.string("DATABASE_VISITOR");
   return yield* db.withTransaction(
     db
       .selectNoFrom((eb) => [
-        eb.fn<void>("set_config", [sql.lit("role"), sql.lit(sessionId), eb.lit(false)]).as("_1"),
+        eb.fn<void>("set_config", [sql.lit("role"), eb.val(databaseVisitor), eb.lit(false)]).as("_1"),
         eb
           .fn<void>("set_config", [sql.lit("my.session_id"), eb.val(sessionId), eb.lit(true)])
           .as("_2"),
       ])
-      .pipe(Effect.andThen(cb(db)), Effect.provide(PgAuthDB.Live)),
+      .pipe(Effect.andThen(cb(db))),
   );
 });

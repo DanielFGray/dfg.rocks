@@ -176,7 +176,7 @@ const AddEmailPayload = S.Struct({
   email: S.String,
 });
 const TestimonialPayload = S.Struct({
-  body: S.String,
+  body: S.String.pipe(S.minLength(20), S.maxLength(2000)),
 });
 
 const UpdateSubmissionPayload = S.Struct({
@@ -275,10 +275,143 @@ const UploadMaterialPayload = HttpApiSchema.Multipart(
   }),
 );
 const SaveReminderIntervalPayload = S.Struct({
-  interval_days: S.Number,
+  interval_days: S.Number.pipe(S.between(1, 365)),
 });
 const UpdateTestimonialApprovalPayload = S.Struct({
   is_approved: S.Boolean,
+});
+export const CreateFamilyPayload = S.Struct({
+  slug: S.String,
+  name: S.String,
+});
+export const SaveStudentRatePayload = S.Struct({
+  student_id: S.String,
+  rate_cents: S.Number,
+  lesson_duration_minutes: S.Number,
+  location_type: S.Union(
+    S.Literal("in_person_teacher_travels"),
+    S.Literal("in_person_student_travels"),
+    S.Literal("studio"),
+    S.Literal("online"),
+  ),
+  notes: S.optional(S.String),
+});
+
+export const CreatePracticeLogPayload = S.Struct({
+  material_id: S.String,
+  status: S.Union(S.Literal("practiced"), S.Literal("completed")),
+  notes: S.optional(S.String),
+});
+
+export const GcalCallbackQuery = S.Struct({
+  error: S.optional(S.String),
+  code: S.optional(S.String),
+  state: S.optional(S.String),
+});
+
+export const StudentRatesQuery = S.Struct({
+  location_type: S.optional(
+    S.Union(
+      S.Literal("in_person_teacher_travels"),
+      S.Literal("in_person_student_travels"),
+      S.Literal("studio"),
+      S.Literal("online"),
+    ),
+  ),
+});
+
+// Testing schemas
+export const TestingLoginQuery = S.Struct({
+  username: S.optional(S.String),
+  password: S.optional(S.String),
+  role: S.optional(S.Union(S.Literal("admin"), S.Literal("teacher"), S.Literal("student"))),
+  name: S.optional(S.String),
+  email: S.optional(S.String),
+});
+
+export const TestingTestimonialReminderQuery = S.Struct({
+  username: S.String,
+  prompt_enabled: S.optional(S.BooleanFromString),
+  next_prompt_at: S.optional(S.String),
+});
+
+export const SeedCoursePayload = S.Struct({
+  title: S.String,
+  instrument: S.String,
+  description: S.optional(S.String),
+  modules: S.optional(
+    S.Array(
+      S.Struct({
+        title: S.String,
+        sort_order: S.optional(S.Number),
+      }),
+    ),
+  ),
+});
+
+export const SeedMaterialPayload = S.Struct({
+  title: S.String,
+  original_filename: S.optional(S.String),
+  mime_type: S.optional(S.String),
+  file_size: S.optional(S.Number),
+  is_global: S.optional(S.Boolean),
+  source_file_path: S.optional(S.String),
+});
+
+export const TestingAssignMaterialQuery = S.Struct({
+  username: S.String,
+  material_title: S.String,
+  assigned_track_index: S.optional(S.String),
+});
+
+export const TestingEnrollQuery = S.Struct({
+  username: S.String,
+  course_title: S.String,
+});
+
+export const TestingSeedFamilyQuery = S.Struct({
+  slug: S.optional(S.String),
+  name: S.optional(S.String),
+  owner_username: S.optional(S.String),
+});
+
+export const TestingSeedFamilyMembershipQuery = S.Struct({
+  username: S.String,
+  family_slug: S.String,
+  is_owner: S.optional(S.BooleanFromString),
+  is_billing_contact: S.optional(S.BooleanFromString),
+});
+
+export const TestingSeedInvitationQuery = S.Struct({
+  email: S.String,
+  family_slug: S.optional(S.String),
+  expires_at: S.optional(S.String),
+});
+
+export const TestingSeedDeleteAccountQuery = S.Struct({
+  username: S.String,
+});
+
+export const TestingSeedLessonQuery = S.Struct({
+  username: S.String,
+  scheduled_at: S.optional(S.String),
+  duration_minutes: S.optional(S.NumberFromString),
+  location_type: S.optional(
+    S.Union(
+      S.Literal("in_person_teacher_travels"),
+      S.Literal("in_person_student_travels"),
+      S.Literal("studio"),
+      S.Literal("online"),
+    ),
+  ),
+  status: S.optional(
+    S.Union(
+      S.Literal("scheduled"),
+      S.Literal("completed"),
+      S.Literal("cancelled"),
+      S.Literal("no_show"),
+    ),
+  ),
 });
 
 export const publicGroup = HttpApiGroup.make("public")

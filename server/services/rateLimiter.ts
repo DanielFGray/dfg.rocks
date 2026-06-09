@@ -3,9 +3,7 @@ import { Effect, Duration, Layer } from "effect";
 import { RateLimiter } from "@effect/experimental";
 import { HttpError } from "../pgErrors.js";
 
-export const RateLimiterLayer = RateLimiter.layer.pipe(
-  Layer.provide(RateLimiter.layerStoreMemory),
-);
+export const RateLimiterLayer = RateLimiter.layer.pipe(Layer.provide(RateLimiter.layerStoreMemory));
 
 export class RateLimitError extends HttpError {
   constructor() {
@@ -76,37 +74,35 @@ export function clientIdentifierFromHeaders(
   );
 }
 
-export function checkRateLimit(
+export const checkRateLimit = Effect.fnUntraced(function* (
   scope: string,
   headers: Record<string, string | undefined>,
   max: number,
   windowMs: number,
-): Effect.Effect<void, RateLimitError | RateLimiter.RateLimiterError, RateLimiter.RateLimiter> {
-  if (disabled) return Effect.void;
+) {
+  if (disabled) return yield* Effect.void;
 
   const ip = clientIdentifierFromHeaders(headers);
-  if (!ip) return Effect.void;
+  if (!ip) return yield* Effect.void;
 
-  return Effect.gen(function* () {
-    const limiter = yield* RateLimiter.RateLimiter;
+  const limiter = yield* RateLimiter.RateLimiter;
 
-    yield* limiter
-      .consume({
-        key: `dfg:rl:${scope}:${ip}`,
-        algorithm: "fixed-window",
-        window: Duration.millis(windowMs),
-        limit: max,
-        onExceeded: "fail",
-      })
-      .pipe(
-        Effect.mapError((error) =>
-          error instanceof RateLimiter.RateLimitExceeded ? new RateLimitError() : error,
-        ),
-      );
+  yield* limiter
+    .consume({
+      key: `dfg:rl:${scope}:${ip}`,
+      algorithm: "fixed-window",
+      window: Duration.millis(windowMs),
+      limit: max,
+      onExceeded: "fail",
+    })
+    .pipe(
+      Effect.mapError((error) =>
+        error instanceof RateLimiter.RateLimitExceeded ? new RateLimitError() : error,
+      ),
+    );
 
-    return undefined as void;
-  });
-}
+  return yield* Effect.void;
+});
 
 /** Disable rate limiting (for tests). */
 export function disableRateLimiting(): void {

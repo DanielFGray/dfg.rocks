@@ -1,25 +1,16 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { Effect, Layer } from "effect";
-import { RateLimiter } from "@effect/experimental";
+import { it, expect, describe } from "@effect/vitest";
+import { Effect, Exit, TestClock } from "effect";
 import { loadEnvFile } from "node:process";
+import {
+  checkRateLimit,
+  clientIdentifierFromHeaders,
+  RateLimitError,
+  RateLimiterLayer,
+} from "../services/rateLimiter.js";
 
 loadEnvFile();
 
-type CheckRateLimit = typeof import("../services/rateLimiter.js").checkRateLimit;
-type ClientIdentifierFromHeaders =
-  typeof import("../services/rateLimiter.js").clientIdentifierFromHeaders;
-
-let checkRateLimit: CheckRateLimit;
-let clientIdentifierFromHeaders: ClientIdentifierFromHeaders;
-
 describe("rateLimiter", () => {
-  beforeEach(async () => {
-    vi.resetModules();
-
-    const rateLimiter = await import("../services/rateLimiter.js");
-    ({ checkRateLimit, clientIdentifierFromHeaders } = rateLimiter);
-  });
-
   it("extracts the first client hop from trusted proxy headers", () => {
     expect(
       clientIdentifierFromHeaders({
@@ -35,28 +26,21 @@ describe("rateLimiter", () => {
     ).toBe("198.51.100.8");
   });
 
-  it("stores counters in memory and expires them with the fixed window", async () => {
-    // Fresh in-memory store per test
-    const rateLimiterLayer = RateLimiter.layer.pipe(
-      Layer.provide(RateLimiter.layerStoreMemory),
+  it.layer(RateLimiterLayer)((it) => {
+    it.effect("stores counters in memory and expires them with the fixed window", () =>
+      Effect.gen(function* () {
+        const headers = { "x-real-ip": "203.0.113.7" };
+
+        yield* checkRateLimit("login", headers, 2, 50);
+        yield* checkRateLimit("login", headers, 2, 50);
+
+        const exceeded = yield* Effect.exit(checkRateLimit("login", headers, 2, 50));
+        expect(exceeded).toStrictEqual(Exit.fail(new RateLimitError()));
+
+        yield* TestClock.adjust("75 millis");
+
+        yield* checkRateLimit("login", headers, 2, 50);
+      }),
     );
-
-    const run = (scope: string, headers: Record<string, string | undefined>, max: number, windowMs: number) =>
-      Effect.runPromise(
-        checkRateLimit(scope, headers, max, windowMs).pipe(
-          Effect.provide(rateLimiterLayer),
-        ),
-      );
-
-    const headers = { "x-real-ip": "203.0.113.7" };
-
-    await run("login", headers, 2, 50);
-    await run("login", headers, 2, 50);
-
-    await expect(run("login", headers, 2, 50)).rejects.toThrow("Too many requests");
-
-    await new Promise((resolve) => setTimeout(resolve, 75));
-
-    await expect(run("login", headers, 2, 50)).resolves.toBeUndefined();
   });
 });

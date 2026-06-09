@@ -24,8 +24,17 @@ generated/
 data/
 uploads/
 
+# tanstack tmp cache
+.tanstack/tmp/
+
+# mprocs log
+mprocs.log
+
 # worker ethereal email cache
 worker/.ethereal
+
+# google auth config
+google-auth-*
 
 # macOS-specific files
 .DS_Store
