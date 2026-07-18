@@ -14,12 +14,16 @@ export function LessonCard({
   onNotes,
   onComplete,
   onCancel,
+  onEdit,
+  onDelete,
 }: {
   lesson: Lesson;
   studentName: string;
   onNotes: () => void;
   onComplete: () => void;
   onCancel: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
 }) {
   const badge =
     statusBadgeClass[lesson.status] ??
@@ -40,6 +44,14 @@ export function LessonCard({
             >
               {label}
             </span>
+            {lesson.recurring_schedule_id ? (
+              <span
+                data-testid="recurring-lesson-badge"
+                className="rounded-full bg-violet-500/15 px-2 py-0.5 text-xs font-semibold text-violet-700 dark:text-violet-300"
+              >
+                Recurring
+              </span>
+            ) : null}
           </div>
           <p className="text-sm text-muted dark:text-muted-dark">
             {formatDateTime(lesson.scheduled_at)} · {lesson.duration_minutes}{" "}
@@ -64,6 +76,14 @@ export function LessonCard({
             <>
               <Button
                 variant="ghost"
+                onClick={onEdit}
+                className="px-3 py-1.5 text-xs text-blue-400 hover:text-blue-300"
+                data-testid="edit-lesson"
+              >
+                Edit
+              </Button>
+              <Button
+                variant="ghost"
                 onClick={onComplete}
                 className="px-3 py-1.5 text-xs text-green-400 hover:text-green-300"
                 data-testid="complete-lesson"
@@ -77,6 +97,14 @@ export function LessonCard({
                 data-testid="cancel-lesson"
               >
                 Cancel
+              </Button>
+              <Button
+                variant="ghost"
+                onClick={onDelete}
+                className="px-3 py-1.5 text-xs text-red-600 hover:text-red-500 dark:text-red-400 dark:hover:text-red-300"
+                data-testid="delete-lesson"
+              >
+                Delete
               </Button>
             </>
           ) : null}

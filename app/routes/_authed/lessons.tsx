@@ -1,19 +1,63 @@
 import { Effect } from "effect";
+import * as S from "effect/Schema";
 import { useState } from "react";
 import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { useMutation } from "@tanstack/react-query";
+import { createServerFn } from "@tanstack/react-start";
+import { getCookie } from "@tanstack/react-start/server";
 import { api } from "../../lib/api.js";
 import { getErrorMessage } from "../../lib/errors.js";
 import type { Lesson, User, LocationType } from "../../../shared/schemas.js";
-import { getLessonNote, getLessonsPageData } from "../../lib/routeData.js";
 import { Button } from "../../components/ui/Button.js";
 import { EmptyState } from "../../components/ui/EmptyState.js";
 import { ConfirmDialog } from "../../components/ui/ConfirmDialog.js";
 import { formatDateTime } from "../../components/lessons/helpers.js";
 import { NoteEditorModal } from "../../components/lessons/NoteEditorModal.js";
 import type { NoteEditorState, NoteFormValues } from "../../components/lessons/NoteEditorModal.js";
+import { EditLessonModal } from "../../components/lessons/EditLessonModal.js";
 import { NewLessonModal } from "../../components/lessons/NewLessonModal.js";
 import { LessonCard } from "../../components/lessons/LessonCard.js";
+import { serverRuntime } from "../../../server/runtime.js";
+import { AdminRouteService } from "../../../server/services/adminRouteService.js";
+import {
+  serializeLesson,
+  serializeLessonNote,
+  normalizeStudents,
+} from "../../../shared/responseMappers.js";
+import { requireAdminSession } from "../../lib/sessionGuards.server.js";
+import { toServerFunctionPayload } from "../../lib/serverFunctionPayload.js";
+
+const getLessonsPageData = createServerFn({ method: "GET" }).handler(() =>
+  serverRuntime.runPromise(
+    Effect.gen(function* () {
+      const session = yield* requireAdminSession(getCookie("session"));
+      const [lessons, students] = yield* Effect.all([
+        AdminRouteService.listLessons(session.session.id, { limit: 50, offset: 0 }),
+        AdminRouteService.listStudents(session.session.id),
+      ]);
+
+      return toServerFunctionPayload({
+        lessons: lessons.map(serializeLesson),
+        students: normalizeStudents(students),
+      }) as {
+        lessons: ReturnType<typeof serializeLesson>[];
+        students: User[];
+      };
+    }),
+  ),
+);
+
+const getLessonNote = createServerFn({ method: "GET" })
+  .validator(S.standardSchemaV1(S.Struct({ lessonId: S.String })))
+  .handler(({ data }) =>
+    serverRuntime.runPromise(
+      Effect.gen(function* () {
+        const session = yield* requireAdminSession(getCookie("session"));
+        const note = yield* AdminRouteService.getLessonNote(session.session.id, data.lessonId);
+        return serializeLessonNote(note);
+      }),
+    ),
+  );
 
 /* ---------------------------------------------------------------------------
  * Route
@@ -36,6 +80,8 @@ function LessonsPage() {
 
   const [formOpen, setFormOpen] = useState(false);
   const [cancelTarget, setCancelTarget] = useState<Lesson | null>(null);
+  const [editTarget, setEditTarget] = useState<Lesson | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Lesson | null>(null);
   const [noteState, setNoteState] = useState<NoteEditorState>(null);
   const [noteSaving, setNoteSaving] = useState(false);
 
@@ -67,9 +113,7 @@ function LessonsPage() {
 
   const completeLessonMutation = useMutation({
     mutationFn: (id: string) =>
-      Effect.runPromise(
-        api.admin.updateLesson({ path: { id }, payload: { status: "completed" } }),
-      ),
+      Effect.runPromise(api.admin.completeLesson({ path: { id } })),
     onSettled: () => {
       void router.invalidate();
     },
@@ -77,10 +121,31 @@ function LessonsPage() {
 
   const cancelLessonMutation = useMutation({
     mutationFn: (id: string) =>
+      Effect.runPromise(api.admin.cancelLesson({ path: { id }, payload: {} })),
+    onSettled: () => {
+      void router.invalidate();
+    },
+  });
+
+  const updateLessonMutation = useMutation({
+    mutationFn: (params: { id: string; payload: Record<string, unknown> }) =>
       Effect.runPromise(
-        api.admin.updateLesson({ path: { id }, payload: { status: "cancelled" } }),
+        api.admin.updateLesson({
+          path: { id: params.id },
+          payload: params.payload,
+        }),
       ),
     onSettled: () => {
+      setEditTarget(null);
+      void router.invalidate();
+    },
+  });
+
+  const deleteLessonMutation = useMutation({
+    mutationFn: (id: string) =>
+      Effect.runPromise(api.admin.deleteLesson({ path: { id } })),
+    onSettled: () => {
+      setDeleteTarget(null);
       void router.invalidate();
     },
   });
@@ -204,6 +269,8 @@ function LessonsPage() {
                 onNotes={() => openNoteEditor(lesson)}
                 onComplete={() => completeLessonMutation.mutate(lesson.id)}
                 onCancel={() => setCancelTarget(lesson)}
+                onEdit={() => setEditTarget(lesson)}
+                onDelete={() => setDeleteTarget(lesson)}
               />
             );
           })}
@@ -231,6 +298,39 @@ function LessonsPage() {
         variant="danger"
         onConfirm={confirmCancel}
         onCancel={() => setCancelTarget(null)}
+      />
+
+      {/* ---- Edit Lesson Modal ---- */}
+      {editTarget ? (
+        <EditLessonModal
+          open={editTarget !== null}
+          onClose={() => setEditTarget(null)}
+          lesson={editTarget}
+          studentOptions={studentOptions}
+          onSubmit={(value) =>
+            updateLessonMutation.mutate({
+              id: editTarget.id,
+              payload: value as Record<string, unknown>,
+            })
+          }
+        />
+      ) : null}
+
+      {/* ---- Delete Confirm Dialog ---- */}
+      <ConfirmDialog
+        open={deleteTarget !== null}
+        title="Delete Lesson"
+        message={
+          deleteTarget
+            ? `Permanently delete the lesson with ${studentMap.get(deleteTarget.student_id)?.name ?? "this student"} on ${formatDateTime(deleteTarget.scheduled_at)}? This cannot be undone.`
+            : ""
+        }
+        confirmLabel="Delete Forever"
+        variant="danger"
+        onConfirm={() => {
+          if (deleteTarget) deleteLessonMutation.mutate(deleteTarget.id);
+        }}
+        onCancel={() => setDeleteTarget(null)}
       />
 
       {/* ---- Lesson Notes Modal ---- */}

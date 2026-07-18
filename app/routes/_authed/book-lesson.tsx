@@ -1,23 +1,56 @@
 import { Effect } from "effect";
 import { useState } from "react";
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import {
-  useMutation,
-  useQueryClient,
-  useSuspenseQuery,
-} from "@tanstack/react-query";
+import { createFileRoute, useNavigate, useRouter } from "@tanstack/react-router";
+import { useMutation } from "@tanstack/react-query";
+import { createServerFn } from "@tanstack/react-start";
+import { getCookie } from "@tanstack/react-start/server";
+import { requireSession } from "../../lib/sessionGuards.server.js";
 import { api } from "../../lib/api.js";
-import { availableSlotsQuery, myLessonsQuery } from "../../lib/queries.js";
+import { useAuth } from "../../lib/hooks/useAuth.js";
 import type { LocationType } from "../../../shared/schemas.js";
+import { serverRuntime } from "../../../server/runtime.js";
+import { GoogleCalendarService } from "../../../server/services/googleCalendarService.js";
 import { Button } from "../../components/ui/Button.js";
 import { Select } from "../../components/ui/Select.js";
 import { EmptyState } from "../../components/ui/EmptyState.js";
 import { ConfirmDialog } from "../../components/ui/ConfirmDialog.js";
 import { Main } from "../../components/ui/Container.js";
+import { Calendar } from "../../components/ui/Calendar.js";
+import { Popover, DialogTrigger } from "react-aria-components";
+import { CalendarDate } from "@internationalized/date";
 
 export function getDefaultBookingDate() {
   return new Date().toISOString().slice(0, 10);
 }
+
+function calendarDateToMonday(calDate: CalendarDate): string {
+  const jsDate = new Date(calDate.year, calDate.month - 1, calDate.day);
+  const day = jsDate.getDay();
+  const diff = jsDate.getDate() - day + (day === 0 ? -6 : 1);
+  jsDate.setDate(diff);
+  return jsDate.toISOString().slice(0, 10);
+}
+
+const getBookLessonPageData = createServerFn({ method: "GET" })
+  .validator((data: unknown) => {
+    const obj = data as Record<string, unknown>;
+    return {
+      date: typeof obj.date === "string" ? obj.date : getDefaultBookingDate(),
+    };
+  })
+  .handler(async ({ data }) => {
+    const token = getCookie("session");
+    await serverRuntime.runPromise(
+      requireSession(token).pipe(Effect.catchAll(() => Effect.fail(new Error("Unauthorized")))),
+    );
+    return serverRuntime.runPromise(
+      GoogleCalendarService.getAvailableSlots({
+        date: data.date,
+        days: 7,
+        duration: 60,
+      }),
+    );
+  });
 
 export const Route = createFileRoute("/_authed/book-lesson")({
   validateSearch: (search: Record<string, unknown>) => ({
@@ -27,13 +60,10 @@ export const Route = createFileRoute("/_authed/book-lesson")({
         : getDefaultBookingDate(),
   }),
   loaderDeps: ({ search }) => ({ date: search.date }),
-  loader: ({ context, deps }) =>
-    context.queryClient.ensureQueryData(availableSlotsQuery(deps.date)),
+  loader: ({ deps }) => getBookLessonPageData({ data: deps }),
   head: () => ({ meta: [{ title: "Book a Lesson | DFG Portal" }] }),
   component: BookLessonPage,
-  pendingComponent: () => (
-    <Main className="text-muted dark:text-muted-dark">Loading...</Main>
-  ),
+  pendingComponent: () => <Main className="text-muted dark:text-muted-dark">Loading...</Main>,
 });
 
 /* ---------------------------------------------------------------------------
@@ -88,11 +118,14 @@ function formatConfirmDate(iso: string): string {
 
 function BookLessonPage() {
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
+  const router = useRouter();
   const search = Route.useSearch();
-  const { data: slots } = useSuspenseQuery(availableSlotsQuery(search.date));
-  const [selectedLocation, setSelectedLocation] =
-    useState<LocationType>("online");
+  const slots = Route.useLoaderData();
+  const { user, isParent, familyStudents, activeStudentId } = useAuth();
+  const [selectedLocation, setSelectedLocation] = useState<LocationType>("online");
+  const [selectedStudentId, setSelectedStudentId] = useState(
+    activeStudentId ?? (isParent ? familyStudents[0]?.id : user?.id) ?? "",
+  );
   const [bookingSlot, setBookingSlot] = useState<{
     start: string;
     end: string;
@@ -106,16 +139,12 @@ function BookLessonPage() {
             scheduled_at: slot.start,
             duration_minutes: 60,
             location_type: selectedLocation,
+            student_id: selectedStudentId || undefined,
           },
         }),
       ),
     onSuccess: () => {
-      void queryClient.invalidateQueries({
-        queryKey: availableSlotsQuery(search.date).queryKey,
-      });
-      void queryClient.invalidateQueries({
-        queryKey: myLessonsQuery.queryKey,
-      });
+      void router.invalidate();
       setBookingSlot(null);
       navigate({ to: "/my-lessons" });
     },
@@ -174,14 +203,68 @@ function BookLessonPage() {
         />
       </div>
 
+      {/* Student selector for parents */}
+      {isParent && familyStudents.length > 0 ? (
+        <div className="mb-6">
+          <Select
+            id="booking-student"
+            name="student_id"
+            label="Book for"
+            options={[
+              ...familyStudents.map((s) => ({
+                value: s.id,
+                label: s.name || s.username,
+              })),
+            ]}
+            value={selectedStudentId}
+            onChange={setSelectedStudentId}
+            data-testid="booking-student"
+          />
+        </div>
+      ) : null}
+
       {/* Week navigation */}
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-6 flex items-center justify-between gap-4">
         <Button variant="ghost" onClick={prevWeek} data-testid="prev-week">
           Previous Week
         </Button>
-        <span className="text-sm font-medium text-muted md:text-base dark:text-muted-dark">
-          Week of {formatWeekLabel(search.date)}
-        </span>
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-medium text-muted md:text-base dark:text-muted-dark">
+            Week of {formatWeekLabel(search.date)}
+          </span>
+          <DialogTrigger>
+            <Button variant="ghost" className="px-2 py-1" aria-label="Pick a date">
+              <svg
+                className="h-4 w-4"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                <line x1="16" y1="2" x2="16" y2="6" />
+                <line x1="8" y1="2" x2="8" y2="6" />
+                <line x1="3" y1="10" x2="21" y2="10" />
+              </svg>
+            </Button>
+            <Popover className="rounded-xl border border-overlay/10 bg-card p-4 shadow-2xl dark:border-overlay-dark/10 dark:bg-card-dark">
+              <Calendar
+                value={null}
+                onChange={(date) => {
+                  const monday = calendarDateToMonday(date);
+                  navigate({
+                    to: "/book-lesson",
+                    search: { date: monday },
+                    replace: true,
+                  });
+                  setBookingSlot(null);
+                }}
+              />
+            </Popover>
+          </DialogTrigger>
+        </div>
         <Button variant="ghost" onClick={nextWeek} data-testid="next-week">
           Next Week
         </Button>
