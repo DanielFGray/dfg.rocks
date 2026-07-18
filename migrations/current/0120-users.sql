@@ -32,10 +32,21 @@ alter table app_private.sessions
   add constraint sessions_user_id_fkey
   foreign key ("user_id") references app_public.users on delete cascade;
 
+-- Derives role by joining through sessions → users. Same security as current_user_id().
+-- Defined before policies so they can reference it.
+create function app_public.current_user_role() returns app_public.user_role as $$
+  select role from app_public.users where id = app_public.current_user_id();
+$$ language sql stable security definer set search_path to pg_catalog, public, pg_temp;
+comment on function app_public.current_user_role() is
+  E'Returns the current user role. Derived via session join, not a direct setting.';
+
 -- Users are publicly visible, like on GitHub, Twitter, Facebook, Trello, etc.
 create policy select_all on app_public.users for select using (true);
 -- You can only update yourself.
 create policy update_self on app_public.users for update using (id = app_public.current_user_id());
+-- Admin/teacher can update any user (role changes, etc.)
+create policy update_admin on app_public.users for update
+  using (app_public.current_user_role() in ('admin', 'teacher'));
 grant select on app_public.users to :DATABASE_VISITOR;
 -- NOTE: `insert` is not granted, because we'll handle that separately
 grant update(username, name, bio, avatar_url) on app_public.users to :DATABASE_VISITOR;
@@ -87,7 +98,9 @@ create table app_private.user_secrets (
   failed_reset_password_attempts int not null default 0,
   first_failed_reset_password_attempt timestamptz,
   delete_account_token text,
-  delete_account_token_generated timestamptz
+  delete_account_token_generated timestamptz,
+  child_password_reset_token text,
+  child_password_reset_token_generated timestamptz
 );
 alter table app_private.user_secrets enable row level security;
 comment on table app_private.user_secrets is
@@ -134,10 +147,3 @@ create trigger _500_gql_update
     'graphql:user:$1', -- the "topic" the event will be published to, as a template
     'id' -- If specified, `$1` above will be replaced with NEW.id or OLD.id from the trigger.
   );
-
--- Derives role by joining through sessions → users. Same security as current_user_id().
-create function app_public.current_user_role() returns app_public.user_role as $$
-  select role from app_public.users where id = app_public.current_user_id();
-$$ language sql stable security definer set search_path to pg_catalog, public, pg_temp;
-comment on function app_public.current_user_role() is
-  E'Returns the current user role. Derived via session join, not a direct setting.';

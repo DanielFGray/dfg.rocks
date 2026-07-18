@@ -3,12 +3,19 @@ import * as HttpApiBuilder from "@effect/platform/HttpApiBuilder";
 import * as HttpServerResponse from "@effect/platform/HttpServerResponse";
 import { Effect } from "effect";
 import { authGroup } from "../../shared/httpApi.js";
+import { adaptHttpApiErrors } from "../httpApiErrors.js";
 import { checkRateLimit } from "../services/rateLimiter.js";
 import { AuthService } from "../services/authService.js";
 import { AuthRouteService } from "../services/authRouteService.js";
 import { SessionService } from "../services/sessionService.js";
 import { UserService } from "../services/userService.js";
-import { csrfCheck, expireSessionCookie, setSessionCookie, responseForCause } from "./raw.js";
+import { csrfCheck, expireSessionCookie, setSessionCookie } from "./raw.js";
+
+const authErrorStatuses = [400, 401, 404, 409, 423, 429, 500] as const;
+
+function adaptAuthHttpApiErrors<A, E, R>(effect: Effect.Effect<A, E, R>) {
+  return adaptHttpApiErrors(effect, authErrorStatuses);
+}
 
 function cookieIdFromToken(token: string): string | undefined {
   return token.split(".")[0] || undefined;
@@ -22,7 +29,7 @@ export function makeAuthLayer() {
       .handle(
         "login",
         Effect.fnUntraced(function* ({ request, payload }) {
-          csrfCheck(request.headers);
+          yield* csrfCheck(request.headers);
           yield* checkRateLimit("login", request.headers, 10, 60000);
           const result = yield* AuthService.login(payload);
           const { email } = yield* UserService.primaryEmailForUser(result.user.user_id);
@@ -34,80 +41,90 @@ export function makeAuthLayer() {
             role: result.user.role,
             is_verified: result.user.is_verified ?? false,
           });
-          response = setSessionCookie(response, result.token, result.expiresAt);
+          response = yield* setSessionCookie(response, result.token, result.expiresAt);
           return response;
-        }, Effect.catchAllCause(responseForCause)),
+        }, adaptAuthHttpApiErrors),
       )
       .handle(
         "magicLink",
         Effect.fnUntraced(function* ({ request, payload }) {
-          csrfCheck(request.headers);
+          yield* csrfCheck(request.headers);
           yield* checkRateLimit("magic-link", request.headers, 5, 60000);
           yield* AuthRouteService.generateMagicLink(payload.email);
           return { success: true as const };
-        }, Effect.catchAllCause(responseForCause)),
+        }, adaptAuthHttpApiErrors),
       )
       .handle(
         "verifyMagicLink",
         Effect.fnUntraced(function* ({ request, payload }) {
-          csrfCheck(request.headers);
+          yield* csrfCheck(request.headers);
           const session = yield* AuthRouteService.consumeMagicLink(payload.token);
           let response = HttpServerResponse.unsafeJson(session.response);
-          response = setSessionCookie(response, session.token, session.expiresAt);
+          response = yield* setSessionCookie(response, session.token, session.expiresAt);
           return response;
-        }, Effect.catchAllCause(responseForCause)),
+        }, adaptAuthHttpApiErrors),
       )
       .handle(
         "logout",
         Effect.fnUntraced(function* ({ request }) {
-          csrfCheck(request.headers);
+          yield* csrfCheck(request.headers);
           const token = request.cookies.session;
           const cookieId = token ? cookieIdFromToken(token) : undefined;
           yield* AuthService.logout(cookieId);
           return expireSessionCookie(HttpServerResponse.unsafeJson({ success: true as const }));
-        }, Effect.catchAllCause(responseForCause)),
+        }, adaptAuthHttpApiErrors),
       )
       .handle(
         "forgotPassword",
         Effect.fnUntraced(function* ({ request, payload }) {
-          csrfCheck(request.headers);
+          yield* csrfCheck(request.headers);
           yield* AuthService.forgotPassword(payload);
           return { success: true as const };
-        }, Effect.catchAllCause(responseForCause)),
+        }, adaptAuthHttpApiErrors),
       )
       .handle(
         "resetPassword",
         Effect.fnUntraced(function* ({ request, payload }) {
-          csrfCheck(request.headers);
+          yield* csrfCheck(request.headers);
           const result = yield* AuthService.resetPassword(payload);
           let response = HttpServerResponse.unsafeJson({
             success: true as const,
           });
-          response = setSessionCookie(response, result.token, result.expiresAt);
+          response = yield* setSessionCookie(response, result.token, result.expiresAt);
           return response;
-        }, Effect.catchAllCause(responseForCause)),
+        }, adaptAuthHttpApiErrors),
       )
       .handle(
         "me",
         Effect.fnUntraced(function* ({ request }) {
           const session = yield* SessionService.validateSessionToken(request.cookies.session);
           if (!session) {
-            return { user: null };
+            return {
+              user: null,
+              isParent: false,
+              familyStudents: [],
+              activeStudentId: null,
+              activeStudent: null,
+            };
           }
-          return yield* AuthRouteService.me(session.user.id);
-        }, Effect.catchAllCause(responseForCause)),
+          return yield* AuthRouteService.me(
+            session.session.id,
+            session.user.id,
+            session.session.active_student_id,
+          );
+        }, adaptAuthHttpApiErrors),
       )
       .handle(
         "resendVerification",
         Effect.fnUntraced(function* ({ request }) {
-          csrfCheck(request.headers);
+          yield* csrfCheck(request.headers);
           const session = yield* SessionService.validateSessionToken(request.cookies.session);
           if (!session) {
             return { success: true as const };
           }
-          yield* AuthRouteService.resendVerification(session.user.id);
+          yield* AuthRouteService.resendVerification(session.session.id, session.user.id);
           return { success: true as const };
-        }, Effect.catchAllCause(responseForCause)),
+        }, adaptAuthHttpApiErrors),
       ),
   );
 }

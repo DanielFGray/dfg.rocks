@@ -1,4 +1,3 @@
-import { sql } from "kysely";
 import { Effect, Option } from "effect";
 import { PgRootDB } from "../db.js";
 import { catchPgErrors, HttpError } from "../pgErrors.js";

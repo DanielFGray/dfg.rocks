@@ -841,3 +841,14 @@ end;
 $$ language plpgsql strict volatile security definer set search_path to pg_catalog, public, pg_temp;
 comment on function app_public.resend_email_verification_code(email_id uuid) is
   E'If you didn''t receive the verification code for this email, we can resend it. We silently cap the rate of resends on the backend, so calls to this function may not result in another email being sent if it has been called recently.';
+
+create function app_private.set_password(
+  user_id uuid,
+  password text
+) returns void as $$
+begin
+  update app_private.user_secrets
+  set password_hash = crypt(password, gen_salt('bf'))
+  where user_secrets.user_id = set_password.user_id;
+end;
+$$ language plpgsql volatile security definer set search_path to pg_catalog, public, pg_temp;

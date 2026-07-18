@@ -91,6 +91,14 @@ create policy insert_own on app_public.user_emails for insert with check (user_i
 -- NOTE: we don't allow emails to be updated, instead add a new email and delete the old one.
 create policy delete_own on app_public.user_emails for delete using (user_id = app_public.current_user_id());
 
+-- Admin/teacher can manage any user's emails
+create policy select_admin on app_public.user_emails for select
+  using (app_public.current_user_role() in ('admin', 'teacher'));
+create policy insert_admin on app_public.user_emails for insert
+  with check (app_public.current_user_role() in ('admin', 'teacher'));
+create policy delete_admin on app_public.user_emails for delete
+  using (app_public.current_user_role() in ('admin', 'teacher'));
+
 grant select on app_public.user_emails to :DATABASE_VISITOR;
 grant insert (email) on app_public.user_emails to :DATABASE_VISITOR;
 -- No update

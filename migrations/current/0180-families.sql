@@ -7,8 +7,10 @@ drop function if exists app_public.families_current_user_is_owner(app_public.fam
 drop function if exists app_public.accept_invitation_to_family(uuid, text) cascade;
 drop function if exists app_public.get_family_for_invitation(uuid, text) cascade;
 drop function if exists app_public.family_for_invitation(uuid, text) cascade;
+drop function if exists app_private.create_qr_invite(uuid, text) cascade;
 drop function if exists app_private.create_qr_invite(uuid) cascade;
 drop function if exists app_public.invite_user_to_family(uuid, uuid) cascade;
+drop function if exists app_public.invite_to_family(uuid, citext, citext, text) cascade;
 drop function if exists app_public.invite_to_family(uuid, citext, citext) cascade;
 drop function if exists app_public.current_user_invited_family_ids() cascade;
 drop function if exists app_public.current_user_member_family_ids() cascade;
@@ -27,7 +29,7 @@ create table app_public.families (
 );
 alter table app_public.families enable row level security;
 
-grant select, update(name, slug) on app_public.families to :DATABASE_VISITOR;
+grant select, insert, delete, update(name, slug) on app_public.families to :DATABASE_VISITOR;
 
 --------------------------------------------------------------------------------
 
@@ -44,7 +46,7 @@ alter table app_public.family_memberships enable row level security;
 
 create index on app_public.family_memberships (user_id);
 
-grant select on app_public.family_memberships to :DATABASE_VISITOR;
+grant select, insert, delete on app_public.family_memberships to :DATABASE_VISITOR;
 
 --------------------------------------------------------------------------------
 
@@ -54,6 +56,7 @@ create table app_public.family_invitations (
   code text,
   user_id uuid references app_public.users on delete cascade,
   email citext,
+  invited_role text check (invited_role in ('parent', 'student')),
   expires_at timestamptz,
   check (user_id is not null or email is not null or code is not null),
   unique (family_id, user_id),
@@ -62,7 +65,18 @@ create table app_public.family_invitations (
 alter table app_public.family_invitations enable row level security;
 
 create index on app_public.family_invitations(user_id);
--- grant select on app_public.family_invitations to :DATABASE_VISITOR;
+
+-- Admin/teacher can see and manage all family invitations
+create policy select_admin on app_public.family_invitations for select
+  using (app_public.current_user_role() in ('admin', 'teacher'));
+create policy insert_admin on app_public.family_invitations for insert
+  with check (app_public.current_user_role() in ('admin', 'teacher'));
+create policy delete_admin on app_public.family_invitations for delete
+  using (app_public.current_user_role() in ('admin', 'teacher'));
+create policy update_admin on app_public.family_invitations for update
+  using (app_public.current_user_role() in ('admin', 'teacher'));
+
+grant select, insert, delete, update(invited_role) on app_public.family_invitations to :DATABASE_VISITOR;
 
 --------------------------------------------------------------------------------
 create function app_public.current_user_member_family_ids() returns setof uuid as $$
@@ -81,11 +95,21 @@ create policy select_member on app_public.families
 create policy select_invited on app_public.families
   for select using (id in (select app_public.current_user_invited_family_ids()));
 
+create policy insert_admin on app_public.families for insert
+  with check (app_public.current_user_role() in ('admin', 'teacher'));
+create policy delete_admin on app_public.families for delete
+  using (app_public.current_user_role() in ('admin', 'teacher'));
+
 create policy select_member on app_public.family_memberships
   for select using (family_id in (select app_public.current_user_member_family_ids()));
 
 create policy select_invited on app_public.family_memberships
   for select using (family_id in (select app_public.current_user_invited_family_ids()));
+
+create policy insert_admin on app_public.family_memberships for insert
+  with check (app_public.current_user_role() in ('admin', 'teacher'));
+create policy delete_admin on app_public.family_memberships for delete
+  using (app_public.current_user_role() in ('admin', 'teacher'));
 
 --------------------------------------------------------------------------------
 create function app_public.create_family(slug citext, name text) returns app_public.families as $$
@@ -99,7 +123,7 @@ begin
 end;
 $$ language plpgsql volatile security definer set search_path = pg_catalog, public, pg_temp;
 
-create function app_public.invite_to_family(family_id uuid, username citext = null, email citext = null)
+create function app_public.invite_to_family(family_id uuid, username citext = null, email citext = null, invited_role text = 'parent')
   returns void as $$
 declare
   v_code text;
@@ -144,20 +168,21 @@ begin
   end if;
 
   -- Invite the user
-  insert into app_public.family_invitations(family_id, user_id, email, code)
-    values (invite_to_family.family_id, v_user.id, email, v_code);
+  insert into app_public.family_invitations(family_id, user_id, email, code, invited_role)
+    values (invite_to_family.family_id, v_user.id, email, v_code, invite_to_family.invited_role);
 end;
 $$ language plpgsql volatile security definer set search_path = pg_catalog, public, pg_temp;
 
-create function app_private.create_qr_invite(family_id uuid)
+create function app_private.create_qr_invite(family_id uuid, invited_role text = 'parent')
   returns app_public.family_invitations as $$
 declare
   v_invitation app_public.family_invitations;
 begin
-  insert into app_public.family_invitations(family_id, code, expires_at)
+  insert into app_public.family_invitations(family_id, code, invited_role, expires_at)
     values (
       create_qr_invite.family_id,
       encode(gen_random_bytes(12), 'hex'),
+      create_qr_invite.invited_role,
       now() + interval '24 hours'
     )
     returning * into v_invitation;

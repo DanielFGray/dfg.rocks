@@ -6,7 +6,7 @@ import { normalizeLoginRedirect } from "../lib/loginRedirect.js";
 import { fetchAuthUser } from "../lib/queries.js";
 
 export const Route = createFileRoute("/_authed")({
-  ssr: false,
+  ssr: "data-only",
   beforeLoad: async ({ context, location }) => {
     const result = await fetchAuthUser(context.queryClient);
 
@@ -16,7 +16,6 @@ export const Route = createFileRoute("/_authed")({
         search: { redirect: normalizeLoginRedirect(location.href) },
       });
     }
-
   },
   component: AuthedLayout,
 });
