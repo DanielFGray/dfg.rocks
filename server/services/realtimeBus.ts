@@ -14,3 +14,4 @@ class RealtimeBus extends EventEmitter {
 }
 
 export const realtimeBus = new RealtimeBus();
+realtimeBus.setMaxListeners(0);

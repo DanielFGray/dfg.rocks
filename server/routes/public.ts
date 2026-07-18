@@ -1,8 +1,9 @@
 import * as HttpApi from "@effect/platform/HttpApi";
 import * as HttpApiBuilder from "@effect/platform/HttpApiBuilder";
 import * as HttpServerResponse from "@effect/platform/HttpServerResponse";
-import { Effect, Option } from "effect";
+import { Effect } from "effect";
 import { publicGroup } from "../../shared/httpApi.js";
+import { adaptHttpApiErrors } from "../httpApiErrors.js";
 import { HttpError } from "../pgErrors.js";
 import {
   createAuthorizationRequest,
@@ -22,7 +23,13 @@ import { GeolocationService } from "../services/geolocation.js";
 import { PublicRouteService } from "../services/publicRouteService.js";
 import { checkRateLimit, clientIdentifierFromHeaders } from "../services/rateLimiter.js";
 import { UserService } from "../services/userService.js";
-import { csrfCheck, setSessionCookie, responseForCause } from "./raw.js";
+import { csrfCheck, setSessionCookie } from "./raw.js";
+
+const publicErrorStatuses = [400, 403, 404, 409, 429, 500, 502, 503] as const;
+
+function adaptPublicHttpApiErrors<A, E, R>(effect: Effect.Effect<A, E, R>) {
+  return adaptHttpApiErrors(effect, publicErrorStatuses);
+}
 
 const fetchGoogleUserInfo = Effect.fnUntraced(function* (accessToken: string) {
   const response = yield* Effect.tryPromise({
@@ -53,14 +60,14 @@ const publicApi = HttpApi.make("dfg").add(publicGroup);
 export function makePublicLayer() {
   return HttpApiBuilder.group(publicApi, "public", (handlers) =>
     handlers
-      .handleRaw("health", () =>
-        Effect.succeed({ success: true as const }).pipe(Effect.catchAllCause(responseForCause)),
+      .handle("health", () =>
+        adaptPublicHttpApiErrors(Effect.succeed({ success: true as const })),
       )
 
       .handle(
         "contact",
         Effect.fnUntraced(function* ({ request, payload }) {
-          csrfCheck(request.headers);
+          yield* csrfCheck(request.headers);
           if (payload.website) {
             return yield* new HttpError(400, "Invalid submission");
           }
@@ -86,7 +93,7 @@ export function makePublicLayer() {
             yield* PublicRouteService.submitContact(payload);
           }
           return { success: true as const };
-        }, Effect.catchAllCause(responseForCause)),
+        }, adaptPublicHttpApiErrors),
       )
 
       .handleRaw(
@@ -118,7 +125,7 @@ export function makePublicLayer() {
               )
             : HttpServerResponse.expireCookie(response, redirectCookieName, cookieOptions);
           return yield* response;
-        }, Effect.catchAllCause(responseForCause)),
+        }, adaptPublicHttpApiErrors),
       )
 
       .handleRaw(
@@ -167,9 +174,9 @@ export function makePublicLayer() {
             redirectCookieName,
             getOAuthCookieOptions("google", rootUrl),
           );
-          response = setSessionCookie(response, session.token, session.expiresAt);
+          response = yield* setSessionCookie(response, session.token, session.expiresAt);
           return response;
-        }, Effect.catchAllCause(responseForCause)),
+        }, adaptPublicHttpApiErrors),
       )
 
       .handleRaw(
@@ -200,7 +207,7 @@ export function makePublicLayer() {
               )
             : HttpServerResponse.expireCookie(response, redirectCookieName, cookieOptions);
           return yield* response;
-        }, Effect.catchAllCause(responseForCause)),
+        }, adaptPublicHttpApiErrors),
       )
 
       .handle(
@@ -256,31 +263,31 @@ export function makePublicLayer() {
             redirectCookieName,
             getOAuthCookieOptions("apple", rootUrl),
           );
-          response = setSessionCookie(response, session.token, session.expiresAt);
+          response = yield* setSessionCookie(response, session.token, session.expiresAt);
           return response;
-        }, Effect.catchAllCause(responseForCause)),
+        }, adaptPublicHttpApiErrors),
       )
 
       .handle(
         "verifyEmail",
         Effect.fnUntraced(function* ({ request, payload }) {
-          csrfCheck(request.headers);
+          yield* csrfCheck(request.headers);
           yield* PublicRouteService.verifyEmail(payload.token);
           return { success: true as const };
-        }, Effect.catchAllCause(responseForCause)),
+        }, adaptPublicHttpApiErrors),
       )
 
-      .handleRaw(
+      .handle(
         "invitation",
         Effect.fnUntraced(function* ({ path, urlParams }) {
           return yield* PublicRouteService.invitation(path.id, urlParams.code ?? "");
-        }, Effect.catchAllCause(responseForCause)),
+        }, adaptPublicHttpApiErrors),
       )
 
       .handle(
         "acceptInvitation",
         Effect.fnUntraced(function* ({ request, path, payload }) {
-          csrfCheck(request.headers);
+          yield* csrfCheck(request.headers);
           yield* checkRateLimit("accept-invite", request.headers, 10, 60000);
           const session = yield* PublicRouteService.acceptInvitation({
             invitationId: path.id,
@@ -289,12 +296,11 @@ export function makePublicLayer() {
             password: payload.password,
             name: payload.name,
             email: payload.email,
-            role: payload.role,
           });
           let response = HttpServerResponse.unsafeJson(session.response);
-          response = setSessionCookie(response, session.token, session.expiresAt);
+          response = yield* setSessionCookie(response, session.token, session.expiresAt);
           return response;
-        }, Effect.catchAllCause(responseForCause)),
+        }, adaptPublicHttpApiErrors),
       ),
   );
 }

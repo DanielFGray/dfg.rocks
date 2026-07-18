@@ -16,7 +16,7 @@ create table app_public.contact_submissions (
 
 alter table app_public.contact_submissions enable row level security;
 create policy admin_all on app_public.contact_submissions
-  using (app_public.current_user_role() = 'admin');
+  using (app_public.current_user_role() in ('admin', 'teacher'));
 grant select, update on app_public.contact_submissions to :DATABASE_VISITOR;
 grant insert on app_public.contact_submissions to :DATABASE_AUTHENTICATOR;
 

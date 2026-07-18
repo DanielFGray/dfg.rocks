@@ -1,9 +1,9 @@
 import { createHash, randomUUID } from "node:crypto";
 import { createReadStream } from "node:fs";
-import fs from "node:fs/promises";
 import path from "node:path";
 import { Readable } from "node:stream";
-import { Effect } from "effect";
+import * as FileSystem from "@effect/platform/FileSystem";
+import { Effect, Layer } from "effect";
 import { env } from "../assertEnv.js";
 
 export type StorageBackend = "local";
@@ -13,115 +13,104 @@ export type StorageLocation = {
   storageKey: string;
 };
 
+interface StorageServiceShape {
+  readonly exists: (location: StorageLocation) => Effect.Effect<boolean, unknown>;
+  readonly put: (location: StorageLocation, bytes: Uint8Array) => Effect.Effect<void, unknown>;
+  readonly delete: (location: StorageLocation) => Effect.Effect<void, unknown>;
+  readonly open: (location: StorageLocation) => Effect.Effect<ReadableStream<Uint8Array>, unknown>;
+}
+
 const uploadsDir = env.UPLOADS_DIR || "./uploads";
 
 function resolveLocalPath(storageKey: string): string {
-  return path.isAbsolute(storageKey)
-    ? storageKey
-    : path.join(uploadsDir, storageKey);
+  return path.isAbsolute(storageKey) ? storageKey : path.join(uploadsDir, storageKey);
 }
 
 function getExtension(filename: string): string {
   return path.extname(filename).toLowerCase();
 }
 
-function assertLocal(location: StorageLocation): void {
-  if (location.storageBackend !== "local") {
-    throw new Error(`Unsupported storage backend: ${location.storageBackend}`);
-  }
+function localPath(location: StorageLocation): Effect.Effect<string, Error> {
+  return location.storageBackend === "local"
+    ? Effect.succeed(resolveLocalPath(location.storageKey))
+    : Effect.fail(new Error(`Unsupported storage backend: ${location.storageBackend}`));
 }
 
-const existsEffect = Effect.fnUntraced(function* (location: StorageLocation) {
-  assertLocal(location);
-  return yield* Effect.tryPromise({
-    try: () =>
-      fs
-        .access(resolveLocalPath(location.storageKey))
-        .then(() => true as const),
-    catch: (error) => error,
-  }).pipe(
-    Effect.catchAll((error) => {
-      const code = (error as { code?: string }).code;
-      return code === "ENOENT"
-        ? Effect.succeed(false as const)
-        : Effect.fail(error);
-    }),
-  );
+const makeLive = Effect.gen(function* () {
+  const fileSystem = yield* FileSystem.FileSystem;
+
+  return {
+    exists: (location) =>
+      localPath(location).pipe(Effect.flatMap((filePath) => fileSystem.exists(filePath))),
+    put: (location, bytes) =>
+      localPath(location).pipe(
+        Effect.flatMap((filePath) =>
+          fileSystem
+            .makeDirectory(path.dirname(filePath), { recursive: true })
+            .pipe(Effect.zipRight(fileSystem.writeFile(filePath, bytes))),
+        ),
+      ),
+    delete: (location) =>
+      localPath(location).pipe(Effect.flatMap((filePath) => fileSystem.remove(filePath))),
+    open: (location) =>
+      localPath(location).pipe(
+        Effect.flatMap((filePath) =>
+          Effect.try({
+            try: () =>
+              Readable.toWeb(createReadStream(filePath)) as unknown as ReadableStream<Uint8Array>,
+            catch: (error) => error,
+          }),
+        ),
+      ),
+  } satisfies StorageServiceShape;
 });
 
-const putEffect = Effect.fnUntraced(function* (
-  location: StorageLocation,
-  bytes: Uint8Array,
-) {
-  assertLocal(location);
-  const filePath = resolveLocalPath(location.storageKey);
-  yield* Effect.tryPromise({
-    // Creates the directory path (including uploadsDir) on first write
-    try: () => fs.mkdir(path.dirname(filePath), { recursive: true }),
-    catch: (error) => error,
-  });
-  yield* Effect.tryPromise({
-    try: () => fs.writeFile(filePath, bytes),
-    catch: (error) => error,
-  });
-});
+const makeTest = Effect.sync(() => {
+  const files = new Map<string, Uint8Array>();
 
-const deleteEffect = Effect.fnUntraced(function* (location: StorageLocation) {
-  assertLocal(location);
-  yield* Effect.tryPromise({
-    try: () => fs.unlink(resolveLocalPath(location.storageKey)),
-    catch: (error) => error,
-  });
-});
-
-const openEffect = Effect.fnUntraced(function* (location: StorageLocation) {
-  assertLocal(location);
-  return yield* Effect.try({
-    try: () => {
-      const nodeStream = createReadStream(
-        resolveLocalPath(location.storageKey),
-      );
-      return Readable.toWeb(
-        nodeStream,
-      ) as unknown as ReadableStream<Uint8Array>;
-    },
-    catch: (error) => error,
-  });
+  return {
+    exists: (location) => localPath(location).pipe(Effect.map((filePath) => files.has(filePath))),
+    put: (location, bytes) =>
+      localPath(location).pipe(
+        Effect.tap((filePath) => Effect.sync(() => files.set(filePath, bytes.slice()))),
+        Effect.asVoid,
+      ),
+    delete: (location) =>
+      localPath(location).pipe(
+        Effect.tap((filePath) => Effect.sync(() => files.delete(filePath))),
+        Effect.asVoid,
+      ),
+    open: (location) =>
+      localPath(location).pipe(
+        Effect.flatMap((filePath) => {
+          const bytes = files.get(filePath);
+          if (bytes === undefined) {
+            return Effect.fail(new Error(`Stored file not found: ${location.storageKey}`));
+          }
+          return Effect.succeed(
+            new ReadableStream<Uint8Array>({
+              start(controller) {
+                controller.enqueue(bytes.slice());
+                controller.close();
+              },
+            }),
+          );
+        }),
+      ),
+  } satisfies StorageServiceShape;
 });
 
 /**
- * Local filesystem storage service. Sync helpers (hashBytes, createMaterialLocation,
- * createTestingLocation) are plain functions; IO operations return Effects.
- * The top-level mkdir is removed — putEffect creates directories on first write.
+ * Replaceable storage I/O. Call operations through the generated static accessors
+ * and provide either Live or Test at the application boundary.
  */
-export class StorageService extends Effect.Service<StorageService>()(
-  "StorageService",
-  {
-    sync: () => ({
-      hashBytes: (bytes: Uint8Array) =>
-        createHash("sha256").update(bytes).digest("hex"),
-      createMaterialLocation: (contentHash: string): StorageLocation => ({
-        storageBackend: "local",
-        storageKey: path.posix.join(
-          "materials",
-          contentHash.slice(0, 2),
-          contentHash,
-        ),
-      }),
-      createTestingLocation: (filename: string): StorageLocation => ({
-        storageBackend: "local",
-        storageKey: path.posix.join(
-          "test",
-          `${randomUUID()}${getExtension(filename)}`,
-        ),
-      }),
-      exists: existsEffect,
-      put: putEffect,
-      delete: deleteEffect,
-      open: openEffect,
-    }),
-  },
-) {
+export class StorageService extends Effect.Tag("StorageService")<
+  StorageService,
+  StorageServiceShape
+>() {
+  static readonly Live = Layer.effect(this, makeLive);
+  static readonly Test = Layer.effect(this, makeTest);
+
   static hashBytes(bytes: Uint8Array): string {
     return createHash("sha256").update(bytes).digest("hex");
   }
@@ -129,26 +118,14 @@ export class StorageService extends Effect.Service<StorageService>()(
   static createMaterialLocation(contentHash: string): StorageLocation {
     return {
       storageBackend: "local",
-      storageKey: path.posix.join(
-        "materials",
-        contentHash.slice(0, 2),
-        contentHash,
-      ),
+      storageKey: path.posix.join("materials", contentHash.slice(0, 2), contentHash),
     };
   }
 
   static createTestingLocation(filename: string): StorageLocation {
     return {
       storageBackend: "local",
-      storageKey: path.posix.join(
-        "test",
-        `${randomUUID()}${getExtension(filename)}`,
-      ),
+      storageKey: path.posix.join("test", `${randomUUID()}${getExtension(filename)}`),
     };
   }
-
-  static readonly exists = existsEffect;
-  static readonly put = putEffect;
-  static readonly delete = deleteEffect;
-  static readonly open = openEffect;
 }

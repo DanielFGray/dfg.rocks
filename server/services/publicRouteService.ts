@@ -1,11 +1,17 @@
-import { Effect } from "effect";
+import { Effect, Schema as S } from "effect";
 import { sql } from "kysely";
+import { serializeTestimonial } from "../../shared/responseMappers.js";
+import { FamilyInviteRole, type Testimonial } from "../../shared/schemas.js";
 import { env } from "../assertEnv.js";
 import { PgRootDB } from "../db.js";
 import { catchPgErrors, HttpError } from "../pgErrors.js";
 import { EmailService } from "./emailService.js";
 import type { UserRow } from "./userService.js";
 import { UserService } from "./userService.js";
+
+export interface HomePageData {
+  readonly testimonials: readonly Testimonial[];
+}
 
 export class PublicRouteService extends Effect.Service<PublicRouteService>()("PublicRouteService", {
   accessors: true,
@@ -15,10 +21,35 @@ export class PublicRouteService extends Effect.Service<PublicRouteService>()("Pu
     const invitationById = (invitationId: string) =>
       db
         .selectFrom("app_public.family_invitations")
-        .select(["id", "family_id", "code", "email", "expires_at"])
+        .select(["id", "family_id", "code", "email", "invited_role", "expires_at"])
         .where("id", "=", invitationId);
 
     return {
+      homePageData: Effect.fn("homePageData")(function* () {
+        const rows = yield* db
+          .selectFrom("app_public.testimonials as t")
+          .innerJoin("app_public.users as u", "u.id", "t.user_id")
+          .select([
+            "t.id",
+            "t.user_id",
+            "t.body",
+            "t.is_approved",
+            "t.created_at",
+            "t.updated_at",
+            "u.username",
+            "u.name",
+            "u.role",
+          ])
+          .where("u.role", "!=", "admin")
+          .where("t.is_approved", "=", true)
+          .orderBy("t.updated_at", "desc")
+          .limit(6);
+
+        return {
+          testimonials: rows.map(serializeTestimonial),
+        } satisfies HomePageData;
+      }),
+
       submitContact: Effect.fn("submitContact")(function* (
         values: {
           name: string;
@@ -76,10 +107,9 @@ export class PublicRouteService extends Effect.Service<PublicRouteService>()("Pu
           .pipe(
             catchPgErrors,
             Effect.head,
-            Effect.catchTag(
-              "NoSuchElementException",
-              () => new HttpError(500, "Failed to link account"),
-            ),
+            Effect.catchTags({
+              NoSuchElementException: () => new HttpError(500, "Failed to link account"),
+            }),
           );
       }),
 
@@ -90,10 +120,10 @@ export class PublicRouteService extends Effect.Service<PublicRouteService>()("Pu
           .where("verification_token", "=", token)
           .pipe(
             Effect.head,
-            Effect.catchTag(
-              "NoSuchElementException",
-              () => new HttpError(400, "Invalid or expired verification link"),
-            ),
+            Effect.catchTags({
+              NoSuchElementException: () =>
+                new HttpError(400, "Invalid or expired verification link"),
+            }),
           );
         yield* db
           .selectNoFrom((eb) =>
@@ -110,10 +140,9 @@ export class PublicRouteService extends Effect.Service<PublicRouteService>()("Pu
       invitation: Effect.fn("invitation")(function* (invitationId: string, code: string) {
         const invitation = yield* invitationById(invitationId).pipe(
           Effect.head,
-          Effect.catchTag(
-            "NoSuchElementException",
-            () => new HttpError(404, "Invitation not found"),
-          ),
+          Effect.catchTags({
+            NoSuchElementException: () => new HttpError(404, "Invitation not found"),
+          }),
         );
         if (invitation.code && invitation.code !== code) {
           return yield* new HttpError(404, "Invalid invitation code");
@@ -128,14 +157,16 @@ export class PublicRouteService extends Effect.Service<PublicRouteService>()("Pu
           .where("id", "=", invitation.family_id)
           .pipe(
             Effect.head,
-            Effect.catchTag(
-              "NoSuchElementException",
-              () => new HttpError(404, "Invitation family not found"),
-            ),
+            Effect.catchTags({
+              NoSuchElementException: () => new HttpError(404, "Invitation family not found"),
+            }),
           );
         return {
           ...family,
           email: invitation.email ?? "",
+          invited_role: invitation.invited_role
+            ? S.decodeUnknownSync(FamilyInviteRole)(invitation.invited_role)
+            : undefined,
           created_at: family.created_at.toISOString(),
         };
       }),
@@ -147,55 +178,58 @@ export class PublicRouteService extends Effect.Service<PublicRouteService>()("Pu
         password: string;
         name: string;
         email?: string;
-        role?: string;
       }) {
-        const invitation = yield* invitationById(values.invitationId).pipe(
-          Effect.head,
-          Effect.catchTag(
-            "NoSuchElementException",
-            () => new HttpError(400, "Invitation not found"),
-          ),
+        return yield* db.withTransaction(
+          Effect.gen(function* () {
+            const invitation = yield* invitationById(values.invitationId)
+              .forUpdate()
+              .pipe(
+                Effect.head,
+                Effect.catchTags({
+                  NoSuchElementException: () => new HttpError(400, "Invitation not found"),
+                }),
+              );
+            if (invitation.code && invitation.code !== (values.code ?? "")) {
+              return yield* new HttpError(400, "Invalid invitation code");
+            }
+            if (invitation.expires_at && new Date(String(invitation.expires_at)) < new Date()) {
+              return yield* new HttpError(400, "This invitation has expired");
+            }
+            let user: UserRow = yield* db
+              .selectFrom(
+                sql<UserRow>`app_private.really_create_user(
+                ${values.username}::citext,
+                ${values.name},
+                null,
+                false,
+                ${invitation.email || values.email || null},
+                ${values.password}
+              )`.as("u"),
+              )
+              .selectAll()
+              .pipe(
+                catchPgErrors,
+                Effect.head,
+                Effect.catchTags({
+                  NoSuchElementException: () => new HttpError(500, "Failed to create user"),
+                }),
+              );
+            const invitedRole = invitation.invited_role;
+            if (invitedRole === "parent" || invitedRole === "student") {
+              yield* db
+                .updateTable("app_public.users")
+                .set({ role: invitedRole })
+                .where("id", "=", user.id);
+              user = { ...user, role: invitedRole };
+            }
+            yield* db
+              .insertInto("app_public.family_memberships")
+              .values({ family_id: invitation.family_id, user_id: user.id })
+              .onConflict((oc) => oc.doNothing());
+            yield* db.deleteFrom("app_public.family_invitations").where("id", "=", invitation.id);
+            return yield* UserService.sessionFromUser(user);
+          }),
         );
-        if (invitation.code && invitation.code !== (values.code ?? "")) {
-          return yield* new HttpError(400, "Invalid invitation code");
-        }
-        if (invitation.expires_at && new Date(String(invitation.expires_at)) < new Date()) {
-          return yield* new HttpError(400, "This invitation has expired");
-        }
-        let user: UserRow = yield* db
-          .selectFrom(
-            sql<UserRow>`app_private.really_create_user(
-            ${values.username}::citext,
-            ${values.name},
-            null,
-            false,
-            ${values.email || null},
-            ${values.password}
-          )`.as("u"),
-          )
-          .selectAll()
-          .pipe(
-            catchPgErrors,
-            Effect.head,
-            Effect.catchTag(
-              "NoSuchElementException",
-              () => new HttpError(500, "Failed to create user"),
-            ),
-          );
-        const invitedRole = values.role;
-        if (invitedRole === "parent" || invitedRole === "student") {
-          yield* db
-            .updateTable("app_public.users")
-            .set({ role: invitedRole })
-            .where("id", "=", user.id);
-          user = { ...user, role: invitedRole };
-        }
-        yield* db
-          .insertInto("app_public.family_memberships")
-          .values({ family_id: invitation.family_id, user_id: user.id })
-          .onConflict((oc) => oc.doNothing());
-        yield* db.deleteFrom("app_public.family_invitations").where("id", "=", invitation.id);
-        return yield* UserService.sessionFromUser(user);
       }),
     };
   }),

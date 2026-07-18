@@ -33,6 +33,7 @@ create policy select_approved_or_own on app_public.testimonials for select
   using (
     is_approved = true
     or user_id = app_public.current_user_id()
+    or app_public.current_user_role() in ('admin', 'teacher')
   );
 
 create policy insert_own_non_admin on app_public.testimonials for insert
@@ -57,9 +58,12 @@ create policy delete_own_non_admin on app_public.testimonials for delete
     and app_public.current_user_role() <> 'admin'
   );
 
+create policy update_admin_approval on app_public.testimonials for update
+  using (app_public.current_user_role() = 'admin');
+
 grant select on app_public.testimonials to :DATABASE_VISITOR;
 grant insert (body) on app_public.testimonials to :DATABASE_VISITOR;
-grant update (body) on app_public.testimonials to :DATABASE_VISITOR;
+grant update (body, is_approved) on app_public.testimonials to :DATABASE_VISITOR;
 grant delete on app_public.testimonials to :DATABASE_VISITOR;
 
 comment on table app_public.testimonials is 'Public testimonials written by non-admin users. One testimonial per user.';

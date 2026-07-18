@@ -17,7 +17,7 @@ alter table app_public.assignment_progress enable row level security;
 
 create policy select_own on app_public.assignment_progress for select
   using (
-    app_public.current_user_role() = 'admin'
+    app_public.current_user_role() in ('admin', 'teacher')
     or student_id = app_public.current_user_id()
     or student_id in (select app_public.current_user_family_member_ids())
   );
@@ -28,7 +28,14 @@ create policy insert_own on app_public.assignment_progress for insert
 create policy update_own on app_public.assignment_progress for update
   using (student_id = app_public.current_user_id());
 
-grant select, insert, update on app_public.assignment_progress to :DATABASE_VISITOR;
+create policy insert_admin on app_public.assignment_progress for insert
+  with check (app_public.current_user_role() in ('admin', 'teacher'));
+create policy update_admin on app_public.assignment_progress for update
+  using (app_public.current_user_role() in ('admin', 'teacher'));
+create policy delete_admin on app_public.assignment_progress for delete
+  using (app_public.current_user_role() in ('admin', 'teacher'));
+
+grant select, insert, update, delete on app_public.assignment_progress to :DATABASE_VISITOR;
 grant insert (student_id, material_id, listened_seconds, last_played_at, updated_at)
   on app_public.assignment_progress to :DATABASE_VISITOR;
 grant update (listened_seconds, last_played_at, updated_at)
@@ -58,13 +65,16 @@ alter table app_public.assignment_reviews enable row level security;
 
 create policy select_own on app_public.assignment_reviews for select
   using (
-    app_public.current_user_role() = 'admin'
+    app_public.current_user_role() in ('admin', 'teacher')
     or student_id = app_public.current_user_id()
     or student_id in (select app_public.current_user_family_member_ids())
   );
 
 create policy insert_own on app_public.assignment_reviews for insert
   with check (student_id = app_public.current_user_id());
+
+create policy insert_admin on app_public.assignment_reviews for insert
+  with check (app_public.current_user_role() in ('admin', 'teacher'));
 
 grant select, insert on app_public.assignment_reviews to :DATABASE_VISITOR;
 grant insert (student_id, material_id, stars, listened_seconds)

@@ -1,7 +1,6 @@
 import * as Cookies from "@effect/platform/Cookies";
 import * as HttpServerRequest from "@effect/platform/HttpServerRequest";
 import * as HttpServerResponse from "@effect/platform/HttpServerResponse";
-import * as Cause from "effect/Cause";
 import { Effect, Schema as S } from "effect";
 import { env } from "../assertEnv.js";
 import { HttpError } from "../pgErrors.js";
@@ -28,26 +27,22 @@ export function setSessionCookie(
   token: string,
   expiresAt: Date,
 ) {
-  return Effect.runSync(
-    HttpServerResponse.setCookie(response, "session", token, {
-      ...defaultCookieOptions(),
-      expires: expiresAt,
-    }),
-  );
+  return HttpServerResponse.setCookie(response, "session", token, {
+    ...defaultCookieOptions(),
+    expires: expiresAt,
+  });
 }
 
 export function expireSessionCookie(response: HttpServerResponse.HttpServerResponse) {
-  return HttpServerResponse.expireCookie(
-    response,
-    "session",
-    defaultCookieOptions(),
-  );
+  return HttpServerResponse.expireCookie(response, "session", defaultCookieOptions());
 }
 
-export function csrfCheck(headers: Record<string, string | undefined>): void {
-  if (!headers["x-requested-with"]) {
-    throw HttpError.make(400, "Missing CSRF header");
-  }
+export function csrfCheck(
+  headers: Record<string, string | undefined>,
+): Effect.Effect<void, HttpError> {
+  return headers["x-requested-with"]
+    ? Effect.void
+    : Effect.fail(HttpError.make(400, "Missing CSRF header"));
 }
 
 export function normalizeToResponse(value: unknown): HttpServerResponse.HttpServerResponse {
@@ -60,23 +55,4 @@ export function normalizeToResponse(value: unknown): HttpServerResponse.HttpServ
   return value === undefined
     ? HttpServerResponse.empty({ status: 204 })
     : HttpServerResponse.unsafeJson(value);
-}
-
-export function responseForCause(cause: Cause.Cause<unknown>) {
-  const error = Cause.squash(cause);
-  if (error instanceof HttpError) {
-    return Effect.succeed(
-      HttpServerResponse.unsafeJson(
-        { error: error.message },
-        { status: error.status },
-      ),
-    );
-  }
-  console.error(error);
-  return Effect.succeed(
-    HttpServerResponse.unsafeJson(
-      { error: "Internal Server Error" },
-      { status: 500 },
-    ),
-  );
 }

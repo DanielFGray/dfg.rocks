@@ -1,5 +1,24 @@
 import * as S from "effect/Schema";
 
+export type JsonValue =
+  | string
+  | number
+  | boolean
+  | null
+  | ReadonlyArray<JsonValue>
+  | { readonly [x: string]: JsonValue };
+
+export const JsonValue: S.Schema<JsonValue> = S.suspend(() =>
+  S.Union(
+    S.String,
+    S.Number,
+    S.Boolean,
+    S.Null,
+    S.Array(JsonValue),
+    S.Record({ key: S.String, value: JsonValue }),
+  ),
+);
+
 export const UserRole = S.Union(
   S.Literal("admin"),
   S.Literal("student"),
@@ -8,6 +27,10 @@ export const UserRole = S.Union(
 );
 
 export type UserRole = S.Schema.Type<typeof UserRole>;
+
+export const FamilyInviteRole = S.Union(S.Literal("parent"), S.Literal("student"));
+
+export type FamilyInviteRole = S.Schema.Type<typeof FamilyInviteRole>;
 
 export const User = S.Struct({
   id: S.String,
@@ -33,7 +56,7 @@ export const Module = S.Struct({
   id: S.String,
   course_id: S.String,
   title: S.String,
-  content: S.NullishOr(S.Unknown),
+  content: S.NullishOr(JsonValue),
   sort_order: S.Number,
 });
 
@@ -58,9 +81,7 @@ export const Material = S.Struct({
 
 export type Material = S.Schema.Type<typeof Material>;
 
-export type MaterialNotationTrack = NonNullable<
-  Material["notation_tracks"]
->[number];
+export type MaterialNotationTrack = NonNullable<Material["notation_tracks"]>[number];
 
 export const AssignedMaterial = S.Struct({
   id: S.String,
@@ -71,6 +92,7 @@ export const AssignedMaterial = S.Struct({
   is_global: S.Boolean,
   notation_tracks: S.NullishOr(S.Array(MaterialNotationTrack)),
   assigned_track_index: S.NullishOr(S.Number),
+  listened_seconds: S.optional(S.Number),
 });
 
 export type AssignedMaterial = S.Schema.Type<typeof AssignedMaterial>;
@@ -79,7 +101,7 @@ export const ModuleWithMaterials = S.Struct({
   id: S.String,
   course_id: S.String,
   title: S.String,
-  content: S.NullishOr(S.Unknown),
+  content: S.NullishOr(JsonValue),
   sort_order: S.Number,
   materials: S.Array(Material),
 });
@@ -135,19 +157,12 @@ export const Submission = S.Struct({
 
 export type Submission = S.Schema.Type<typeof Submission>;
 
-export const PracticeLogStatus = S.Union(
-  S.Literal("practiced"),
-  S.Literal("completed"),
-);
-
-export type PracticeLogStatus = S.Schema.Type<typeof PracticeLogStatus>;
-
 export const PracticeLog = S.Struct({
   id: S.String,
   student_id: S.String,
   material_id: S.String,
-  status: PracticeLogStatus,
-  notes: S.NullishOr(S.String),
+  rating: S.NullishOr(S.Number.pipe(S.between(1, 5))),
+  duration_minutes: S.NullishOr(S.Number),
   logged_at: S.String,
 });
 
@@ -210,6 +225,7 @@ export const FamilyInvitation = S.Struct({
   code: S.NullishOr(S.String),
   user_id: S.NullishOr(S.String),
   email: S.NullishOr(S.String),
+  invited_role: S.NullishOr(FamilyInviteRole),
 });
 
 export type FamilyInvitation = S.Schema.Type<typeof FamilyInvitation>;
@@ -240,6 +256,40 @@ export const DepositStatus = S.Union(
 
 export type DepositStatus = S.Schema.Type<typeof DepositStatus>;
 
+export const BillingModel = S.Union(S.Literal("single_booking"), S.Literal("monthly_prepaid"));
+
+export type BillingModel = S.Schema.Type<typeof BillingModel>;
+
+export const DepositPolicyOutcome = S.Union(
+  S.Literal("none"),
+  S.Literal("refunded"),
+  S.Literal("captured"),
+);
+
+export type DepositPolicyOutcome = S.Schema.Type<typeof DepositPolicyOutcome>;
+
+export const FeePolicyOutcome = S.Union(S.Literal("none"), S.Literal("recorded"));
+
+export type FeePolicyOutcome = S.Schema.Type<typeof FeePolicyOutcome>;
+
+export const LessonCancellationPolicy = S.Struct({
+  billing_model: BillingModel,
+  hours_until_lesson: S.Number,
+  is_late: S.Boolean,
+  deposit_outcome: DepositPolicyOutcome,
+  fee_outcome: FeePolicyOutcome,
+  amount_cents: S.Number,
+});
+
+export type LessonCancellationPolicy = S.Schema.Type<typeof LessonCancellationPolicy>;
+
+export const CancellationPolicySettings = S.Struct({
+  cancellation_window_hours: S.Number,
+  late_cancel_charge_percent: S.Number,
+});
+
+export type CancellationPolicySettings = S.Schema.Type<typeof CancellationPolicySettings>;
+
 export const Lesson = S.Struct({
   id: S.String,
   student_id: S.String,
@@ -251,6 +301,10 @@ export const Lesson = S.Struct({
   cancellation_reason: S.NullishOr(S.String),
   cancelled_at: S.NullishOr(S.String),
   completed_at: S.NullishOr(S.String),
+  cancellation_fee_cents: S.Number,
+  remainder_due_cents: S.Number,
+  recurring_schedule_id: S.NullishOr(S.String),
+  recurrence_date: S.NullishOr(S.String),
   created_at: S.String,
 });
 
@@ -262,11 +316,49 @@ export const StudentRate = S.Struct({
   rate_cents: S.Number,
   lesson_duration_minutes: S.Number,
   location_type: LocationType,
+  billing_model: BillingModel,
   notes: S.NullishOr(S.String),
   created_at: S.String,
 });
 
 export type StudentRate = S.Schema.Type<typeof StudentRate>;
+
+export const RecurringSchedule = S.Struct({
+  id: S.String,
+  student_rate_id: S.String,
+  student_id: S.String,
+  day_of_week: S.Number.pipe(S.int(), S.between(1, 7)),
+  local_start_time: S.String,
+  timezone: S.String,
+  starts_on: S.String,
+  ends_on: S.NullishOr(S.String),
+  active: S.Boolean,
+});
+
+export type RecurringSchedule = S.Schema.Type<typeof RecurringSchedule>;
+
+export const PaymentGenerationStatus = S.Union(
+  S.Literal("pending"),
+  S.Literal("processing"),
+  S.Literal("generated"),
+  S.Literal("failed"),
+);
+
+export type PaymentGenerationStatus = S.Schema.Type<typeof PaymentGenerationStatus>;
+
+export const MonthlyPayment = S.Struct({
+  id: S.String,
+  student_id: S.String,
+  billing_month: S.String,
+  amount_cents: S.Number,
+  paid_at: S.String,
+  notes: S.NullishOr(S.String),
+  generation_status: PaymentGenerationStatus,
+  generation_error: S.NullishOr(S.String),
+  generated_at: S.NullishOr(S.String),
+});
+
+export type MonthlyPayment = S.Schema.Type<typeof MonthlyPayment>;
 
 export const LessonDeposit = S.Struct({
   id: S.String,
@@ -362,9 +454,18 @@ export const InviteSearch = S.Struct({
 
 export type InviteSearch = S.Schema.Type<typeof InviteSearch>;
 
-export const ApiError = S.Struct({
-  error: S.String,
-  status: S.optional(S.Number),
+export const CreateChildPayload = S.Struct({
+  name: S.String.pipe(S.minLength(1), S.maxLength(200)),
 });
 
-export type ApiError = S.Schema.Type<typeof ApiError>;
+export type CreateChildPayload = S.Schema.Type<typeof CreateChildPayload>;
+
+export const CreateChildResponse = S.Struct({
+  id: S.String,
+  username: S.String,
+  name: S.String,
+  role: UserRole,
+  is_verified: S.Boolean,
+});
+
+export type CreateChildResponse = S.Schema.Type<typeof CreateChildResponse>;

@@ -1,9 +1,7 @@
 import net from "node:net";
-import { Effect, Duration, Layer } from "effect";
-import { RateLimiter } from "@effect/experimental";
+import { RateLimiter as ExperimentalRateLimiter } from "@effect/experimental";
+import { Context, Duration, Effect, Layer } from "effect";
 import { HttpError } from "../pgErrors.js";
-
-export const RateLimiterLayer = RateLimiter.layer.pipe(Layer.provide(RateLimiter.layerStoreMemory));
 
 export class RateLimitError extends HttpError {
   constructor() {
@@ -11,7 +9,53 @@ export class RateLimitError extends HttpError {
   }
 }
 
-let disabled = false;
+interface RateLimitServiceShape {
+  readonly consume: (
+    key: string,
+    max: number,
+    windowMs: number,
+  ) => Effect.Effect<void, RateLimitError | ExperimentalRateLimiter.RateLimitStoreError>;
+}
+
+export class RateLimitService extends Context.Tag("RateLimitService")<
+  RateLimitService,
+  RateLimitServiceShape
+>() {
+  static readonly Live = Layer.effect(
+    this,
+    Effect.gen(function* () {
+      const limiter = yield* ExperimentalRateLimiter.RateLimiter;
+
+      return {
+        consume: (key, max, windowMs) =>
+          limiter
+            .consume({
+              key,
+              algorithm: "fixed-window",
+              window: Duration.millis(windowMs),
+              limit: max,
+              onExceeded: "fail",
+            })
+            .pipe(
+              Effect.mapError((error) =>
+                error instanceof ExperimentalRateLimiter.RateLimitExceeded
+                  ? new RateLimitError()
+                  : error,
+              ),
+              Effect.asVoid,
+            ),
+      } satisfies RateLimitServiceShape;
+    }),
+  ).pipe(
+    Layer.provide(
+      ExperimentalRateLimiter.layer.pipe(Layer.provide(ExperimentalRateLimiter.layerStoreMemory)),
+    ),
+  );
+
+  static readonly Test = Layer.succeed(this, {
+    consume: () => Effect.void,
+  });
+}
 
 function normalizeIpCandidate(candidate?: string): string | undefined {
   if (!candidate) {
@@ -80,33 +124,11 @@ export const checkRateLimit = Effect.fnUntraced(function* (
   max: number,
   windowMs: number,
 ) {
-  if (disabled) return yield* Effect.void;
-
   const ip = clientIdentifierFromHeaders(headers);
   if (!ip) return yield* Effect.void;
 
-  const limiter = yield* RateLimiter.RateLimiter;
-
-  yield* limiter
-    .consume({
-      key: `dfg:rl:${scope}:${ip}`,
-      algorithm: "fixed-window",
-      window: Duration.millis(windowMs),
-      limit: max,
-      onExceeded: "fail",
-    })
-    .pipe(
-      Effect.mapError((error) =>
-        error instanceof RateLimiter.RateLimitExceeded ? new RateLimitError() : error,
-      ),
-    );
+  const rateLimiter = yield* RateLimitService;
+  yield* rateLimiter.consume(`dfg:rl:${scope}:${ip}`, max, windowMs);
 
   return yield* Effect.void;
 });
-
-/** Disable rate limiting (for tests). */
-export function disableRateLimiting(): void {
-  disabled = true;
-}
-
-export { RateLimiter };

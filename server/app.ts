@@ -1,11 +1,9 @@
 import * as HttpApi from "@effect/platform/HttpApi";
 import * as HttpApiBuilder from "@effect/platform/HttpApiBuilder";
-import * as Etag from "@effect/platform/Etag";
-import * as FetchHttpClient from "@effect/platform/FetchHttpClient";
-import * as NodeFileSystem from "@effect/platform-node/NodeFileSystem";
-import * as NodeHttpPlatform from "@effect/platform-node/NodeHttpPlatform";
-import * as NodePath from "@effect/platform-node/NodePath";
+import * as HttpApp from "@effect/platform/HttpApp";
+import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import type * as ManagedRuntime from "effect/ManagedRuntime";
 import { authGroup, publicGroup } from "../shared/httpApi.js";
 import { env } from "./assertEnv.js";
 import {
@@ -17,24 +15,10 @@ import {
 import { makeAuthLayer } from "./routes/auth.js";
 import { authenticatedGroup, makeAuthenticatedLayer } from "./routes/authenticated.js";
 import { makePublicLayer } from "./routes/public.js";
-import { PgAuthDB, PgRootDB } from "./db.js";
-import { AdminRouteService } from "./services/adminRouteService.js";
-import { AuthenticatedRouteService } from "./services/authenticatedRouteService.js";
-import { AuthRouteService } from "./services/authRouteService.js";
-import { AuthService } from "./services/authService.js";
-import { EmailService } from "./services/emailService.js";
-import { FileService } from "./services/fileService.js";
-import { GeolocationService } from "./services/geolocation.js";
-import { GoogleCalendarService } from "./services/googleCalendarService.js";
-import { NotationService } from "./services/notationService.js";
-import { PublicRouteService } from "./services/publicRouteService.js";
-import { RateLimiterLayer } from "./services/rateLimiter.js";
-import { SessionService } from "./services/sessionService.js";
-import { StorageService } from "./services/storageService.js";
-import { UserService } from "./services/userService.js";
 import { serverRuntime } from "./runtime.js";
+import { RateLimitService } from "./services/rateLimiter.js";
 
-type WebHandler = ReturnType<typeof HttpApiBuilder.toWebHandler>;
+type WebHandler = (request: Request) => Promise<Response>;
 
 let handlerPromise: Promise<WebHandler> | undefined;
 
@@ -53,52 +37,39 @@ async function createHandler() {
     makeAdminLayer(),
     makeMaterialDownloadLayer(),
   ] as const;
-  const infrastructureLayer = Layer.mergeAll(
-    NodeHttpPlatform.layer,
-    NodeFileSystem.layer,
-    NodePath.layer,
-    Etag.layer,
-    FetchHttpClient.layer,
-    PgRootDB.Live,
-    PgAuthDB.Live,
-    RateLimiterLayer,
-  );
-  const baseServicesLayer = Layer.mergeAll(
-    PublicRouteService.Default,
-    AdminRouteService.Default,
-    AuthenticatedRouteService.Default,
-    AuthRouteService.Default,
-    AuthService.Default,
-    EmailService.Default,
-    FileService.Default,
-    GeolocationService.Default,
-    GoogleCalendarService.Default,
-    NotationService.Default,
-    SessionService.Default,
-    StorageService.Default,
-    UserService.Default,
-  );
-  const defaultServicesLayer = baseServicesLayer.pipe(
-    Layer.provideMerge(infrastructureLayer),
-  );
-
   if (env.NODE_ENV !== "production") {
     const { makeTestingLayer, testingGroup } = await import("./routes/testing.js");
     const { TestingService } = await import("./services/testingService.js");
     const api = baseApi.add(testingGroup);
     const apiLayer = HttpApiBuilder.api(api).pipe(
       Layer.provide([...baseRouteLayers, makeTestingLayer()] as const),
-    );
-    const servicesLayer = Layer.mergeAll(baseServicesLayer, TestingService.Default).pipe(
-      Layer.provideMerge(infrastructureLayer),
+      Layer.provide(RateLimitService.Test),
+      Layer.provide(TestingService.Default),
     );
 
-    return HttpApiBuilder.toWebHandler(apiLayer.pipe(Layer.provideMerge(servicesLayer)));
+    return makeWebHandler(apiLayer);
   }
 
   const apiLayer = HttpApiBuilder.api(baseApi).pipe(Layer.provide(baseRouteLayers));
 
-  return HttpApiBuilder.toWebHandler(apiLayer.pipe(Layer.provideMerge(defaultServicesLayer)));
+  return makeWebHandler(apiLayer);
+}
+
+type ApplicationServices = ManagedRuntime.ManagedRuntime.Context<typeof serverRuntime>;
+
+async function makeWebHandler(
+  apiLayer: Layer.Layer<HttpApi.Api, never, ApplicationServices>,
+) {
+  const handlerLayer = Layer.mergeAll(
+    apiLayer,
+    HttpApiBuilder.Router.Live,
+    HttpApiBuilder.Middleware.layer,
+  );
+  const httpApp = await serverRuntime.runPromise(
+    HttpApiBuilder.httpApp.pipe(Effect.provide(handlerLayer)),
+  );
+  const runtime = await serverRuntime.runtime();
+  return HttpApp.toWebHandlerRuntime(runtime)(httpApp);
 }
 
 async function getWebHandler() {
@@ -110,17 +81,11 @@ async function getWebHandler() {
 }
 
 export async function handleApiRequest(request: Request): Promise<Response> {
-  const { handler } = await getWebHandler();
+  const handler = await getWebHandler();
   return handler(request);
 }
 
 export async function disposeApiHandler(): Promise<void> {
-  if (!handlerPromise) {
-    return;
-  }
-
-  const { dispose } = await handlerPromise;
-  await serverRuntime.dispose();
-  await dispose();
   handlerPromise = undefined;
+  await serverRuntime.dispose();
 }

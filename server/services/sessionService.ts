@@ -61,9 +61,24 @@ export type SessionInfo = {
   id: string;
   cookie_id: string;
   user_id: string;
+  active_student_id: string | null;
 };
 
 export type SessionResult = { user: SessionUser; session: SessionInfo } | null;
+
+export type EffectiveStudentContext = {
+  studentId: string;
+  isActing: boolean;
+};
+
+export function resolveEffectiveStudent(auth: NonNullable<SessionResult>): EffectiveStudentContext {
+  const isParent = auth.user.role === "parent";
+  const activeStudentId = auth.session.active_student_id;
+  if (isParent && activeStudentId) {
+    return { studentId: activeStudentId, isActing: true };
+  }
+  return { studentId: auth.user.id, isActing: false };
+}
 
 class SessionUserNotFoundError extends S.TaggedError<SessionUserNotFoundError>()(
   "SessionUserNotFoundError",
@@ -91,6 +106,7 @@ type LiveSessionRecord = {
   name: string | null;
   role: UserRole;
   expires_at: Date;
+  active_student_id: string | null;
 };
 
 const loadLiveSessionByCookieIdEffect = Effect.fnUntraced(function* (cookieId: string) {
@@ -103,6 +119,7 @@ const loadLiveSessionByCookieIdEffect = Effect.fnUntraced(function* (cookieId: s
       "s.cookie_id",
       "s.user_id",
       "s.expires_at",
+      "s.active_student_id",
       "u.username",
       "u.name",
       "u.role",
@@ -199,8 +216,19 @@ export class SessionService extends Effect.Service<SessionService>()("SessionSer
             id: liveSession.session_id,
             cookie_id: liveSession.cookie_id,
             user_id: liveSession.user_id,
+            active_student_id: liveSession.active_student_id,
           },
         } satisfies Exclude<SessionResult, null>;
+      }),
+
+      updateActiveStudent: Effect.fnUntraced(function* (
+        sessionId: string,
+        studentId: string | null,
+      ) {
+        yield* db
+          .updateTable("app_private.sessions")
+          .set({ active_student_id: studentId })
+          .where("id", "=", sessionId);
       }),
 
       deleteSession: Effect.fnUntraced(function* (cookieId: string) {

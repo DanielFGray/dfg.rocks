@@ -6,7 +6,7 @@ import {
   generateCodeVerifier,
   generateState,
 } from "arctic";
-import { Effect } from "effect";
+import { Duration, Effect } from "effect";
 import * as Redacted from "effect/Redacted";
 import * as S from "effect/Schema";
 import { createRemoteJWKSet, jwtVerify } from "jose";
@@ -217,7 +217,7 @@ export function getOAuthCookieOptions(provider: OAuthProvider, rootUrl: string) 
     sameSite: provider === "apple" ? ("none" as const) : ("lax" as const),
     secure: provider === "apple" ? secureCookies : standardSecureCookies,
     path: "/api/oauth",
-    maxAge: 60 * 10,
+    maxAge: Duration.minutes(10),
   };
 }
 

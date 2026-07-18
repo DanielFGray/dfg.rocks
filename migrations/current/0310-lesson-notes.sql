@@ -21,14 +21,14 @@ create trigger _timestamps
   for each row execute function app_private.tg__timestamps();
 
 -- Grants: read-only for visitors (teacher manages via PgRootDB)
-grant select on app_public.lesson_notes to :DATABASE_VISITOR;
+grant select, insert, update, delete on app_public.lesson_notes to :DATABASE_VISITOR;
 
 -- RLS
 alter table app_public.lesson_notes enable row level security;
 
 create policy select_own on app_public.lesson_notes for select
   using (
-    app_public.current_user_role() = 'admin'
+    app_public.current_user_role() in ('admin', 'teacher')
     or (
       draft = false
       and lesson_id in (
@@ -38,6 +38,13 @@ create policy select_own on app_public.lesson_notes for select
       )
     )
   );
+
+create policy insert_admin on app_public.lesson_notes for insert
+  with check (app_public.current_user_role() in ('admin', 'teacher'));
+create policy update_admin on app_public.lesson_notes for update
+  using (app_public.current_user_role() in ('admin', 'teacher'));
+create policy delete_admin on app_public.lesson_notes for delete
+  using (app_public.current_user_role() in ('admin', 'teacher'));
 
 -- Comments
 comment on table app_public.lesson_notes is 'Post-lesson notes from teacher to student. One per lesson, starts as draft until published.';

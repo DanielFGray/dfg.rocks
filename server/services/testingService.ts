@@ -4,7 +4,10 @@ import { Effect, Option } from "effect";
 import { sql } from "kysely";
 import type { LessonStatus, LocationType } from "../../shared/schemas.js";
 import { HttpError } from "../pgErrors.js";
-import { extractNotationTracksFromBytes, NotationService } from "./notationService.js";
+import {
+  extractNotationTracksFromBytes,
+  resolveAssignedTrackIndex,
+} from "./notationService.js";
 import { SessionService } from "./sessionService.js";
 import { StorageService } from "./storageService.js";
 import { PgRootDB } from "../db.js";
@@ -46,7 +49,7 @@ export class TestingService extends Effect.Service<TestingService>()("TestingSer
       }: {
         username?: string;
         password?: string;
-        role?: "admin" | "teacher" | "student";
+        role?: "admin" | "teacher" | "student" | "parent";
         name?: string;
         email?: string;
       }) {
@@ -59,22 +62,34 @@ export class TestingService extends Effect.Service<TestingService>()("TestingSer
         );
 
         if (!userId) {
-          const created = yield* db
-            .selectFrom(
-              sql<{ id: string }>`
-              app_private.really_create_user(
-                ${username}::citext,
-                ${name},
-                null,
-                true,
-                ${email}::citext,
-                ${password}
+          const existingByEmail = yield* db
+            .selectFrom("app_public.user_emails")
+            .innerJoin("app_public.users", "app_public.users.id", "app_public.user_emails.user_id")
+            .select("app_public.users.id")
+            .where("app_public.user_emails.email", "=", email)
+            .where("app_public.user_emails.is_verified", "=", true)
+            .pipe(Effect.head, Effect.option);
+
+          if (Option.isSome(existingByEmail)) {
+            userId = existingByEmail.value.id;
+          } else {
+            const created = yield* db
+              .selectFrom(
+                sql<{ id: string }>`
+                app_private.really_create_user(
+                  ${username}::citext,
+                  ${name},
+                  null,
+                  true,
+                  ${email}::citext,
+                  ${password}
+                )
+              `.as("u"),
               )
-            `.as("u"),
-            )
-            .select("id")
-            .pipe(Effect.head);
-          userId = created.id;
+              .select("id")
+              .pipe(Effect.head);
+            userId = created.id;
+          }
         }
 
         if (role !== "student") {
@@ -118,29 +133,46 @@ export class TestingService extends Effect.Service<TestingService>()("TestingSer
       }),
 
       clear: Effect.fnUntraced(function* () {
+        const testUsers = yield* db
+          .selectFrom("app_public.users")
+          .select("id")
+          .where("username", "like", "test_%");
+        const testUserIds = testUsers.map((u) => u.id);
+
         yield* db.deleteFrom("app_public.families").where("slug", "like", "test-%");
-        yield* db.deleteFrom("app_public.users").where("username", "like", "test_%");
-        yield* db.deleteFrom("app_public.courses").where("title", "like", "Test:%");
 
         const testMaterialFiles = yield* db
           .selectFrom("app_public.materials")
-          .select(["storage_backend", "storage_key"])
-          .where((eb) =>
-            eb.or([
+          .select(["id", "storage_backend", "storage_key"])
+          .where((eb) => {
+            const conditions = [
               eb("storage_key", "like", "test/%"),
               eb("storage_key", "like", "/test/%"),
               eb("storage_key", "like", "/tmp/test-%"),
-            ]),
+              eb("title", "like", "Test:%"),
+              eb("original_filename", "in", [
+                "Scale-Patterns.pdf",
+                "Moonlight-Sonata.pdf",
+                "Fresh-Upload.pdf",
+              ]),
+              eb("title", "in", ["Scale Patterns", "Moonlight Sonata", "Fresh Upload"]),
+            ];
+            if (testUserIds.length > 0) {
+              conditions.push(eb("uploaded_by", "in", testUserIds));
+            }
+            return eb.or(conditions);
+          });
+
+        if (testMaterialFiles.length > 0) {
+          yield* db.deleteFrom("app_public.materials").where(
+            "id",
+            "in",
+            testMaterialFiles.map((m) => m.id),
           );
-        yield* db
-          .deleteFrom("app_public.materials")
-          .where((eb) =>
-            eb.or([
-              eb("storage_key", "like", "test/%"),
-              eb("storage_key", "like", "/test/%"),
-              eb("storage_key", "like", "/tmp/test-%"),
-            ]),
-          );
+        }
+
+        yield* db.deleteFrom("app_public.users").where("username", "like", "test_%");
+        yield* db.deleteFrom("app_public.courses").where("title", "like", "Test:%");
 
         yield* Effect.forEach(
           testMaterialFiles.filter((material) => material.storage_backend === "local"),
@@ -245,7 +277,8 @@ export class TestingService extends Effect.Service<TestingService>()("TestingSer
           .select("id")
           .where("title", "=", values.materialTitle)
           .pipe(Effect.head);
-        const assignedTrackIndex = yield* NotationService.resolveAssignedTrackIndex(
+        const assignedTrackIndex = yield* resolveAssignedTrackIndex(
+          null,
           material.id,
           values.assignedTrackIndex ? Number(values.assignedTrackIndex) : undefined,
         );
@@ -328,6 +361,7 @@ export class TestingService extends Effect.Service<TestingService>()("TestingSer
       seedInvitation: Effect.fnUntraced(function* (values: {
         email: string;
         familySlug?: string | null;
+        invitedRole?: string;
         expiresAt?: Date;
       }) {
         let familyId: string;
@@ -347,10 +381,14 @@ export class TestingService extends Effect.Service<TestingService>()("TestingSer
           const admin = yield* db
             .selectFrom("app_public.users")
             .select("id")
-            .where("role", "=", "admin")
+            .where((eb) => eb.or([eb("username", "=", "test_admin"), eb("role", "=", "admin")]))
+            .orderBy(sql`case when username = 'test_admin' then 0 else 1 end`)
+            .limit(1)
             .pipe(
               Effect.head,
-              Effect.orElseFail(() => new HttpError(500, "No admin user found")),
+              Effect.catchTags({
+                NoSuchElementException: () => new HttpError(500, "No admin user found"),
+              }),
             );
 
           yield* queries.addFamilyMembership({
@@ -368,6 +406,7 @@ export class TestingService extends Effect.Service<TestingService>()("TestingSer
             family_id: familyId,
             email: values.email,
             code,
+            invited_role: values.invitedRole ?? "parent",
             ...(values.expiresAt ? { expires_at: values.expiresAt } : {}),
           })
           .returning(["id"])
@@ -397,6 +436,16 @@ export class TestingService extends Effect.Service<TestingService>()("TestingSer
         status: LessonStatus;
       }) {
         const student = yield* queries.userIdByUsername(values.username).pipe(Effect.head);
+        yield* db
+          .insertInto("app_public.student_rates")
+          .values({
+            student_id: student.id,
+            rate_cents: values.durationMinutes === 30 ? 5000 : 10000,
+            lesson_duration_minutes: values.durationMinutes === 30 ? 30 : 60,
+            location_type: values.locationType,
+            billing_model: "single_booking",
+          })
+          .onConflict((conflict) => conflict.columns(["student_id", "location_type"]).doNothing());
         yield* db.insertInto("app_public.lessons").values({
           student_id: student.id,
           scheduled_at: new Date(

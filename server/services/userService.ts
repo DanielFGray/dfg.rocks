@@ -47,7 +47,13 @@ export class UserService extends Effect.Service<UserService>()("UserService", {
 
       sessionFromUser: Effect.fn("sessionFromUser")(function* (user: UserRow) {
         const { token, expiresAt } = yield* SessionService.createSession(user.id);
-        const { email } = yield* primaryEmailForUser(user.id).pipe(Effect.head);
+        const emailResult = yield* primaryEmailForUser(user.id).pipe(
+          Effect.head,
+          Effect.catchTags({
+            NoSuchElementException: () => Effect.succeed({ email: "" }),
+          }),
+        );
+        const email = emailResult.email;
 
         return {
           response: {

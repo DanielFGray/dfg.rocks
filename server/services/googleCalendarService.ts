@@ -5,7 +5,7 @@ import {
   generateCodeVerifier,
   generateState,
 } from "arctic";
-import { Effect, Option } from "effect";
+import { Duration, Effect, Option } from "effect";
 import * as Redacted from "effect/Redacted";
 import * as S from "effect/Schema";
 import * as HttpClient from "@effect/platform/HttpClient";
@@ -14,6 +14,7 @@ import { PgRootDB } from "../db.js";
 import { env } from "../assertEnv.js";
 import { HttpError } from "../pgErrors.js";
 import { WorkingHours } from "../../shared/schemas.js";
+import { decodeWorkingHoursValue, defaultWorkingHours } from "../../shared/workingHours.js";
 
 // Types
 interface GcalEventTime {
@@ -65,29 +66,6 @@ const RefreshTokenResponseSchema = S.Struct({
   access_token: S.String,
   expires_in: S.Number,
 });
-
-const defaultWorkingHours: WorkingHours = {
-  0: null,
-  1: { start: "09:00", end: "20:00" },
-  2: { start: "09:00", end: "20:00" },
-  3: { start: "09:00", end: "20:00" },
-  4: { start: "09:00", end: "20:00" },
-  5: { start: "09:00", end: "20:00" },
-  6: { start: "10:00", end: "14:00" },
-};
-
-function decodeWorkingHours(value: unknown): WorkingHours {
-  const decoded = S.decodeUnknownSync(WorkingHours)(value);
-  return {
-    0: decoded[0] ?? null,
-    1: decoded[1] ?? null,
-    2: decoded[2] ?? null,
-    3: decoded[3] ?? null,
-    4: decoded[4] ?? null,
-    5: decoded[5] ?? null,
-    6: decoded[6] ?? null,
-  };
-}
 
 // Constants
 const GCAL_BASE = "https://www.googleapis.com/calendar/v3";
@@ -211,9 +189,9 @@ export class GoogleCalendarService extends Effect.Service<GoogleCalendarService>
           Effect.catchAll(() => HttpError.make(502, "Token refresh response was invalid")),
         );
         const payload = yield* S.decodeUnknown(RefreshTokenResponseSchema)(json).pipe(
-          Effect.catchTag("ParseError", () =>
-            HttpError.make(502, "Token refresh response was invalid"),
-          ),
+          Effect.catchTags({
+            ParseError: () => HttpError.make(502, "Token refresh response was invalid"),
+          }),
         );
         yield* setSettingEffect("gcal_access_token", payload.access_token);
         yield* setSettingEffect(
@@ -350,9 +328,9 @@ export class GoogleCalendarService extends Effect.Service<GoogleCalendarService>
             ),
           );
           const decoded = yield* S.decodeUnknown(GcalEventListSchema)(json).pipe(
-            Effect.catchTag("ParseError", () =>
-              HttpError.make(502, "Google Calendar events response was invalid"),
-            ),
+            Effect.catchTags({
+              ParseError: () => HttpError.make(502, "Google Calendar events response was invalid"),
+            }),
           );
           if (decoded.items) all.push(...decoded.items);
           if (decoded.nextPageToken) {
@@ -437,11 +415,12 @@ export class GoogleCalendarService extends Effect.Service<GoogleCalendarService>
               HttpError.make(502, "Google Calendar event response was invalid"),
             ),
           );
-          return (
-            json as {
-              id: string;
-            }
-          ).id;
+          const event = yield* S.decodeUnknown(GcalEventSchema)(json).pipe(
+            Effect.catchTags({
+              ParseError: () => HttpError.make(502, "Google Calendar event response was invalid"),
+            }),
+          );
+          return event.id;
         }),
 
         deleteEvent: Effect.fnUntraced(function* (eventId: string) {
@@ -477,7 +456,7 @@ export class GoogleCalendarService extends Effect.Service<GoogleCalendarService>
           duration: number;
         }) {
           const wh = yield* getSettingEffect("working_hours");
-          const workingHours = wh ? decodeWorkingHours(wh) : defaultWorkingHours;
+          const workingHours = decodeWorkingHoursValue(wh, defaultWorkingHours);
           const startDate = new Date(`${params.date}T00:00:00`);
           const endDate = new Date(startDate);
           endDate.setDate(endDate.getDate() + params.days);
@@ -493,7 +472,7 @@ export class GoogleCalendarService extends Effect.Service<GoogleCalendarService>
 
         getWorkingHours: Effect.fnUntraced(function* () {
           const v = yield* getSettingEffect("working_hours");
-          return v ? decodeWorkingHours(v) : defaultWorkingHours;
+          return decodeWorkingHoursValue(v, defaultWorkingHours);
         }),
 
         setWorkingHours: Effect.fnUntraced(function* (hours: WorkingHours) {
@@ -527,9 +506,10 @@ export class GoogleCalendarService extends Effect.Service<GoogleCalendarService>
                 ),
               );
               const decoded = yield* S.decodeUnknown(GcalEventListSchema)(json).pipe(
-                Effect.catchTag("ParseError", () =>
-                  HttpError.make(502, "Google Calendar sync response was invalid"),
-                ),
+                Effect.catchTags({
+                  ParseError: () =>
+                    HttpError.make(502, "Google Calendar sync response was invalid"),
+                }),
               );
               const nextToken = decoded.nextSyncToken ?? "";
               yield* setSettingEffect("gcal_sync_token", nextToken);
@@ -562,9 +542,9 @@ export class GoogleCalendarService extends Effect.Service<GoogleCalendarService>
               ),
             );
             const decoded = yield* S.decodeUnknown(GcalEventListSchema)(json).pipe(
-              Effect.catchTag("ParseError", () =>
-                HttpError.make(502, "Google Calendar sync response was invalid"),
-              ),
+              Effect.catchTags({
+                ParseError: () => HttpError.make(502, "Google Calendar sync response was invalid"),
+              }),
             );
             const nextToken = decoded.nextSyncToken ?? "";
             yield* setSettingEffect("gcal_sync_token", nextToken);
@@ -619,7 +599,7 @@ export class GoogleCalendarService extends Effect.Service<GoogleCalendarService>
     const root = new URL(rootUrl);
     return {
       httpOnly: true,
-      maxAge: 60 * 10,
+      maxAge: Duration.minutes(10),
       path: "/api/admin/gcal",
       sameSite: "lax" as const,
       secure: env.NODE_ENV === "production" || root.protocol === "https:",

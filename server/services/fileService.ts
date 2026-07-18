@@ -3,7 +3,7 @@ import * as FileSystem from "@effect/platform/FileSystem";
 import * as Multipart from "@effect/platform/Multipart";
 import { sql } from "kysely";
 import { Effect, Option } from "effect";
-import { PgRootDB } from "../db.js";
+import { withAuthContext } from "../db.js";
 import { HttpError } from "../pgErrors.js";
 import { extractNotationTracksFromBytes } from "./notationService.js";
 import { StorageService, type StorageLocation } from "./storageService.js";
@@ -19,16 +19,6 @@ function isFileAllowed(mimeType: string, filename: string): boolean {
     typeof pattern === "string" ? mimeType === pattern : pattern.test(mimeType),
   );
 }
-
-const MATERIAL_RESPONSE_COLUMNS = [
-  "id",
-  "title",
-  "original_filename",
-  "mime_type",
-  "file_size",
-  "is_global",
-  "notation_tracks",
-] as const;
 
 type MaterialRecord = {
   id: string;
@@ -66,13 +56,27 @@ function toMaterialResponse(material: MaterialRecord): MaterialRecord {
   };
 }
 
-const findMaterialByContentHashEffect = Effect.fnUntraced(function* (contentHash: string) {
-  const rootDb = yield* PgRootDB;
-  return yield* rootDb
-    .selectFrom("app_public.materials")
-    .select([...MATERIAL_RESPONSE_COLUMNS, "storage_backend", "storage_key"])
-    .where("content_hash", "=", contentHash)
-    .pipe(Effect.head, Effect.option, Effect.map(Option.getOrUndefined));
+const findMaterialByContentHashEffect = Effect.fnUntraced(function* (
+  sessionId: string,
+  contentHash: string,
+) {
+  return yield* withAuthContext(sessionId, (db) =>
+    db
+      .selectFrom("app_public.materials")
+      .select((eb) => [
+        "id",
+        "title",
+        "original_filename",
+        "mime_type",
+        eb.cast<number>("file_size", "integer").as("file_size"),
+        "is_global",
+        "notation_tracks",
+        "storage_backend",
+        "storage_key",
+      ])
+      .where("content_hash", "=", contentHash)
+      .pipe(Effect.head, Effect.option, Effect.map(Option.getOrUndefined)),
+  );
 });
 
 const ensureStoredBlobEffect = Effect.fnUntraced(function* (
@@ -92,7 +96,6 @@ const ensureStoredBlobEffect = Effect.fnUntraced(function* (
 export class FileService extends Effect.Service<FileService>()("FileService", {
   accessors: true,
   effect: Effect.gen(function* () {
-    const db = yield* PgRootDB;
     const fileSystem = yield* FileSystem.FileSystem;
     return {
       upload: Effect.fn("fileUpload")(function* (
@@ -100,6 +103,7 @@ export class FileService extends Effect.Service<FileService>()("FileService", {
         title: string,
         isGlobal: boolean,
         uploadedBy: string,
+        sessionId: string,
       ) {
         let fileSize: number;
         let mimeType: string;
@@ -136,102 +140,128 @@ export class FileService extends Effect.Service<FileService>()("FileService", {
         }
         const contentHash = StorageService.hashBytes(bytes);
         const notationTracks = yield* extractNotationTracksFromBytes(bytes, file.name);
-        const existingMaterial = yield* findMaterialByContentHashEffect(contentHash);
+        const existingMaterial = yield* findMaterialByContentHashEffect(sessionId, contentHash);
         if (existingMaterial) {
           yield* ensureStoredBlobEffect(existingMaterial, bytes);
-          return toMaterialResponse(existingMaterial);
+          return yield* Effect.succeed(toMaterialResponse(existingMaterial));
         }
         const location = StorageService.createMaterialLocation(contentHash);
         yield* StorageService.put(location, bytes);
         // Handle concurrent uploads with the same content hash (unique constraint race)
-        return yield* db
-          .insertInto("app_public.materials")
-          .values({
-            title,
-            original_filename: file.name,
-            storage_backend: location.storageBackend,
-            storage_key: location.storageKey,
-            content_hash: contentHash,
-            mime_type: mimeType,
-            file_size: bytes.byteLength,
-            is_global: isGlobal,
-            notation_tracks:
-              notationTracks === null ? null : sql`${JSON.stringify(notationTracks)}::jsonb`,
-            uploaded_by: uploadedBy,
-          })
-          .returning(MATERIAL_RESPONSE_COLUMNS)
-          .pipe(
-            Effect.catchAll(
-              Effect.fnUntraced(function* (error: unknown) {
-                const cause = ((
-                  error as {
-                    cause?: unknown;
+        return yield* withAuthContext(sessionId, (db) =>
+          db
+            .insertInto("app_public.materials")
+            .values({
+              title,
+              original_filename: file.name,
+              storage_backend: location.storageBackend,
+              storage_key: location.storageKey,
+              content_hash: contentHash,
+              mime_type: mimeType,
+              file_size: bytes.byteLength,
+              is_global: isGlobal,
+              notation_tracks:
+                notationTracks === null ? null : sql`${JSON.stringify(notationTracks)}::jsonb`,
+              uploaded_by: uploadedBy,
+            })
+            .returning((eb) => [
+              "id",
+              "title",
+              "original_filename",
+              "mime_type",
+              eb.cast<number>("file_size", "integer").as("file_size"),
+              "is_global",
+              "notation_tracks",
+            ])
+            .pipe(
+              Effect.catchAll(
+                Effect.fnUntraced(function* (error: unknown) {
+                  const cause = ((
+                    error as {
+                      cause?: unknown;
+                    }
+                  ).cause ?? error) as {
+                    code?: unknown;
+                    constraint?: unknown;
+                  };
+                  if (cause.code === "23505" && cause.constraint === "materials_content_hash_key") {
+                    const concurrent = yield* findMaterialByContentHashEffect(
+                      sessionId,
+                      contentHash,
+                    );
+                    if (concurrent) {
+                      yield* ensureStoredBlobEffect(concurrent, bytes);
+                      return [toMaterialResponse(concurrent)] as const;
+                    }
                   }
-                ).cause ?? error) as {
-                  code?: unknown;
-                  constraint?: unknown;
-                };
-                if (cause.code === "23505" && cause.constraint === "materials_content_hash_key") {
-                  const concurrent = yield* findMaterialByContentHashEffect(contentHash);
-                  if (concurrent) {
-                    yield* ensureStoredBlobEffect(concurrent, bytes);
-                    return [toMaterialResponse(concurrent)] as const;
-                  }
-                }
-                return yield* Effect.fail(error);
-              }),
+                  return yield* Effect.fail(error);
+                }),
+              ),
+              Effect.head,
             ),
-            Effect.head,
-          );
+        );
       }),
 
-      download: Effect.fnUntraced(function* (materialId: string, userId: string) {
-        const material = yield* db
-          .selectFrom("app_public.materials")
-          .select([
-            "id",
-            "title",
-            "original_filename",
-            "storage_backend",
-            "storage_key",
-            "mime_type",
-            "is_global",
-            "uploaded_by",
-          ])
-          .where("id", "=", materialId)
-          .pipe(
-            Effect.head,
-            Effect.catchTag(
-              "NoSuchElementException",
-              () => new HttpError(404, "Material not found"),
+      download: Effect.fnUntraced(function* (
+        materialId: string,
+        userId: string,
+        sessionId: string,
+      ) {
+        const material = yield* withAuthContext(sessionId, (db) =>
+          db
+            .selectFrom("app_public.materials")
+            .select([
+              "id",
+              "title",
+              "original_filename",
+              "storage_backend",
+              "storage_key",
+              "mime_type",
+              "is_global",
+              "uploaded_by",
+            ])
+            .where("id", "=", materialId)
+            .pipe(
+              Effect.head,
+              Effect.catchTags({
+                NoSuchElementException: () => new HttpError(404, "Material not found"),
+              }),
             ),
-          );
-        const user = yield* db
-          .selectFrom("app_public.users")
-          .select(["id", "role"])
-          .where("id", "=", userId)
-          .pipe(
-            Effect.head,
-            Effect.catchTag("NoSuchElementException", () => new HttpError(404, "User not found")),
-          );
+        );
+        const user = yield* withAuthContext(sessionId, (db) =>
+          db
+            .selectFrom("app_public.users")
+            .select(["id", "role"])
+            .where("id", "=", userId)
+            .pipe(
+              Effect.head,
+              Effect.catchTags({
+                NoSuchElementException: () => new HttpError(404, "User not found"),
+              }),
+            ),
+        );
         if (user.role !== "admin") {
           let hasAccess = material.is_global;
           if (!hasAccess) {
-            const assignedRows = yield* db
-              .selectFrom("app_public.student_materials")
-              .select(["material_id"])
-              .where("student_id", "=", userId)
-              .where("material_id", "=", materialId);
+            const assignedRows = yield* withAuthContext(sessionId, (db) =>
+              db
+                .selectFrom("app_public.student_materials")
+                .select(["material_id"])
+                .where("student_id", "=", userId)
+                .where("material_id", "=", materialId),
+            );
             if (assignedRows[0]) hasAccess = true;
           }
           if (!hasAccess) {
-            const enrolledRows = yield* db
-              .selectFrom("app_public.module_materials as mm")
-              .innerJoin("app_public.modules as mod", "mod.id", "mm.module_id")
-              .innerJoin("app_public.enrollments as e", "e.course_id", "mod.course_id")
-              .where("mm.material_id", "=", materialId)
-              .where("e.student_id", "=", userId)
-              .select(["mm.material_id"]);
+            const enrolledRows = yield* withAuthContext(sessionId, (db) =>
+              db
+                .selectFrom("app_public.module_materials as mm")
+                .innerJoin("app_public.modules as mod", "mod.id", "mm.module_id")
+                .innerJoin("app_public.enrollments as e", "e.course_id", "mod.course_id")
+                .where("mm.material_id", "=", materialId)
+                .where("e.student_id", "=", userId)
+                .select(["mm.material_id"]),
+            );
             if (enrolledRows[0]) hasAccess = true;
           }
           if (!hasAccess) {

@@ -228,18 +228,17 @@ export class RealtimeService extends Effect.Service<RealtimeService>()("Realtime
 
     yield* Effect.forEach(
       Object.keys(CHANNEL_QUERY_KEYS),
-      (channel) =>
-        Effect.gen(function* () {
-          yield* Effect.forkScoped(
-            client.listen(channel).pipe(
-              Stream.mapEffect((rawPayload) => processNotification(channel, rawPayload), {
-                concurrency: "unbounded",
-              }),
-              Stream.runDrain,
-            ),
-          );
-          yield* Effect.sleep("10 millis");
-        }),
+      Effect.fnUntraced(function* (channel) {
+        yield* Effect.forkScoped(
+          client.listen(channel).pipe(
+            Stream.mapEffect((rawPayload) => processNotification(channel, rawPayload), {
+              concurrency: "unbounded",
+            }),
+            Stream.runDrain,
+          ),
+        );
+        yield* Effect.sleep("10 millis");
+      }),
       { concurrency: 1 },
     );
 

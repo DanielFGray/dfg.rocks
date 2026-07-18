@@ -52,16 +52,18 @@ export class PgRootDB extends Context.Tag("PgRootDB")<PgRootDB, KyselyDB>() {
   static Live = this.Kysely.pipe(Layer.provide(this.Conn));
 }
 
-export const withAuthContext = Effect.fnUntraced(function* <A, E>(
+export const withAuthContext = Effect.fnUntraced(function* <A, E, R>(
   sessionId: string,
-  cb: (db: AuthKyselyDB) => Effect.Effect<A, E, never>,
+  cb: (db: AuthKyselyDB) => Effect.Effect<A, E, R>,
 ) {
   const db = yield* PgAuthDB;
   const databaseVisitor = yield* Config.string("DATABASE_VISITOR");
   return yield* db.withTransaction(
     db
       .selectNoFrom((eb) => [
-        eb.fn<void>("set_config", [sql.lit("role"), eb.val(databaseVisitor), eb.lit(false)]).as("_1"),
+        eb
+          .fn<void>("set_config", [sql.lit("role"), eb.val(databaseVisitor), eb.lit(false)])
+          .as("_1"),
         eb
           .fn<void>("set_config", [sql.lit("my.session_id"), eb.val(sessionId), eb.lit(true)])
           .as("_2"),
