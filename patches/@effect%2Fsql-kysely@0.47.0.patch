@@ -1,0 +1,207 @@
+diff --git a/node_modules/@effect/sql-kysely/.bun-tag-1fe17d6564c3457e b/.bun-tag-1fe17d6564c3457e
+new file mode 100644
+index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
+diff --git a/node_modules/@effect/sql-kysely/.bun-tag-8f9377bdae1f1ab6 b/.bun-tag-8f9377bdae1f1ab6
+new file mode 100644
+index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
+diff --git a/node_modules/@effect/sql-kysely/.bun-tag-96f0d98b6ca5fb3d b/.bun-tag-96f0d98b6ca5fb3d
+new file mode 100644
+index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
+diff --git a/node_modules/@effect/sql-kysely/.bun-tag-9bb85925ade554b4 b/.bun-tag-9bb85925ade554b4
+new file mode 100644
+index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
+diff --git a/node_modules/@effect/sql-kysely/.bun-tag-c886f7af8284fa71 b/.bun-tag-c886f7af8284fa71
+new file mode 100644
+index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
+diff --git a/dist/cjs/internal/patch.js b/dist/cjs/internal/patch.js
+index 161b91059d0cb8778716a8f0ae18653a96df895f..eaf05f332cb506ba2edeee19c389ef73efcba553 100644
+--- a/dist/cjs/internal/patch.js
++++ b/dist/cjs/internal/patch.js
+@@ -29,15 +29,17 @@ function _interopRequireWildcard(e, t) {
+ }
+ const ATTR_DB_QUERY_TEXT = "db.query.text";
+ const COMMIT_ERROR = "Kysely instance not properly initialised: use 'make' to create an Effect compatible instance";
++const KYSELY_QUERYBUILDER_ID = Symbol("@effect/sql-kysely/QueryBuilder");
+ const PatchProto = {
+   ...Effectable.CommitPrototype,
++  [KYSELY_QUERYBUILDER_ID]: KYSELY_QUERYBUILDER_ID,
+   commit() {
+     return Effect.die(new Error(COMMIT_ERROR));
+   }
+ };
+ /** @internal */
+ const patch = prototype => {
+-  if (!(Effect.EffectTypeId in prototype)) {
++  if (!(KYSELY_QUERYBUILDER_ID in prototype)) {
+     Object.assign(prototype, PatchProto);
+   }
+ };
+@@ -60,7 +62,7 @@ function effectifyWith(obj, commit, whitelist) {
+         return target[prop];
+       }
+       const prototype = Object.getPrototypeOf(target);
+-      if (Effect.EffectTypeId in prototype && prop === "commit") {
++      if (KYSELY_QUERYBUILDER_ID in prototype && prop === "commit") {
+         return commit.bind(target);
+       }
+       if (typeof target[prop] === "function") {
+@@ -76,15 +78,27 @@ function effectifyWith(obj, commit, whitelist) {
+ /** @internal */
+ const makeSqlCommit = client => {
+   return function () {
+-    const {
+-      parameters,
+-      sql
+-    } = this.compile();
+-    return client.unsafe(sql, parameters);
++    if (typeof this.compile !== "function") {
++      return Effect.fail(new _SqlError.SqlError({
++        cause: new Error("makeSqlCommit: commit() bound to non-QueryBuilder: " + ((this?.constructor?.name) ?? typeof this))
++      }));
++    }
++    let compiled;
++    try {
++      compiled = this.compile();
++    } catch (error) {
++      return Effect.fail(new _SqlError.SqlError({ cause: error }));
++    }
++    return client.unsafe(compiled.sql, compiled.parameters);
+   };
+ };
+ /** @internal */
+ function executeCommit() {
++  if (typeof this.compile !== "function" || typeof this.execute !== "function") {
++    return Effect.fail(new _SqlError.SqlError({
++      cause: new Error("executeCommit: bound to non-QueryBuilder: " + ((this?.constructor?.name) ?? typeof this))
++    }));
++  }
+   return Effect.tryPromise({
+     try: () => this.execute(),
+     catch: cause => new _SqlError.SqlError({
+diff --git a/dist/esm/internal/patch.js b/dist/esm/internal/patch.js
+index 2e51aed2abba71d6fe74584a0a2020ce23022938..1399cc8d44ce260a3876e7505c3f247d42f24966 100644
+--- a/dist/esm/internal/patch.js
++++ b/dist/esm/internal/patch.js
+@@ -3,15 +3,17 @@ import * as Effect from "effect/Effect";
+ import * as Effectable from "effect/Effectable";
+ const ATTR_DB_QUERY_TEXT = "db.query.text";
+ const COMMIT_ERROR = "Kysely instance not properly initialised: use 'make' to create an Effect compatible instance";
++const KYSELY_QUERYBUILDER_ID = Symbol("@effect/sql-kysely/QueryBuilder");
+ const PatchProto = {
+   ...Effectable.CommitPrototype,
++  [KYSELY_QUERYBUILDER_ID]: KYSELY_QUERYBUILDER_ID,
+   commit() {
+     return Effect.die(new Error(COMMIT_ERROR));
+   }
+ };
+ /** @internal */
+ export const patch = prototype => {
+-  if (!(Effect.EffectTypeId in prototype)) {
++  if (!(KYSELY_QUERYBUILDER_ID in prototype)) {
+     Object.assign(prototype, PatchProto);
+   }
+ };
+@@ -33,7 +35,7 @@ function effectifyWith(obj, commit, whitelist) {
+         return target[prop];
+       }
+       const prototype = Object.getPrototypeOf(target);
+-      if (Effect.EffectTypeId in prototype && prop === "commit") {
++      if (KYSELY_QUERYBUILDER_ID in prototype && prop === "commit") {
+         return commit.bind(target);
+       }
+       if (typeof target[prop] === "function") {
+@@ -49,15 +51,27 @@ function effectifyWith(obj, commit, whitelist) {
+ /** @internal */
+ const makeSqlCommit = client => {
+   return function () {
+-    const {
+-      parameters,
+-      sql
+-    } = this.compile();
+-    return client.unsafe(sql, parameters);
++    if (typeof this.compile !== "function") {
++      return Effect.fail(new SqlError({
++        cause: new Error("makeSqlCommit: commit() bound to non-QueryBuilder: " + (this?.constructor?.name ?? typeof this))
++      }));
++    }
++    let compiled;
++    try {
++      compiled = this.compile();
++    } catch (error) {
++      return Effect.fail(new SqlError({ cause: error }));
++    }
++    return client.unsafe(compiled.sql, compiled.parameters);
+   };
+ };
+ /** @internal */
+ function executeCommit() {
++  if (typeof this.compile !== "function" || typeof this.execute !== "function") {
++    return Effect.fail(new SqlError({
++      cause: new Error("executeCommit: bound to non-QueryBuilder: " + (this?.constructor?.name ?? typeof this))
++    }));
++  }
+   return Effect.tryPromise({
+     try: () => this.execute(),
+     catch: cause => new SqlError({
+diff --git a/src/internal/patch.ts b/src/internal/patch.ts
+index fb4b0ddcac30af3d09c828e114a25a2cad0c9d56..34203ad707ee89cc58e942a7f45cb6d59680f3ea 100644
+--- a/src/internal/patch.ts
++++ b/src/internal/patch.ts
+@@ -12,8 +12,15 @@ interface Executable extends Compilable {
+ 
+ const COMMIT_ERROR = "Kysely instance not properly initialised: use 'make' to create an Effect compatible instance"
+ 
++/** Custom symbol to identify Kysely query builders patched by @effect/sql-kysely.
++ * Using Effect.EffectTypeId conflates with YieldableError subclasses (HttpError, SqlError, etc.)
++ * which also have EffectTypeId in their prototype chain and would cause the proxy to bind
++ * makeSqlCommit/executeCommit to non-querybuilder objects (the proxy binding bug). */
++const KYSELY_QUERYBUILDER_ID = Symbol("@effect/sql-kysely/QueryBuilder")
++
+ const PatchProto = {
+   ...Effectable.CommitPrototype,
++  [KYSELY_QUERYBUILDER_ID]: KYSELY_QUERYBUILDER_ID,
+   commit() {
+     return Effect.die(new Error(COMMIT_ERROR))
+   }
+@@ -21,7 +28,7 @@ const PatchProto = {
+ 
+ /** @internal */
+ export const patch = (prototype: any) => {
+-  if (!(Effect.EffectTypeId in prototype)) {
++  if (!(KYSELY_QUERYBUILDER_ID in prototype)) {
+     Object.assign(prototype, PatchProto)
+   }
+ }
+@@ -48,7 +55,7 @@ function effectifyWith(
+         return target[prop]
+       }
+       const prototype = Object.getPrototypeOf(target)
+-      if (Effect.EffectTypeId in prototype && prop === "commit") {
++      if (KYSELY_QUERYBUILDER_ID in prototype && prop === "commit") {
+         return commit.bind(target)
+       }
+       if (typeof (target[prop]) === "function") {
+@@ -65,6 +72,11 @@ function effectifyWith(
+ /** @internal */
+ const makeSqlCommit = (client: Client.SqlClient) => {
+   return function(this: Compilable) {
++    if (typeof this.compile !== "function") {
++      return Effect.fail(new SqlError({
++        cause: new Error("makeSqlCommit: commit() bound to non-QueryBuilder: " + (this as any)?.constructor?.name)
++      }))
++    }
+     const { parameters, sql } = this.compile()
+     return client.unsafe(sql, parameters as any)
+   }
+@@ -72,6 +84,11 @@ const makeSqlCommit = (client: Client.SqlClient) => {
+ 
+ /** @internal */
+ function executeCommit(this: Executable) {
++  if (typeof this.compile !== "function" || typeof this.execute !== "function") {
++    return Effect.fail(new SqlError({
++      cause: new Error("executeCommit: bound to non-QueryBuilder: " + (this as any)?.constructor?.name)
++    }))
++  }
+   return Effect.tryPromise({
+     try: () => this.execute(),
+     catch: (cause) => new SqlError({ cause })

@@ -33,14 +33,14 @@ test.describe("assignments management", () => {
 
     const form = page.getByTestId("staff-assign-form");
     await expect(form).toBeVisible();
-    await form.locator("#staff-assign-material").click();
+    await form.getByRole("combobox", { name: "Material" }).click();
     await page
       .getByRole("option", { name: /Test Assignment Material Admin/ })
       .first()
       .click();
-    await form.locator("#staff-assign-track").click();
+    await form.getByRole("combobox", { name: "Assigned Track" }).click();
     await page.getByRole("option", { name: "Bass" }).click();
-    await form.locator('button[type="submit"]').click();
+    await form.getByRole("button", { name: "Assign", exact: true }).click();
 
     await expect(studentCard.getByText("Test Assignment Material Admin")).toBeVisible({
       timeout: 10_000,
@@ -75,9 +75,7 @@ test.describe("assignments management", () => {
       await studentPage.getByTestId("nav-assignments").click();
       await expect(studentPage.getByRole("heading", { name: "My Assignments" })).toBeVisible();
       await expect(
-        studentPage.getByText(
-          "No assignments yet. Your teacher will assign materials here.",
-        ),
+        studentPage.getByText("No assignments yet. Your teacher will assign materials here."),
       ).toBeVisible();
 
       await loginViaUi(adminPage, "test_admin", "testpassword123");
@@ -92,12 +90,12 @@ test.describe("assignments management", () => {
 
       const form = adminPage.getByTestId("staff-assign-form");
       await expect(form).toBeVisible();
-      await form.locator("#staff-assign-material").click();
+      await form.getByRole("combobox", { name: "Material" }).click();
       await adminPage
         .getByRole("option", { name: /Realtime Assignment Material/ })
         .first()
         .click();
-      await form.locator('button[type="submit"]').click();
+      await form.getByRole("button", { name: "Assign" }).click();
 
       await expect(studentCard.getByText("Realtime Assignment Material")).toBeVisible({
         timeout: 10_000,
@@ -144,12 +142,12 @@ test.describe("assignments management", () => {
 
     const form = page.getByTestId("staff-assign-form");
     await expect(form).toBeVisible();
-    await form.locator("#staff-assign-material").click();
+    await form.getByRole("combobox", { name: "Material" }).click();
     await page
       .getByRole("option", { name: /Test Assignment Material Teacher/ })
       .first()
       .click();
-    await form.locator('button[type="submit"]').click();
+    await form.getByRole("button", { name: "Assign" }).click();
 
     await expect(studentCard.getByText("Test Assignment Material Teacher")).toBeVisible({
       timeout: 10_000,

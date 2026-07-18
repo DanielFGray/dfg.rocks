@@ -1,4 +1,4 @@
-import { test as base, expect, type Page } from "@playwright/test";
+import { test as base, expect, type ConsoleMessage, type Page } from "@playwright/test";
 import type { UserRole } from "../shared/schemas.js";
 
 const vitePort = process.env.PLAYWRIGHT_VITE_PORT || process.env.VITE_PORT || "4174";
@@ -47,6 +47,7 @@ type TestingApi = {
   seedInvitation(data: {
     email: string;
     family_slug?: string;
+    invited_role?: string;
     expires_at?: string;
   }): Promise<string>;
   seedDeleteAccountLink(data: { username: string }): Promise<string>;
@@ -66,35 +67,19 @@ type TestingApi = {
 
 /** Login through the UI (client-side routing) */
 const loginViaUi = async (page: Page, username: string, password: string) => {
-  for (let attempt = 0; attempt < 2; attempt++) {
-    await page.goto("/login");
-    await page.waitForLoadState("networkidle");
-    await page.getByTestId("login-id").fill(username);
-    await page.getByTestId("login-password").fill(password);
-
-    const loginResponsePromise = page
-      .waitForResponse(
-        (response) =>
-          response.url().includes("/api/login") && response.request().method() === "POST",
-        { timeout: 5_000 },
-      )
-      .catch(() => null);
-
-    await page.getByTestId("login-submit").click();
-
-    const loginResponse = await loginResponsePromise;
-    if (!loginResponse) {
-      if (attempt === 0) {
-        continue;
-      }
-      throw new Error("Login request did not fire");
-    }
-
-    expect(loginResponse.ok(), await loginResponse.text()).toBe(true);
-    await expect(page).toHaveURL(/\/dashboard/, { timeout: 15_000 });
-    await expect(page.getByTestId("dashboard")).toBeVisible({ timeout: 15_000 });
-    return;
-  }
+  // `testing.login()` seeds users by issuing a real session. UI-login tests
+  // must start without that fixture session or route/auth requests can race.
+  await page.context().clearCookies({ name: "session" });
+  await page.goto("/login");
+  await page.waitForLoadState("networkidle");
+  const loginId = page.getByTestId("login-id");
+  const loginPassword = page.getByTestId("login-password");
+  await loginId.fill(username);
+  await expect(loginId).toHaveValue(username);
+  await loginPassword.fill(password);
+  await expect(loginPassword).toHaveValue(password);
+  await page.getByTestId("login-submit").click();
+  await expect(page.getByTestId("dashboard")).toBeVisible({ timeout: 15_000 });
 };
 
 const logoutViaUi = async (page: Page) => {
@@ -104,7 +89,46 @@ const logoutViaUi = async (page: Page) => {
   await logoutButton.click();
 };
 
-export const test = base.extend<{ testing: TestingApi }>({
+const regressionWarningPatterns = [
+  /hydration failed/i,
+  /PressResponder/i,
+  /Pressable child/i,
+  /do not provide a visible label/i,
+];
+
+export const test = base.extend<{ testing: TestingApi; browserErrorGuard: void }>({
+  browserErrorGuard: [
+    async ({ page }, use) => {
+      const browserErrors: string[] = [];
+      const handleConsole = (message: ConsoleMessage) => {
+        const type = message.type();
+        const text = message.text();
+        if (
+          type === "error" ||
+          (type === "warning" && regressionWarningPatterns.some((pattern) => pattern.test(text)))
+        ) {
+          const { url, lineNumber, columnNumber } = message.location();
+          const source = url ? ` (${url}:${lineNumber}:${columnNumber})` : "";
+          browserErrors.push(`console.${type}: ${text}${source}`);
+        }
+      };
+      const handlePageError = (error: Error) => {
+        browserErrors.push(`pageerror: ${error.stack ?? error.message}`);
+      };
+
+      page.on("console", handleConsole);
+      page.on("pageerror", handlePageError);
+
+      await use();
+
+      page.off("console", handleConsole);
+      page.off("pageerror", handlePageError);
+      expect(browserErrors, `Unexpected browser errors:\n${browserErrors.join("\n\n")}`).toEqual(
+        [],
+      );
+    },
+    { auto: true },
+  ],
   testing: async ({ page }, use) => {
     function qs(params: Record<string, string | undefined>) {
       const s = new URLSearchParams();
@@ -117,14 +141,34 @@ export const test = base.extend<{ testing: TestingApi }>({
     async function get(path: string, params: Record<string, string | undefined> = {}) {
       const q = qs(params);
       const url = `${api_url}/api/testing/${path}${q ? `?${q}` : ""}`;
-      const res = await page.request.get(url);
-      expect(res.ok(), `testing/${path} failed: ${await res.text()}`).toBe(true);
+      const res = await page.request.get(url, { maxRedirects: 0 });
+      const succeeded = res.ok() || (res.status() >= 300 && res.status() < 400);
+      if (!succeeded) {
+        expect(succeeded, `testing/${path} failed: ${await res.text()}`).toBe(true);
+      }
       return res;
+    }
+
+    function redirectUrl(res: Awaited<ReturnType<typeof get>>): string {
+      const location = res.headers()["location"];
+      expect(location, "testing endpoint did not return a redirect location").toBeTruthy();
+      return new URL(location!, api_url).toString();
     }
 
     const testing: TestingApi = {
       async login(opts = {}) {
-        await get("login", { username: "test_admin", role: "admin", ...opts });
+        const q = qs({ username: "test_admin", role: "admin", ...opts });
+        const res = await fetch(`${api_url}/api/testing/login?${q}`, { redirect: "manual" });
+        const succeeded = res.ok || (res.status >= 300 && res.status < 400);
+        if (!succeeded) {
+          throw new Error(`testing/login failed: ${await res.text()}`);
+        }
+
+        const sessionCookie = res.headers
+          .get("set-cookie")
+          ?.match(/(?:^|;\s*)session=([^;]+)/)?.[1];
+        if (!sessionCookie) throw new Error("testing/login did not return a session cookie");
+        await page.context().addCookies([{ name: "session", value: sessionCookie, url: api_url }]);
       },
 
       async clear() {
@@ -172,12 +216,12 @@ export const test = base.extend<{ testing: TestingApi }>({
 
       async seedInvitation(data) {
         const res = await get("seed-invitation", data);
-        return res.url();
+        return redirectUrl(res);
       },
 
       async seedDeleteAccountLink(data) {
         const res = await get("seed-delete-account", { username: data.username });
-        return res.url();
+        return redirectUrl(res);
       },
 
       async seedLesson(data) {

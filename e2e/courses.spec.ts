@@ -10,6 +10,8 @@ test.describe("courses", () => {
     });
 
     await loginViaUi(page, "test_admin", "testpassword123");
+    await page.getByTestId("nav-courses").click();
+    await expect(page.getByTestId("courses")).toBeVisible();
     await expect(page.getByText("Test: Guitar Fundamentals")).toBeVisible();
   });
 });

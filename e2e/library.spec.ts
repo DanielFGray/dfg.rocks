@@ -55,18 +55,21 @@ test.describe("library", () => {
       await expect(firstRow.getByLabel("Title")).toHaveValue("Moonlight Sonata");
       await expect(secondRow.getByLabel("Title")).toHaveValue("Scale Patterns");
 
-      const uploadResponsesPromise = Promise.all([
-        page.waitForResponse(
-          (response) =>
+      const responses: any[] = [];
+      const uploadResponsesPromise = new Promise<any[]>((resolve) => {
+        page.on("response", function handler(response) {
+          if (
             response.url().includes("/api/admin/materials/upload") &&
-            response.request().method() === "POST",
-        ),
-        page.waitForResponse(
-          (response) =>
-            response.url().includes("/api/admin/materials/upload") &&
-            response.request().method() === "POST",
-        ),
-      ]);
+            response.request().method() === "POST"
+          ) {
+            responses.push(response);
+            if (responses.length === 2) {
+              page.off("response", handler);
+              resolve(responses);
+            }
+          }
+        });
+      });
       await form.getByRole("button", { name: "Upload 2 files" }).click();
 
       const uploadResponses = await uploadResponsesPromise;
@@ -92,6 +95,9 @@ test.describe("library", () => {
         page.getByTestId("material-row").filter({ hasText: "Scale Patterns" }),
       ).toBeVisible();
     } finally {
+      // Unmount previews before deleting their backing files so the browser
+      // cannot race a late media request against cleanup.
+      await page.goto("/dashboard");
       for (const materialId of createdMaterialIds) {
         await page.request.delete(`/api/admin/materials/${materialId}`, {
           headers: { "X-Requested-With": "dfg" },

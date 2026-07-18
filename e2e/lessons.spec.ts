@@ -36,7 +36,15 @@ test.describe("lesson management", () => {
     await expect(studentOpt).toBeVisible();
     await studentOpt.click();
 
-    await lessonForm.getByLabel("Date & Time").fill("2026-04-01T10:00");
+    const dateGroup = page.getByRole("group", { name: "Date" });
+    await dateGroup.getByRole("spinbutton").nth(0).click();
+    await page.keyboard.type("4");
+    await page.keyboard.type("1");
+    await page.keyboard.type("2026");
+    const timeGroup = page.getByRole("group", { name: "Time" });
+    await timeGroup.getByRole("spinbutton").nth(0).click();
+    await page.keyboard.type("10");
+    await page.keyboard.type("00");
 
     await lessonForm.getByRole("button", { name: /Duration/ }).click();
     const durationOpt = page.getByRole("option", { name: "60 minutes" });

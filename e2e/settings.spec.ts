@@ -10,7 +10,7 @@ test.describe("settings page", () => {
     await page.getByTestId("nav-settings").click();
     await expect(page.getByTestId("settings")).toBeVisible();
     await expect(page.getByText("settings@test.local")).toBeVisible();
-    await expect(page.getByText("Primary")).toBeVisible();
+    await expect(page.getByTestId("primary-badge").first()).toBeVisible();
     await expect(page.getByText("Verified")).toBeVisible();
   });
 
@@ -110,10 +110,7 @@ test.describe("settings page", () => {
     await expect(page.getByTestId("nav-settings")).toBeVisible();
   });
 
-  test("testimonials stay hidden until an admin approves them", async ({
-    page,
-    testing,
-  }) => {
+  test("testimonials stay hidden until an admin approves them", async ({ page, testing }) => {
     const body =
       "Lessons have been organized, encouraging, and much easier to stay consistent with every week.";
 

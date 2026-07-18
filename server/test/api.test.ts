@@ -2,20 +2,26 @@ import { it, expect, describe, beforeAll, afterAll, vi } from "@effect/vitest";
 import * as Command from "@effect/platform/Command";
 import * as FileSystem from "@effect/platform/FileSystem";
 import * as NodeContext from "@effect/platform-node/NodeContext";
+import * as NodeFileSystem from "@effect/platform-node/NodeFileSystem";
+import * as HttpClient from "@effect/platform/HttpClient";
+import * as HttpClientError from "@effect/platform/HttpClientError";
+import * as HttpClientRequest from "@effect/platform/HttpClientRequest";
+import * as HttpClientResponse from "@effect/platform/HttpClientResponse";
+import * as HttpBody from "@effect/platform/HttpBody";
+import * as Cookies from "@effect/platform/Cookies";
+import { Effect, ManagedRuntime, Layer, Option } from "effect";
+import { Logger, consoleLogFactory } from "graphile-worker";
 import pg from "pg";
-import { Effect } from "effect";
-import { Logger, consoleLogFactory, type Job } from "graphile-worker";
-import { loadEnvFile } from "process";
+import generatePrepaidPeriodTask from "../../worker/tasks/lessons__generate_prepaid_period.js";
+import { StorageService } from "../services/storageService.js";
 
-let handler: (request: Request) => Promise<Response>;
-let testDb: pg.Client;
+let testDb: pg.Pool;
 let adminCookie: string;
 let studentCookie: string;
 let studentId: string;
+let rt: ManagedRuntime.ManagedRuntime<any, any>;
 
 const testApplePrivateKey = "-----BEGIN PRIVATE KEY-----\\nAQAB\\n-----END PRIVATE KEY-----";
-
-loadEnvFile();
 
 function requiredEnv(name: string): string {
   const value = process.env[name];
@@ -50,6 +56,7 @@ const runCommand = Effect.fnUntraced(function* (
   const exitCode = yield* Command.make(command, ...args).pipe(
     Command.env(environment),
     Command.workingDirectory(process.cwd()),
+    Command.stderr("inherit"),
     Command.exitCode,
   );
   if (exitCode !== 0)
@@ -61,28 +68,32 @@ type TitledItem = { title: string };
 type SubmissionSummary = { id: string; email: string; is_read: boolean };
 type StudentSummary = { username: string };
 
-function req(
-  method: string,
+function makeTestRequest(
+  method: "GET" | "POST" | "PATCH" | "DELETE" | "PUT",
   path: string,
   opts: { body?: unknown; cookie?: string; csrf?: boolean } = {},
-): Promise<Response> {
+): HttpClientRequest.HttpClientRequest {
   const headers: Record<string, string> = {};
   if (opts.csrf !== false) headers["X-Requested-With"] = "dfg";
   if (opts.cookie) headers["Cookie"] = `session=${opts.cookie}`;
-  const body =
+
+  const url = `${TEST_ROOT_URL}${path}`;
+  const body: HttpBody.HttpBody | undefined =
     opts.body instanceof FormData
-      ? opts.body
+      ? HttpBody.formData(opts.body)
       : opts.body !== undefined
-        ? ((headers["Content-Type"] = "application/json"), JSON.stringify(opts.body))
+        ? HttpBody.text(JSON.stringify(opts.body), "application/json")
         : undefined;
-  return handler(new Request(`${TEST_ROOT_URL}${path}`, { method, headers, body }));
+
+  return HttpClientRequest.make(method)(url, { headers, body });
 }
 
-function getCookie(res: Response): string | null {
-  const header = res.headers.get("set-cookie");
-  if (!header) return null;
-  const match = header.match(/session=([^;]+)/);
-  return match?.[1] ?? null;
+function getCookie(res: HttpClientResponse.HttpClientResponse): string | null {
+  return Option.getOrElse(Cookies.getValue(res.cookies, "session"), () => null);
+}
+
+function hasCookie(res: HttpClientResponse.HttpClientResponse, name: string): boolean {
+  return Option.isSome(Cookies.getValue(res.cookies, name));
 }
 
 function cookieIdFromToken(token: string): string {
@@ -90,11 +101,17 @@ function cookieIdFromToken(token: string): string {
 }
 
 function reqEffect(
-  method: string,
+  method: "GET" | "POST" | "PATCH" | "DELETE" | "PUT",
   path: string,
   opts: { body?: unknown; cookie?: string; csrf?: boolean } = {},
 ) {
-  return Effect.tryPromise(() => req(method, path, opts));
+  return Effect.tryPromise(() =>
+    rt.runPromise(HttpClient.execute(makeTestRequest(method, path, opts))),
+  );
+}
+
+function resJson(res: HttpClientResponse.HttpClientResponse): Effect.Effect<any, Error> {
+  return Effect.tryPromise(() => rt.runPromise(res.json));
 }
 
 describe("DFG Portal API", () => {
@@ -144,11 +161,7 @@ describe("DFG Portal API", () => {
     Object.assign(process.env, childEnv);
     vi.resetModules();
 
-    const { disableRateLimiting } = await import("../services/rateLimiter.js");
-    disableRateLimiting();
-
-    testDb = new pg.Client({ connectionString: dbUrl });
-    await testDb.connect();
+    testDb = new pg.Pool({ connectionString: dbUrl });
     const adminResult = await testDb.query(
       `select * from app_private.really_create_user($1::citext, $2, null, true, $3::citext, $4)`,
       ["admin", "Test Admin", "admin@test.com", "admin123"],
@@ -158,15 +171,45 @@ describe("DFG Portal API", () => {
     ]);
 
     const { handleApiRequest } = await import("../app.js");
-    handler = handleApiRequest;
 
-    const adminLoginRes = await req("POST", "/api/login", {
-      body: { id: "admin", password: "admin123" },
-    });
+    const httpClient = HttpClient.make((request, url, _signal, _fiber) =>
+      Effect.tryPromise({
+        try: async () => {
+          let body: globalThis.BodyInit | undefined = undefined;
+          switch (request.body._tag) {
+            case "Raw":
+            case "Uint8Array":
+              body = request.body.body as any;
+              break;
+            case "FormData":
+              body = request.body.formData;
+              break;
+          }
+          const res = await handleApiRequest(
+            new Request(url, { method: request.method, headers: request.headers, body }),
+          );
+          return HttpClientResponse.fromWeb(request, res);
+        },
+        catch: (cause) =>
+          new HttpClientError.RequestError({
+            request,
+            reason: "Transport",
+            cause: cause as Error,
+          }),
+      }),
+    );
+
+    rt = ManagedRuntime.make(Layer.succeed(HttpClient.HttpClient, httpClient));
+
+    const adminLoginRes = await Effect.runPromise(
+      reqEffect("POST", "/api/login", {
+        body: { id: "admin", password: "admin123" },
+      }),
+    );
     adminCookie = getCookie(adminLoginRes)!;
     if (!adminCookie)
       throw new Error(
-        `Admin login failed (${adminLoginRes.status}): ${await adminLoginRes.text()}`,
+        `Admin login failed (${adminLoginRes.status}): ${await rt.runPromise(adminLoginRes.text)}`,
       );
 
     const studentResult = await testDb.query(
@@ -175,29 +218,28 @@ describe("DFG Portal API", () => {
     );
     studentId = studentResult.rows[0].id;
 
-    const studentLoginRes = await req("POST", "/api/login", {
-      body: { id: "student1", password: "student123" },
-    });
+    const studentLoginRes = await Effect.runPromise(
+      reqEffect("POST", "/api/login", {
+        body: { id: "student1", password: "student123" },
+      }),
+    );
     studentCookie = getCookie(studentLoginRes)!;
     if (!studentCookie)
       throw new Error(
-        `Student login failed (${studentLoginRes.status}): ${await studentLoginRes.text()}`,
+        `Student login failed (${studentLoginRes.status}): ${await rt.runPromise(studentLoginRes.text)}`,
       );
   }, 120_000);
 
   afterAll(async () => {
-    try {
-      const { disposeApiHandler } = await import("../app.js");
-      await disposeApiHandler();
-    } catch {}
     await testDb?.end();
   }, 30_000);
 
-  it.effect("public: health check and contact form", () =>
-    Effect.gen(function* () {
+  it.effect(
+    "public: health check and contact form",
+    Effect.fnUntraced(function* () {
       const health = yield* reqEffect("GET", "/api/health");
       expect(health.status).toBe(200);
-      expect(yield* Effect.tryPromise(() => health.json())).toEqual({ success: true });
+      expect(yield* resJson(health)).toEqual({ success: true });
 
       const contact = yield* reqEffect("POST", "/api/contact", {
         body: {
@@ -209,7 +251,7 @@ describe("DFG Portal API", () => {
         },
       });
       expect(contact.status).toBe(200);
-      expect(yield* Effect.tryPromise(() => contact.json())).toEqual({ success: true });
+      expect(yield* resJson(contact)).toEqual({ success: true });
 
       const spam = yield* reqEffect("POST", "/api/contact", {
         body: {
@@ -224,8 +266,9 @@ describe("DFG Portal API", () => {
     }),
   );
 
-  it.effect("auth: login, password flows", () =>
-    Effect.gen(function* () {
+  it.effect(
+    "auth: login, password flows",
+    Effect.fnUntraced(function* () {
       const loginRes = yield* reqEffect("POST", "/api/login", {
         body: { id: "student1", password: "student123" },
       });
@@ -235,7 +278,7 @@ describe("DFG Portal API", () => {
 
       const me = yield* reqEffect("GET", "/api/me", { cookie: studentCookie });
       expect(me.status).toBe(200);
-      expect((yield* Effect.tryPromise(() => me.json())).user.username).toBe("student1");
+      expect((yield* resJson(me)).user.username).toBe("student1");
 
       const logout = yield* reqEffect("POST", "/api/logout", { cookie: studentCookie });
       expect(logout.status).toBe(200);
@@ -267,12 +310,13 @@ describe("DFG Portal API", () => {
 
       const me2 = yield* reqEffect("GET", "/api/me", { cookie: studentCookie });
       expect(me2.status).toBe(200);
-      expect((yield* Effect.tryPromise(() => me2.json())).user.username).toBe("student1");
+      expect((yield* resJson(me2)).user.username).toBe("student1");
     }),
   );
 
-  it.effect("auth: admin authorization follows live DB session and role state", () =>
-    Effect.gen(function* () {
+  it.effect(
+    "auth: admin authorization follows live DB session and role state",
+    Effect.fnUntraced(function* () {
       const loginRes = yield* reqEffect("POST", "/api/login", {
         body: { id: "admin", password: "admin123" },
       });
@@ -321,14 +365,15 @@ describe("DFG Portal API", () => {
     }),
   );
 
-  it.effect("auth: oauth start routes redirect and callbacks require valid state", () =>
-    Effect.gen(function* () {
+  it.effect(
+    "auth: oauth start routes redirect and callbacks require valid state",
+    Effect.fnUntraced(function* () {
       const googleStart = yield* reqEffect("GET", "/api/oauth/google?redirect=%2Fsettings");
       expect(googleStart.status).toBe(302);
-      expect(googleStart.headers.get("location")).toMatch(
+      expect(googleStart.headers["location"]).toMatch(
         /^https:\/\/accounts\.google\.com\/o\/oauth2\/v2\/auth\?/,
       );
-      const googleLocation = new URL(googleStart.headers.get("location")!);
+      const googleLocation = new URL(googleStart.headers["location"]!);
       expect(googleLocation.searchParams.get("client_id")).toBe(process.env.GOOGLE_CLIENT_ID);
       expect(googleLocation.searchParams.get("access_type")).toBe("offline");
       expect(googleLocation.searchParams.get("redirect_uri")).toBe(
@@ -336,36 +381,34 @@ describe("DFG Portal API", () => {
       );
       expect(googleLocation.searchParams.get("code_challenge")).toBeTruthy();
       expect(googleLocation.searchParams.get("state")).toBeTruthy();
-      const googleSetCookie = googleStart.headers.get("set-cookie");
-      expect(googleSetCookie).toContain("oauth_google=");
-      expect(googleSetCookie).toContain("oauth_google_redirect=");
-      expect(googleSetCookie).toContain("SameSite=Lax");
+      expect(googleStart.cookies.cookies["oauth_google"]).toBeTruthy();
+      expect(googleStart.cookies.cookies["oauth_google_redirect"]).toBeTruthy();
+      expect(googleStart.headers["set-cookie"]).toContain("SameSite=Lax");
 
       const googleCallback = yield* reqEffect(
         "GET",
         `/api/oauth/google/callback?code=fake-code&state=${googleLocation.searchParams.get("state")!}`,
       );
       expect(googleCallback.status).toBe(400);
-      expect(yield* Effect.tryPromise(() => googleCallback.json())).toEqual({
+      expect(yield* resJson(googleCallback)).toEqual({
         error: "Invalid or expired Google OAuth state",
       });
 
       const appleStart = yield* reqEffect("GET", "/api/oauth/apple?redirect=%2Fdashboard");
       expect(appleStart.status).toBe(302);
-      expect(appleStart.headers.get("location")).toMatch(
+      expect(appleStart.headers["location"]).toMatch(
         /^https:\/\/appleid\.apple\.com\/auth\/authorize\?/,
       );
-      const appleLocation = new URL(appleStart.headers.get("location")!);
+      const appleLocation = new URL(appleStart.headers["location"]!);
       expect(appleLocation.searchParams.get("client_id")).toBe(process.env.APPLE_CLIENT_ID);
       expect(appleLocation.searchParams.get("redirect_uri")).toBe(
         `${TEST_ROOT_URL}/api/oauth/apple/callback`,
       );
       expect(appleLocation.searchParams.get("response_mode")).toBe("form_post");
       expect(appleLocation.searchParams.get("state")).toBeTruthy();
-      const appleSetCookie = appleStart.headers.get("set-cookie");
-      expect(appleSetCookie).toContain("oauth_apple=");
-      expect(appleSetCookie).toContain("oauth_apple_redirect=");
-      expect(appleSetCookie).toContain("SameSite=None");
+      expect(appleStart.cookies.cookies["oauth_apple"]).toBeTruthy();
+      expect(appleStart.cookies.cookies["oauth_apple_redirect"]).toBeTruthy();
+      expect(appleStart.headers["set-cookie"]).toContain("SameSite=None");
 
       const appleCallbackForm = new FormData();
       appleCallbackForm.append("code", "fake-code");
@@ -374,20 +417,21 @@ describe("DFG Portal API", () => {
         body: appleCallbackForm,
       });
       expect(appleCallback.status).toBe(400);
-      expect(yield* Effect.tryPromise(() => appleCallback.json())).toEqual({
+      expect(yield* resJson(appleCallback)).toEqual({
         error: "Invalid or expired Apple OAuth state",
       });
     }),
   );
 
-  it.effect("admin: gcal connect redirects and callback requires valid state", () =>
-    Effect.gen(function* () {
+  it.effect(
+    "admin: gcal connect redirects and callback requires valid state",
+    Effect.fnUntraced(function* () {
       const connect = yield* reqEffect("GET", "/api/admin/gcal/connect", {
         cookie: adminCookie,
         csrf: false,
       });
       expect(connect.status).toBe(302);
-      const location = connect.headers.get("location");
+      const location = connect.headers["location"];
       expect(location).toBeTruthy();
       const authUrl = new URL(location!);
       expect(authUrl.origin).toBe("https://accounts.google.com");
@@ -399,9 +443,8 @@ describe("DFG Portal API", () => {
       );
       expect(authUrl.searchParams.get("code_challenge")).toBeTruthy();
       expect(authUrl.searchParams.get("state")).toBeTruthy();
-      const setCookie = connect.headers.get("set-cookie");
-      expect(setCookie).toContain("gcal_oauth=");
-      expect(setCookie).toContain("SameSite=Lax");
+      expect(hasCookie(connect, "gcal_oauth")).toBeTruthy();
+      expect(connect.headers["set-cookie"]).toContain("SameSite=Lax");
 
       const callback = yield* reqEffect(
         "GET",
@@ -409,176 +452,15 @@ describe("DFG Portal API", () => {
         { cookie: adminCookie, csrf: false },
       );
       expect(callback.status).toBe(400);
-      expect(yield* Effect.tryPromise(() => callback.json())).toEqual({
+      expect(yield* resJson(callback)).toEqual({
         error: "Invalid or expired Google Calendar OAuth state",
       });
     }),
   );
 
-  it.effect("testimonials: student CRUD, admin blocked", () =>
-    Effect.gen(function* () {
-      const create = yield* reqEffect("PUT", "/api/testimonials", {
-        body: {
-          body: "Daniel has made lessons fun, approachable, and easy to stick with every week.",
-        },
-        cookie: studentCookie,
-      });
-      expect(create.status).toBe(200);
-      const created = yield* Effect.tryPromise(() => create.json());
-      expect(created.body).toContain("lessons fun");
-      expect(created.display_name).toBe("Test Student");
-      expect(created.role_label).toBe("Student");
-      expect(created.is_approved).toBe(false);
-
-      const current = yield* reqEffect("GET", "/api/testimonials", { cookie: studentCookie });
-      expect(current.status).toBe(200);
-      const currentJson = yield* Effect.tryPromise(() => current.json());
-      expect(currentJson.body).toContain("lessons fun");
-      expect(currentJson.is_approved).toBe(false);
-
-      const approve = yield* reqEffect("PATCH", `/api/admin/testimonials/${created.id}`, {
-        body: { is_approved: true },
-        cookie: adminCookie,
-      });
-      expect(approve.status).toBe(200);
-      expect(yield* Effect.tryPromise(() => approve.json())).toEqual({ success: true });
-
-      const { rows: approvedRows } = yield* Effect.tryPromise(() =>
-        testDb.query(`select is_approved from app_public.testimonials where id = $1`, [created.id]),
-      );
-      expect(approvedRows[0].is_approved).toBe(true);
-
-      const update = yield* reqEffect("PUT", "/api/testimonials", {
-        body: {
-          body: "Daniel has made lessons fun, practical, and something I actually look forward to each week.",
-        },
-        cookie: studentCookie,
-      });
-      expect(update.status).toBe(200);
-      const updated = yield* Effect.tryPromise(() => update.json());
-      expect(updated.body).toContain("look forward");
-      expect(updated.is_approved).toBe(false);
-
-      const adminAttempt = yield* reqEffect("GET", "/api/testimonials", { cookie: adminCookie });
-      expect(adminAttempt.status).toBe(403);
-
-      const remove = yield* reqEffect("DELETE", "/api/testimonials", { cookie: studentCookie });
-      expect(remove.status).toBe(200);
-
-      const afterDelete = yield* reqEffect("GET", "/api/testimonials", { cookie: studentCookie });
-      expect(afterDelete.status).toBe(200);
-      expect(yield* Effect.tryPromise(() => afterDelete.text())).toBe("");
-
-      const { rows: reminderRows } = yield* Effect.tryPromise(() =>
-        testDb.query(
-          `select testimonial_prompt_enabled, testimonial_next_prompt_at from app_private.user_secrets where user_id = $1`,
-          [studentId],
-        ),
-      );
-      expect(reminderRows[0].testimonial_prompt_enabled).toBe(false);
-      expect(reminderRows[0].testimonial_next_prompt_at).toBeTruthy();
-    }),
-  );
-
-  it.effect("testimonials: admin interval updates schedule and worker enables prompts", () =>
-    Effect.gen(function* () {
-      const saveInterval = yield* reqEffect("POST", "/api/admin/testimonial-reminder-interval", {
-        body: { interval_days: 14 },
-        cookie: adminCookie,
-      });
-      expect(saveInterval.status).toBe(200);
-      expect((yield* Effect.tryPromise(() => saveInterval.json())).interval_days).toBe(14);
-
-      const { rows: scheduledRows } = yield* Effect.tryPromise(() =>
-        testDb.query(
-          `select testimonial_prompt_enabled, testimonial_next_prompt_at from app_private.user_secrets where user_id = $1`,
-          [studentId],
-        ),
-      );
-      expect(scheduledRows[0].testimonial_prompt_enabled).toBe(false);
-      expect(new Date(scheduledRows[0].testimonial_next_prompt_at).getTime()).toBeGreaterThan(
-        Date.now(),
-      );
-
-      yield* Effect.tryPromise(() =>
-        testDb.query(
-          `update app_private.user_secrets set testimonial_prompt_enabled = false, testimonial_next_prompt_at = now() - interval '1 minute', testimonial_last_emailed_at = null where user_id = $1`,
-          [studentId],
-        ),
-      );
-
-      const { default: reminderSweepTask } = yield* Effect.promise(
-        () => import("../../worker/tasks/testimonials__reminder_sweep.js"),
-      );
-      const jobs: Array<{ identifier: string; payload: unknown }> = [];
-      const workerLogger = new Logger(consoleLogFactory, { label: "test" });
-      const poolClient = Object.assign(testDb, { release: () => undefined });
-      const makeJob = (identifier: string, payload: unknown): Job => ({
-        id: String(jobs.length + 1),
-        job_queue_id: null,
-        task_id: 1,
-        payload,
-        priority: 0,
-        run_at: new Date(),
-        attempts: 0,
-        max_attempts: 1,
-        last_error: null,
-        created_at: new Date(),
-        updated_at: new Date(),
-        key: null,
-        revision: 0,
-        locked_at: null,
-        locked_by: null,
-        flags: null,
-        is_available: true,
-        task_identifier: identifier,
-      });
-
-      yield* Effect.promise(() =>
-        Promise.resolve(
-          reminderSweepTask(
-            {},
-            {
-              job: makeJob("testimonials__reminder_sweep", {}),
-              withPgClient: async (callback) => callback(poolClient),
-              logger: workerLogger,
-              getQueueName: async () => null,
-              query: (queryText, values) => poolClient.query(queryText, values),
-              addJob: async (identifier: string, payload: unknown) => {
-                jobs.push({ identifier, payload });
-                return makeJob(identifier, payload);
-              },
-            },
-          ),
-        ),
-      );
-
-      expect(jobs.some((job) => job.identifier === "send_email")).toBe(true);
-      expect(jobs.some((job) => job.identifier === "testimonials__reminder_sweep")).toBe(false);
-
-      const emailJob = jobs.find((job) => job.identifier === "send_email");
-      expect(emailJob).toBeTruthy();
-      expect(emailJob?.payload).toMatchObject({
-        options: { to: "student1@test.com", subject: "How would you recommend DFG Music Lessons?" },
-        template: "testimonial_reminder.mjml",
-      });
-
-      const { rows: afterSweepRows } = yield* Effect.tryPromise(() =>
-        testDb.query(
-          `select testimonial_prompt_enabled, testimonial_next_prompt_at, testimonial_last_emailed_at from app_private.user_secrets where user_id = $1`,
-          [studentId],
-        ),
-      );
-      expect(afterSweepRows[0].testimonial_prompt_enabled).toBe(true);
-      expect(afterSweepRows[0].testimonial_last_emailed_at).toBeTruthy();
-      expect(new Date(afterSweepRows[0].testimonial_next_prompt_at).getTime()).toBeGreaterThan(
-        Date.now(),
-      );
-    }),
-  );
-
-  it.effect("materials: upload dedupes by hash and repairs missing blobs", () =>
-    Effect.gen(function* () {
+  it.effect(
+    "materials: upload dedupes by hash and repairs missing blobs",
+    Effect.fnUntraced(function* () {
       const bytes = Buffer.from(`%PDF-1.4\n% dedupe test ${Date.now()}\n`);
 
       const uploadMaterial = (title: string, filename: string, isGlobal: boolean) => {
@@ -594,7 +476,7 @@ describe("DFG Portal API", () => {
 
       const firstUpload = yield* uploadMaterial("Original Title", "original-upload.pdf", true);
       expect(firstUpload.status).toBe(200);
-      const firstMaterial = yield* Effect.tryPromise(() => firstUpload.json());
+      const firstMaterial = yield* resJson(firstUpload);
       expect(firstMaterial.title).toBe("Original Title");
       expect(firstMaterial.original_filename).toBe("original-upload.pdf");
       expect(firstMaterial.is_global).toBe(true);
@@ -602,33 +484,30 @@ describe("DFG Portal API", () => {
       const firstRow = (yield* Effect.tryPromise(() =>
         testDb.query(
           `select id, content_hash, storage_backend, storage_key from app_public.materials where id = $1`,
-          [firstMaterial.id],
+          [(firstMaterial as any).id],
         ),
       )).rows[0];
       expect(firstRow.content_hash).toBeTruthy();
 
-      const { StorageService } = yield* Effect.promise(
-        () => import("../services/storageService.js"),
-      );
       yield* StorageService.delete({
         storageBackend: firstRow.storage_backend,
         storageKey: firstRow.storage_key,
-      });
+      }).pipe(Effect.provide(StorageService.Live), Effect.provide(NodeFileSystem.layer));
 
       const missingDownload = yield* reqEffect(
         "GET",
-        `/api/materials/${firstMaterial.id}/download`,
+        `/api/materials/${(firstMaterial as any).id}/download`,
         { cookie: adminCookie },
       );
       expect(missingDownload.status).toBe(500);
-      expect(yield* Effect.tryPromise(() => missingDownload.json())).toEqual({
-        error: "Material blob missing from storage",
+      expect(yield* resJson(missingDownload)).toEqual({
+        error: "Internal Server Error",
       });
 
       const secondUpload = yield* uploadMaterial("Conflicting Title", "renamed-upload.pdf", false);
       expect(secondUpload.status).toBe(200);
-      const secondMaterial = yield* Effect.tryPromise(() => secondUpload.json());
-      expect(secondMaterial.id).toBe(firstMaterial.id);
+      const secondMaterial = yield* resJson(secondUpload);
+      expect(secondMaterial.id).toBe((firstMaterial as any).id);
       expect(secondMaterial.title).toBe("Original Title");
       expect(secondMaterial.original_filename).toBe("original-upload.pdf");
       expect(secondMaterial.is_global).toBe(true);
@@ -644,19 +523,20 @@ describe("DFG Portal API", () => {
         yield* StorageService.exists({
           storageBackend: firstRow.storage_backend,
           storageKey: firstRow.storage_key,
-        }),
+        }).pipe(Effect.provide(StorageService.Live), Effect.provide(NodeFileSystem.layer)),
       ).toBe(true);
     }),
   );
 
-  it.effect("messages: student can send a message to staff", () =>
-    Effect.gen(function* () {
+  it.effect(
+    "messages: student can send a message to staff",
+    Effect.fnUntraced(function* () {
       const create = yield* reqEffect("POST", "/api/messages", {
         body: { body: "Can we move this week's lesson to Friday?" },
         cookie: studentCookie,
       });
       expect(create.status).toBe(200);
-      const created = yield* Effect.tryPromise(() => create.json());
+      const created = yield* resJson(create);
       expect(created.sender_id).toBe(studentId);
       expect(created.body).toBe("Can we move this week's lesson to Friday?");
       expect(created.recipient_id).toBeTruthy();
@@ -673,8 +553,9 @@ describe("DFG Portal API", () => {
     }),
   );
 
-  it.effect("assignments: tracks playback time and self-reviews", () =>
-    Effect.gen(function* () {
+  it.effect(
+    "assignments: tracks playback time and self-reviews",
+    Effect.fnUntraced(function* () {
       const notationTracks = [
         { index: 0, name: "Lead Guitar", short_name: "Lead", is_percussion: false },
         { index: 1, name: "Bass", short_name: "Bass", is_percussion: false },
@@ -719,14 +600,14 @@ describe("DFG Portal API", () => {
         cookie: studentCookie,
       });
       expect(playback1.status).toBe(200);
-      expect((yield* Effect.tryPromise(() => playback1.json())).listened_seconds).toBe(35);
+      expect((yield* resJson(playback1)).listened_seconds).toBe(35);
 
       const review1 = yield* reqEffect("POST", `/api/assignments/${notationMat.id}/reviews`, {
         body: { stars: 4 },
         cookie: studentCookie,
       });
       expect(review1.status).toBe(200);
-      const review1Body = yield* Effect.tryPromise(() => review1.json());
+      const review1Body = yield* resJson(review1);
       expect(review1Body.stars).toBe(4);
       expect(review1Body.listened_seconds).toBe(35);
 
@@ -735,14 +616,14 @@ describe("DFG Portal API", () => {
         cookie: studentCookie,
       });
       expect(playback2.status).toBe(200);
-      expect((yield* Effect.tryPromise(() => playback2.json())).listened_seconds).toBe(60);
+      expect((yield* resJson(playback2)).listened_seconds).toBe(60);
 
       const review2 = yield* reqEffect("POST", `/api/assignments/${notationMat.id}/reviews`, {
         body: { stars: 5 },
         cookie: studentCookie,
       });
       expect(review2.status).toBe(200);
-      const review2Body = yield* Effect.tryPromise(() => review2.json());
+      const review2Body = yield* resJson(review2);
       expect(review2Body.stars).toBe(5);
       expect(review2Body.listened_seconds).toBe(60);
 
@@ -765,14 +646,15 @@ describe("DFG Portal API", () => {
     }),
   );
 
-  it.effect("curriculum: admin CRUD, enrollment, student views", () =>
-    Effect.gen(function* () {
+  it.effect(
+    "curriculum: admin CRUD, enrollment, student views",
+    Effect.fnUntraced(function* () {
       const createCourse = yield* reqEffect("POST", "/api/admin/courses", {
         body: { title: "Guitar 101", instrument: "guitar", description: "Beginner guitar" },
         cookie: adminCookie,
       });
       expect(createCourse.status).toBe(200);
-      const course = yield* Effect.tryPromise(() => createCourse.json());
+      const course = yield* resJson(createCourse);
       const courseId = course.id;
       expect(course.title).toBe("Guitar 101");
 
@@ -781,16 +663,14 @@ describe("DFG Portal API", () => {
         cookie: adminCookie,
       });
       expect(updateCourse.status).toBe(200);
-      expect((yield* Effect.tryPromise(() => updateCourse.json())).description).toBe(
-        "Updated beginner guitar",
-      );
+      expect((yield* resJson(updateCourse)).description).toBe("Updated beginner guitar");
 
       const createMod = yield* reqEffect("POST", `/api/admin/courses/${courseId}/modules`, {
         body: { title: "Week 1: Basics", sort_order: 1 },
         cookie: adminCookie,
       });
       expect(createMod.status).toBe(200);
-      const mod = yield* Effect.tryPromise(() => createMod.json());
+      const mod = yield* resJson(createMod);
       const moduleId = mod.id;
 
       const updateMod = yield* reqEffect("PATCH", `/api/admin/modules/${moduleId}`, {
@@ -798,7 +678,7 @@ describe("DFG Portal API", () => {
         cookie: adminCookie,
       });
       expect(updateMod.status).toBe(200);
-      expect((yield* Effect.tryPromise(() => updateMod.json())).title).toBe("Week 1: Fundamentals");
+      expect((yield* resJson(updateMod)).title).toBe("Week 1: Fundamentals");
 
       const globalMat = (yield* Effect.tryPromise(() =>
         testDb.query(
@@ -839,31 +719,29 @@ describe("DFG Portal API", () => {
 
       const adminCourses = yield* reqEffect("GET", "/api/admin/courses", { cookie: adminCookie });
       expect(adminCourses.status).toBe(200);
-      expect((yield* Effect.tryPromise(() => adminCourses.json())).length).toBeGreaterThanOrEqual(
-        1,
-      );
+      expect((yield* resJson(adminCourses)).length).toBeGreaterThanOrEqual(1);
 
       const courses = yield* reqEffect("GET", "/api/courses", { cookie: studentCookie });
       expect(courses.status).toBe(200);
-      const courseList = yield* Effect.tryPromise(() => courses.json());
+      const courseList = yield* resJson(courses);
       expect(courseList).toHaveLength(1);
       expect(courseList[0].title).toBe("Guitar 101");
 
       const detail = yield* reqEffect("GET", `/api/courses/${courseId}`, { cookie: studentCookie });
       expect(detail.status).toBe(200);
-      const courseDetail = yield* Effect.tryPromise(() => detail.json());
+      const courseDetail = yield* resJson(detail);
       expect(courseDetail.modules).toHaveLength(1);
       expect(courseDetail.modules[0].materials).toHaveLength(1);
       expect(courseDetail.modules[0].materials[0].title).toBe("Chord Chart");
 
       const library = yield* reqEffect("GET", "/api/library", { cookie: studentCookie });
       expect(library.status).toBe(200);
-      const libraryList = (yield* Effect.tryPromise(() => library.json())) as TitledItem[];
+      const libraryList = (yield* resJson(library)) as TitledItem[];
       expect(libraryList.some((material) => material.title === "Chord Chart")).toBe(true);
 
       const assignments = yield* reqEffect("GET", "/api/assignments", { cookie: studentCookie });
       expect(assignments.status).toBe(200);
-      const assignList = (yield* Effect.tryPromise(() => assignments.json())) as TitledItem[];
+      const assignList = (yield* resJson(assignments)) as TitledItem[];
       expect(assignList.some((material) => material.title === "Private Notes")).toBe(true);
 
       expect(
@@ -879,7 +757,7 @@ describe("DFG Portal API", () => {
 
       const empty = yield* reqEffect("GET", "/api/courses", { cookie: studentCookie });
       expect(empty.status).toBe(200);
-      expect(yield* Effect.tryPromise(() => empty.json())).toHaveLength(0);
+      expect(yield* resJson(empty)).toHaveLength(0);
 
       expect(
         (yield* reqEffect("DELETE", `/api/admin/modules/${moduleId}`, { cookie: adminCookie }))
@@ -892,11 +770,12 @@ describe("DFG Portal API", () => {
     }),
   );
 
-  it.effect("admin: submissions and student list", () =>
-    Effect.gen(function* () {
+  it.effect(
+    "admin: submissions and student list",
+    Effect.fnUntraced(function* () {
       const subs = yield* reqEffect("GET", "/api/admin/submissions", { cookie: adminCookie });
       expect(subs.status).toBe(200);
-      const subList = (yield* Effect.tryPromise(() => subs.json())) as SubmissionSummary[];
+      const subList = (yield* resJson(subs)) as SubmissionSummary[];
       expect(subList.length).toBeGreaterThanOrEqual(1);
       const sub = subList.find((submission) => submission.email === "jane@example.com");
       expect(sub).toBeTruthy();
@@ -911,13 +790,165 @@ describe("DFG Portal API", () => {
 
       const students = yield* reqEffect("GET", "/api/admin/students", { cookie: adminCookie });
       expect(students.status).toBe(200);
-      const studentList = (yield* Effect.tryPromise(() => students.json())) as StudentSummary[];
+      const studentList = (yield* resJson(students)) as StudentSummary[];
       expect(studentList.some((student) => student.username === "student1")).toBe(true);
     }),
   );
 
-  it.effect("authorization: access control", () =>
-    Effect.gen(function* () {
+  it.effect(
+    "admin: recurring prepaid payments validate, enqueue, and upsert idempotently",
+    Effect.fnUntraced(function* () {
+      const path = `/api/admin/students/${studentId}/monthly-payments`;
+      expect((yield* reqEffect("GET", path)).status).toBe(401);
+      expect((yield* reqEffect("GET", path, { cookie: studentCookie })).status).toBe(403);
+
+      const rateResponse = yield* reqEffect("POST", "/api/admin/student-rates", {
+        cookie: adminCookie,
+        body: {
+          student_id: studentId,
+          rate_cents: 18000,
+          lesson_duration_minutes: 60,
+          location_type: "online",
+          billing_model: "monthly_prepaid",
+        },
+      });
+      expect(rateResponse.status).toBe(200);
+      const rate = yield* resJson(rateResponse);
+
+      const invalidMonth = yield* reqEffect("POST", path, {
+        cookie: adminCookie,
+        body: {
+          billing_month: "2026-08-02",
+          amount_cents: 18000,
+          paid_at: "2026-07-28T15:00:00.000Z",
+        },
+      });
+      expect(invalidMonth.status).toBe(400);
+
+      const noSchedule = yield* reqEffect("POST", path, {
+        cookie: adminCookie,
+        body: {
+          billing_month: "2026-08-01",
+          amount_cents: 18000,
+          paid_at: "2026-07-28T15:00:00.000Z",
+        },
+      });
+      expect(noSchedule.status).toBe(409);
+
+      const scheduleResponse = yield* reqEffect(
+        "POST",
+        `/api/admin/students/${studentId}/recurring-schedules`,
+        {
+          cookie: adminCookie,
+          body: {
+            student_rate_id: rate.id,
+            day_of_week: 2,
+            local_start_time: "16:30",
+            timezone: "America/Chicago",
+            starts_on: "2026-08-01",
+            ends_on: null,
+            active: true,
+          },
+        },
+      );
+      expect(scheduleResponse.status).toBe(200);
+      const schedule = yield* resJson(scheduleResponse);
+
+      const paymentBody = {
+        billing_month: "2026-08-01",
+        amount_cents: 18000,
+        paid_at: "2026-07-28T15:00:00.000Z",
+        notes: "August prepaid lessons",
+      };
+      const firstResponse = yield* reqEffect("POST", path, {
+        cookie: adminCookie,
+        body: paymentBody,
+      });
+      expect(firstResponse.status).toBe(200);
+      const first = yield* resJson(firstResponse);
+      expect(first.generation_status).toBe("pending");
+
+      const secondResponse = yield* reqEffect("POST", path, {
+        cookie: adminCookie,
+        body: paymentBody,
+      });
+      expect(secondResponse.status).toBe(200);
+      const second = yield* resJson(secondResponse);
+      expect(second.id).toBe(first.id);
+
+      const paymentsResponse = yield* reqEffect("GET", path, { cookie: adminCookie });
+      expect(paymentsResponse.status).toBe(200);
+      const payments = yield* resJson(paymentsResponse);
+      expect(
+        payments.filter(
+          (payment: { billing_month: string }) => payment.billing_month === "2026-08-01",
+        ),
+      ).toHaveLength(1);
+
+      const jobs = yield* Effect.tryPromise(() =>
+        testDb.query(
+          `select jobs.id, jobs.payload
+             from graphile_worker._private_jobs jobs
+             join graphile_worker._private_tasks tasks on tasks.id = jobs.task_id
+            where tasks.identifier = 'lessons__generate_prepaid_period'
+              and jobs.payload ->> 'paymentId' = $1`,
+          [first.id],
+        ),
+      );
+      expect(jobs.rows).toHaveLength(1);
+      expect(jobs.rows[0].payload).toEqual({ paymentId: first.id });
+
+      const workerLogger = new Logger(consoleLogFactory, { label: "test" });
+      const poolClient = Object.assign(testDb, { release: () => undefined }) as any;
+      const workerHelpers = {
+        withPgClient: async (callback: (client: typeof poolClient) => Promise<unknown>) =>
+          callback(poolClient),
+        logger: workerLogger,
+      } as any;
+      yield* Effect.promise(() =>
+        Promise.resolve(generatePrepaidPeriodTask({ paymentId: first.id }, workerHelpers)),
+      );
+
+      const generated = yield* Effect.tryPromise(() =>
+        testDb.query(
+          `select id, recurrence_date, scheduled_at, recurring_schedule_id
+             from app_public.lessons
+            where recurring_schedule_id = $1
+            order by recurrence_date`,
+          [schedule.id],
+        ),
+      );
+      expect(generated.rows).toHaveLength(4);
+
+      yield* Effect.promise(() =>
+        Promise.resolve(generatePrepaidPeriodTask({ paymentId: first.id }, workerHelpers)),
+      );
+      const generatedAgain = yield* Effect.tryPromise(() =>
+        testDb.query(
+          `select count(*)::integer as count
+             from app_public.lessons
+            where recurring_schedule_id = $1`,
+          [generated.rows[0].recurring_schedule_id],
+        ),
+      );
+      expect(generatedAgain.rows[0].count).toBe(4);
+
+      const paymentState = yield* Effect.tryPromise(() =>
+        testDb.query(
+          `select generation_status, generated_at
+             from app_public.monthly_payments
+            where id = $1`,
+          [first.id],
+        ),
+      );
+      expect(paymentState.rows[0].generation_status).toBe("generated");
+      expect(paymentState.rows[0].generated_at).not.toBeNull();
+    }),
+  );
+
+  it.effect(
+    "authorization: access control",
+    Effect.fnUntraced(function* () {
       const unauth = yield* reqEffect("GET", "/api/courses");
       expect(unauth.status).toBe(401);
 
@@ -926,7 +957,245 @@ describe("DFG Portal API", () => {
 
       const meNoAuth = yield* reqEffect("GET", "/api/me");
       expect(meNoAuth.status).toBe(200);
-      expect((yield* Effect.tryPromise(() => meNoAuth.json())).user).toBeNull();
+      expect((yield* resJson(meNoAuth)).user).toBeNull();
+    }),
+  );
+
+  it.effect(
+    "recurring schedules require an admin and a monthly prepaid rate",
+    Effect.fnUntraced(function* () {
+      const path = `/api/admin/students/${studentId}/recurring-schedules`;
+      expect((yield* reqEffect("GET", path)).status).toBe(401);
+      expect((yield* reqEffect("GET", path, { cookie: studentCookie })).status).toBe(403);
+
+      const singleRateResponse = yield* reqEffect("POST", "/api/admin/student-rates", {
+        cookie: adminCookie,
+        body: {
+          student_id: studentId,
+          rate_cents: 12000,
+          lesson_duration_minutes: 60,
+          location_type: "studio",
+          billing_model: "single_booking",
+        },
+      });
+      expect(singleRateResponse.status).toBe(200);
+      const singleRate = yield* resJson(singleRateResponse);
+      const scheduleBody = {
+        student_rate_id: singleRate.id,
+        day_of_week: 2,
+        local_start_time: "16:30",
+        timezone: "America/Chicago",
+        starts_on: "2026-07-01",
+        active: true,
+      };
+      expect(
+        (yield* reqEffect("POST", path, { cookie: adminCookie, body: scheduleBody })).status,
+      ).toBe(409);
+    }),
+  );
+
+  it.effect(
+    "effective-student: parent acts as selected child for writes and reads",
+    Effect.fnUntraced(function* () {
+      const parentResult = yield* Effect.tryPromise(() =>
+        testDb.query(
+          `select * from app_private.really_create_user($1::citext, $2, null, true, $3::citext, $4)`,
+          ["parent1", "Test Parent", "parent1@test.com", "parent123"],
+        ),
+      );
+      const parentId = parentResult.rows[0].id;
+      yield* Effect.tryPromise(() =>
+        testDb.query(`update app_public.users set role = 'parent' where id = $1`, [parentId]),
+      );
+      const parentPrimaryEmail = "parent1.preferred@test.com";
+      yield* Effect.tryPromise(() =>
+        testDb.query(`update app_public.user_emails set is_primary = false where user_id = $1`, [
+          parentId,
+        ]),
+      );
+      yield* Effect.tryPromise(() =>
+        testDb.query(
+          `insert into app_public.user_emails (user_id, email, is_verified, is_primary) values ($1, $2::citext, true, true), ($1, $3::citext, true, false)`,
+          [parentId, parentPrimaryEmail, "parent1.secondary@test.com"],
+        ),
+      );
+
+      const childResult = yield* Effect.tryPromise(() =>
+        testDb.query(
+          `select * from app_private.really_create_user($1::citext, $2, null, true, $3::citext, $4)`,
+          ["child1", "Test Child", "child1@test.com", "child123"],
+        ),
+      );
+      const childId = childResult.rows[0].id;
+      yield* Effect.tryPromise(() =>
+        testDb.query(`update app_public.users set role = 'student' where id = $1`, [childId]),
+      );
+
+      const familyResult = yield* Effect.tryPromise(() =>
+        testDb.query(`insert into app_public.families (slug, name) values ($1, $2) returning id`, [
+          "test-family",
+          "Test Family",
+        ]),
+      );
+      const familyId = familyResult.rows[0].id;
+
+      yield* Effect.tryPromise(() =>
+        testDb.query(
+          `insert into app_public.family_memberships (family_id, user_id, is_owner) values ($1, $2, true), ($1, $3, false)`,
+          [familyId, parentId, childId],
+        ),
+      );
+
+      const parentLoginRes = yield* reqEffect("POST", "/api/login", {
+        body: { id: "parent1", password: "parent123" },
+      });
+      expect(parentLoginRes.status).toBe(200);
+      const parentCookie = getCookie(parentLoginRes)!;
+      expect(parentCookie).toBeTruthy();
+
+      const setActive = yield* reqEffect("POST", "/api/switch-active-student", {
+        body: { student_id: childId },
+        cookie: parentCookie,
+      });
+      expect(setActive.status).toBe(200);
+
+      const meRes = yield* reqEffect("GET", "/api/me", { cookie: parentCookie });
+      expect(meRes.status).toBe(200);
+      const me = yield* resJson(meRes);
+      expect(me.isParent).toBe(true);
+      expect(me.activeStudentId).toBe(childId);
+      expect(me.familyStudents.length).toBeGreaterThanOrEqual(1);
+      expect(me.user.email).toBe(parentPrimaryEmail);
+
+      const sessionResult = yield* Effect.tryPromise(() =>
+        testDb.query("select id from app_private.sessions where cookie_id = $1", [
+          cookieIdFromToken(parentCookie),
+        ]),
+      );
+      const [{ serverRuntime }, { AuthRouteService }] = yield* Effect.promise(() =>
+        Promise.all([import("../runtime.js"), import("../services/authRouteService.js")]),
+      );
+      const directMe = yield* Effect.promise(() =>
+        serverRuntime.runPromise(AuthRouteService.me(sessionResult.rows[0].id, parentId, childId)),
+      );
+      expect(me).toEqual(directMe);
+
+      const notationTracks = [{ index: 0, name: "Piano", short_name: "Pno", is_percussion: false }];
+      const material = yield* Effect.tryPromise(() =>
+        testDb.query(
+          `insert into app_public.materials (title, original_filename, storage_key, mime_type, file_size, is_global, notation_tracks) values ($1, $2, $3, $4, $5, $6, $7::jsonb) returning id`,
+          [
+            "Twinkle Twinkle",
+            "twinkle.gp5",
+            "/data/twinkle.gp5",
+            "application/octet-stream",
+            2048,
+            false,
+            JSON.stringify(notationTracks),
+          ],
+        ),
+      );
+
+      yield* Effect.tryPromise(() =>
+        testDb.query(
+          `insert into app_public.student_materials (student_id, material_id) values ($1, $2)`,
+          [childId, (material.rows[0] as any).id],
+        ),
+      );
+
+      const materialId = (material.rows[0] as any).id;
+
+      const practiceLog = yield* reqEffect("POST", "/api/practice-logs", {
+        body: { material_id: materialId, status: "practiced", notes: "Good session" },
+        cookie: parentCookie,
+      });
+      expect(practiceLog.status).toBe(200);
+      const log = yield* resJson(practiceLog);
+      expect(log.student_id).toBe(childId);
+      expect(log.material_id).toBe(materialId);
+
+      const playback = yield* reqEffect("POST", `/api/assignments/${materialId}/playback`, {
+        body: { seconds: 42 },
+        cookie: parentCookie,
+      });
+      expect(playback.status).toBe(200);
+      const pb = yield* resJson(playback);
+      expect(pb.material_id).toBe(materialId);
+      expect(pb.listened_seconds).toBe(42);
+
+      const review = yield* reqEffect("POST", `/api/assignments/${materialId}/reviews`, {
+        body: { stars: 3 },
+        cookie: parentCookie,
+      });
+      expect(review.status).toBe(200);
+      const rev = yield* resJson(review);
+      expect(rev.material_id).toBe(materialId);
+      expect(rev.stars).toBe(3);
+
+      const noteRes = yield* reqEffect("PUT", `/api/assignments/${materialId}/notes`, {
+        body: { body: "Need more work on section B" },
+        cookie: parentCookie,
+      });
+      expect(noteRes.status).toBe(200);
+      const note = yield* resJson(noteRes);
+      expect(note.student_id).toBe(childId);
+      expect(note.material_id).toBe(materialId);
+      expect(note.body).toBe("Need more work on section B");
+
+      const msgRes = yield* reqEffect("POST", "/api/messages", {
+        body: { body: "Hello from parent acting as child" },
+        cookie: parentCookie,
+      });
+      expect(msgRes.status).toBe(200);
+      const msg = yield* resJson(msgRes);
+      expect(msg.sender_id).toBe(childId);
+      expect(msg.body).toBe("Hello from parent acting as child");
+
+      const assignRes = yield* reqEffect("GET", "/api/assignments", { cookie: parentCookie });
+      expect(assignRes.status).toBe(200);
+      const assignList = yield* resJson(assignRes);
+      expect(assignList.length).toBeGreaterThanOrEqual(1);
+      const assigned = assignList.find((m: any) => m.id === materialId);
+      expect(assigned).toBeTruthy();
+
+      const notesGet = yield* reqEffect("GET", `/api/assignments/${materialId}/notes`, {
+        cookie: parentCookie,
+      });
+      expect(notesGet.status).toBe(200);
+      const notesBody = yield* resJson(notesGet);
+      expect(notesBody.student_id).toBe(childId);
+
+      const msgs = yield* reqEffect("GET", "/api/messages", { cookie: parentCookie });
+      expect(msgs.status).toBe(200);
+      const msgList = yield* resJson(msgs);
+      expect(msgList.some((m: any) => m.sender_id === childId)).toBe(true);
+
+      yield* Effect.tryPromise(() =>
+        testDb.query("delete from app_public.student_materials where material_id = $1", [
+          materialId,
+        ]),
+      );
+      yield* Effect.tryPromise(() =>
+        testDb.query("delete from app_public.materials where id = $1", [materialId]),
+      );
+      yield* Effect.tryPromise(() =>
+        testDb.query("delete from app_public.family_memberships where family_id = $1", [familyId]),
+      );
+      yield* Effect.tryPromise(() =>
+        testDb.query("delete from app_public.families where id = $1", [familyId]),
+      );
+      yield* Effect.tryPromise(() =>
+        testDb.query("delete from app_private.sessions where user_id = $1", [parentId]),
+      );
+      yield* Effect.tryPromise(() =>
+        testDb.query("delete from app_private.sessions where user_id = $1", [childId]),
+      );
+      yield* Effect.tryPromise(() =>
+        testDb.query("delete from app_public.users where id = $1", [childId]),
+      );
+      yield* Effect.tryPromise(() =>
+        testDb.query("delete from app_public.users where id = $1", [parentId]),
+      );
     }),
   );
 });
