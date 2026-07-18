@@ -26,28 +26,25 @@ export const ConfirmDialog = ({
       if (!isOpen) onCancel();
     }}
     isDismissable={false}
-    className="inset-0 bg-black/60 backdrop-blur-xs data-[entering]:animate-in data-[entering]:fade-in data-[exiting]:animate-out data-[exiting]:fade-out fixed z-50 flex items-center justify-center"
+    className="data-[entering]:animate-in data-[entering]:fade-in data-[exiting]:animate-out data-[exiting]:fade-out fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs"
   >
-    <Modal className="max-w-lg w-full outline-hidden">
+    <Modal className="w-full max-w-lg outline-hidden">
       <Dialog
         role="alertdialog"
-        className="rounded-xl border-overlay/6 dark:border-overlay-dark/6 bg-card dark:bg-card-dark p-6 shadow-2xl relative border outline-hidden"
+        className="relative rounded-xl border border-overlay/6 bg-card p-6 shadow-2xl outline-hidden dark:border-overlay-dark/6 dark:bg-card-dark"
       >
         <Heading
           slot="title"
-          className="text-lg font-semibold text-primary dark:text-primary-dark mb-4"
+          className="mb-4 text-lg font-semibold text-primary dark:text-primary-dark"
         >
           {title}
         </Heading>
         <p className="mb-6 text-muted dark:text-muted-dark">{message}</p>
-        <div className="gap-3 flex justify-end">
+        <div className="flex justify-end gap-3">
           <Button variant="ghost" onClick={onCancel}>
             Cancel
           </Button>
-          <Button
-            variant={variant === "danger" ? "danger" : "primary"}
-            onClick={onConfirm}
-          >
+          <Button variant={variant === "danger" ? "danger" : "primary"} onClick={onConfirm}>
             {confirmLabel}
           </Button>
         </div>

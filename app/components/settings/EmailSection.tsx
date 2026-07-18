@@ -13,7 +13,7 @@ export function EmailSection({
   onRefresh,
 }: {
   emails: UserEmail[];
-  onRefresh: () => void;
+  onRefresh: () => Promise<void>;
 }) {
   const [newEmail, setNewEmail] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<UserEmail | null>(null);
@@ -21,32 +21,24 @@ export function EmailSection({
   const addEmailMutation = useMutation({
     mutationFn: (email: string) =>
       Effect.runPromise(api.authenticated.addMyEmail({ payload: { email } })),
-    onSettled: () => {
-      onRefresh();
-    },
+    onSuccess: onRefresh,
   });
 
   const makePrimaryMutation = useMutation({
     mutationFn: (id: string) =>
       Effect.runPromise(api.authenticated.makePrimaryEmail({ path: { id } })),
-    onSettled: () => {
-      onRefresh();
-    },
+    onSuccess: onRefresh,
   });
 
   const resendVerificationMutation = useMutation({
     mutationFn: (id: string) =>
-      Effect.runPromise(
-        api.authenticated.resendEmailVerification({ path: { id } }),
-      ),
+      Effect.runPromise(api.authenticated.resendEmailVerification({ path: { id } })),
   });
 
   const deleteEmailMutation = useMutation({
     mutationFn: (id: string) =>
       Effect.runPromise(api.authenticated.deleteMyEmail({ path: { id } })),
-    onSettled: () => {
-      onRefresh();
-    },
+    onSuccess: onRefresh,
   });
 
   const handleAddEmail = (e: React.FormEvent) => {
@@ -77,7 +69,10 @@ export function EmailSection({
                       {em.email}
                     </span>
                     {em.is_primary ? (
-                      <span className="rounded-full bg-accent/20 px-2 py-0.5 text-xs font-semibold text-accent">
+                      <span
+                        data-testid="primary-badge"
+                        className="rounded-full bg-accent/20 px-2 py-0.5 text-xs font-semibold text-accent"
+                      >
                         Primary
                       </span>
                     ) : null}
@@ -160,9 +155,7 @@ export function EmailSection({
       <ConfirmDialog
         open={deleteTarget !== null}
         title="Remove Email"
-        message={
-          deleteTarget ? `Remove ${deleteTarget.email} from your account?` : ""
-        }
+        message={deleteTarget ? `Remove ${deleteTarget.email} from your account?` : ""}
         confirmLabel="Remove"
         variant="danger"
         onConfirm={confirmDelete}

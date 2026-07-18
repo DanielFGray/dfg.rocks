@@ -1,10 +1,14 @@
 import { Effect } from "effect";
 import { useEffect, useState } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { api } from "../../lib/api.js";
 import type { Testimonial, WorkingHours } from "../../../shared/schemas.js";
+import { defaultWorkingHours } from "../../../shared/workingHours.js";
 import { Button } from "../ui/Button.js";
 import { Card } from "../ui/Card.js";
+import { Input } from "../ui/Input.js";
+import { TimeField } from "../ui/TimeField.js";
+import { Time } from "@internationalized/date";
 
 /* ---------------------------------------------------------------------------
  * Working hours types & constants
@@ -22,16 +26,6 @@ const days = [
   { index: "5", label: "Friday" },
   { index: "6", label: "Saturday" },
 ] as const;
-
-const defaultWorkingHours: WorkingHoursMap = {
-  "0": null,
-  "1": { start: "09:00", end: "20:00" },
-  "2": { start: "09:00", end: "20:00" },
-  "3": { start: "09:00", end: "20:00" },
-  "4": { start: "09:00", end: "20:00" },
-  "5": { start: "09:00", end: "20:00" },
-  "6": { start: "10:00", end: "14:00" },
-};
 
 function toWorkingHoursMap(wh: WorkingHours): WorkingHoursMap {
   const mapped: WorkingHoursMap = {};
@@ -56,34 +50,40 @@ export function AdminSection({
   workingHoursData: WorkingHours;
   testimonialReminderIntervalDays: number;
   testimonials: Testimonial[];
-  onRefresh: () => void;
+  onRefresh: () => Promise<void>;
 }) {
   const [workingHours, setWorkingHours] = useState<WorkingHoursMap>(() =>
-    workingHoursData
-      ? toWorkingHoursMap(workingHoursData)
-      : defaultWorkingHours,
+    toWorkingHoursMap(workingHoursData ?? defaultWorkingHours),
   );
-  const [intervalDays, setIntervalDays] = useState(() =>
-    String(testimonialReminderIntervalDays),
-  );
+  const [intervalDays, setIntervalDays] = useState(() => String(testimonialReminderIntervalDays));
+  const [policyWindowHours, setPolicyWindowHours] = useState(() => "");
+  const [policyChargePercent, setPolicyChargePercent] = useState(() => "");
+  const [policyInitialized, setPolicyInitialized] = useState(false);
 
   useEffect(() => {
-    setWorkingHours(
-      workingHoursData
-        ? toWorkingHoursMap(workingHoursData)
-        : defaultWorkingHours,
-    );
+    setWorkingHours(toWorkingHoursMap(workingHoursData ?? defaultWorkingHours));
   }, [workingHoursData]);
 
   useEffect(() => {
     setIntervalDays(String(testimonialReminderIntervalDays));
   }, [testimonialReminderIntervalDays]);
 
+  const policyQuery = useQuery({
+    queryKey: ["admin", "cancellation-policy"],
+    queryFn: () => Effect.runPromise(api.admin.cancellationPolicySettings()),
+  });
+
+  useEffect(() => {
+    if (policyQuery.data && !policyInitialized) {
+      setPolicyWindowHours(String(policyQuery.data.cancellation_window_hours));
+      setPolicyChargePercent(String(policyQuery.data.late_cancel_charge_percent));
+      setPolicyInitialized(true);
+    }
+  }, [policyQuery.data, policyInitialized]);
+
   const disconnectMutation = useMutation({
     mutationFn: () => Effect.runPromise(api.admin.gcalDisconnect()),
-    onSettled: () => {
-      onRefresh();
-    },
+    onSuccess: onRefresh,
   });
 
   const saveHoursMutation = useMutation({
@@ -101,9 +101,7 @@ export function AdminSection({
           },
         }),
       ),
-    onSettled: () => {
-      onRefresh();
-    },
+    onSuccess: onRefresh,
   });
 
   const saveReminderIntervalMutation = useMutation({
@@ -113,27 +111,23 @@ export function AdminSection({
           payload: { interval_days: nextIntervalDays },
         }),
       ),
-    onSettled: () => {
-      onRefresh();
-    },
+    onSuccess: onRefresh,
   });
   const reviewTestimonialMutation = useMutation({
-    mutationFn: ({
-      testimonialId,
-      isApproved,
-    }: {
-      testimonialId: string;
-      isApproved: boolean;
-    }) =>
+    mutationFn: ({ testimonialId, isApproved }: { testimonialId: string; isApproved: boolean }) =>
       Effect.runPromise(
         api.admin.updateTestimonialApproval({
           path: { id: testimonialId },
           payload: { is_approved: isApproved },
         }),
       ),
-    onSettled: () => {
-      onRefresh();
-    },
+    onSuccess: onRefresh,
+  });
+
+  const savePolicyMutation = useMutation({
+    mutationFn: (payload: { cancellation_window_hours: number; late_cancel_charge_percent: number }) =>
+      Effect.runPromise(api.admin.saveCancellationPolicySettings({ payload })),
+    onSuccess: onRefresh,
   });
 
   const handleConnect = () => {
@@ -147,11 +141,7 @@ export function AdminSection({
     }));
   };
 
-  const updateDayTime = (
-    index: string,
-    field: "start" | "end",
-    value: string,
-  ) => {
+  const updateDayTime = (index: string, field: "start" | "end", value: string) => {
     setWorkingHours((prev) => {
       const current = prev[index];
       if (!current) return prev;
@@ -167,6 +157,20 @@ export function AdminSection({
     parsedIntervalDays !== testimonialReminderIntervalDays &&
     !saveReminderIntervalMutation.isPending;
 
+  const parsedWindowHours = Number(policyWindowHours);
+  const parsedChargePercent = Number(policyChargePercent);
+  const canSavePolicy =
+    policyQuery.data &&
+    Number.isInteger(parsedWindowHours) &&
+    parsedWindowHours >= 0 &&
+    parsedWindowHours <= 720 &&
+    Number.isInteger(parsedChargePercent) &&
+    parsedChargePercent >= 0 &&
+    parsedChargePercent <= 100 &&
+    (parsedWindowHours !== policyQuery.data.cancellation_window_hours ||
+      parsedChargePercent !== policyQuery.data.late_cancel_charge_percent) &&
+    !savePolicyMutation.isPending;
+
   return (
     <section className="mb-12" data-testid="gcal-section">
       <h2 className="mb-4 text-xl font-semibold">Google Calendar</h2>
@@ -175,14 +179,10 @@ export function AdminSection({
         <Card>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <p className="font-medium text-primary dark:text-primary-dark">
-                Connected
-              </p>
+              <p className="font-medium text-primary dark:text-primary-dark">Connected</p>
               <p className="text-sm text-muted dark:text-muted-dark">
                 Calendar:{" "}
-                {"calendar_id" in gcalStatus
-                  ? (gcalStatus.calendar_id ?? "primary")
-                  : "primary"}
+                {"calendar_id" in gcalStatus ? (gcalStatus.calendar_id ?? "primary") : "primary"}
               </p>
             </div>
             <Button
@@ -204,11 +204,7 @@ export function AdminSection({
                 Connect your Google Calendar to enable scheduling
               </p>
             </div>
-            <Button
-              variant="primary"
-              onClick={handleConnect}
-              data-testid="gcal-connect"
-            >
+            <Button variant="primary" onClick={handleConnect} data-testid="gcal-connect">
               Connect Calendar
             </Button>
           </div>
@@ -226,23 +222,45 @@ export function AdminSection({
               </span>
               {workingHours[day.index] ? (
                 <div className="flex flex-wrap items-center gap-2">
-                  <input
-                    type="time"
-                    value={workingHours[day.index]!.start}
-                    onChange={(e) =>
-                      updateDayTime(day.index, "start", e.target.value)
+                  <TimeField
+                    label="Start"
+                    value={
+                      workingHours[day.index]!.start
+                        ? new Time(
+                            Number(workingHours[day.index]!.start.split(":")[0]),
+                            Number(workingHours[day.index]!.start.split(":")[1]),
+                          )
+                        : null
                     }
-                    className="border-border rounded-sm border bg-surface px-2 py-1 text-sm text-primary dark:bg-surface-dark dark:text-primary-dark"
+                    onChange={(v) => {
+                      if (v)
+                        updateDayTime(
+                          day.index,
+                          "start",
+                          `${String(v.hour).padStart(2, "0")}:${String(v.minute).padStart(2, "0")}`,
+                        );
+                    }}
                     data-testid={`hours-start-${day.index}`}
                   />
                   <span className="text-muted dark:text-muted-dark">to</span>
-                  <input
-                    type="time"
-                    value={workingHours[day.index]!.end}
-                    onChange={(e) =>
-                      updateDayTime(day.index, "end", e.target.value)
+                  <TimeField
+                    label="End"
+                    value={
+                      workingHours[day.index]!.end
+                        ? new Time(
+                            Number(workingHours[day.index]!.end.split(":")[0]),
+                            Number(workingHours[day.index]!.end.split(":")[1]),
+                          )
+                        : null
                     }
-                    className="border-border rounded-sm border bg-surface px-2 py-1 text-sm text-primary dark:bg-surface-dark dark:text-primary-dark"
+                    onChange={(v) => {
+                      if (v)
+                        updateDayTime(
+                          day.index,
+                          "end",
+                          `${String(v.hour).padStart(2, "0")}:${String(v.minute).padStart(2, "0")}`,
+                        );
+                    }}
                     data-testid={`hours-end-${day.index}`}
                   />
                   <Button
@@ -256,9 +274,7 @@ export function AdminSection({
                 </div>
               ) : (
                 <div className="flex items-center gap-2">
-                  <span className="text-sm text-muted dark:text-muted-dark">
-                    Not working
-                  </span>
+                  <span className="text-sm text-muted dark:text-muted-dark">Not working</span>
                   <Button
                     variant="ghost"
                     onClick={() => toggleDay(day.index)}
@@ -283,47 +299,81 @@ export function AdminSection({
         </div>
       </div>
 
+      {/* Cancellation Policy */}
+      <h3 className="mt-8 mb-4 text-lg font-semibold">Cancellation Policy</h3>
+      <Card>
+        {policyQuery.isLoading ? (
+          <p className="text-sm text-muted dark:text-muted-dark">Loading...</p>
+        ) : policyQuery.error ? (
+          <p className="text-sm text-red-500">Failed to load cancellation policy settings.</p>
+        ) : (
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-end">
+              <Input
+                id="cancellation-window-hours"
+                name="cancellation_window_hours"
+                label="Cancellation window (hours)"
+                type="number"
+                placeholder="24"
+                value={policyWindowHours}
+                onChange={setPolicyWindowHours}
+                data-testid="policy-window-hours-input"
+              />
+              <Input
+                id="late-cancel-charge-percent"
+                name="late_cancel_charge_percent"
+                label="Late cancel charge (%)"
+                type="number"
+                placeholder="50"
+                value={policyChargePercent}
+                onChange={setPolicyChargePercent}
+                data-testid="policy-charge-percent-input"
+              />
+            </div>
+            <Button
+              variant="primary"
+              onClick={() =>
+                savePolicyMutation.mutate({
+                  cancellation_window_hours: parsedWindowHours,
+                  late_cancel_charge_percent: parsedChargePercent,
+                })
+              }
+              disabled={!canSavePolicy}
+              data-testid="save-cancellation-policy"
+            >
+              {savePolicyMutation.isPending ? "Saving..." : "Save Policy"}
+            </Button>
+          </div>
+        )}
+      </Card>
+
       <h3 className="mt-8 mb-4 text-lg font-semibold">Testimonial Reminders</h3>
       <Card>
         <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div className="flex-1">
-            <p className="font-medium text-primary dark:text-primary-dark">
-              Reminder interval
-            </p>
+            <p className="font-medium text-primary dark:text-primary-dark">Reminder interval</p>
             <p className="text-sm text-muted dark:text-muted-dark">
-              New students and parents will see the dashboard testimonial prompt
-              after this many days, and reminder emails will repeat on the same
-              cadence until they submit one.
+              New students and parents will see the dashboard testimonial prompt after this many
+              days, and reminder emails will repeat on the same cadence until they submit one.
             </p>
           </div>
           <div className="flex flex-col gap-2 sm:min-w-56">
-            <label
-              htmlFor="testimonial-reminder-interval"
-              className="text-sm font-medium text-primary dark:text-primary-dark"
-            >
-              Days between reminders
-            </label>
-            <input
+            <Input
               id="testimonial-reminder-interval"
+              name="testimonial-reminder-interval"
+              label="Days between reminders"
               type="number"
-              min={1}
-              max={365}
               value={intervalDays}
-              onChange={(e) => setIntervalDays(e.target.value)}
-              className="border-border rounded-sm border bg-surface px-3 py-2 text-sm text-primary dark:bg-surface-dark dark:text-primary-dark"
+              onChange={setIntervalDays}
               data-testid="testimonial-reminder-interval-input"
             />
             <Button
               variant="primary"
-              onClick={() =>
-                saveReminderIntervalMutation.mutate(parsedIntervalDays)
-              }
+              onClick={() => saveReminderIntervalMutation.mutate(parsedIntervalDays)}
               disabled={!canSaveInterval}
               data-testid="save-testimonial-reminder-interval"
             >
-              {saveReminderIntervalMutation.isPending
-                ? "Saving..."
-                : "Save Reminder Interval"}
+              {saveReminderIntervalMutation.isPending ? "Saving..." : "Save Reminder Interval"}
             </Button>
           </div>
         </div>
@@ -337,7 +387,7 @@ export function AdminSection({
               reviewTestimonialMutation.isPending &&
               reviewTestimonialMutation.variables?.testimonialId === testimonial.id;
             return (
-              <Card key={testimonial.id}>
+              <Card key={testimonial.id} data-testid="testimonial-review-card">
                 <div className="flex flex-col gap-4">
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                     <div>
@@ -352,9 +402,7 @@ export function AdminSection({
                       {testimonial.is_approved ? "Approved" : "Pending review"}
                     </span>
                   </div>
-                  <p className="text-sm text-primary dark:text-primary-dark">
-                    {testimonial.body}
-                  </p>
+                  <p className="text-sm text-primary dark:text-primary-dark">{testimonial.body}</p>
                   <div className="flex items-center justify-between gap-3">
                     <p className="text-xs text-muted dark:text-muted-dark">
                       Updated{" "}
@@ -366,6 +414,7 @@ export function AdminSection({
                     </p>
                     <Button
                       variant={testimonial.is_approved ? "outline" : "primary"}
+                      data-testid="approve-testimonial"
                       onClick={() =>
                         reviewTestimonialMutation.mutate({
                           testimonialId: testimonial.id,

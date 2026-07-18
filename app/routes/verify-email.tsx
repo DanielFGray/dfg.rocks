@@ -1,39 +1,41 @@
-import { Effect } from "effect";
-import { useEffect } from "react";
-import { createFileRoute, Link } from "@tanstack/react-router";
-import { useMutation } from "@tanstack/react-query";
 import * as S from "effect/Schema";
-import { api } from "../lib/api.js";
-import { getErrorMessage } from "../lib/errors.js";
+import { createServerFn } from "@tanstack/react-start";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { TokenSearch } from "../../shared/schemas.js";
+import { serverRuntime } from "../../server/runtime.js";
+import { PublicRouteService } from "../../server/services/publicRouteService.js";
+
+const verifyEmailPageData = createServerFn({ method: "GET" })
+  .validator((data: unknown) => S.decodeUnknownSync(TokenSearch)(data))
+  .handler(async ({ data }) => {
+    if (!data.token) {
+      return { status: "missing-token" as const, error: null };
+    }
+
+    try {
+      await serverRuntime.runPromise(PublicRouteService.verifyEmail(data.token));
+      return { status: "verified" as const, error: null };
+    } catch (error) {
+      return {
+        status: "error" as const,
+        error: error instanceof Error ? error.message : "Verification failed",
+      };
+    }
+  });
 
 export const Route = createFileRoute("/verify-email")({
   head: () => ({ meta: [{ title: "Verify Email | DFG Portal" }] }),
-  validateSearch: (
-    search: Record<string, unknown>,
-  ): S.Schema.Type<typeof TokenSearch> =>
+  validateSearch: (search: Record<string, unknown>): S.Schema.Type<typeof TokenSearch> =>
     S.decodeUnknownSync(TokenSearch)(search),
+  loaderDeps: ({ search }) => ({ token: search.token }),
+  loader: ({ deps }) => verifyEmailPageData({ data: deps }),
   component: VerifyEmailPage,
 });
 
 function VerifyEmailPage() {
-  const { token } = Route.useSearch();
+  const { status, error } = Route.useLoaderData();
 
-  const verify = useMutation({
-    mutationFn: async () => {
-      if (!token) throw new Error("Missing verification token");
-      await Effect.runPromise(api.public.verifyEmail({ payload: { token } }));
-    },
-  });
-
-  useEffect(() => {
-    if (token) {
-      verify.mutate();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token]);
-
-  if (!token) {
+  if (status === "missing-token") {
     return (
       <main className="flex min-h-screen items-center justify-center px-4">
         <div className="text-center">
@@ -55,17 +57,14 @@ function VerifyEmailPage() {
     );
   }
 
-  if (verify.isError) {
-    const message = getErrorMessage(verify.error, "Verification failed");
+  if (status === "error") {
     return (
       <main className="flex min-h-screen items-center justify-center px-4">
         <div className="text-center">
           <h1 className="mb-4 text-2xl font-bold text-primary dark:text-primary-dark">
             Verification Failed
           </h1>
-          <p className="mb-6 text-sm text-muted dark:text-muted-dark">
-            {message}
-          </p>
+          <p className="mb-6 text-sm text-muted dark:text-muted-dark">{error}</p>
           <Link
             to="/login"
             search={{ redirect: undefined }}
@@ -78,30 +77,18 @@ function VerifyEmailPage() {
     );
   }
 
-  if (verify.isSuccess) {
-    return (
-      <main className="flex min-h-screen items-center justify-center px-4">
-        <div className="text-center">
-          <h1 className="mb-4 text-2xl font-bold text-primary dark:text-primary-dark">
-            Email Verified
-          </h1>
-          <p className="mb-6 text-sm text-muted dark:text-muted-dark">
-            Your email has been verified successfully.
-          </p>
-          <Link to="/dashboard" className="text-sm text-accent hover:underline">
-            Go to dashboard
-          </Link>
-        </div>
-      </main>
-    );
-  }
-
   return (
     <main className="flex min-h-screen items-center justify-center px-4">
       <div className="text-center">
-        <p className="text-sm text-muted dark:text-muted-dark">
-          Verifying your email...
+        <h1 className="mb-4 text-2xl font-bold text-primary dark:text-primary-dark">
+          Email Verified
+        </h1>
+        <p className="mb-6 text-sm text-muted dark:text-muted-dark">
+          Your email has been verified successfully.
         </p>
+        <Link to="/dashboard" className="text-sm text-accent hover:underline">
+          Go to dashboard
+        </Link>
       </div>
     </main>
   );

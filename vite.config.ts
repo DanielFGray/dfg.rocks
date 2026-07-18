@@ -6,7 +6,14 @@ import { env } from "./server/assertEnv.js";
 import tailwind from "@tailwindcss/vite";
 
 export default defineConfig({
-  plugins: [alphaTabAssetsPlugin(), tanstackStart({ srcDirectory: "app" }), react(), tailwind()],
+  plugins: [
+    alphaTabAssetsPlugin(),
+    tanstackStart({
+      srcDirectory: "app",
+    }),
+    react(),
+    tailwind(),
+  ],
   optimizeDeps: {
     exclude: ["@coderline/alphatab"],
   },

@@ -1,10 +1,7 @@
 import type { Message } from "../../../shared/schemas.js";
 
 /** Group messages by conversation partner (the other user's ID). */
-export function groupByPartner(
-  messages: readonly Message[],
-  myId: string,
-): Map<string, Message[]> {
+export function groupByPartner(messages: readonly Message[], myId: string): Map<string, Message[]> {
   const groups = new Map<string, Message[]>();
   messages.forEach((msg) => {
     const partnerId = msg.sender_id === myId ? msg.recipient_id : msg.sender_id;
@@ -17,10 +14,7 @@ export function groupByPartner(
   });
   // Sort each thread oldest-first for display
   groups.forEach((thread) => {
-    thread.sort(
-      (a, b) =>
-        new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
-    );
+    thread.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
   });
   return groups;
 }

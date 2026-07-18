@@ -1,5 +1,5 @@
 #!/usr/bin/env bun
-import { execSync, spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { env } from "../server/assertEnv.js";
 
 function withDatabaseSuffix(connectionString: string, suffix: string): string {
@@ -22,9 +22,8 @@ function forceIpv4(urlString: string): string {
   return url.toString();
 }
 
-const vitePort = process.env.VITE_PORT || process.env.PLAYWRIGHT_VITE_PORT || "4174";
-
-const childEnv: Record<string, string> = {
+const vitePort = process.env.PLAYWRIGHT_VITE_PORT || process.env.VITE_PORT || "4174";
+const childEnv: NodeJS.ProcessEnv = {
   ...process.env,
   DATABASE_URL: forceIpv4(withDatabaseSuffix(env.DATABASE_URL, "_test")),
   AUTH_DATABASE_URL: forceIpv4(withDatabaseSuffix(env.AUTH_DATABASE_URL, "_test")),
@@ -36,36 +35,37 @@ const childEnv: Record<string, string> = {
   NODE_ENV: "test",
 };
 
-for (const command of [
-  "bun run db:ensure",
-  "bun -b graphile-migrate reset --erase",
-  "cd worker && bun -b graphile-worker --schema-only",
-  "bun -b graphile-migrate watch --once",
-]) {
-  execSync(command, {
-    cwd: process.cwd(),
+function run(command: string, args: string[], cwd = process.cwd()): void {
+  const result = spawnSync(command, args, {
+    cwd,
     env: childEnv,
     stdio: "inherit",
   });
+
+  if (result.error) throw result.error;
+  if (result.status !== 0) {
+    throw new Error(`${command} ${args.join(" ")} exited with status ${result.status}`);
+  }
 }
 
-const server = spawn("bun", ["run", "dev:app"], {
+run("bun", ["run", "db:ensure"]);
+run("bun", ["-b", "graphile-migrate", "reset", "--erase"]);
+run("bun", ["-b", "graphile-worker", "--schema-only"], `${process.cwd()}/worker`);
+run("bun", ["-b", "graphile-migrate", "watch", "--once"]);
+
+const server = spawn("bun", ["-b", "vite", "dev"], {
   cwd: process.cwd(),
   env: childEnv,
   stdio: "inherit",
 });
 
 for (const signal of ["SIGINT", "SIGTERM"] as const) {
-  process.on(signal, () => {
-    server.kill(signal);
-  });
+  process.once(signal, () => server.kill(signal));
 }
 
-server.on("exit", (code, signal) => {
-  if (signal) {
-    process.kill(process.pid, signal);
-    return;
-  }
-
-  process.exit(code ?? 0);
+server.on("error", (error) => {
+  console.error("E2E server failed to start:", error);
+  process.exit(1);
 });
+
+server.on("exit", (code) => process.exit(code ?? 0));

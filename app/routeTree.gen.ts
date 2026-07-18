@@ -25,6 +25,7 @@ import { Route as AuthedMyLessonsRouteImport } from './routes/_authed/my-lessons
 import { Route as AuthedMessagesRouteImport } from './routes/_authed/messages'
 import { Route as AuthedLibraryRouteImport } from './routes/_authed/library'
 import { Route as AuthedLessonsRouteImport } from './routes/_authed/lessons'
+import { Route as AuthedFamilyRouteImport } from './routes/_authed/family'
 import { Route as AuthedDashboardRouteImport } from './routes/_authed/dashboard'
 import { Route as AuthedBookLessonRouteImport } from './routes/_authed/book-lesson'
 import { Route as AuthedAssignmentsRouteImport } from './routes/_authed/assignments'
@@ -116,6 +117,11 @@ const AuthedLessonsRoute = AuthedLessonsRouteImport.update({
   path: '/lessons',
   getParentRoute: () => AuthedRoute,
 } as any)
+const AuthedFamilyRoute = AuthedFamilyRouteImport.update({
+  id: '/family',
+  path: '/family',
+  getParentRoute: () => AuthedRoute,
+} as any)
 const AuthedDashboardRoute = AuthedDashboardRouteImport.update({
   id: '/dashboard',
   path: '/dashboard',
@@ -187,6 +193,7 @@ export interface FileRoutesByFullPath {
   '/assignments': typeof AuthedAssignmentsRouteWithChildren
   '/book-lesson': typeof AuthedBookLessonRoute
   '/dashboard': typeof AuthedDashboardRoute
+  '/family': typeof AuthedFamilyRoute
   '/lessons': typeof AuthedLessonsRoute
   '/library': typeof AuthedLibraryRoute
   '/messages': typeof AuthedMessagesRoute
@@ -214,6 +221,7 @@ export interface FileRoutesByTo {
   '/assignment-notes': typeof AuthedAssignmentNotesRoute
   '/book-lesson': typeof AuthedBookLessonRoute
   '/dashboard': typeof AuthedDashboardRoute
+  '/family': typeof AuthedFamilyRoute
   '/lessons': typeof AuthedLessonsRoute
   '/library': typeof AuthedLibraryRoute
   '/messages': typeof AuthedMessagesRoute
@@ -244,6 +252,7 @@ export interface FileRoutesById {
   '/_authed/assignments': typeof AuthedAssignmentsRouteWithChildren
   '/_authed/book-lesson': typeof AuthedBookLessonRoute
   '/_authed/dashboard': typeof AuthedDashboardRoute
+  '/_authed/family': typeof AuthedFamilyRoute
   '/_authed/lessons': typeof AuthedLessonsRoute
   '/_authed/library': typeof AuthedLibraryRoute
   '/_authed/messages': typeof AuthedMessagesRoute
@@ -274,6 +283,7 @@ export interface FileRouteTypes {
     | '/assignments'
     | '/book-lesson'
     | '/dashboard'
+    | '/family'
     | '/lessons'
     | '/library'
     | '/messages'
@@ -301,6 +311,7 @@ export interface FileRouteTypes {
     | '/assignment-notes'
     | '/book-lesson'
     | '/dashboard'
+    | '/family'
     | '/lessons'
     | '/library'
     | '/messages'
@@ -330,6 +341,7 @@ export interface FileRouteTypes {
     | '/_authed/assignments'
     | '/_authed/book-lesson'
     | '/_authed/dashboard'
+    | '/_authed/family'
     | '/_authed/lessons'
     | '/_authed/library'
     | '/_authed/messages'
@@ -473,6 +485,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedLessonsRouteImport
       parentRoute: typeof AuthedRoute
     }
+    '/_authed/family': {
+      id: '/_authed/family'
+      path: '/family'
+      fullPath: '/family'
+      preLoaderRoute: typeof AuthedFamilyRouteImport
+      parentRoute: typeof AuthedRoute
+    }
     '/_authed/dashboard': {
       id: '/_authed/dashboard'
       path: '/dashboard'
@@ -571,6 +590,7 @@ interface AuthedRouteChildren {
   AuthedAssignmentsRoute: typeof AuthedAssignmentsRouteWithChildren
   AuthedBookLessonRoute: typeof AuthedBookLessonRoute
   AuthedDashboardRoute: typeof AuthedDashboardRoute
+  AuthedFamilyRoute: typeof AuthedFamilyRoute
   AuthedLessonsRoute: typeof AuthedLessonsRoute
   AuthedLibraryRoute: typeof AuthedLibraryRoute
   AuthedMessagesRoute: typeof AuthedMessagesRoute
@@ -589,6 +609,7 @@ const AuthedRouteChildren: AuthedRouteChildren = {
   AuthedAssignmentsRoute: AuthedAssignmentsRouteWithChildren,
   AuthedBookLessonRoute: AuthedBookLessonRoute,
   AuthedDashboardRoute: AuthedDashboardRoute,
+  AuthedFamilyRoute: AuthedFamilyRoute,
   AuthedLessonsRoute: AuthedLessonsRoute,
   AuthedLibraryRoute: AuthedLibraryRoute,
   AuthedMessagesRoute: AuthedMessagesRoute,

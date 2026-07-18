@@ -18,7 +18,7 @@ export function getRouter() {
     routeTree,
     scrollRestoration: true,
     context: { queryClient },
-    defaultPreload: "intent",
+    defaultPreload: false,
   });
 
   setupRouterSsrQueryIntegration({

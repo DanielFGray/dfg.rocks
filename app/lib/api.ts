@@ -16,9 +16,7 @@ const clientRuntime = ManagedRuntime.make(clientLayer);
 
 export const api = clientRuntime.runSync(
   HttpApiClient.make(clientApi, {
-    transformClient: HttpClient.mapRequest(
-      HttpClientRequest.setHeader("X-Requested-With", "dfg"),
-    ),
+    transformClient: HttpClient.mapRequest(HttpClientRequest.setHeader("X-Requested-With", "dfg")),
   }),
 );
 

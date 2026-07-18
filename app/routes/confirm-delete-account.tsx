@@ -1,44 +1,56 @@
-import { Effect } from "effect";
 import * as S from "effect/Schema";
-import { createFileRoute, Link, useNavigate, useRouter } from "@tanstack/react-router";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { api } from "../lib/api.js";
-import { getAuthUser } from "../lib/auth.js";
-import { resetAuthClientState } from "../lib/authClientState.js";
-import { getErrorMessage } from "../lib/errors.js";
-import { Button } from "../components/ui/Button.js";
+import { createServerFn } from "@tanstack/react-start";
+import { deleteCookie, getCookie } from "@tanstack/react-start/server";
+import { createFileRoute, Link, redirect } from "@tanstack/react-router";
+import { decodeAuthState, getAuthUser } from "../lib/auth.js";
 import { Card } from "../components/ui/Card.js";
 import { TokenSearch } from "../../shared/schemas.js";
+import { serverRuntime } from "../../server/runtime.js";
+import { HttpError } from "../../server/pgErrors.js";
+import { SessionService } from "../../server/services/sessionService.js";
+import { AuthenticatedRouteService } from "../../server/services/authenticatedRouteService.js";
+
+const confirmDeleteAccountAction = createServerFn({ method: "POST" })
+  .validator((data) => {
+    if (!(data instanceof FormData)) throw new Error("FormData expected");
+    return {
+      token: String(data.get("token") ?? ""),
+    };
+  })
+  .handler(async ({ data }) => {
+    const sessionToken = getCookie("session");
+    const auth = await serverRuntime.runPromise(SessionService.validateSessionToken(sessionToken));
+    if (!auth) {
+      throw redirect({
+        to: "/login",
+        search: { redirect: `/confirm-delete-account?token=${encodeURIComponent(data.token)}` },
+      });
+    }
+
+    const deleted = await serverRuntime.runPromise(
+      AuthenticatedRouteService.confirmDeleteAccount(auth.session.id, data.token),
+    );
+
+    if (!deleted) {
+      throw new HttpError(400, "Invalid or expired deletion token");
+    }
+
+    await serverRuntime.runPromise(SessionService.deleteAllUserSessions(auth.user.id));
+    deleteCookie("session");
+    throw redirect({ to: "/" });
+  });
 
 export const Route = createFileRoute("/confirm-delete-account")({
   head: () => ({ meta: [{ title: "Confirm Delete Account | DFG Portal" }] }),
-  validateSearch: (
-    search: Record<string, unknown>,
-  ): S.Schema.Type<typeof TokenSearch> =>
+  validateSearch: (search: Record<string, unknown>): S.Schema.Type<typeof TokenSearch> =>
     S.decodeUnknownSync(TokenSearch)(search),
-  loader: () => getAuthUser(),
+  loader: async () => decodeAuthState(await getAuthUser()),
   component: ConfirmDeleteAccountPage,
 });
 
 function ConfirmDeleteAccountPage() {
   const { token } = Route.useSearch();
   const { user } = Route.useLoaderData();
-  const navigate = useNavigate();
-  const router = useRouter();
-  const queryClient = useQueryClient();
-
-  const confirmDelete = useMutation({
-    mutationFn: () => {
-      if (!token) throw new Error("Missing deletion token");
-      return Effect.runPromise(
-        api.authenticated.confirmDeleteAccount({ payload: { token } }),
-      );
-    },
-    onSuccess: async () => {
-      await resetAuthClientState({ queryClient, router });
-      navigate({ to: "/" });
-    },
-  });
 
   if (!token) {
     return (
@@ -107,16 +119,6 @@ function ConfirmDeleteAccountPage() {
             </p>
           </div>
 
-          {confirmDelete.isError ? (
-            <div
-              data-testid="confirm-delete-account-error"
-              role="alert"
-              className="mt-6 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-600 dark:text-red-400"
-            >
-              {getErrorMessage(confirmDelete.error, "Could not delete your account")}
-            </div>
-          ) : null}
-
           <div className="mt-6 rounded-lg border border-red-500/20 bg-red-500/5 px-4 py-4 text-sm text-muted dark:text-muted-dark">
             <p className="font-medium text-red-600 dark:text-red-400">Before you continue</p>
             <ul className="mt-2 list-disc space-y-1 pl-5">
@@ -133,15 +135,16 @@ function ConfirmDeleteAccountPage() {
             >
               Cancel
             </Link>
-            <Button
-              type="button"
-              variant="danger"
-              data-testid="confirm-delete-account-submit"
-              onClick={() => confirmDelete.mutate()}
-              disabled={confirmDelete.isPending}
-            >
-              {confirmDelete.isPending ? "Deleting Account..." : "Delete Account"}
-            </Button>
+            <form method="post" action={confirmDeleteAccountAction.url}>
+              <input type="hidden" name="token" value={token} />
+              <button
+                type="submit"
+                data-testid="confirm-delete-account-submit"
+                className="inline-flex items-center justify-center rounded-xl bg-red-600 px-6 py-3 text-sm font-semibold text-white transition-all hover:-translate-y-px hover:bg-red-500"
+              >
+                Delete Account
+              </button>
+            </form>
           </div>
         </Card>
       </div>

@@ -3,9 +3,11 @@ import { useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useRouter } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../lib/hooks/useAuth.js";
+import { useSwitchActiveStudent } from "../lib/queries.js";
 import { api } from "../lib/api.js";
 import { resetAuthClientState } from "../lib/authClientState.js";
 import { Button } from "./ui/Button.js";
+import { Select } from "./ui/Select.js";
 import { Sidebar } from "./ui/Sidebar.js";
 
 const navLinkClass =
@@ -20,35 +22,38 @@ const navItems: Array<{
   mobileLabel?: string;
   adminOnly?: boolean;
   nonAdminOnly?: boolean;
+  parentOnly?: boolean;
 }> = [
-    { to: "/dashboard", id: "nav-dashboard", label: "Dashboard" },
-    { to: "/lessons", id: "nav-lessons", label: "Lessons", adminOnly: true },
-    { to: "/messages", id: "nav-messages", label: "Messages" },
-    { to: "/courses", id: "nav-courses", label: "Courses" },
-    { to: "/library", id: "nav-library", label: "Library", adminOnly: true },
-    { to: "/assignments", id: "nav-assignments", label: "Assignments" },
-    {
-      to: "/my-lessons",
-      id: "nav-my-lessons",
-      label: "My Lessons",
-      nonAdminOnly: true,
-    },
-    { to: "/students", id: "nav-students", label: "Students", adminOnly: true },
-    {
-      to: "/submissions",
-      id: "nav-submissions",
-      label: "Submissions",
-      adminOnly: true,
-    },
-    { to: "/settings", id: "nav-settings", label: "Settings" },
-  ];
+  { to: "/dashboard", id: "nav-dashboard", label: "Dashboard" },
+  { to: "/lessons", id: "nav-lessons", label: "Lessons", adminOnly: true },
+  { to: "/messages", id: "nav-messages", label: "Messages" },
+  { to: "/courses", id: "nav-courses", label: "Courses" },
+  { to: "/library", id: "nav-library", label: "Library", adminOnly: true },
+  { to: "/assignments", id: "nav-assignments", label: "Assignments" },
+  {
+    to: "/my-lessons",
+    id: "nav-my-lessons",
+    label: "My Lessons",
+    nonAdminOnly: true,
+  },
+  { to: "/students", id: "nav-students", label: "Students", adminOnly: true },
+  {
+    to: "/submissions",
+    id: "nav-submissions",
+    label: "Submissions",
+    adminOnly: true,
+  },
+  { to: "/family", id: "nav-family", label: "Family", parentOnly: true },
+  { to: "/settings", id: "nav-settings", label: "Settings" },
+];
 
 // --- PortalNav ---
 
 export function PortalNav() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [navVisible, setNavVisible] = useState(true);
-  const { isAdmin, user } = useAuth();
+  const { isAdmin, user, isParent, familyStudents, activeStudentId } = useAuth();
+  const switchStudent = useSwitchActiveStudent();
   const navigate = useNavigate();
   const router = useRouter();
   const location = useLocation();
@@ -60,13 +65,34 @@ export function PortalNav() {
 
   const onLogout = async () => {
     await Effect.runPromise(api.auth.logout());
-    await resetAuthClientState({ queryClient, router });
-    navigate({ to: "/login", search: { redirect: undefined } });
+    await resetAuthClientState({ queryClient });
+    await navigate({ to: "/login", search: { redirect: undefined } });
   };
 
   const visibleItems = navItems.filter(
-    (it) => (it.adminOnly ? isAdmin : true) && (it.nonAdminOnly ? !isAdmin : true),
+    (it) =>
+      (it.adminOnly ? isAdmin : true) &&
+      (it.nonAdminOnly ? !isAdmin : true) &&
+      (it.parentOnly ? isParent : true),
   );
+
+  const studentOptions = familyStudents.map((s) => ({
+    value: s.id,
+    label: s.name || s.username,
+  }));
+
+  const handleSwitchStudent = (value: string) => {
+    switchStudent.mutate(value, {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+        queryClient.invalidateQueries({ queryKey: ["assignments"] });
+        queryClient.invalidateQueries({ queryKey: ["courses"] });
+        queryClient.invalidateQueries({ queryKey: ["my-lessons"] });
+        queryClient.invalidateQueries({ queryKey: ["messages"] });
+        router.invalidate();
+      },
+    });
+  };
 
   useEffect(() => {
     setNavVisible(true);
@@ -151,8 +177,8 @@ export function PortalNav() {
       typeof ResizeObserver === "undefined"
         ? null
         : new ResizeObserver(() => {
-          updateNavHeight();
-        });
+            updateNavHeight();
+          });
 
     resizeObserver?.observe(nav);
     window.addEventListener("resize", updateNavHeight);
@@ -186,16 +212,28 @@ export function PortalNav() {
               {it.label}
             </Link>
           ))}
+          {isParent && familyStudents.length > 0 && (
+            <Select
+              id="student-switcher-desktop"
+              name="student-switcher"
+              label="Student"
+              options={studentOptions}
+              value={activeStudentId ?? ""}
+              disabled={switchStudent.isPending}
+              onChange={handleSwitchStudent}
+              data-testid="student-switcher"
+            />
+          )}
           <Button variant="ghost" onClick={onLogout} data-testid="logout">
             Log Out
           </Button>
         </div>
 
         {/* Mobile hamburger */}
-        <button
-          type="button"
+        <Button
+          variant="ghost"
           onClick={toggle}
-          className="cursor-pointer p-2 text-muted transition-colors hover:text-primary lg:hidden dark:text-muted-dark dark:hover:text-primary-dark"
+          className="p-2 lg:hidden"
           data-testid="nav-menu-toggle"
           aria-label="Toggle menu"
         >
@@ -212,7 +250,7 @@ export function PortalNav() {
             <line x1="4" y1="12" x2="20" y2="12" />
             <line x1="4" y1="17" x2="20" y2="17" />
           </svg>
-        </button>
+        </Button>
       </nav>
 
       {/* Mobile slideout */}
@@ -247,6 +285,20 @@ export function PortalNav() {
               </div>
             </Link>
           ))}
+          {isParent && familyStudents.length > 0 && (
+            <div className="border-b border-overlay/5 py-3 dark:border-overlay-dark/5">
+              <Select
+                id="student-switcher-mobile"
+                name="student-switcher"
+                label="Switch Student"
+                options={studentOptions}
+                value={activeStudentId ?? ""}
+                disabled={switchStudent.isPending}
+                onChange={handleSwitchStudent}
+                data-testid="student-switcher-mobile"
+              />
+            </div>
+          )}
         </div>
       </Sidebar>
     </>

@@ -17,9 +17,7 @@ export function rememberLoginRedirect(redirect?: string): void {
   }
 }
 
-export function consumeLoginRedirect(
-  explicitRedirect?: string,
-): string | undefined {
+export function consumeLoginRedirect(explicitRedirect?: string): string | undefined {
   const explicit = normalizeLoginRedirect(explicitRedirect);
   if (typeof window === "undefined") {
     return explicit;

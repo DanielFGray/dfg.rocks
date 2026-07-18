@@ -1,46 +1,38 @@
-import { Effect } from "effect";
 import { useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useMutation } from "@tanstack/react-query";
-import { api } from "../lib/api.js";
 import { Button } from "../components/ui/Button.js";
 import { Input } from "../components/ui/Input.js";
+import { forgotPassword } from "../lib/authForms.js";
 
 export const Route = createFileRoute("/forgot-password")({
   head: () => ({ meta: [{ title: "Forgot Password | DFG Portal" }] }),
+  validateSearch: (search: Record<string, unknown>) => ({
+    ...(search.sent === "true" ? { sent: true as const } : {}),
+  }),
   component: ForgotPasswordPage,
 });
 
 function ForgotPasswordPage() {
+  const { sent } = Route.useSearch();
   const [email, setEmail] = useState("");
 
-  const forgot = useMutation({
-    mutationFn: () =>
-      Effect.runPromise(api.auth.forgotPassword({ payload: { email } })),
-  });
-
-  // Always show success after submit -- don't reveal if email exists
-  const submitted = forgot.isSuccess || forgot.isError;
-
-  if (submitted) {
+  if (sent) {
     return (
       <main
         data-testid="forgot-password-page"
-        className="px-4 flex min-h-screen items-center justify-center"
+        className="flex min-h-screen items-center justify-center px-4"
       >
-        <div className="max-w-sm w-full text-center">
-          <h1 className="mb-4 text-3xl font-bold tracking-tight">
-            Check Your Email
-          </h1>
+        <div className="w-full max-w-sm text-center">
+          <h1 className="mb-4 text-3xl font-bold tracking-tight">Check Your Email</h1>
           <p className="text-sm text-muted dark:text-muted-dark">
-            If an account exists with that email, we've sent a password reset
-            link. Check your inbox.
+            If an account exists with that email, we've sent a password reset link. Check your
+            inbox.
           </p>
           <Link
             to="/login"
             search={{ redirect: undefined }}
             data-testid="back-to-login"
-            className="mt-6 text-sm text-accent inline-block hover:underline"
+            className="mt-6 inline-block text-sm text-accent hover:underline"
           >
             Back to Log In
           </Link>
@@ -49,30 +41,30 @@ function ForgotPasswordPage() {
     );
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    forgot.mutate();
-  };
-
   return (
     <main
       data-testid="forgot-password-page"
-      className="px-4 flex min-h-screen items-center justify-center"
+      className="flex min-h-screen items-center justify-center px-4"
     >
-      <div className="max-w-sm w-full">
+      <div className="w-full max-w-sm">
         <div className="mb-8 text-center">
           <h1 className="text-3xl font-bold tracking-tight">Forgot Password</h1>
           <p className="mt-2 text-sm text-muted dark:text-muted-dark">
             Enter your email and we'll send a reset link
           </p>
         </div>
-        <form onSubmit={handleSubmit} className="gap-5 flex flex-col">
+        <form
+          method="post"
+          action={forgotPassword.url}
+          className="flex flex-col gap-5"
+        >
           <Input
             id="forgot-email"
             name="email"
             label="Email"
             type="email"
             required
+            autoComplete="email"
             data-testid="forgot-email"
             value={email}
             onChange={(v) => setEmail(v)}
@@ -82,9 +74,8 @@ function ForgotPasswordPage() {
             variant="primary"
             className="mt-2 w-full"
             data-testid="forgot-submit"
-            disabled={forgot.isPending}
           >
-            {forgot.isPending ? "Sending..." : "Send Reset Link"}
+            Send Reset Link
           </Button>
         </form>
         <div className="mt-6 text-center">

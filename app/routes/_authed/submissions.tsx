@@ -1,42 +1,62 @@
 import { Effect } from "effect";
 import { useState } from "react";
-import { createFileRoute } from "@tanstack/react-router";
-import {
-  useMutation,
-  useQueryClient,
-  useSuspenseQuery,
-} from "@tanstack/react-query";
+import { createFileRoute, useRouter } from "@tanstack/react-router";
+import { useMutation } from "@tanstack/react-query";
+import { createServerFn } from "@tanstack/react-start";
+import { getCookie } from "@tanstack/react-start/server";
+import { requireSession } from "../../lib/sessionGuards.server.js";
+import { toServerFunctionPayload } from "../../lib/serverFunctionPayload.js";
 import { api } from "../../lib/api.js";
-import { adminSubmissionsQuery } from "../../lib/queries.js";
 import type { Submission } from "../../../shared/schemas.js";
+import { toIsoString } from "../../../shared/responseMappers.js";
+import { serverRuntime } from "../../../server/runtime.js";
+import { AdminRouteService } from "../../../server/services/adminRouteService.js";
+import { HttpError } from "../../../server/pgErrors.js";
 import { Button } from "../../components/ui/Button.js";
 import { EmptyState } from "../../components/ui/EmptyState.js";
 import { Main } from "../../components/ui/Container.js";
+import { Disclosure, DisclosureTrigger, DisclosurePanel } from "../../components/ui/Disclosure.js";
 
 const PAGE_SIZE = 25;
+
+const getSubmissionsPageData = createServerFn({ method: "GET" }).handler(() =>
+  serverRuntime.runPromise(
+    Effect.gen(function* () {
+      const token = getCookie("session");
+      const session = yield* requireSession(token);
+      if (session.user.role !== "admin") {
+        throw new HttpError(403, "Forbidden");
+      }
+      return toServerFunctionPayload(
+        (yield* AdminRouteService.listSubmissions(session.session.id, 5000, 0)).map(
+          (submission) => ({
+            ...submission,
+            created_at: toIsoString(submission.created_at),
+          }),
+        ),
+      ) satisfies Submission[];
+    }),
+  ),
+);
 
 export const Route = createFileRoute("/_authed/submissions")({
   head: () => ({
     meta: [{ title: "Submissions | DFG Portal" }],
   }),
-  loader: ({ context }) =>
-    context.queryClient.ensureQueryData(adminSubmissionsQuery),
+  loader: () => getSubmissionsPageData(),
   component: SubmissionsPage,
-  pendingComponent: () => (
-    <Main className="text-muted dark:text-muted-dark">Loading...</Main>
-  ),
+  pendingComponent: () => <Main className="text-muted dark:text-muted-dark">Loading...</Main>,
 });
 
 function SubmissionsPage() {
-  const queryClient = useQueryClient();
-  const { data: allSubmissions } = useSuspenseQuery(adminSubmissionsQuery);
+  const router = useRouter();
+  const allSubmissions = Route.useLoaderData();
 
   const [page, setPage] = useState(0);
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const sorted = [...allSubmissions].sort(
-    (a, b) =>
-      new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+    (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
   );
 
   const total = sorted.length;
@@ -52,9 +72,7 @@ function SubmissionsPage() {
         }),
       ),
     onSettled: () => {
-      void queryClient.invalidateQueries({
-        queryKey: adminSubmissionsQuery.queryKey,
-      });
+      void router.invalidate();
     },
   });
 
@@ -71,9 +89,7 @@ function SubmissionsPage() {
   return (
     <Main data-testid="submissions">
       <div className="mb-8 flex items-center justify-between">
-        <h1 className="text-3xl font-bold tracking-tight">
-          Contact Submissions
-        </h1>
+        <h1 className="text-3xl font-bold tracking-tight">Contact Submissions</h1>
         {allSubmissions.length > 0 ? (
           <span className="rounded-full bg-accent/12 px-3 py-1 text-sm font-semibold text-accent">
             {allSubmissions.length} total
@@ -92,7 +108,7 @@ function SubmissionsPage() {
                 className={`rounded-xl border bg-card p-5 transition-colors dark:bg-card-dark ${
                   s.is_read
                     ? "border-overlay/6 dark:border-overlay-dark/6"
-                    : "border-accent/40 bg-accent/3 dark:border-accent-dark/40 dark:bg-accent-dark/3"
+                    : "dark:border-accent-dark/40 dark:bg-accent-dark/3 border-accent/40 bg-accent/3"
                 }`}
               >
                 <div className="flex items-start justify-between gap-4">
@@ -102,16 +118,13 @@ function SubmissionsPage() {
                         {s.name}
                       </span>
                       {!s.is_read ? (
-                        <span className="shrink-0 rounded-full bg-accent/15 px-2 py-0.5 text-[0.7rem] font-semibold text-accent uppercase tracking-wide">
+                        <span className="shrink-0 rounded-full bg-accent/15 px-2 py-0.5 text-[0.7rem] font-semibold tracking-wide text-accent uppercase">
                           New
                         </span>
                       ) : null}
                     </div>
                     <div className="mb-2 flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted dark:text-muted-dark">
-                      <a
-                        href={`mailto:${s.email}`}
-                        className="text-accent hover:underline"
-                      >
+                      <a href={`mailto:${s.email}`} className="text-accent hover:underline">
                         {s.email}
                       </a>
                       {s.phone ? <span>{formatPhone(s.phone)}</span> : null}
@@ -131,29 +144,21 @@ function SubmissionsPage() {
                     ) : null}
                     {s.message ? (
                       <div className="text-sm text-muted dark:text-muted-dark">
-                        {s.message.length > 200 &&
-                        expandedId !== s.id ? (
-                          <>
-                            {s.message.slice(0, 200)}...
-                            <button
-                              type="button"
-                              onClick={() => setExpandedId(s.id)}
-                              className="ml-1 text-accent hover:underline"
-                            >
-                              Show more
-                            </button>
-                          </>
-                        ) : s.message.length > 200 ? (
-                          <>
-                            {s.message}
-                            <button
-                              type="button"
-                              onClick={() => setExpandedId(null)}
-                              className="ml-1 text-accent hover:underline"
-                            >
-                              Show less
-                            </button>
-                          </>
+                        {s.message.length > 200 ? (
+                          <Disclosure
+                            isExpanded={expandedId === s.id}
+                            onExpandedChange={(isExpanded) =>
+                              setExpandedId(isExpanded ? s.id : null)
+                            }
+                          >
+                            <span>{s.message.slice(0, 200)}...</span>
+                            <DisclosureTrigger className="ml-1 text-accent hover:underline">
+                              {expandedId === s.id ? "Show less" : "Show more"}
+                            </DisclosureTrigger>
+                            <DisclosurePanel>
+                              <span>{s.message}</span>
+                            </DisclosurePanel>
+                          </Disclosure>
                         ) : (
                           s.message
                         )}
@@ -164,14 +169,13 @@ function SubmissionsPage() {
                   <div className="flex shrink-0 flex-col items-end gap-2">
                     <time
                       dateTime={s.created_at}
-                      className="whitespace-nowrap text-xs text-muted dark:text-muted-dark"
+                      className="text-xs whitespace-nowrap text-muted dark:text-muted-dark"
                     >
                       {new Date(s.created_at).toLocaleDateString("en-US", {
                         month: "short",
                         day: "numeric",
                         year:
-                          new Date(s.created_at).getFullYear() !==
-                          new Date().getFullYear()
+                          new Date(s.created_at).getFullYear() !== new Date().getFullYear()
                             ? "numeric"
                             : undefined,
                       })}
@@ -180,7 +184,7 @@ function SubmissionsPage() {
                       variant="ghost"
                       onClick={() => toggleRead.mutate(s)}
                       disabled={toggleRead.isPending}
-                      className="whitespace-nowrap px-3 py-1.5 text-xs"
+                      className="px-3 py-1.5 text-xs whitespace-nowrap"
                     >
                       {s.is_read ? "Mark unread" : "Mark read"}
                     </Button>
@@ -205,9 +209,7 @@ function SubmissionsPage() {
               </span>
               <Button
                 variant="outline"
-                onClick={() =>
-                  setPage(Math.min(totalPages - 1, page + 1))
-                }
+                onClick={() => setPage(Math.min(totalPages - 1, page + 1))}
                 disabled={page >= totalPages - 1}
                 className="px-4 py-2 text-xs"
               >

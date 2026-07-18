@@ -77,5 +77,4 @@ export default async (_payload, { addJob, logger, withPgClient }) => {
       ),
     );
   }
-
 };

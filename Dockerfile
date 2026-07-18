@@ -4,11 +4,13 @@ WORKDIR /app
 # Install dependencies
 FROM base AS deps
 COPY package.json bun.lock ./
+COPY patches ./patches
 RUN bun install --frozen-lockfile --production
 
 # Build the app
 FROM base AS build
 COPY package.json bun.lock ./
+COPY patches ./patches
 RUN bun install --frozen-lockfile
 COPY . .
 RUN bun run build
@@ -28,4 +30,4 @@ ENV NODE_ENV=production
 ENV PORT=3001
 EXPOSE 3001
 
-CMD ["bun", "run", "dist/server/server.js"]
+CMD ["bun", "run", "start"]

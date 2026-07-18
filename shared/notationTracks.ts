@@ -22,14 +22,9 @@ function toTrackText(value: unknown): string | null {
   return normalized.length > 0 ? normalized : null;
 }
 
-export function toMaterialNotationTrack(
-  track: NotationTrackInput,
-): MaterialNotationTrack {
+export function toMaterialNotationTrack(track: NotationTrackInput): MaterialNotationTrack {
   const index = toTrackIndex(track.index);
-  const name =
-    toTrackText(track.name) ??
-    toTrackText(track.shortName) ??
-    `Track ${index + 1}`;
+  const name = toTrackText(track.name) ?? toTrackText(track.shortName) ?? `Track ${index + 1}`;
   const shortName =
     toTrackText(track.short_name) ??
     toTrackText(track.shortName) ??
@@ -41,9 +36,7 @@ export function toMaterialNotationTrack(
     name,
     short_name: shortName,
     is_percussion:
-      typeof track.is_percussion === "boolean"
-        ? track.is_percussion
-        : Boolean(track.isPercussion),
+      typeof track.is_percussion === "boolean" ? track.is_percussion : Boolean(track.isPercussion),
   };
 }
 
@@ -65,7 +58,5 @@ export function findNotationTrack(
     return notationTracks.length === 1 ? (notationTracks[0] ?? null) : null;
   }
 
-  return (
-    notationTracks.find((track) => track.index === assignedTrackIndex) ?? null
-  );
+  return notationTracks.find((track) => track.index === assignedTrackIndex) ?? null;
 }

@@ -8,10 +8,7 @@ import { useColorScheme, getColors } from "./helpers.js";
 import { PlayerControls } from "./PlayerControls.js";
 import { ProgressBar } from "./ProgressBar.js";
 import { SpeedControl } from "./SpeedControl.js";
-import {
-  SpeedTrainerControl,
-  type SpeedTrainerStepMode,
-} from "./SpeedTrainerControl.js";
+import { SpeedTrainerControl, type SpeedTrainerStepMode } from "./SpeedTrainerControl.js";
 import { VolumeControl } from "./VolumeControl.js";
 
 export interface AlphaTabPlayerProps {
@@ -19,6 +16,7 @@ export interface AlphaTabPlayerProps {
   defaultTrackIndex?: number | null;
   onPlaybackSeconds?: (seconds: number) => void;
   onDurationSeconds?: (seconds: number) => void;
+  onSessionEnd?: () => void;
 }
 
 type PlayerState = "loading" | "ready" | "playing" | "paused";
@@ -120,11 +118,7 @@ function useLatestRef<T>(value: T) {
 }
 
 function normalizePlaybackSpeed(speed: number): number {
-  return (
-    Math.round(
-      clampValue(speed, MIN_PLAYBACK_SPEED, MAX_PLAYBACK_SPEED) * 1000,
-    ) / 1000
-  );
+  return Math.round(clampValue(speed, MIN_PLAYBACK_SPEED, MAX_PLAYBACK_SPEED) * 1000) / 1000;
 }
 
 function toPlayerPosition(position: PositionSnapshot): PlayerPosition {
@@ -146,28 +140,15 @@ function toPlaybackTrackVolume(volume: number): number {
 
 function getTrackChannels(track: PlaybackTrack): number[] {
   return [
-    ...new Set([
-      track.playbackInfo.primaryChannel,
-      track.playbackInfo.secondaryChannel,
-    ]),
+    ...new Set([track.playbackInfo.primaryChannel, track.playbackInfo.secondaryChannel]),
   ].filter((channel) => Number.isInteger(channel) && channel >= 0);
 }
 
-function resolveTrackVolume(
-  track: PlaybackTrack,
-  trackVolumes: TrackVolumeMap,
-): number {
-  return (
-    trackVolumes[track.index] ??
-    toNormalizedTrackVolume(track.playbackInfo.volume)
-  );
+function resolveTrackVolume(track: PlaybackTrack, trackVolumes: TrackVolumeMap): number {
+  return trackVolumes[track.index] ?? toNormalizedTrackVolume(track.playbackInfo.volume);
 }
 
-function applyTrackVolume(
-  api: AlphaTabApi,
-  track: PlaybackTrack,
-  volume: number,
-): void {
+function applyTrackVolume(api: AlphaTabApi, track: PlaybackTrack, volume: number): void {
   const normalized = clampValue(volume, 0, 1);
   track.playbackInfo.volume = toPlaybackTrackVolume(normalized);
 
@@ -185,9 +166,7 @@ function hasSamePlaybackRange(
   left: PlaybackTickRange | null | undefined,
   right: PlaybackTickRange | null | undefined,
 ): boolean {
-  return (
-    left?.startTick === right?.startTick && left?.endTick === right?.endTick
-  );
+  return left?.startTick === right?.startTick && left?.endTick === right?.endTick;
 }
 
 function formatLoopLabel(loopSelection: LoopSelection | null): string {
@@ -196,12 +175,10 @@ function formatLoopLabel(loopSelection: LoopSelection | null): string {
   }
 
   const isWholeStartMeasure = loopSelection.startBeat === 1;
-  const isWholeEndMeasure =
-    loopSelection.endBeat === loopSelection.endBeatCount;
+  const isWholeEndMeasure = loopSelection.endBeat === loopSelection.endBeatCount;
 
   return loopSelection.startMeasure === loopSelection.endMeasure
-    ? loopSelection.startBeat === 1 &&
-      loopSelection.endBeat === loopSelection.endBeatCount
+    ? loopSelection.startBeat === 1 && loopSelection.endBeat === loopSelection.endBeatCount
       ? `Measure ${loopSelection.startMeasure}`
       : loopSelection.startBeat === loopSelection.endBeat
         ? `M${loopSelection.startMeasure} beat ${loopSelection.startBeat}`
@@ -227,9 +204,7 @@ function getLoopSelection(
   };
 }
 
-function collectNavigableBeats(
-  tracks: readonly RenderedTrack[],
-): NavigableBeat[] {
+function collectNavigableBeats(tracks: readonly RenderedTrack[]): NavigableBeat[] {
   const beatsByTick = new Map<number, NavigableBeat>();
 
   for (const track of tracks) {
@@ -252,9 +227,7 @@ function collectNavigableBeats(
     }
   }
 
-  return [...beatsByTick.values()].sort(
-    (left, right) => left.startTick - right.startTick,
-  );
+  return [...beatsByTick.values()].sort((left, right) => left.startTick - right.startTick);
 }
 
 function findCurrentNavigableBeatIndex(
@@ -305,10 +278,7 @@ function getMeasureBoundaryBeat(
 
   let index = currentIndex;
   if (edge === "start") {
-    while (
-      index > 0 &&
-      beats[index - 1]?.masterBarIndex === currentBeat.masterBarIndex
-    ) {
+    while (index > 0 && beats[index - 1]?.masterBarIndex === currentBeat.masterBarIndex) {
       index -= 1;
     }
   } else {
@@ -398,22 +368,14 @@ function getResponsiveDisplayConfig(
 ): { scale: number; stretchForce: number } {
   if (width <= 360) {
     return {
-      scale: clampValue(
-        0.78 * zoomFactor,
-        MIN_DISPLAY_SCALE,
-        MAX_DISPLAY_SCALE,
-      ),
+      scale: clampValue(0.78 * zoomFactor, MIN_DISPLAY_SCALE, MAX_DISPLAY_SCALE),
       stretchForce: 0.82,
     };
   }
 
   if (width <= 420) {
     return {
-      scale: clampValue(
-        0.84 * zoomFactor,
-        MIN_DISPLAY_SCALE,
-        MAX_DISPLAY_SCALE,
-      ),
+      scale: clampValue(0.84 * zoomFactor, MIN_DISPLAY_SCALE, MAX_DISPLAY_SCALE),
       stretchForce: 0.88,
     };
   }
@@ -427,11 +389,7 @@ function getResponsiveDisplayConfig(
 
   if (width < 768) {
     return {
-      scale: clampValue(
-        0.96 * zoomFactor,
-        MIN_DISPLAY_SCALE,
-        MAX_DISPLAY_SCALE,
-      ),
+      scale: clampValue(0.96 * zoomFactor, MIN_DISPLAY_SCALE, MAX_DISPLAY_SCALE),
       stretchForce: 0.97,
     };
   }
@@ -447,6 +405,7 @@ export function AlphaTabPlayer({
   defaultTrackIndex,
   onPlaybackSeconds,
   onDurationSeconds,
+  onSessionEnd,
 }: AlphaTabPlayerProps) {
   const wrapperRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -481,21 +440,15 @@ export function AlphaTabPlayer({
   const [metronomeVolume, setMetronomeVolume] = useState(0); // 0 = off
   const [countInEnabled, setCountInEnabled] = useState(false);
   const [trackOptions, setTrackOptions] = useState<TrackOption[]>([]);
-  const [selectedTrackIndex, setSelectedTrackIndex] = useState<number | null>(
-    null,
-  );
-  const [trackVolumeByIndex, setTrackVolumeByIndex] = useState<TrackVolumeMap>(
-    {},
-  );
+  const [selectedTrackIndex, setSelectedTrackIndex] = useState<number | null>(null);
+  const [trackVolumeByIndex, setTrackVolumeByIndex] = useState<TrackVolumeMap>({});
   const [zoomFactor, setZoomFactor] = useState(1);
   const [displayScale, setDisplayScale] = useState(1);
   const [baseTempoBpm, setBaseTempoBpm] = useState<number | null>(null);
-  const [selectedLoopRange, setSelectedLoopRange] =
-    useState<LoopSelection | null>(null);
+  const [selectedLoopRange, setSelectedLoopRange] = useState<LoopSelection | null>(null);
   const [loopPlaybackEnabled, setLoopPlaybackEnabled] = useState(false);
   const [trainerLoopCount, setTrainerLoopCount] = useState(1);
-  const [trainerStepMode, setTrainerStepMode] =
-    useState<SpeedTrainerStepMode>("percent");
+  const [trainerStepMode, setTrainerStepMode] = useState<SpeedTrainerStepMode>("percent");
   const [trainerStepValue, setTrainerStepValue] = useState(5);
   const isLoading = playerState === "loading";
   const isPlaying = playerState === "playing";
@@ -511,18 +464,15 @@ export function AlphaTabPlayer({
   const trainerStepValueRef = useLatestRef(trainerStepValue);
   const countInEnabledRef = useLatestRef(countInEnabled);
 
-  const applyPlaybackSpeed = useCallback(
-    (speed: number, api = apiRef.current) => {
-      const nextSpeed = normalizePlaybackSpeed(speed);
-      playbackSpeedRef.current = nextSpeed;
-      setPlaybackSpeed(nextSpeed);
+  const applyPlaybackSpeed = useCallback((speed: number, api = apiRef.current) => {
+    const nextSpeed = normalizePlaybackSpeed(speed);
+    playbackSpeedRef.current = nextSpeed;
+    setPlaybackSpeed(nextSpeed);
 
-      if (api) {
-        api.playbackSpeed = nextSpeed;
-      }
-    },
-    [],
-  );
+    if (api) {
+      api.playbackSpeed = nextSpeed;
+    }
+  }, []);
 
   const resetTrainerLoopProgress = useCallback(() => {
     completedTrainerLoopsRef.current = 0;
@@ -543,25 +493,19 @@ export function AlphaTabPlayer({
         return null;
       }
 
-      return tickCache.findBeat(
-        getVisibleTrackLookup(api),
-        currentTickRef.current,
-      );
+      return tickCache.findBeat(getVisibleTrackLookup(api), currentTickRef.current);
     },
     [getVisibleTrackLookup],
   );
 
   const getVisibleBeatInMasterBar = useCallback(
     (
-      masterBarLookup: NonNullable<
-        AlphaTabApi["tickCache"]
-      >["masterBars"][number],
+      masterBarLookup: NonNullable<AlphaTabApi["tickCache"]>["masterBars"][number],
       edge: "start" | "end",
       api: AlphaTabApi,
     ): NavigableBeat | null => {
       const visibleTracks = getVisibleTrackLookup(api);
-      let beatLookup =
-        edge === "start" ? masterBarLookup.firstBeat : masterBarLookup.lastBeat;
+      let beatLookup = edge === "start" ? masterBarLookup.firstBeat : masterBarLookup.lastBeat;
 
       while (beatLookup) {
         const beat = beatLookup.getVisibleBeatAtStart(visibleTracks);
@@ -573,8 +517,7 @@ export function AlphaTabPlayer({
           };
         }
 
-        beatLookup =
-          edge === "start" ? beatLookup.nextBeat : beatLookup.previousBeat;
+        beatLookup = edge === "start" ? beatLookup.nextBeat : beatLookup.previousBeat;
       }
 
       return null;
@@ -593,9 +536,7 @@ export function AlphaTabPlayer({
       const currentBeat = getCurrentPlaybackBeat(api);
       const currentMasterBar = currentBeat?.masterBar.masterBar;
       const targetMasterBar =
-        direction === 1
-          ? currentMasterBar?.nextMasterBar
-          : currentMasterBar?.previousMasterBar;
+        direction === 1 ? currentMasterBar?.nextMasterBar : currentMasterBar?.previousMasterBar;
 
       if (!currentMasterBar || !targetMasterBar) {
         return null;
@@ -616,9 +557,7 @@ export function AlphaTabPlayer({
                   lookup.start < currentTickRef.current,
               ) ?? null);
 
-      return targetOccurrence
-        ? getVisibleBeatInMasterBar(targetOccurrence, "start", api)
-        : null;
+      return targetOccurrence ? getVisibleBeatInMasterBar(targetOccurrence, "start", api) : null;
     },
     [getCurrentPlaybackBeat, getVisibleBeatInMasterBar],
   );
@@ -657,18 +596,12 @@ export function AlphaTabPlayer({
       return;
     }
 
-    const track = score.tracks.find(
-      (candidate) => candidate.index === trackIndex,
-    );
+    const track = score.tracks.find((candidate) => candidate.index === trackIndex);
     if (!track) {
       return;
     }
 
-    applyTrackVolume(
-      api,
-      track,
-      resolveTrackVolume(track, trackVolumeByIndexRef.current),
-    );
+    applyTrackVolume(api, track, resolveTrackVolume(track, trackVolumeByIndexRef.current));
   }, []);
 
   const scrollBeatIntoView = useCallback(
@@ -687,15 +620,12 @@ export function AlphaTabPlayer({
       const navVisibleHeight = parseCssPixelValue(
         rootStyles.getPropertyValue("--portal-nav-visible-height"),
       );
-      const controlsPanelHeight =
-        controlsPanelRef.current?.getBoundingClientRect().height ?? 0;
-      const safeTop =
-        navVisibleHeight + controlsPanelHeight + AUTO_SCROLL_TOP_MARGIN;
+      const controlsPanelHeight = controlsPanelRef.current?.getBoundingClientRect().height ?? 0;
+      const safeTop = navVisibleHeight + controlsPanelHeight + AUTO_SCROLL_TOP_MARGIN;
       const safeBottom = window.innerHeight - AUTO_SCROLL_BOTTOM_MARGIN;
 
       const barBounds = beatBounds.barBounds.masterBarBounds.realBounds;
-      const containerTop =
-        container.getBoundingClientRect().top + window.scrollY;
+      const containerTop = container.getBoundingClientRect().top + window.scrollY;
       const barTop = containerTop + barBounds.y;
       const barBottom = barTop + barBounds.h;
       const viewportTop = window.scrollY + safeTop;
@@ -705,10 +635,7 @@ export function AlphaTabPlayer({
         return;
       }
 
-      const maxScroll = Math.max(
-        0,
-        scrollElement.scrollHeight - window.innerHeight,
-      );
+      const maxScroll = Math.max(0, scrollElement.scrollHeight - window.innerHeight);
       const nextTarget = clampValue(barTop - safeTop, 0, maxScroll);
 
       if (
@@ -766,15 +693,11 @@ export function AlphaTabPlayer({
     if (!container) return;
 
     const initialWidth = Math.round(
-      wrapperRef.current?.getBoundingClientRect().width ??
-        container.getBoundingClientRect().width,
+      wrapperRef.current?.getBoundingClientRect().width ?? container.getBoundingClientRect().width,
     );
     containerWidthRef.current = initialWidth;
 
-    const initialDisplay = getResponsiveDisplayConfig(
-      initialWidth || 1024,
-      zoomFactorRef.current,
-    );
+    const initialDisplay = getResponsiveDisplayConfig(initialWidth || 1024, zoomFactorRef.current);
 
     pendingPlaybackMsRef.current = 0;
     lastPlaybackStartedAtRef.current = null;
@@ -839,10 +762,7 @@ export function AlphaTabPlayer({
 
     api.customScrollHandler = {
       [Symbol.dispose]() {
-        if (
-          typeof window !== "undefined" &&
-          autoScrollFrameRef.current !== null
-        ) {
+        if (typeof window !== "undefined" && autoScrollFrameRef.current !== null) {
           window.cancelAnimationFrame(autoScrollFrameRef.current);
           autoScrollFrameRef.current = null;
         }
@@ -861,15 +781,10 @@ export function AlphaTabPlayer({
       }
 
       containerWidthRef.current = args.newWidth;
-      const nextDisplay = getResponsiveDisplayConfig(
-        args.newWidth,
-        zoomFactorRef.current,
-      );
+      const nextDisplay = getResponsiveDisplayConfig(args.newWidth, zoomFactorRef.current);
       args.settings.display.scale = nextDisplay.scale;
       args.settings.display.stretchForce = nextDisplay.stretchForce;
-      setDisplayScale((current) =>
-        current === nextDisplay.scale ? current : nextDisplay.scale,
-      );
+      setDisplayScale((current) => (current === nextDisplay.scale ? current : nextDisplay.scale));
     });
 
     api.scoreLoaded.on((score) => {
@@ -902,8 +817,7 @@ export function AlphaTabPlayer({
       const preferredTrack =
         defaultTrackIndex === null || defaultTrackIndex === undefined
           ? null
-          : (score.tracks.find((track) => track.index === defaultTrackIndex) ??
-            null);
+          : (score.tracks.find((track) => track.index === defaultTrackIndex) ?? null);
 
       if (
         preferredTrack &&
@@ -994,10 +908,7 @@ export function AlphaTabPlayer({
       }
 
       completedTrainerLoopsRef.current += 1;
-      if (
-        completedTrainerLoopsRef.current <
-        Math.max(1, trainerLoopCountRef.current)
-      ) {
+      if (completedTrainerLoopsRef.current < Math.max(1, trainerLoopCountRef.current)) {
         return;
       }
 
@@ -1045,17 +956,11 @@ export function AlphaTabPlayer({
     apiRef.current = api;
 
     return () => {
-      if (
-        typeof window !== "undefined" &&
-        autoScrollFrameRef.current !== null
-      ) {
+      if (typeof window !== "undefined" && autoScrollFrameRef.current !== null) {
         window.cancelAnimationFrame(autoScrollFrameRef.current);
         autoScrollFrameRef.current = null;
       }
-      if (
-        typeof window !== "undefined" &&
-        positionSyncFrameRef.current !== null
-      ) {
+      if (typeof window !== "undefined" && positionSyncFrameRef.current !== null) {
         window.cancelAnimationFrame(positionSyncFrameRef.current);
         positionSyncFrameRef.current = null;
       }
@@ -1094,13 +999,8 @@ export function AlphaTabPlayer({
       const api = apiRef.current;
 
       if (!api) {
-        const nextDisplay = getResponsiveDisplayConfig(
-          nextWidth,
-          zoomFactorRef.current,
-        );
-        setDisplayScale((current) =>
-          current === nextDisplay.scale ? current : nextDisplay.scale,
-        );
+        const nextDisplay = getResponsiveDisplayConfig(nextWidth, zoomFactorRef.current);
+        setDisplayScale((current) => (current === nextDisplay.scale ? current : nextDisplay.scale));
         return;
       }
 
@@ -1165,14 +1065,10 @@ export function AlphaTabPlayer({
     const resources = api.settings.display.resources;
 
     resources.mainGlyphColor = model.Color.fromJson(colors.mainColor)!;
-    resources.secondaryGlyphColor = model.Color.fromJson(
-      colors.secondaryColor,
-    )!;
+    resources.secondaryGlyphColor = model.Color.fromJson(colors.secondaryColor)!;
     resources.scoreInfoColor = model.Color.fromJson(colors.mainColor)!;
     resources.staffLineColor = model.Color.fromJson(colors.staffLineColor)!;
-    resources.barSeparatorColor = model.Color.fromJson(
-      colors.barSeparatorColor,
-    )!;
+    resources.barSeparatorColor = model.Color.fromJson(colors.barSeparatorColor)!;
 
     api.updateSettings();
     api.render();
@@ -1193,9 +1089,7 @@ export function AlphaTabPlayer({
       api.settings.display.scale === nextDisplay.scale &&
       api.settings.display.stretchForce === nextDisplay.stretchForce
     ) {
-      setDisplayScale((current) =>
-        current === nextDisplay.scale ? current : nextDisplay.scale,
-      );
+      setDisplayScale((current) => (current === nextDisplay.scale ? current : nextDisplay.scale));
       return;
     }
 
@@ -1304,9 +1198,7 @@ export function AlphaTabPlayer({
     setCountInEnabled((current) => {
       const nextEnabled = !current;
       if (apiRef.current) {
-        apiRef.current.countInVolume = nextEnabled
-          ? DEFAULT_COUNT_IN_VOLUME
-          : 0;
+        apiRef.current.countInVolume = nextEnabled ? DEFAULT_COUNT_IN_VOLUME : 0;
       }
       return nextEnabled;
     });
@@ -1325,9 +1217,7 @@ export function AlphaTabPlayer({
 
     const api = apiRef.current;
     const score = api?.score;
-    const track = score?.tracks.find(
-      (candidate) => candidate.index === trackIndex,
-    );
+    const track = score?.tracks.find((candidate) => candidate.index === trackIndex);
     if (!api || !track) {
       return;
     }
@@ -1337,21 +1227,13 @@ export function AlphaTabPlayer({
 
   const handleZoomOut = useCallback(() => {
     setZoomFactor((current) =>
-      clampValue(
-        Math.round((current - ZOOM_STEP) * 10) / 10,
-        MIN_ZOOM_FACTOR,
-        MAX_ZOOM_FACTOR,
-      ),
+      clampValue(Math.round((current - ZOOM_STEP) * 10) / 10, MIN_ZOOM_FACTOR, MAX_ZOOM_FACTOR),
     );
   }, []);
 
   const handleZoomIn = useCallback(() => {
     setZoomFactor((current) =>
-      clampValue(
-        Math.round((current + ZOOM_STEP) * 10) / 10,
-        MIN_ZOOM_FACTOR,
-        MAX_ZOOM_FACTOR,
-      ),
+      clampValue(Math.round((current + ZOOM_STEP) * 10) / 10, MIN_ZOOM_FACTOR, MAX_ZOOM_FACTOR),
     );
   }, []);
 
@@ -1383,8 +1265,7 @@ export function AlphaTabPlayer({
   const accumulateElapsedPlayback = useCallback(() => {
     if (lastPlaybackStartedAtRef.current === null) return;
 
-    pendingPlaybackMsRef.current +=
-      Date.now() - lastPlaybackStartedAtRef.current;
+    pendingPlaybackMsRef.current += Date.now() - lastPlaybackStartedAtRef.current;
     lastPlaybackStartedAtRef.current = Date.now();
   }, []);
 
@@ -1398,9 +1279,7 @@ export function AlphaTabPlayer({
         return;
       }
 
-      const track = score.tracks.find(
-        (candidate) => candidate.index === trackIndex,
-      );
+      const track = score.tracks.find((candidate) => candidate.index === trackIndex);
       if (!track) {
         return;
       }
@@ -1490,11 +1369,7 @@ export function AlphaTabPlayer({
 
   const handleKeyboardShortcut = useCallback(
     (event: React.KeyboardEvent<HTMLDivElement>) => {
-      if (
-        event.defaultPrevented ||
-        isLoading ||
-        isEditableShortcutTarget(event.target)
-      ) {
+      if (event.defaultPrevented || isLoading || isEditableShortcutTarget(event.target)) {
         return;
       }
 
@@ -1517,13 +1392,8 @@ export function AlphaTabPlayer({
         return;
       }
 
-      if (
-        event.ctrlKey &&
-        (event.key === "ArrowLeft" || event.key === "ArrowRight")
-      ) {
-        const targetBeat = getMeasureJumpTarget(
-          event.key === "ArrowRight" ? 1 : -1,
-        );
+      if (event.ctrlKey && (event.key === "ArrowLeft" || event.key === "ArrowRight")) {
+        const targetBeat = getMeasureJumpTarget(event.key === "ArrowRight" ? 1 : -1);
         if (!targetBeat) {
           return;
         }
@@ -1534,10 +1404,7 @@ export function AlphaTabPlayer({
       }
 
       const beats = navigableBeatsRef.current;
-      const currentIndex = findCurrentNavigableBeatIndex(
-        beats,
-        currentTickRef.current,
-      );
+      const currentIndex = findCurrentNavigableBeatIndex(beats, currentTickRef.current);
       if (currentIndex === -1) {
         return;
       }
@@ -1549,8 +1416,7 @@ export function AlphaTabPlayer({
           targetBeat = beats[Math.max(0, currentIndex - 1)] ?? null;
           break;
         case "ArrowRight":
-          targetBeat =
-            beats[Math.min(beats.length - 1, currentIndex + 1)] ?? null;
+          targetBeat = beats[Math.min(beats.length - 1, currentIndex + 1)] ?? null;
           break;
         case "Home":
           targetBeat = event.ctrlKey
@@ -1573,13 +1439,7 @@ export function AlphaTabPlayer({
       event.preventDefault();
       moveCursorToBeat(targetBeat, event.shiftKey);
     },
-    [
-      getMeasureJumpTarget,
-      handlePlayFromStart,
-      handlePlayPause,
-      isLoading,
-      moveCursorToBeat,
-    ],
+    [getMeasureJumpTarget, handlePlayFromStart, handlePlayPause, isLoading, moveCursorToBeat],
   );
 
   useEffect(() => {
@@ -1607,6 +1467,15 @@ export function AlphaTabPlayer({
     };
   }, [accumulateElapsedPlayback, flushPlayback, isPlaying, onPlaybackSeconds]);
 
+  const prevPlayingRef = useRef(isPlaying);
+
+  useEffect(() => {
+    if (prevPlayingRef.current && !isPlaying && pendingPlaybackMsRef.current > 0) {
+      onSessionEnd?.();
+    }
+    prevPlayingRef.current = isPlaying;
+  }, [isPlaying, onSessionEnd]);
+
   useEffect(() => {
     applySelectedTrackVolume();
   }, [applySelectedTrackVolume, selectedTrackIndex, trackVolumeByIndex]);
@@ -1625,19 +1494,13 @@ export function AlphaTabPlayer({
       ? DEFAULT_TRACK_VOLUME
       : (trackVolumeByIndex[selectedTrackIndex] ?? DEFAULT_TRACK_VOLUME);
   const currentTempoBpm =
-    baseTempoBpm === null
-      ? null
-      : Number.parseFloat((baseTempoBpm * playbackSpeed).toFixed(1));
+    baseTempoBpm === null ? null : Number.parseFloat((baseTempoBpm * playbackSpeed).toFixed(1));
 
   const controlsViewportClassName =
     "box-border mx-[calc(50%-(var(--viewport-client-width)/2))] w-(--viewport-client-width) max-w-(--viewport-client-width) md:mx-0 md:w-auto md:max-w-none";
 
   return (
-    <div
-      ref={wrapperRef}
-      className="mb-8"
-      onKeyDownCapture={handleKeyboardShortcut}
-    >
+    <div ref={wrapperRef} className="mb-8" onKeyDownCapture={handleKeyboardShortcut}>
       <div
         ref={controlsPanelRef}
         className={`sticky top-[calc(env(safe-area-inset-top,0)+var(--portal-nav-visible-height))] z-30 bg-inherit backdrop-blur-md ${controlsViewportClassName}`}
@@ -1666,9 +1529,7 @@ export function AlphaTabPlayer({
           <div className="flex min-w-0 scrollbar-thin [scrollbar-color:rgb(15_23_42/0.18)_transparent] items-center gap-2 overflow-x-auto pb-0.5 md:flex-[0_1_auto] md:overflow-visible md:pb-0 [&::-webkit-scrollbar]:h-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[rgb(15_23_42/0.18)] [&::-webkit-scrollbar-track]:bg-transparent [@media(hover:hover)_and_(pointer:fine)]:[scrollbar-color:transparent_transparent] [@media(hover:hover)_and_(pointer:fine)]:hover:[scrollbar-color:rgb(15_23_42/0.22)_transparent] [@media(hover:hover)_and_(pointer:fine)]:[&::-webkit-scrollbar-thumb]:bg-transparent [@media(hover:hover)_and_(pointer:fine)]:hover:[&::-webkit-scrollbar-thumb]:bg-[rgb(15_23_42/0.22)]">
             {trackOptions.length > 1 && (
               <label className="flex min-w-0 shrink-0 items-center gap-1.5 whitespace-nowrap">
-                <span className="text-[11px] text-muted dark:text-muted-dark">
-                  Track:
-                </span>
+                <span className="text-[11px] text-muted dark:text-muted-dark">Track:</span>
                 <select
                   value={selectedTrackIndex ?? ""}
                   onChange={handleTrackChange}
@@ -1686,9 +1547,7 @@ export function AlphaTabPlayer({
             )}
 
             <div className="flex shrink-0 items-center gap-1.5 whitespace-nowrap">
-              <span className="text-[11px] text-muted dark:text-muted-dark">
-                Zoom:
-              </span>
+              <span className="text-[11px] text-muted dark:text-muted-dark">Zoom:</span>
               <div className="inline-flex overflow-hidden rounded-sm border border-overlay/10 dark:border-overlay-dark/10">
                 <button
                   type="button"
@@ -1759,9 +1618,7 @@ export function AlphaTabPlayer({
       </div>
 
       {/* Notation container */}
-      <div
-        className={`relative z-0 overflow-hidden bg-inherit ${controlsViewportClassName}`}
-      >
+      <div className={`relative z-0 overflow-hidden bg-inherit ${controlsViewportClassName}`}>
         <div
           ref={containerRef}
           className="alphatab-player-surface min-h-50 w-full overscroll-x-contain rounded-sm focus-visible:ring-2 focus-visible:ring-[rgba(55,55,255,0.35)] focus-visible:ring-offset-2 focus-visible:ring-offset-transparent focus-visible:outline-none [&_.at-cursor-bar]:bg-[rgba(55,55,255,0.15)] [&_.at-cursor-beat]:w-0.75 [&_.at-cursor-beat]:bg-[rgba(180,180,180,0.75)] [&_.at-cursor-beat]:[backdrop-filter:invert(80%)]"

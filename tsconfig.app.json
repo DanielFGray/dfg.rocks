@@ -8,9 +8,7 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "types": ["vite/client"],
-    "plugins": [
-      { "name": "@effect/language-service" }
-    ]
+    "plugins": [{ "name": "@effect/language-service" }]
   },
   "include": ["app/**/*.ts", "app/**/*.tsx", "shared/**/*.ts"],
   "exclude": ["app/routeTree.gen.ts"]

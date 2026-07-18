@@ -1,10 +1,15 @@
 import { Effect } from "effect";
 import { useEffect, useState } from "react";
-import { createFileRoute, redirect } from "@tanstack/react-router";
-import { useMutation, useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
+import { createFileRoute, redirect, useRouter } from "@tanstack/react-router";
+import { useMutation } from "@tanstack/react-query";
+import { createServerFn } from "@tanstack/react-start";
+import { getCookie } from "@tanstack/react-start/server";
+import { requireSession } from "../../lib/sessionGuards.server.js";
 import { api } from "../../lib/api.js";
-import { fetchAuthUser, libraryQuery } from "../../lib/queries.js";
 import type { Material } from "../../../shared/schemas.js";
+import { serverRuntime } from "../../../server/runtime.js";
+import { AuthenticatedRouteService } from "../../../server/services/authenticatedRouteService.js";
+import { toServerFunctionPayload } from "../../lib/serverFunctionPayload.js";
 import { Button } from "../../components/ui/Button.js";
 import { Modal } from "../../components/ui/Modal.js";
 import { ConfirmDialog } from "../../components/ui/ConfirmDialog.js";
@@ -12,31 +17,48 @@ import { EmptyState } from "../../components/ui/EmptyState.js";
 import { MaterialCard } from "../../components/library/MaterialCard.js";
 import { UploadMaterialForm } from "../../components/library/UploadMaterialForm.js";
 import { Main } from "../../components/ui/Container.js";
+import { SearchField } from "../../components/ui/SearchField.js";
+
+const getLibraryPageData = createServerFn({ method: "GET" }).handler(() =>
+  serverRuntime.runPromise(
+    Effect.gen(function* () {
+      const token = getCookie("session");
+      const session = yield* requireSession(token);
+      if (session.user.role !== "admin") {
+        return null;
+      }
+      const data = yield* AuthenticatedRouteService.library(session.session.id, {
+        limit: 1000,
+        offset: 0,
+      });
+      return toServerFunctionPayload(data) as Material[];
+    }),
+  ),
+);
 
 export const Route = createFileRoute("/_authed/library")({
-  beforeLoad: async ({ context }) => {
-    const result = await fetchAuthUser(context.queryClient);
-    if (result.user?.role !== "admin") {
-      throw redirect({ to: "/dashboard" });
-    }
+  loader: async () => {
+    const materials = await getLibraryPageData();
+    if (!materials) throw redirect({ to: "/dashboard" });
+    return materials;
   },
-  loader: ({ context }) => context.queryClient.ensureQueryData(libraryQuery),
   head: () => ({ meta: [{ title: "Library | DFG Portal" }] }),
   component: LibraryPage,
   pendingComponent: () => <Main className="text-muted dark:text-muted-dark">Loading...</Main>,
 });
 
 function LibraryPage() {
-  const queryClient = useQueryClient();
-  const { data: loaderMaterials } = useSuspenseQuery(libraryQuery);
+  const router = useRouter();
+  const loaderMaterials = Route.useLoaderData();
 
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Material | null>(null);
   const [pendingCreated, setPendingCreated] = useState<Material[]>([]);
   const [pendingDeletedIds, setPendingDeletedIds] = useState<string[]>([]);
+  const [searchQuery, setSearchQuery] = useState("");
 
-  const materials = [
+  const rawMaterials = [
     ...pendingCreated.filter(
       (item) =>
         !pendingDeletedIds.includes(item.id) &&
@@ -44,6 +66,14 @@ function LibraryPage() {
     ),
     ...loaderMaterials.filter((item) => !pendingDeletedIds.includes(item.id)),
   ];
+
+  const materials = searchQuery
+    ? rawMaterials.filter(
+        (m) =>
+          m.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          m.original_filename.toLowerCase().includes(searchQuery.toLowerCase()),
+      )
+    : rawMaterials;
 
   useEffect(() => {
     setPendingCreated((current) =>
@@ -55,13 +85,12 @@ function LibraryPage() {
   }, [loaderMaterials]);
 
   const deleteMutation = useMutation({
-    mutationFn: (id: string) =>
-      Effect.runPromise(api.admin.deleteMaterial({ path: { id } })),
+    mutationFn: (id: string) => Effect.runPromise(api.admin.deleteMaterial({ path: { id } })),
     onSuccess: (_, id) => {
       setDeleteTarget(null);
       setPendingCreated((current) => current.filter((item) => item.id !== id));
       setPendingDeletedIds((current) => [...current, id]);
-      void queryClient.invalidateQueries({ queryKey: libraryQuery.queryKey });
+      void router.invalidate();
     },
   });
 
@@ -85,7 +114,7 @@ function LibraryPage() {
         ...current.filter((item) => !uploadedIds.has(item.id)),
       ]);
       setPendingDeletedIds((current) => current.filter((id) => !uploadedIds.has(id)));
-      void queryClient.invalidateQueries({ queryKey: libraryQuery.queryKey });
+      void router.invalidate();
     }
 
     if (!hadErrors) {
@@ -103,14 +132,32 @@ function LibraryPage() {
         </Button>
       </div>
 
+      {/* ---- Search ---- */}
+      <div className="mb-6">
+        <SearchField
+          value={searchQuery}
+          onChange={setSearchQuery}
+          placeholder="Search by title or filename..."
+          data-testid="library-search"
+        />
+      </div>
+
       {/* ---- Materials ---- */}
       {materials.length === 0 ? (
         <EmptyState
-          message="No materials in the library yet. Upload your first file."
-          action={{
-            label: "Upload Material",
-            onClick: () => setUploadModalOpen(true),
-          }}
+          message={
+            searchQuery
+              ? "No materials match your search."
+              : "No materials in the library yet. Upload your first file."
+          }
+          action={
+            searchQuery
+              ? undefined
+              : {
+                  label: "Upload Material",
+                  onClick: () => setUploadModalOpen(true),
+                }
+          }
         />
       ) : (
         <div className="flex flex-col gap-2">

@@ -1,20 +1,6 @@
-export type FileCategory =
-  | "pdf"
-  | "image"
-  | "audio"
-  | "video"
-  | "notation"
-  | "other";
+export type FileCategory = "pdf" | "image" | "audio" | "video" | "notation" | "other";
 
-const NOTATION_EXTENSIONS = new Set([
-  ".gp",
-  ".gp3",
-  ".gp4",
-  ".gp5",
-  ".gpx",
-  ".musicxml",
-  ".mxl",
-]);
+const NOTATION_EXTENSIONS = new Set([".gp", ".gp3", ".gp4", ".gp5", ".gpx", ".musicxml", ".mxl"]);
 
 export function isNotation(filename: string): boolean {
   const ext = filename.slice(filename.lastIndexOf(".")).toLowerCase();
@@ -35,9 +21,7 @@ export function getUploadMaterialTitle(
   filename: string,
   extractedScoreTitle: string | null | undefined,
 ): string {
-  const normalizedScoreTitle = normalizeTitleWhitespace(
-    extractedScoreTitle ?? "",
-  );
+  const normalizedScoreTitle = normalizeTitleWhitespace(extractedScoreTitle ?? "");
   if (normalizedScoreTitle) {
     return normalizedScoreTitle;
   }
@@ -69,8 +53,7 @@ export const categoryColor: Record<FileCategory, string> = {
   audio: "bg-violet-500/15 text-violet-600 dark:text-violet-400",
   video: "bg-blue-500/15 text-blue-600 dark:text-blue-400",
   notation: "bg-amber-500/15 text-amber-600 dark:text-amber-400",
-  other:
-    "bg-overlay/10 dark:bg-overlay-dark/10 text-muted dark:text-muted-dark",
+  other: "bg-overlay/10 dark:bg-overlay-dark/10 text-muted dark:text-muted-dark",
 };
 
 export const formatSize = (bytes: number) =>

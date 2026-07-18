@@ -1,11 +1,42 @@
-import { Effect } from "effect";
 import { useEffect } from "react";
-import { createFileRoute, Link, useNavigate, useRouter } from "@tanstack/react-router";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { api } from "../lib/api.js";
+import { createServerFn } from "@tanstack/react-start";
+import { setCookie } from "@tanstack/react-start/server";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { consumeLoginRedirect, normalizeLoginRedirect } from "../lib/loginRedirect.js";
-import { getErrorMessage } from "../lib/errors.js";
-import { resetAuthClientState } from "../lib/authClientState.js";
+import { serverRuntime } from "../../server/runtime.js";
+import { AuthRouteService } from "../../server/services/authRouteService.js";
+
+const SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 30;
+
+const verifyMagicLogin = createServerFn({ method: "GET" })
+  .validator((data: Record<string, unknown>) => ({
+    token: typeof data.token === "string" ? data.token : undefined,
+    redirect: normalizeLoginRedirect(data.redirect),
+  }))
+  .handler(async ({ data }) => {
+    if (!data.token) {
+      return { status: "missing-token" as const, error: null, redirect: data.redirect };
+    }
+
+    try {
+      const session = await serverRuntime.runPromise(AuthRouteService.consumeMagicLink(data.token));
+      setCookie("session", session.token, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax",
+        maxAge: SESSION_TTL_MS / 1000,
+        path: "/",
+        expires: session.expiresAt,
+      });
+      return { status: "verified" as const, error: null, redirect: data.redirect };
+    } catch (error) {
+      return {
+        status: "error" as const,
+        error: error instanceof Error ? error.message : "Link expired",
+        redirect: data.redirect,
+      };
+    }
+  });
 
 export const Route = createFileRoute("/magic-login")({
   head: () => ({ meta: [{ title: "Magic Link Login | DFG Portal" }] }),
@@ -13,38 +44,28 @@ export const Route = createFileRoute("/magic-login")({
     token: typeof search.token === "string" ? search.token : undefined,
     redirect: normalizeLoginRedirect(search.redirect),
   }),
+  loaderDeps: ({ search }) => ({ token: search.token, redirect: search.redirect }),
+  loader: ({ deps }) => verifyMagicLogin({ data: deps }),
   component: MagicLoginPage,
 });
 
 function MagicLoginPage() {
-  const { token, redirect } = Route.useSearch();
   const navigate = useNavigate();
-  const router = useRouter();
-  const queryClient = useQueryClient();
-
-  const verify = useMutation({
-    mutationFn: () => {
-      if (!token) throw new Error("Missing magic link token");
-      return Effect.runPromise(api.auth.verifyMagicLink({ payload: { token } }));
-    },
-    onSuccess: async () => {
-      await resetAuthClientState({ queryClient, router });
-      const nextRedirect = consumeLoginRedirect(redirect);
-      if (nextRedirect) {
-        window.location.assign(nextRedirect);
-        return;
-      }
-      navigate({ to: "/dashboard" });
-    },
-  });
+  const data = Route.useLoaderData();
 
   useEffect(() => {
-    if (token) {
-      verify.mutate();
-    }
-  }, [token]);
+    if (data.status !== "verified") return;
 
-  if (!token) {
+    const nextRedirect = consumeLoginRedirect(data.redirect);
+    if (nextRedirect) {
+      window.location.assign(nextRedirect);
+      return;
+    }
+
+    void navigate({ to: "/dashboard" });
+  }, [data, navigate]);
+
+  if (data.status === "missing-token") {
     return (
       <main className="flex min-h-screen items-center justify-center px-4">
         <div className="text-center">
@@ -54,7 +75,11 @@ function MagicLoginPage() {
           <p className="mb-6 text-sm text-muted dark:text-muted-dark">
             This magic link is missing a token.
           </p>
-          <Link to="/login" search={{ redirect }} className="text-sm text-accent hover:underline">
+          <Link
+            to="/login"
+            search={{ redirect: data.redirect }}
+            className="text-sm text-accent hover:underline"
+          >
             Back to login
           </Link>
         </div>
@@ -62,17 +87,19 @@ function MagicLoginPage() {
     );
   }
 
-  if (verify.isError) {
+  if (data.status === "error") {
     return (
       <main className="flex min-h-screen items-center justify-center px-4">
         <div className="text-center">
           <h1 className="mb-4 text-2xl font-bold text-primary dark:text-primary-dark">
             Link Expired
           </h1>
-          <p className="mb-6 text-sm text-muted dark:text-muted-dark">
-            {getErrorMessage(verify.error, "Link expired")}
-          </p>
-          <Link to="/login" search={{ redirect }} className="text-sm text-accent hover:underline">
+          <p className="mb-6 text-sm text-muted dark:text-muted-dark">{data.error}</p>
+          <Link
+            to="/login"
+            search={{ redirect: data.redirect }}
+            className="text-sm text-accent hover:underline"
+          >
             Back to login
           </Link>
         </div>
@@ -80,10 +107,20 @@ function MagicLoginPage() {
     );
   }
 
+  const fallbackRedirect = data.redirect ?? "/dashboard";
+
   return (
     <main className="flex min-h-screen items-center justify-center px-4">
       <div className="text-center">
-        <p className="text-sm text-muted dark:text-muted-dark">Verifying magic link...</p>
+        <h1 className="mb-4 text-2xl font-bold text-primary dark:text-primary-dark">
+          Magic Link Verified
+        </h1>
+        <p className="mb-6 text-sm text-muted dark:text-muted-dark">
+          You&apos;re signed in. Redirecting now...
+        </p>
+        <Link to={fallbackRedirect} className="text-sm text-accent hover:underline">
+          Continue
+        </Link>
       </div>
     </main>
   );

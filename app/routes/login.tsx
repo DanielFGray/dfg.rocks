@@ -1,22 +1,20 @@
-import { Effect } from "effect";
 import { useEffect, useState } from "react";
-import { createFileRoute, Link, useNavigate, useRouter } from "@tanstack/react-router";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { api } from "../lib/api.js";
-import { getErrorMessage } from "../lib/errors.js";
-import { resetAuthClientState } from "../lib/authClientState.js";
-import {
-  consumeLoginRedirect,
-  normalizeLoginRedirect,
-  rememberLoginRedirect,
-} from "../lib/loginRedirect.js";
-import { Button } from "../components/ui/Button.js";
+import { createFileRoute, Link } from "@tanstack/react-router";
+import type { Key } from "@react-types/shared";
 import { Input } from "../components/ui/Input.js";
+import { Tabs, TabList, Tab, TabPanel } from "../components/ui/Tabs.js";
+import { normalizeLoginRedirect, rememberLoginRedirect } from "../lib/loginRedirect.js";
+import { loginWithPassword, requestMagicLink } from "../lib/authForms.js";
 
 export const Route = createFileRoute("/login")({
   head: () => ({ meta: [{ title: "Log In | DFG Portal" }] }),
   validateSearch: (search: Record<string, unknown>) => ({
-    redirect: normalizeLoginRedirect(search.redirect),
+    ...(normalizeLoginRedirect(search.redirect)
+      ? { redirect: normalizeLoginRedirect(search.redirect) }
+      : {}),
+    ...(typeof search.error === "string" ? { error: search.error } : {}),
+    ...(search.magic_sent === "true" ? { magic_sent: true as const } : {}),
+    ...(search.login_method === "magic" ? { login_method: "magic" as const } : {}),
   }),
   component: LoginPage,
 });
@@ -25,59 +23,37 @@ function PasswordForm({
   email,
   onEmailChange,
   redirectTo,
+  serverError,
 }: {
   email: string;
   onEmailChange: (value: string) => void;
   redirectTo?: string;
+  serverError: string | undefined;
 }) {
-  const navigate = useNavigate();
-  const router = useRouter();
-  const queryClient = useQueryClient();
   const [password, setPassword] = useState("");
-
-  const login = useMutation({
-    mutationFn: () =>
-      Effect.runPromise(api.auth.login({ payload: { id: email, password } })),
-    onSuccess: async () => {
-      await resetAuthClientState({ queryClient, router });
-      const nextRedirect = consumeLoginRedirect(redirectTo);
-      if (nextRedirect) {
-        window.location.assign(nextRedirect);
-        return;
-      }
-      navigate({ to: "/dashboard" });
-    },
-  });
 
   return (
     <form
-      onSubmit={(event) => {
-        event.preventDefault();
-        login.mutate();
-      }}
+      method="post"
+      action={loginWithPassword.url}
       className="flex flex-col gap-5"
     >
-      {login.isPending ? (
-        <div
-          data-testid="login-pending"
-          className="mb-6 rounded-lg border border-blue-500/30 bg-blue-500/10 px-4 py-3 text-sm text-blue-400"
-        >
-          Logging in...
-        </div>
-      ) : login.isError ? (
+      {serverError ? (
         <div
           data-testid="login-error"
           role="alert"
           className="mb-6 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-600 dark:text-red-400"
         >
-          {getErrorMessage(login.error, "Login failed")}
+          {serverError}
         </div>
       ) : null}
+      {redirectTo ? <input type="hidden" name="redirect" value={redirectTo} /> : null}
       <Input
         id="login-id"
         name="id"
         label="Username or Email"
         required
+        autoComplete="username"
         data-testid="login-id"
         value={email}
         onChange={onEmailChange}
@@ -88,13 +64,18 @@ function PasswordForm({
         label="Password"
         type="password"
         required
+        autoComplete="current-password"
         data-testid="login-password"
         value={password}
         onChange={setPassword}
       />
-      <Button type="submit" variant="primary" className="mt-2 w-full" data-testid="login-submit">
+      <button
+        type="submit"
+        data-testid="login-submit"
+        className="mt-2 inline-flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl bg-accent px-6 py-3 text-sm font-semibold text-white transition-all hover:-translate-y-px hover:bg-accent-hover"
+      >
         Log In
-      </Button>
+      </button>
     </form>
   );
 }
@@ -103,17 +84,14 @@ function MagicLinkForm({
   email,
   onEmailChange,
   redirectTo,
+  magicSent,
 }: {
   email: string;
   onEmailChange: (value: string) => void;
   redirectTo?: string;
+  magicSent: boolean | undefined;
 }) {
-  const magicLink = useMutation({
-    mutationFn: () =>
-      Effect.runPromise(api.auth.magicLink({ payload: { email } })),
-  });
-
-  if (magicLink.isSuccess) {
+  if (magicSent) {
     return (
       <div className="py-8 text-center">
         <p className="mb-2 text-lg font-semibold text-primary dark:text-primary-dark">
@@ -128,62 +106,48 @@ function MagicLinkForm({
 
   return (
     <form
-      onSubmit={(event) => {
-        event.preventDefault();
-        if (!email.trim()) return;
+      method="post"
+      action={requestMagicLink.url}
+      onSubmit={() => {
         rememberLoginRedirect(redirectTo);
-        magicLink.mutate();
       }}
       className="flex flex-col gap-5"
     >
-      <div className="flex flex-col gap-1.5">
-        <label
-          htmlFor="magic-email"
-          className="text-sm font-medium text-muted dark:text-muted-dark"
+      {redirectTo ? <input type="hidden" name="redirect" value={redirectTo} /> : null}
+      <Input
+        id="magic-email"
+        name="email"
+        type="email"
+        label="Email"
+        required
+        autoComplete="email"
+        data-testid="magic-email"
+        value={email}
+        onChange={onEmailChange}
+      />
+        <button
+          type="submit"
+          data-testid="magic-link-submit"
+          className="mt-2 inline-flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl bg-accent px-6 py-3 text-sm font-semibold text-white transition-all hover:-translate-y-px hover:bg-accent-hover data-disabled:cursor-not-allowed data-disabled:opacity-50 data-disabled:hover:transform-none"
         >
-          Email
-        </label>
-        <input
-          id="magic-email"
-          name="email"
-          type="email"
-          required
-          data-testid="magic-email"
-          value={email}
-          onChange={(event) => onEmailChange(event.target.value)}
-          className="rounded-lg border border-overlay/10 bg-card px-4 py-3 text-primary outline-hidden transition-colors placeholder:text-muted/50 focus:border-accent focus:ring-1 focus:ring-accent/50 dark:border-overlay-dark/10 dark:bg-card-dark dark:text-primary-dark dark:placeholder:text-muted-dark/50"
-        />
-      </div>
-      <Button
-        type="submit"
-        variant="primary"
-        className="mt-2 w-full"
-        data-testid="magic-link-submit"
-      >
-        Send Magic Link
-      </Button>
-    </form>
-  );
+          Send Magic Link
+        </button>
+      </form>
+    );
 }
 
 function LoginPage() {
-  const { redirect } = Route.useSearch();
-  const [activeTab, setActiveTab] = useState<"password" | "magic">("password");
+  const { redirect, error, magic_sent, login_method } = Route.useSearch();
   const [email, setEmail] = useState("");
+  const [selectedTab, setSelectedTab] = useState<Key>(login_method === "magic" ? "magic" : "password");
+
+  useEffect(() => {
+    setSelectedTab(login_method === "magic" ? "magic" : "password");
+  }, [login_method]);
+
   const googleOauthHref = redirect
     ? `/api/oauth/google?redirect=${encodeURIComponent(redirect)}`
     : "/api/oauth/google";
-
-  useEffect(() => {
-    rememberLoginRedirect(redirect);
-  }, [redirect]);
-
-  const tabClass = (tab: "password" | "magic") =>
-    `flex-1 cursor-pointer rounded-lg py-2.5 text-sm font-medium transition-colors ${
-      activeTab === tab
-        ? "bg-overlay/8 text-primary dark:bg-overlay-dark/8 dark:text-primary-dark"
-        : "text-muted hover:text-primary dark:text-muted-dark dark:hover:text-primary-dark"
-    }`;
 
   return (
     <main data-testid="login-page" className="flex min-h-screen items-center justify-center px-4">
@@ -193,37 +157,35 @@ function LoginPage() {
           <p className="mt-2 text-sm text-muted dark:text-muted-dark">Student Portal</p>
         </div>
 
-        <div className="mb-6 flex gap-1 rounded-xl bg-overlay/4 p-1 dark:bg-overlay-dark/4">
-          <button
-            type="button"
-            onClick={() => setActiveTab("password")}
-            className={tabClass("password")}
-          >
-            Password
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab("magic")}
-            className={tabClass("magic")}
-          >
-            Magic Link
-          </button>
-        </div>
-
-        {activeTab === "password" ? (
-          <PasswordForm email={email} onEmailChange={setEmail} redirectTo={redirect} />
-        ) : (
-          <MagicLinkForm email={email} onEmailChange={setEmail} redirectTo={redirect} />
-        )}
+        <Tabs selectedKey={selectedTab} onSelectionChange={setSelectedTab} className="mb-6">
+          <TabList>
+            <Tab id="password">Password</Tab>
+            <Tab id="magic">Magic Link</Tab>
+          </TabList>
+          <TabPanel id="password" className="mt-6">
+            <PasswordForm
+              email={email}
+              onEmailChange={setEmail}
+              redirectTo={redirect}
+              serverError={error}
+            />
+          </TabPanel>
+          <TabPanel id="magic" className="mt-6">
+            <MagicLinkForm
+              email={email}
+              onEmailChange={setEmail}
+              redirectTo={redirect}
+              magicSent={magic_sent}
+            />
+          </TabPanel>
+        </Tabs>
 
         <div className="relative my-8">
           <div className="absolute inset-0 flex items-center">
             <div className="w-full border-t border-overlay/8 dark:border-overlay-dark/8" />
           </div>
           <div className="relative flex justify-center text-xs">
-            <span className="bg-(--bg) px-3 text-muted dark:text-muted-dark">
-              or continue with
-            </span>
+            <span className="bg-(--bg) px-3 text-muted dark:text-muted-dark">or continue with</span>
           </div>
         </div>
 
@@ -256,11 +218,7 @@ function LoginPage() {
         </div>
 
         <div className="mt-6 text-center">
-          <Link
-            to="/forgot-password"
-            data-testid="forgot-password-link"
-            className="text-sm text-accent hover:underline"
-          >
+          <Link to="/forgot-password" className="text-sm text-accent hover:underline">
             Forgot password?
           </Link>
         </div>

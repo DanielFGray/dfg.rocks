@@ -18,7 +18,7 @@ export function TestimonialEditor({
   mode,
 }: {
   testimonial: Testimonial | null;
-  onRefresh: () => void;
+  onRefresh: () => Promise<void>;
   mode: "dashboard" | "settings";
 }) {
   const [body, setBody] = useState(testimonial?.body ?? "");
@@ -29,21 +29,15 @@ export function TestimonialEditor({
 
   const saveMutation = useMutation({
     mutationFn: (nextBody: string) =>
-      Effect.runPromise(
-        api.authenticated.upsertTestimonial({ payload: { body: nextBody } }),
-      ),
-    onSettled: () => {
-      onRefresh();
-    },
+      Effect.runPromise(api.authenticated.upsertTestimonial({ payload: { body: nextBody } })),
+    onSuccess: onRefresh,
   });
 
   const deleteMutation = useMutation({
     mutationFn: () => Effect.runPromise(api.authenticated.deleteTestimonial()),
-    onSuccess: () => {
+    onSuccess: async () => {
       setBody("");
-    },
-    onSettled: () => {
-      onRefresh();
+      await onRefresh();
     },
   });
 
@@ -56,8 +50,7 @@ export function TestimonialEditor({
     !saveMutation.isPending &&
     !deleteMutation.isPending;
 
-  const title =
-    mode === "dashboard" ? "Share your experience" : "Public Testimonial";
+  const title = mode === "dashboard" ? "Share your experience" : "Public Testimonial";
   const description =
     mode === "dashboard"
       ? "Help future students and parents know what lessons have been like for you."
@@ -72,9 +65,7 @@ export function TestimonialEditor({
       : "Post Testimonial";
 
   const errorMessage =
-    errorMessageFor(saveMutation.error) ||
-    errorMessageFor(deleteMutation.error) ||
-    null;
+    errorMessageFor(saveMutation.error) || errorMessageFor(deleteMutation.error) || null;
   const approvalMessage = testimonial
     ? testimonial.is_approved
       ? "Approved for public display."
@@ -82,21 +73,14 @@ export function TestimonialEditor({
     : "Your testimonial will be reviewed by an admin before it appears on the public site.";
 
   return (
-    <section
-      data-testid={
-        mode === "dashboard" ? "testimonial-prompt" : "testimonial-section"
-      }
-    >
+    <section data-testid={mode === "dashboard" ? "testimonial-prompt" : "testimonial-section"}>
       <Card>
         <div className="flex flex-col gap-4">
           <div className="flex flex-col gap-1">
             <h2 className="text-xl font-semibold">{title}</h2>
-            <p className="text-sm text-muted dark:text-muted-dark">
-              {description}
-            </p>
+            <p className="text-sm text-muted dark:text-muted-dark">{description}</p>
             <p className="text-xs text-muted dark:text-muted-dark">
-              20-2000 characters. Your name and account role will be shown with
-              it publicly.
+              20-2000 characters. Your name and account role will be shown with it publicly.
             </p>
           </div>
 
@@ -115,16 +99,12 @@ export function TestimonialEditor({
             <div className="text-xs text-muted dark:text-muted-dark">
               {testimonial ? (
                 <span>
-                  {approvalMessage}{" "}
-                  Last updated{" "}
-                  {new Date(testimonial.updated_at).toLocaleDateString(
-                    "en-US",
-                    {
-                      month: "short",
-                      day: "numeric",
-                      year: "numeric",
-                    },
-                  )}
+                  {approvalMessage} Last updated{" "}
+                  {new Date(testimonial.updated_at).toLocaleDateString("en-US", {
+                    month: "short",
+                    day: "numeric",
+                    year: "numeric",
+                  })}
                 </span>
               ) : (
                 <span>{approvalMessage}</span>
@@ -153,9 +133,7 @@ export function TestimonialEditor({
           </div>
 
           {errorMessage ? (
-            <p className="text-sm text-red-600 dark:text-red-400">
-              {errorMessage}
-            </p>
+            <p className="text-sm text-red-600 dark:text-red-400">{errorMessage}</p>
           ) : null}
         </div>
       </Card>

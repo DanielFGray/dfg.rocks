@@ -28,11 +28,7 @@ export const MaterialPreview = ({
     case "pdf":
       return (
         <div className={embedded ? "overflow-hidden" : card}>
-          <iframe
-            src={src}
-            className="h-[70vh] min-h-[400px] w-full"
-            title={material.title}
-          />
+          <iframe src={src} className="h-[70vh] min-h-[400px] w-full" title={material.title} />
         </div>
       );
     case "image":

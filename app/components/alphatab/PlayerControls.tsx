@@ -6,6 +6,8 @@ import {
   PlayIcon,
   StopIcon,
 } from "./icons.js";
+import { ToggleButton } from "../ui/ToggleButton.js";
+import { Tooltip } from "../ui/Tooltip.js";
 
 export function PlayerControls({
   metronomeVolume,
@@ -28,55 +30,53 @@ export function PlayerControls({
 }) {
   return (
     <div className="flex shrink-0 items-center gap-2">
-      <button
-        onClick={onPlayPause}
-        disabled={isLoading}
-        className="rounded-full bg-accent p-1.5 text-white transition-colors hover:bg-accent-hover disabled:cursor-not-allowed disabled:bg-muted dark:disabled:bg-muted-dark"
-        title={isPlaying ? "Pause" : "Play"}
-      >
-        {isLoading ? (
-          <LoadingSpinner />
-        ) : isPlaying ? (
-          <PauseIcon />
-        ) : (
-          <PlayIcon />
-        )}
-      </button>
+      <Tooltip content={isPlaying ? "Pause" : "Play"}>
+        <button
+          type="button"
+          aria-label={isPlaying ? "Pause" : "Play"}
+          onClick={onPlayPause}
+          disabled={isLoading}
+          className="rounded-full bg-accent p-1.5 text-white transition-colors hover:bg-accent-hover disabled:cursor-not-allowed disabled:bg-muted dark:disabled:bg-muted-dark"
+        >
+          {isLoading ? <LoadingSpinner /> : isPlaying ? <PauseIcon /> : <PlayIcon />}
+        </button>
+      </Tooltip>
 
-      <button
-        onClick={onStop}
-        disabled={isLoading}
-        className="rounded-full bg-overlay/10 p-1.5 text-primary transition-colors hover:bg-overlay/20 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-overlay-dark/10 dark:text-primary-dark dark:hover:bg-overlay-dark/20"
-        title="Stop"
-      >
-        <StopIcon />
-      </button>
+      <Tooltip content="Stop">
+        <button
+          type="button"
+          aria-label="Stop"
+          onClick={onStop}
+          disabled={isLoading}
+          className="rounded-full bg-overlay/10 p-1.5 text-primary transition-colors hover:bg-overlay/20 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-overlay-dark/10 dark:text-primary-dark dark:hover:bg-overlay-dark/20"
+        >
+          <StopIcon />
+        </button>
+      </Tooltip>
 
-      <button
-        onClick={onMetronomeToggle}
-        disabled={isLoading}
-        className={`rounded-full p-1.5 transition-colors ${
-          metronomeVolume > 0
-            ? "bg-accent text-white"
-            : "bg-overlay/10 text-primary dark:bg-overlay-dark/10 dark:text-primary-dark"
-        } hover:bg-accent/80 disabled:cursor-not-allowed disabled:opacity-50`}
-        title={metronomeVolume > 0 ? "Metronome On" : "Metronome Off"}
-      >
-        <MetronomeIcon active={metronomeVolume > 0} />
-      </button>
+      <Tooltip content={metronomeVolume > 0 ? "Metronome On" : "Metronome Off"}>
+        <ToggleButton
+          aria-label={metronomeVolume > 0 ? "Disable metronome" : "Enable metronome"}
+          isSelected={metronomeVolume > 0}
+          onChange={onMetronomeToggle}
+          isDisabled={isLoading}
+          className="rounded-full bg-overlay/10 p-1.5 hover:bg-accent/80 data-selected:bg-accent data-selected:text-white dark:bg-overlay-dark/10"
+        >
+          <MetronomeIcon active={metronomeVolume > 0} />
+        </ToggleButton>
+      </Tooltip>
 
-      <button
-        onClick={onCountInToggle}
-        disabled={isLoading}
-        className={`rounded-full p-1.5 transition-colors ${
-          countInEnabled
-            ? "bg-accent text-white"
-            : "bg-overlay/10 text-primary dark:bg-overlay-dark/10 dark:text-primary-dark"
-        } hover:bg-accent/80 disabled:cursor-not-allowed disabled:opacity-50`}
-        title={countInEnabled ? "Count In On" : "Count In Off"}
-      >
-        <HourglassIcon active={countInEnabled} />
-      </button>
+      <Tooltip content={countInEnabled ? "Count In On" : "Count In Off"}>
+        <ToggleButton
+          aria-label={countInEnabled ? "Disable count in" : "Enable count in"}
+          isSelected={countInEnabled}
+          onChange={onCountInToggle}
+          isDisabled={isLoading}
+          className="rounded-full bg-overlay/10 p-1.5 hover:bg-accent/80 data-selected:bg-accent data-selected:text-white dark:bg-overlay-dark/10"
+        >
+          <HourglassIcon active={countInEnabled} />
+        </ToggleButton>
+      </Tooltip>
     </div>
   );
 }

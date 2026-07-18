@@ -6,14 +6,14 @@ Music lessons business site + student/admin portal. React + TanStack Start front
 
 ```bash
 bun run dev              # Start all services (app, typecheck, worker)
-bun run dev:app          # Vite + TanStack Start dev server (port 5174)
-bun run typecheck        # tsgo --noEmit -p tsconfig.app.json
+bun run dev:app          # Vite + TanStack Start dev server (port 3000)
+bun run typecheck        # tsc --noEmit -p tsconfig.app.json
 bun run db:setup         # Full DB setup (docker + init + reset + migrate)
 bun run db:reset         # Drop and recreate DB, reapply all migrations
 bun run db:latest        # Apply committed migrations only
 bun -b graphile-migrate watch --once  # Apply current/ migrations
 bun run db:types         # Regenerate Kysely types from DB schema
-bun run test:e2e         # Playwright E2E tests (18 specs)
+bun run test:e2e         # Playwright E2E tests
 ```
 
 ## Architecture
@@ -55,7 +55,7 @@ const mutation = useMutation({ mutationFn: (p) => api.admin.courses.post(p) });
 
 ### Routing: TanStack Start (file-based)
 
-Routes live in `app/routes/`. Auth-guarded routes under `app/routes/_authed/` (layout route with `beforeLoad`, `ssr: false`).
+Routes live in `app/routes/`. Auth-guarded routes under `app/routes/_authed/` (layout route with `beforeLoad`).
 
 ### State Management
 
@@ -107,6 +107,32 @@ RLS policies derive user context from `current_setting('my.session_id')` joined 
 - Testing API (`/api/testing/*`) creates users, seeds data, clears state — only loaded when `NODE_ENV !== "production"`
 - Playwright fixtures: `testing.login()`, `testing.clear()`, `testing.seedCourse()`, `testing.enroll()`
 
+## RLS & `withAuthContext` Rules
+
+- **All `app_public` queries MUST use `withAuthContext`** so RLS enforces per-row access.
+- **Only `app_private` schema operations** (session creation, auth functions, background workers) use `rootDb` directly.
+- Even admin CRUD on `app_public` tables goes through `withAuthContext` — RLS confirms admin role via `current_user_role()`.
+- **`withAuthContext` callback signature**: `<A, E, R>(sessionId, (db) => Effect<A, E, R>)` — the `<R>` generic allows callbacks with environment requirements (e.g., `fileService.ts` which nests `withAuthContext` calls).
+- **Seroval fix**: `JSON.parse(JSON.stringify(...))` + `as` type assertion required on `createServerFn` return values that pass through `withAuthContext` (the `@effect/sql-kysely` Proxy wrapping confuses Seroval serialization).
+
+## Known Issues
+
+### `this.compile is not a function` (upstream `@effect/sql-kysely`)
+
+The `@effect/sql-kysely` Proxy layer in v0.47.0 has a binding bug where `makeSqlCommit(client).bind(target)` occasionally binds to a full `Kysely<DB>` instance instead of a `QueryBuilder`. This causes a `TypeError: this.compile is not a function` error that crashes an Effect fiber mid-query.
+
+**Impact**: Intermittent, non-fatal. A crashed fiber may leave a database connection in a degraded state (uncommitted transaction), causing subsequent operations on that connection to hang. This manifests as:
+
+- 30s Playwright timeouts (default action timeout)
+- "Login request did not fire" errors (login API hangs)
+- `DeprecationWarning` from `@effect/sql-pg` (unrelated, also benign)
+
+**Can't fix in our code** — waiting for upstream fix in `@effect/sql-kysely`.
+
+### `DeprecationWarning: Calling client.query()` (upstream `@effect/sql-pg`)
+
+Benign warning, no functionality impact.
+
 ## Style
 
 ### Server
@@ -121,6 +147,7 @@ RLS policies derive user context from `current_setting('my.session_id')` joined 
 - TanStack Query for server state, useState for local UI state
 - TanStack Router file-based routing with typed routes
 - TailwindCSS for styling, `data-testid` attributes for E2E selectors
+- React Aria Components for form inputs (TextField, Input, etc.)
 
 ## Key Files
 
@@ -131,7 +158,7 @@ RLS policies derive user context from `current_setting('my.session_id')` joined 
 | `app/lib/types.ts`                         | Type aliases derived from shared schemas              |
 | `app/lib/hooks/useAuth.ts`                 | Auth hook (useQuery + isAdmin)                        |
 | `app/routes/__root.tsx`                    | Root layout (html, head, providers)                   |
-| `app/routes/_authed.tsx`                   | Auth guard layout route (ssr: false)                  |
+| `app/routes/_authed.tsx`                   | Auth guard layout route                               |
 | `app/routes/api.$.ts`                      | Catch-all route mounting the Effect web handler       |
 | `app/config.ts`                            | Site metadata (name, city, testimonials, etc.)        |
 | `server/app.ts`                            | Effect HttpApi app composition                        |
@@ -146,3 +173,18 @@ RLS policies derive user context from `current_setting('my.session_id')` joined 
 | `server/services/googleCalendarService.ts` | Google Calendar integration                           |
 | `server/pgErrors.ts`                       | HttpError class, PG errcode mapping                   |
 | `migrations/current/`                      | SQL schema (graphile-migrate)                         |
+
+## RLS Migration Reference
+
+Each `app_public` table needs:
+
+1. `alter table ... enable row level security;`
+2. GRANTs to `:DATABASE_VISITOR` for all operations the visitor role might perform
+3. RLS policies for each operation (select/insert/update/delete)
+4. Admin policies should use `app_public.current_user_role() in ('admin', 'teacher')`
+
+Key GRANT requirements (common pitfalls):
+
+- Tables with `ON CONFLICT DO UPDATE` need `update` GRANT
+- Column-level GRANTs like `grant insert (body)` only allow inserting those columns
+- GRANTs must be applied even if policies allow the operation (GRANT is checked before RLS)

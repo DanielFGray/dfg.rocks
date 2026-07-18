@@ -89,11 +89,11 @@ export function AttachMaterialModal({
           ) : (
             <div className="flex max-h-80 flex-col gap-2 overflow-y-auto">
               {availableMaterials.map((mat) => (
-                <button
+                <Button
                   key={mat.id}
-                  type="button"
+                  variant="ghost"
                   onClick={() => handleAttachMaterial(mat.id)}
-                  className="flex cursor-pointer items-center gap-3 rounded-lg border border-overlay/6 bg-surface px-4 py-3 text-left text-sm transition-colors hover:border-accent/40 hover:bg-accent/5 dark:border-overlay-dark/6 dark:bg-surface-dark"
+                  className="flex items-center gap-3 rounded-lg border border-overlay/6 bg-surface px-4 py-3 text-left text-sm hover:border-accent/40 hover:bg-accent/5 dark:border-overlay-dark/6 dark:bg-surface-dark"
                 >
                   <span className="flex-1 font-medium text-primary dark:text-primary-dark">
                     {mat.title}
@@ -101,7 +101,7 @@ export function AttachMaterialModal({
                   <span className="text-xs text-muted/60 dark:text-muted-dark/60">
                     {mat.original_filename}
                   </span>
-                </button>
+                </Button>
               ))}
             </div>
           )}

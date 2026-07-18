@@ -15,11 +15,7 @@ export function ModuleContent({
   const materialMap = new Map(materials.map((m) => [m.id, m]));
 
   const editor = useEditor({
-    extensions: [
-      StarterKit,
-      Link.configure({ openOnClick: true }),
-      MaterialEmbedNode,
-    ],
+    extensions: [StarterKit, Link.configure({ openOnClick: true }), MaterialEmbedNode],
     content: content ?? undefined,
     editable: false,
   });
@@ -28,10 +24,7 @@ export function ModuleContent({
 
   return (
     <MaterialsContext.Provider value={materialMap}>
-      <EditorContent
-        editor={editor}
-        className="prose max-w-none dark:prose-invert"
-      />
+      <EditorContent editor={editor} className="prose max-w-none dark:prose-invert" />
     </MaterialsContext.Provider>
   );
 }

@@ -3,7 +3,16 @@ services:
     build: .
     ports:
       - "3001:3001"
-    env_file: .env.production
+    env_file: ${ENV_FILE:-.env}
+    environment:
+      NODE_ENV: production
+      PORT: "3001"
+      VITE_ROOT_URL: http://localhost
+      DATABASE_HOST: db
+      DATABASE_PORT: "5432"
+      DATABASE_URL: postgres://${DATABASE_OWNER}:${DATABASE_OWNER_PASSWORD}@db:5432/${DATABASE_NAME}
+      AUTH_DATABASE_URL: postgres://${DATABASE_AUTHENTICATOR}:${DATABASE_AUTHENTICATOR_PASSWORD}@db:5432/${DATABASE_NAME}
+      ROOT_DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${ROOT_DATABASE_PASSWORD}@db:5432/template1
     depends_on:
       db:
         condition: service_healthy
@@ -28,7 +37,14 @@ services:
   worker:
     build: .
     command: ["bun", "run", "worker"]
-    env_file: .env.production
+    env_file: ${ENV_FILE:-.env}
+    environment:
+      NODE_ENV: production
+      DATABASE_HOST: db
+      DATABASE_PORT: "5432"
+      DATABASE_URL: postgres://${DATABASE_OWNER}:${DATABASE_OWNER_PASSWORD}@db:5432/${DATABASE_NAME}
+      AUTH_DATABASE_URL: postgres://${DATABASE_AUTHENTICATOR}:${DATABASE_AUTHENTICATOR_PASSWORD}@db:5432/${DATABASE_NAME}
+      ROOT_DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${ROOT_DATABASE_PASSWORD}@db:5432/template1
     depends_on:
       db:
         condition: service_healthy
@@ -41,6 +57,7 @@ services:
       - "443:443"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./dist/client:/srv:ro
       - caddy_data:/data
       - caddy_config:/config
     depends_on:

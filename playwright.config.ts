@@ -1,6 +1,7 @@
 import { defineConfig, devices } from "@playwright/test";
 
 const vitePort = process.env.PLAYWRIGHT_VITE_PORT || process.env.VITE_PORT || "4174";
+const baseURL = `http://127.0.0.1:${vitePort}`;
 
 export default defineConfig({
   testDir: "./e2e",
@@ -10,7 +11,7 @@ export default defineConfig({
   workers: 1,
   reporter: "list",
   use: {
-    baseURL: `http://127.0.0.1:${vitePort}`,
+    baseURL,
     trace: "on-first-retry",
   },
   projects: [
@@ -25,8 +26,8 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: `VITE_PORT=${vitePort} bun run e2e:server`,
-    url: `http://127.0.0.1:${vitePort}`,
+    command: "bun run e2e:server",
+    url: baseURL,
     reuseExistingServer: false,
     timeout: 120_000,
   },

@@ -1,14 +1,11 @@
 import { Effect } from "effect";
 import { useState } from "react";
-import { createFileRoute, Link } from "@tanstack/react-router";
-import {
-  useMutation,
-  useQueryClient,
-  useSuspenseQuery,
-} from "@tanstack/react-query";
+import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
+import { useMutation } from "@tanstack/react-query";
+import { createServerFn } from "@tanstack/react-start";
+import { getCookie } from "@tanstack/react-start/server";
 import { api } from "../../lib/api.js";
 import { useAuth } from "../../lib/hooks/useAuth.js";
-import { coursesQuery } from "../../lib/queries.js";
 import type { Course } from "../../../shared/schemas.js";
 import { Button } from "../../components/ui/Button.js";
 import { Card } from "../../components/ui/Card.js";
@@ -16,43 +13,49 @@ import { EmptyState } from "../../components/ui/EmptyState.js";
 import { ConfirmDialog } from "../../components/ui/ConfirmDialog.js";
 import { CourseFormModal } from "../../components/CourseFormModal.js";
 import { Main } from "../../components/ui/Container.js";
+import { serverRuntime } from "../../../server/runtime.js";
+import { serializeCourse } from "../../../shared/responseMappers.js";
+import { toServerFunctionPayload } from "../../lib/serverFunctionPayload.js";
+import { requireSession } from "../../lib/sessionGuards.server.js";
+import { AuthenticatedRouteService } from "../../../server/services/authenticatedRouteService.js";
+
+type CoursesPageData = Course[];
+
+const getCoursesPageData = createServerFn({ method: "GET" }).handler(() =>
+  serverRuntime.runPromise(
+    Effect.gen(function* () {
+      const session = yield* requireSession(getCookie("session"));
+      const data = yield* AuthenticatedRouteService.courses(session.session.id);
+      return toServerFunctionPayload(data.map(serializeCourse)) satisfies CoursesPageData;
+    }),
+  ),
+);
 
 export const Route = createFileRoute("/_authed/courses/")({
   head: () => ({ meta: [{ title: "Courses | DFG Portal" }] }),
-  loader: ({ context }) => context.queryClient.ensureQueryData(coursesQuery),
+  loader: () => getCoursesPageData(),
   component: CoursesPage,
-  pendingComponent: () => (
-    <Main className="text-muted dark:text-muted-dark">Loading...</Main>
-  ),
+  pendingComponent: () => <Main className="text-muted dark:text-muted-dark">Loading...</Main>,
 });
 
 function CoursesPage() {
   const { isAdmin } = useAuth();
-  const { data: courses } = useSuspenseQuery(coursesQuery);
+  const courses = Route.useLoaderData() as CoursesPageData;
 
-  return isAdmin ? (
-    <AdminCourses courses={courses} />
-  ) : (
-    <StudentCourses courses={courses} />
-  );
+  return isAdmin ? <AdminCourses courses={courses} /> : <StudentCourses courses={courses} />;
 }
 
-export function AdminCourses({
-  courses,
-}: {
-  courses: readonly Course[];
-}) {
-  const queryClient = useQueryClient();
+export function AdminCourses({ courses }: { courses: readonly Course[] }) {
+  const router = useRouter();
 
   const [courseFormOpen, setCourseFormOpen] = useState(false);
   const [editingCourse, setEditingCourse] = useState<Course | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Course | null>(null);
 
   const deleteCourseMutation = useMutation({
-    mutationFn: (id: string) =>
-      Effect.runPromise(api.admin.deleteCourse({ path: { id } })),
+    mutationFn: (id: string) => Effect.runPromise(api.admin.deleteCourse({ path: { id } })),
     onSettled: () => {
-      void queryClient.invalidateQueries({ queryKey: coursesQuery.queryKey });
+      void router.invalidate();
     },
   });
 
@@ -89,26 +92,16 @@ export function AdminCourses({
         <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-3">
           {courses.map((c) => (
             <Card key={c.id}>
-              <Link
-                to="/courses/$id"
-                params={{ id: c.id }}
-                className="block no-underline"
-              >
+              <Link to="/courses/$id" params={{ id: c.id }} className="block no-underline">
                 <div className="flex items-start justify-between">
-                  <p className="font-medium text-primary dark:text-primary-dark">
-                    {c.title}
-                  </p>
+                  <p className="font-medium text-primary dark:text-primary-dark">{c.title}</p>
                   <span className="ml-2 shrink-0 rounded-full bg-accent/12 px-2 py-0.5 text-xs font-semibold text-accent">
                     {c.instrument}
                   </span>
                 </div>
               </Link>
               <div className="mt-4 flex gap-2 border-t border-overlay/6 pt-3 dark:border-overlay-dark/6">
-                <Button
-                  variant="ghost"
-                  onClick={openEditCourse(c)}
-                  className="px-3 py-1.5 text-xs"
-                >
+                <Button variant="ghost" onClick={openEditCourse(c)} className="px-3 py-1.5 text-xs">
                   Edit
                 </Button>
                 <Button
@@ -128,9 +121,7 @@ export function AdminCourses({
         open={courseFormOpen}
         onClose={closeCourseForm}
         course={editingCourse}
-        onSuccess={() =>
-          void queryClient.invalidateQueries({ queryKey: coursesQuery.queryKey })
-        }
+        onSuccess={() => void router.invalidate()}
       />
 
       <ConfirmDialog
@@ -155,11 +146,7 @@ export function AdminCourses({
   );
 }
 
-export function StudentCourses({
-  courses,
-}: {
-  courses: readonly Course[];
-}) {
+export function StudentCourses({ courses }: { courses: readonly Course[] }) {
   return (
     <Main data-testid="courses">
       <div className="mb-8 flex items-center justify-between">
@@ -171,17 +158,10 @@ export function StudentCourses({
       ) : (
         <div className="flex flex-col gap-2">
           {courses.map((c) => (
-            <Link
-              key={c.id}
-              to="/courses/$id"
-              params={{ id: c.id }}
-              className="no-underline"
-            >
+            <Link key={c.id} to="/courses/$id" params={{ id: c.id }} className="no-underline">
               <Card>
                 <div className="flex items-center justify-between">
-                  <span className="font-medium text-primary dark:text-primary-dark">
-                    {c.title}
-                  </span>
+                  <span className="font-medium text-primary dark:text-primary-dark">{c.title}</span>
                   <span className="rounded-full bg-accent/12 px-2.5 py-0.5 text-sm font-semibold text-accent">
                     {c.instrument}
                   </span>

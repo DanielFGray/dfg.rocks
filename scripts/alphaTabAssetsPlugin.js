@@ -3,7 +3,14 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
-const ALPHATAB_DIST_DIR = path.join(SCRIPT_DIR, "..", "node_modules", "@coderline", "alphatab", "dist");
+const ALPHATAB_DIST_DIR = path.join(
+  SCRIPT_DIR,
+  "..",
+  "node_modules",
+  "@coderline",
+  "alphatab",
+  "dist",
+);
 
 const ALPHATAB_FILES = [
   "alphaTab.mjs",
@@ -68,7 +75,11 @@ async function loadAssetEntries() {
       fileName: `alphatab/${fileName}`,
       sourcePath: path.join(ALPHATAB_DIST_DIR, fileName),
     })),
-    ...(await Promise.all(ALPHATAB_DIRECTORIES.map((directoryName) => collectDirectoryEntries(directoryName)))).flat(),
+    ...(
+      await Promise.all(
+        ALPHATAB_DIRECTORIES.map((directoryName) => collectDirectoryEntries(directoryName)),
+      )
+    ).flat(),
   ];
 }
 

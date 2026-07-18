@@ -10,24 +10,18 @@ type SidebarProps = {
   footer?: ReactNode;
 };
 
-export const Sidebar = ({
-  open,
-  onClose,
-  title,
-  children,
-  footer,
-}: SidebarProps) => (
+export const Sidebar = ({ open, onClose, title, children, footer }: SidebarProps) => (
   <ModalOverlay
     isOpen={open}
     onOpenChange={(isOpen) => {
       if (!isOpen) onClose();
     }}
     isDismissable
-    className="fixed inset-0 z-200 data-[entering]:animate-in data-[entering]:fade-in data-[exiting]:animate-out data-[exiting]:fade-out lg:hidden"
+    className="data-[entering]:animate-in data-[entering]:fade-in data-[exiting]:animate-out data-[exiting]:fade-out fixed inset-0 z-200 lg:hidden"
   >
-    <Modal className="top-0 right-0 w-72 absolute h-full outline-hidden">
-      <Dialog className="bg-card dark:bg-card-dark border-overlay/6 dark:border-overlay-dark/6 shadow-2xl flex h-full flex-col border-l outline-hidden">
-        <div className="px-6 py-4 border-overlay/6 dark:border-overlay-dark/6 flex items-center justify-between border-b">
+    <Modal className="absolute top-0 right-0 h-full w-72 outline-hidden">
+      <Dialog className="flex h-full flex-col border-l border-overlay/6 bg-card shadow-2xl outline-hidden dark:border-overlay-dark/6 dark:bg-card-dark">
+        <div className="flex items-center justify-between border-b border-overlay/6 px-6 py-4 dark:border-overlay-dark/6">
           <Heading
             slot="title"
             className="text-lg font-semibold text-primary dark:text-primary-dark"
@@ -38,7 +32,7 @@ export const Sidebar = ({
             variant="ghost"
             onClick={onClose}
             aria-label="Close"
-            className="rounded-lg p-1.5 px-1.5 py-1.5 text-muted dark:text-muted-dark hover:bg-overlay/5 dark:hover:bg-overlay-dark/5 hover:text-primary dark:hover:text-primary-dark transition-colors"
+            className="rounded-lg p-1.5 px-1.5 py-1.5 text-muted transition-colors hover:bg-overlay/5 hover:text-primary dark:text-muted-dark dark:hover:bg-overlay-dark/5 dark:hover:text-primary-dark"
           >
             <svg
               xmlns="http://www.w3.org/2000/svg"
@@ -58,9 +52,7 @@ export const Sidebar = ({
         </div>
         <div className="flex flex-1 flex-col overflow-y-auto">{children}</div>
         {footer ? (
-          <div className="border-overlay/6 dark:border-overlay-dark/6 border-t">
-            {footer}
-          </div>
+          <div className="border-t border-overlay/6 dark:border-overlay-dark/6">{footer}</div>
         ) : null}
       </Dialog>
     </Modal>

@@ -1,10 +1,7 @@
-import { type FormEvent, useState } from "react";
-import { Effect } from "effect";
-import { createFileRoute, Link } from "@tanstack/react-router";
-import { useMutation } from "@tanstack/react-query";
-import { getHomePageData } from "../lib/routeData.js";
-import { api } from "../lib/api.js";
-import { getErrorMessage } from "../lib/errors.js";
+import { useState } from "react";
+import { Schema as S } from "effect";
+import { createFileRoute, Link, redirect } from "@tanstack/react-router";
+import { useServerFn } from "@tanstack/react-start";
 import {
   site,
   nav,
@@ -16,8 +13,54 @@ import {
 } from "../config.js";
 import { Sidebar } from "../components/ui/Sidebar.js";
 import { Button } from "../components/ui/Button.js";
+import { Input } from "../components/ui/Input.js";
+import { Select } from "../components/ui/Select.js";
+import { Textarea } from "../components/ui/Textarea.js";
+
+import { createServerFn } from "@tanstack/react-start";
+import { serverRuntime } from "../../server/runtime.js";
+import { PublicRouteService } from "../../server/services/publicRouteService.js";
+import { toServerFunctionPayload } from "../lib/serverFunctionPayload.js";
 
 const [logoBefore, logoAfter] = site.logo.split(site.logoDot);
+
+export const getHomePageData = createServerFn({ method: "GET" }).handler(() =>
+  serverRuntime.runPromise(PublicRouteService.homePageData()).then(toServerFunctionPayload),
+);
+
+const ContactFormSchema = S.Struct({
+  name: S.String.pipe(S.nonEmptyString()),
+  email: S.String.pipe(S.nonEmptyString()),
+  phone: S.optional(S.String),
+  instrument: S.String.pipe(S.nonEmptyString()),
+  format: S.String.pipe(S.nonEmptyString()),
+  message: S.optional(S.String),
+  website: S.optional(S.String),
+});
+
+export const submitContact = createServerFn({ method: "POST" })
+  .validator((data) => {
+    if (!(data instanceof FormData)) throw new Error("FormData expected");
+    const obj: Record<string, unknown> = {};
+    for (const [key, value] of data.entries()) {
+      obj[key] = value;
+    }
+    return S.decodeUnknownSync(ContactFormSchema)(obj);
+  })
+  .handler(async ({ data }) => {
+    if (data.website) throw new Error("Invalid submission");
+    await serverRuntime.runPromise(
+      PublicRouteService.submitContact({
+        name: data.name,
+        email: data.email,
+        phone: data.phone,
+        instrument: data.instrument,
+        format: data.format,
+        message: data.message,
+      }),
+    );
+    throw redirect({ to: "/", search: { sent: true as const } });
+  });
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -33,8 +76,7 @@ export const Route = createFileRoute("/")({
       },
       {
         property: "og:description",
-        content:
-          "Private drum, guitar, piano & bass lessons for all ages. First lesson free.",
+        content: "Private drum, guitar, piano & bass lessons for all ages. First lesson free.",
       },
       { property: "og:url", content: "https://dfg.rocks/" },
       { property: "og:type", content: "website" },
@@ -62,6 +104,9 @@ export const Route = createFileRoute("/")({
     ],
   }),
   loader: () => getHomePageData(),
+  validateSearch: (search: Record<string, unknown>) => ({
+    ...(search.sent === "true" ? { sent: true as const } : {}),
+  }),
   component: HomePage,
 });
 
@@ -113,10 +158,10 @@ function SiteNav() {
           </li>
         </ul>
 
-        <button
-          type="button"
+        <Button
+          variant="ghost"
           onClick={() => setOpen(!open)}
-          className="cursor-pointer p-2 text-muted transition-colors hover:text-primary md:hidden dark:text-muted-dark dark:hover:text-primary-dark"
+          className="p-2 md:hidden"
           aria-label="Toggle menu"
         >
           <svg
@@ -132,7 +177,7 @@ function SiteNav() {
             <line x1="4" y1="12" x2="20" y2="12" />
             <line x1="4" y1="17" x2="20" y2="17" />
           </svg>
-        </button>
+        </Button>
       </nav>
 
       <Sidebar open={open} onClose={() => setOpen(false)} title="Menu">
@@ -197,25 +242,16 @@ function Hero() {
 
 function About() {
   return (
-    <section
-      id="about"
-      className="mx-auto max-w-275 px-5 py-16 md:px-8 md:py-24"
-    >
+    <section id="about" className="mx-auto max-w-275 px-5 py-16 md:px-8 md:py-24">
       <div className="grid grid-cols-1 items-center gap-10 md:grid-cols-2 md:gap-16">
         <div className="max-h-[50vh] w-full overflow-hidden rounded-xl">
-          <img
-            className="block h-full w-full object-cover"
-            src={site.gravatar}
-            alt={site.name}
-          />
+          <img className="block h-full w-full object-cover" src={site.gravatar} alt={site.name} />
         </div>
         <div>
           <div className="mb-3 text-[0.8rem] font-semibold tracking-[0.15em] text-accent uppercase">
             {about.sectionLabel}
           </div>
-          <h2 className="mb-5 text-4xl leading-[1.15] font-bold tracking-tight">
-            {about.heading}
-          </h2>
+          <h2 className="mb-5 text-4xl leading-[1.15] font-bold tracking-tight">{about.heading}</h2>
           {about.paragraphs.map((p, i) => (
             <p key={i} className="mb-4 text-muted dark:text-muted-dark">
               {p}
@@ -229,16 +265,11 @@ function About() {
 
 function LessonsSection() {
   return (
-    <section
-      id="lessons"
-      className="mx-auto max-w-275 px-5 py-16 md:px-8 md:py-24"
-    >
+    <section id="lessons" className="mx-auto max-w-275 px-5 py-16 md:px-8 md:py-24">
       <div className="mb-3 text-[0.8rem] font-semibold tracking-[0.15em] text-accent uppercase">
         {lessons.sectionLabel}
       </div>
-      <h2 className="mb-5 text-4xl leading-[1.15] font-bold tracking-tight">
-        {lessons.heading}
-      </h2>
+      <h2 className="mb-5 text-4xl leading-[1.15] font-bold tracking-tight">{lessons.heading}</h2>
       <div className="mt-10 grid grid-cols-[repeat(auto-fit,minmax(280px,1fr))] gap-6">
         {lessons.items.map((lesson) => (
           <div
@@ -247,9 +278,7 @@ function LessonsSection() {
           >
             <div className="mb-4 text-[2rem]">{lesson.icon}</div>
             <h3 className="mb-2 text-xl font-semibold">{lesson.title}</h3>
-            <p className="text-[0.95rem] text-muted dark:text-muted-dark">
-              {lesson.description}
-            </p>
+            <p className="text-[0.95rem] text-muted dark:text-muted-dark">{lesson.description}</p>
             <div className="mt-4 flex gap-2">
               {lesson.formats.map((f) => (
                 <span
@@ -270,10 +299,7 @@ function LessonsSection() {
 function Testimonials() {
   const { testimonials } = Route.useLoaderData();
   return testimonials.length > 0 ? (
-    <section
-      id="testimonials"
-      className="mx-auto max-w-275 px-5 py-16 md:px-8 md:py-24"
-    >
+    <section id="testimonials" data-testid="testimonial-section" className="mx-auto max-w-275 px-5 py-16 md:px-8 md:py-24">
       <div className="mb-3 text-[0.8rem] font-semibold tracking-[0.15em] text-accent uppercase">
         {testimonialsSection.sectionLabel}
       </div>
@@ -284,16 +310,13 @@ function Testimonials() {
         {testimonials.map((t) => (
           <div
             key={t.id}
+            data-testid="testimonial-card"
             className="rounded-xl border border-overlay/6 bg-card p-8 dark:border-overlay-dark/6 dark:bg-card-dark"
           >
-            <p className="mb-6 text-muted italic dark:text-muted-dark">
-              &ldquo;{t.body}&rdquo;
-            </p>
+            <p className="mb-6 text-muted italic dark:text-muted-dark">&ldquo;{t.body}&rdquo;</p>
             <div>
               <div className="font-semibold">{t.display_name}</div>
-              <div className="text-sm text-muted dark:text-muted-dark">
-                {t.role_label}
-              </div>
+              <div className="text-sm text-muted dark:text-muted-dark">{t.role_label}</div>
             </div>
           </div>
         ))}
@@ -303,65 +326,21 @@ function Testimonials() {
 }
 
 function Contact() {
+  const { sent } = Route.useSearch();
+  const contactFn = useServerFn(submitContact);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [instrument, setInstrument] = useState("");
   const [format, setFormat] = useState("");
   const [message, setMessage] = useState("");
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const contactMutation = useMutation({
-    mutationFn: () =>
-      Effect.runPromise(
-        api.public.contact({
-          payload: {
-            name,
-            email,
-            phone: phone || undefined,
-            instrument,
-            format,
-            message: message || undefined,
-            website: undefined,
-          },
-        }),
-      ),
-    onSuccess: () => {
-      setName("");
-      setEmail("");
-      setPhone("");
-      setInstrument("");
-      setFormat("");
-      setMessage("");
-    },
-  });
-
-  const handleSubmit = (e: FormEvent) => {
-    e.preventDefault();
-    contactMutation.mutate();
-  };
-
-  const inputClass =
-    "w-full rounded-lg border bg-card px-4 py-3 text-left text-primary outline-hidden transition-colors placeholder:text-muted/50 focus:border-accent focus:ring-1 focus:ring-accent/50 dark:bg-card-dark dark:text-primary-dark dark:placeholder:text-muted-dark/50 border-overlay/10 dark:border-overlay-dark/10";
-  const labelClass =
-    "mb-1.5 block text-left text-sm font-medium text-muted dark:text-muted-dark";
-
-  return (
-    <section
-      id="contact"
-      className="mx-auto max-w-275 px-5 py-16 md:px-8 md:py-24"
-    >
-      <div className="mx-auto max-w-2xl text-center">
-        <div className="mb-3 text-[0.8rem] font-semibold tracking-[0.15em] text-accent uppercase">
-          {contact.sectionLabel}
-        </div>
-        <h2 className="mb-5 text-4xl leading-[1.15] font-bold tracking-tight">
-          {contact.heading}
-        </h2>
-        <p className="mb-10 text-muted dark:text-muted-dark">
-          {contact.description}
-        </p>
-
-        {contactMutation.isSuccess ? (
+  if (sent) {
+    return (
+      <section id="contact" className="mx-auto max-w-275 px-5 py-16 md:px-8 md:py-24">
+        <div className="mx-auto max-w-2xl text-center">
           <div className="mb-10 rounded-xl border border-green-500/30 bg-green-500/5 p-8 text-center dark:border-green-500/20 dark:bg-green-500/5">
             <div className="mb-3 text-3xl">&#x2714;</div>
             <h3 className="mb-2 text-xl font-semibold text-primary dark:text-primary-dark">
@@ -371,144 +350,187 @@ function Contact() {
               Thanks for reaching out. I'll get back to you within 24 hours.
             </p>
           </div>
-        ) : (
-          <form
-            onSubmit={handleSubmit}
-            className="mb-10"
-            data-testid="contact-form"
-          >
-            <div className="flex flex-col gap-5 text-left">
-              <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
-                <div>
-                  <label htmlFor="contact-name" className={labelClass}>
-                    Name *
-                  </label>
-                  <input
-                    id="contact-name"
-                    type="text"
-                    required
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    placeholder="Your name"
-                    className={inputClass}
-                  />
-                </div>
-                <div>
-                  <label htmlFor="contact-email" className={labelClass}>
-                    Email *
-                  </label>
-                  <input
-                    id="contact-email"
-                    type="email"
-                    required
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="you@example.com"
-                    className={inputClass}
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label htmlFor="contact-phone" className={labelClass}>
-                  Phone
-                </label>
-                <input
-                  id="contact-phone"
-                  type="tel"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  placeholder="(optional)"
-                  className={inputClass}
-                />
-              </div>
-
-              <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
-                <div>
-                  <label htmlFor="contact-instrument" className={labelClass}>
-                    Instrument *
-                  </label>
-                  <select
-                    id="contact-instrument"
-                    required
-                    value={instrument}
-                    onChange={(e) => setInstrument(e.target.value)}
-                    className={inputClass + " cursor-pointer"}
-                  >
-                    <option value="" disabled>
-                      Select an instrument...
-                    </option>
-                    {contact.instruments.map((inst) => (
-                      <option key={inst.value} value={inst.value}>
-                        {inst.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label htmlFor="contact-format" className={labelClass}>
-                    Format *
-                  </label>
-                  <select
-                    id="contact-format"
-                    required
-                    value={format}
-                    onChange={(e) => setFormat(e.target.value)}
-                    className={inputClass + " cursor-pointer"}
-                  >
-                    <option value="" disabled>
-                      Select format...
-                    </option>
-                    {contact.formats.map((fmt) => (
-                      <option key={fmt.value} value={fmt.value}>
-                        {fmt.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <div>
-                <label htmlFor="contact-message" className={labelClass}>
-                  Message
-                </label>
-                <textarea
-                  id="contact-message"
-                  rows={4}
-                  value={message}
-                  onChange={(e) => setMessage(e.target.value)}
-                  placeholder="Tell me about yourself, your goals, or any questions you have..."
-                  className={inputClass + " resize-y"}
-                />
-              </div>
-
-              <input
-                type="text"
-                name="website"
-                style={{ display: "none" }}
-                tabIndex={-1}
-                autoComplete="off"
-              />
-
-              {contactMutation.isError ? (
-                <div className="rounded-lg border border-red-500/30 bg-red-500/5 px-4 py-3 text-sm text-red-600 dark:text-red-400">
-                  {getErrorMessage(
-                    contactMutation.error,
-                    "Failed to send message. Please try again.",
-                  )}
-                </div>
-              ) : null}
-
-              <Button
-                type="submit"
-                disabled={contactMutation.isPending}
-                className="w-full py-4 text-base"
+          <div className="mb-10 flex flex-col justify-center gap-4 sm:flex-row">
+            <a
+              href={site.calendar}
+              className="inline-flex items-center justify-center gap-3 rounded-xl bg-accent px-9 py-4 text-base font-semibold text-white no-underline transition-all hover:-translate-y-px hover:bg-accent-hover"
+            >
+              <svg
+                className="h-5 w-5"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth="2"
               >
-                {contactMutation.isPending ? "Sending..." : "Send Message"}
-              </Button>
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+                />
+              </svg>
+              Book Online
+            </a>
+            <a
+              href={`tel:${site.phone}`}
+              className="inline-flex items-center justify-center gap-3 rounded-xl border border-overlay/20 bg-transparent px-9 py-4 text-base font-semibold text-primary no-underline transition-all hover:-translate-y-px hover:border-accent hover:text-accent dark:border-overlay-dark/20 dark:text-primary-dark"
+            >
+              <svg
+                className="h-5 w-5"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth="2"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"
+                />
+              </svg>
+              Call Me
+            </a>
+            <a
+              href={`mailto:${site.email}`}
+              className="inline-flex items-center justify-center gap-3 rounded-xl border border-overlay/20 bg-transparent px-9 py-4 text-base font-semibold text-primary no-underline transition-all hover:-translate-y-px hover:border-accent hover:text-accent dark:border-overlay-dark/20 dark:text-primary-dark"
+            >
+              <svg
+                className="h-5 w-5"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth="2"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
+                />
+              </svg>
+              Email Me
+            </a>
+          </div>
+          <div className="flex flex-wrap justify-center gap-x-8 gap-y-3 text-sm text-muted dark:text-muted-dark">
+            <span>
+              <strong className="text-primary dark:text-primary-dark">Location:</strong> {site.city}
+              , {site.state}
+            </span>
+            <span>
+              <strong className="text-primary dark:text-primary-dark">Hours:</strong> {site.hours}
+            </span>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  return (
+    <section id="contact" className="mx-auto max-w-275 px-5 py-16 md:px-8 md:py-24">
+      <div className="mx-auto max-w-2xl text-center">
+        <div className="mb-3 text-[0.8rem] font-semibold tracking-[0.15em] text-accent uppercase">
+          {contact.sectionLabel}
+        </div>
+        <h2 className="mb-5 text-4xl leading-[1.15] font-bold tracking-tight">{contact.heading}</h2>
+        <p className="mb-10 text-muted dark:text-muted-dark">{contact.description}</p>
+
+        <form
+          method="post"
+          action={submitContact.url}
+          onSubmit={(event) => {
+            event.preventDefault();
+            setPending(true);
+            setError(null);
+            const formData = new FormData(event.currentTarget);
+            contactFn({ data: formData }).catch((err) => {
+              setError(err instanceof Error ? err.message : "Failed to send message");
+              setPending(false);
+            });
+          }}
+          className="mb-10"
+          data-testid="contact-form"
+        >
+          <div className="flex flex-col gap-5 text-left">
+            <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+              <Input
+                id="contact-name"
+                name="name"
+                label="Name *"
+                value={name}
+                onChange={setName}
+                placeholder="Your name"
+                required
+              />
+              <Input
+                id="contact-email"
+                name="email"
+                label="Email *"
+                type="email"
+                value={email}
+                onChange={setEmail}
+                placeholder="you@example.com"
+                required
+              />
             </div>
-          </form>
-        )}
+
+            <Input
+              id="contact-phone"
+              name="phone"
+              label="Phone"
+              type="tel"
+              value={phone}
+              onChange={setPhone}
+              placeholder="(optional)"
+            />
+
+            <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+              <Select
+                id="contact-instrument"
+                name="instrument"
+                label="Instrument *"
+                options={[{ value: "", label: "Select an instrument..." }, ...contact.instruments]}
+                value={instrument}
+                onChange={setInstrument}
+                required
+              />
+              <Select
+                id="contact-format"
+                name="format"
+                label="Format *"
+                options={[{ value: "", label: "Select format..." }, ...contact.formats]}
+                value={format}
+                onChange={setFormat}
+                required
+              />
+            </div>
+
+            <Textarea
+              id="contact-message"
+              name="message"
+              label="Message"
+              value={message}
+              onChange={setMessage}
+              placeholder="Tell me about yourself, your goals, or any questions you have..."
+              rows={4}
+            />
+
+            <input
+              type="text"
+              name="website"
+              style={{ display: "none" }}
+              tabIndex={-1}
+              autoComplete="off"
+            />
+
+            {error ? (
+              <div className="rounded-lg border border-red-500/30 bg-red-500/5 px-4 py-3 text-sm text-red-600 dark:text-red-400">
+                {error}
+              </div>
+            ) : null}
+
+            <Button type="submit" disabled={pending} className="w-full py-4 text-base">
+              {pending ? "Sending..." : "Send Message"}
+            </Button>
+          </div>
+        </form>
 
         <div className="mb-10 flex flex-col justify-center gap-4 sm:flex-row">
           <a
@@ -572,16 +594,11 @@ function Contact() {
 
         <div className="flex flex-wrap justify-center gap-x-8 gap-y-3 text-sm text-muted dark:text-muted-dark">
           <span>
-            <strong className="text-primary dark:text-primary-dark">
-              Location:
-            </strong>{" "}
-            {site.city}, {site.state}
+            <strong className="text-primary dark:text-primary-dark">Location:</strong> {site.city},{" "}
+            {site.state}
           </span>
           <span>
-            <strong className="text-primary dark:text-primary-dark">
-              Hours:
-            </strong>{" "}
-            {site.hours}
+            <strong className="text-primary dark:text-primary-dark">Hours:</strong> {site.hours}
           </span>
         </div>
       </div>

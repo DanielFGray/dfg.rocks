@@ -1,12 +1,111 @@
 import { Effect } from "effect";
+import * as S from "effect/Schema";
 import { useState } from "react";
 import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { useMutation } from "@tanstack/react-query";
+import { createServerFn } from "@tanstack/react-start";
+import { getCookie } from "@tanstack/react-start/server";
 import { api } from "../../lib/api.js";
-import { getDashboardPageData } from "../../lib/routeData.js";
 import { useAuth } from "../../lib/hooks/useAuth.js";
 import { AdminDashboard } from "../../components/dashboard/AdminDashboard.js";
 import { StudentDashboard } from "../../components/dashboard/StudentDashboard.js";
+import { ParentOnboarding } from "../../components/dashboard/ParentOnboarding.js";
+import { ParentDashboard } from "../../components/dashboard/ParentDashboard.js";
+import { serverRuntime } from "../../../server/runtime.js";
+import { AdminRouteService } from "../../../server/services/adminRouteService.js";
+import { TestimonialReminderService } from "../../../server/services/testimonialReminderService.js";
+import { SessionService } from "../../../server/services/sessionService.js";
+import { AuthenticatedRouteService } from "../../../server/services/authenticatedRouteService.js";
+import * as SharedSchemas from "../../../shared/schemas.js";
+import {
+  serializeMessage,
+  serializeMaterial,
+  serializeLesson,
+  serializeTestimonial,
+  normalizeStudents,
+} from "../../../shared/responseMappers.js";
+import { todayRange, weekRange } from "../../../shared/dateRanges.js";
+import { toServerFunctionPayload } from "../../lib/serverFunctionPayload.js";
+
+const getDashboardPageData = createServerFn({ method: "GET" }).handler(() =>
+  serverRuntime.runPromise(
+    Effect.gen(function* () {
+      const token = yield* Effect.sync(() => getCookie("session"));
+      const session = yield* SessionService.validateSessionToken(token);
+      if (!session) throw new Error("Unauthorized");
+
+      const effectiveStudentId =
+        session.user.role === "parent" && session.session.active_student_id
+          ? session.session.active_student_id
+          : null;
+      const isActing = effectiveStudentId !== null;
+      const filterStudentId = isActing ? effectiveStudentId : undefined;
+
+      if (session.user.role === "admin") {
+        const today = todayRange();
+        const week = weekRange();
+        const data = yield* Effect.all({
+          students: AdminRouteService.listStudents(session.session.id),
+          messages: AuthenticatedRouteService.messages(session.session.id, {
+            limit: 50,
+            offset: 0,
+          }),
+          todayLessons: AdminRouteService.listLessons(session.session.id, {
+            limit: 50,
+            offset: 0,
+            from: today.from,
+            to: today.to,
+          }),
+          weekLessons: AdminRouteService.listLessons(session.session.id, {
+            limit: 50,
+            offset: 0,
+            from: week.from,
+            to: week.to,
+          }),
+          courses: AdminRouteService.listCourses(session.session.id),
+        });
+
+        return toServerFunctionPayload({
+          kind: "admin" as const,
+          students: normalizeStudents(data.students),
+          messages: data.messages.map(serializeMessage),
+          todayLessons: data.todayLessons.map(serializeLesson),
+          weekLessons: data.weekLessons.map(serializeLesson),
+          courses: [...S.decodeUnknownSync(S.Array(SharedSchemas.Course))(data.courses)],
+        });
+      }
+
+      const [data, canShowTestimonialPrompt] = yield* Effect.all([
+        Effect.all({
+          messages: AuthenticatedRouteService.messages(
+            session.session.id,
+            { limit: 50, offset: 0 },
+            filterStudentId,
+          ),
+          assignments: AuthenticatedRouteService.assignments(session.session.id, filterStudentId),
+          scheduledLessons: AuthenticatedRouteService.myLessons(
+            session.session.id,
+            { status: "scheduled", limit: 5, offset: 0 },
+            filterStudentId,
+          ),
+          courses: AuthenticatedRouteService.courses(session.session.id, filterStudentId),
+          testimonial: AuthenticatedRouteService.testimonial(session.session.id, session.user.id),
+        }),
+        TestimonialReminderService.getPromptEnabled(session.user.id),
+      ]);
+
+      return toServerFunctionPayload({
+        kind: "student" as const,
+        messages: data.messages.map(serializeMessage),
+        assignments: data.assignments.map(serializeMaterial),
+        scheduledLessons: data.scheduledLessons.map(serializeLesson),
+        courses: [...S.decodeUnknownSync(S.Array(SharedSchemas.Course))(data.courses)],
+        testimonial: data.testimonial ? serializeTestimonial(data.testimonial) : null,
+        canShowTestimonialPrompt,
+      });
+    }),
+  ),
+);
 
 /* ---------------------------------------------------------------------------
  * Route
@@ -14,6 +113,8 @@ import { StudentDashboard } from "../../components/dashboard/StudentDashboard.js
 
 export const Route = createFileRoute("/_authed/dashboard")({
   head: () => ({ meta: [{ title: "Dashboard | DFG Portal" }] }),
+  staleTime: 5_000,
+  validateSearch: () => ({}),
   loader: () => getDashboardPageData(),
   component: DashboardPage,
   pendingComponent: () => <div>Loading...</div>,
@@ -33,22 +134,20 @@ function EmailVerificationBanner() {
   return (
     <div
       data-testid="verify-email-banner"
-      className="mb-6 gap-4 rounded-lg border-amber-500/30 bg-amber-500/10 px-4 py-3 flex items-center justify-between border"
+      className="mb-6 flex items-center justify-between gap-4 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3"
     >
       <p className="text-sm text-amber-200">
         Verify your email address to receive lesson reminders and updates.
       </p>
       {sent ? (
-        <span className="text-sm text-amber-300 shrink-0">
-          Verification email sent
-        </span>
+        <span className="shrink-0 text-sm text-amber-300">Verification email sent</span>
       ) : (
         <button
           type="button"
           onClick={() => resend.mutate()}
           disabled={resend.isPending}
           data-testid="resend-verification"
-          className="rounded-md bg-amber-500/20 px-3 py-1.5 text-sm font-medium text-amber-200 hover:bg-amber-500/30 shrink-0 transition-colors disabled:opacity-50"
+          className="shrink-0 rounded-md bg-amber-500/20 px-3 py-1.5 text-sm font-medium text-amber-200 transition-colors hover:bg-amber-500/30 disabled:opacity-50"
         >
           {resend.isPending ? "Sending..." : "Resend verification email"}
         </button>
@@ -59,14 +158,13 @@ function EmailVerificationBanner() {
 
 function DashboardPage() {
   const router = useRouter();
-  const { user, isAdmin } = useAuth();
+  const { user, isAdmin, isParent, familyStudents, activeStudentId } = useAuth();
   const data = Route.useLoaderData();
 
+  const showParentOnboarding = isParent && familyStudents.length === 0;
+
   return (
-    <main
-      data-testid="dashboard"
-      className="px-5 md:px-8 pt-20 pb-16 mx-auto max-w-[1100px]"
-    >
+    <main data-testid="dashboard" className="mx-auto max-w-[1100px] px-5 pt-20 pb-16 md:px-8">
       {user && !user.is_verified ? <EmailVerificationBanner /> : null}
       {isAdmin && data.kind === "admin" ? (
         <AdminDashboard
@@ -76,6 +174,10 @@ function DashboardPage() {
           students={data.students}
           courses={data.courses}
         />
+      ) : showParentOnboarding ? (
+        <ParentOnboarding isFirstStudent={true} onSuccess={() => router.invalidate()} />
+      ) : isParent && familyStudents.length > 0 && !activeStudentId ? (
+        <ParentDashboard />
       ) : (
         <StudentDashboard
           messages={data.kind === "student" ? data.messages : []}
@@ -83,10 +185,8 @@ function DashboardPage() {
           assignments={data.kind === "student" ? data.assignments : []}
           courses={data.kind === "student" ? data.courses : []}
           testimonial={data.kind === "student" ? data.testimonial : null}
-          canShowTestimonialPrompt={
-            data.kind === "student" ? data.canShowTestimonialPrompt : false
-          }
-          onRefresh={() => void router.invalidate()}
+          canShowTestimonialPrompt={data.kind === "student" ? data.canShowTestimonialPrompt : false}
+          onRefresh={() => router.invalidate()}
         />
       )}
     </main>

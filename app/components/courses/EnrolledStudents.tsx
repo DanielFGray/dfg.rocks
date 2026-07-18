@@ -55,17 +55,15 @@ export function EnrolledStudents({
                 >
                   {s.name}
                 </Link>
-                <span className="ml-3 text-xs text-muted dark:text-muted-dark">
-                  @{s.username}
-                </span>
+                <span className="ml-3 text-xs text-muted dark:text-muted-dark">@{s.username}</span>
               </div>
-              <button
-                type="button"
+              <Button
+                variant="ghost"
                 onClick={() => onUnenroll(s)}
-                className="cursor-pointer text-xs text-red-600 transition-colors hover:text-red-500 dark:text-red-400 dark:hover:text-red-300"
+                className="text-xs text-red-600 hover:text-red-500 dark:text-red-400 dark:hover:text-red-300"
               >
                 Unenroll
-              </button>
+              </Button>
             </div>
           ))}
         </div>

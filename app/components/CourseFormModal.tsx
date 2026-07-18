@@ -34,18 +34,10 @@ type CourseFormModalProps = {
   onSuccess: () => void;
 };
 
-export function CourseFormModal({
-  open,
-  onClose,
-  course,
-  onSuccess,
-}: CourseFormModalProps) {
+export function CourseFormModal({ open, onClose, course, onSuccess }: CourseFormModalProps) {
   const createMutation = useMutation({
-    mutationFn: (payload: {
-      title: string;
-      instrument: string;
-      description?: string;
-    }) => Effect.runPromise(api.admin.createCourse({ payload })),
+    mutationFn: (payload: { title: string; instrument: string; description?: string }) =>
+      Effect.runPromise(api.admin.createCourse({ payload })),
   });
 
   const updateMutation = useMutation({
@@ -101,18 +93,14 @@ export function CourseFormModal({
   }
 
   return (
-    <Modal
-      open={open}
-      onClose={onClose}
-      title={course ? "Edit Course" : "New Course"}
-    >
+    <Modal open={open} onClose={onClose} title={course ? "Edit Course" : "New Course"}>
       <form
         data-testid="course-form"
         onSubmit={(e) => {
           e.preventDefault();
           form.handleSubmit();
         }}
-        className="gap-5 flex flex-col"
+        className="flex flex-col gap-5"
       >
         <form.Field name="title" validators={requiredValidator}>
           {(field) => (
@@ -156,7 +144,7 @@ export function CourseFormModal({
             />
           )}
         </form.Field>
-        <div className="gap-3 pt-2 flex justify-end">
+        <div className="flex justify-end gap-3 pt-2">
           <Button variant="ghost" onClick={onClose}>
             Cancel
           </Button>

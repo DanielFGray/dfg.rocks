@@ -3,12 +3,7 @@ import type { Course, Message, Lesson, User } from "../../../shared/schemas.js";
 import { useAuth } from "../../lib/hooks/useAuth.js";
 import { Button } from "../ui/Button.js";
 import { Card } from "../ui/Card.js";
-import {
-  formatTime,
-  statusBadgeClass,
-  statusLabels,
-  locationLabels,
-} from "./helpers.js";
+import { formatTime, statusBadgeClass, statusLabels, locationLabels } from "./helpers.js";
 
 export function AdminDashboard({
   todayLessons,
@@ -32,26 +27,17 @@ export function AdminDashboard({
 
   // Today's lessons sorted by time
   const todayScheduled = [...todayLessons].sort(
-    (a, b) =>
-      new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime(),
+    (a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime(),
   );
 
   // Week stats
   const weekAll = weekLessons;
-  const weekScheduledCount = weekAll.filter(
-    (l) => l.status === "scheduled",
-  ).length;
-  const weekCompletedCount = weekAll.filter(
-    (l) => l.status === "completed",
-  ).length;
-  const weekCancelledCount = weekAll.filter(
-    (l) => l.status === "cancelled",
-  ).length;
+  const weekScheduledCount = weekAll.filter((l) => l.status === "scheduled").length;
+  const weekCompletedCount = weekAll.filter((l) => l.status === "completed").length;
+  const weekCancelledCount = weekAll.filter((l) => l.status === "cancelled").length;
 
   // Unread messages (not sent by me)
-  const unreadMessages = messages.filter(
-    (m) => !m.is_read && m.sender_id !== user?.id,
-  );
+  const unreadMessages = messages.filter((m) => !m.is_read && m.sender_id !== user?.id);
 
   const firstName = user?.name ? user.name.split(" ")[0] : null;
   const showCoursesPreview = students.length === 0;
@@ -93,8 +79,7 @@ export function AdminDashboard({
                 statusBadgeClass[lesson.status] ??
                 "bg-overlay/10 dark:bg-overlay-dark/10 text-muted dark:text-muted-dark";
               const label = statusLabels[lesson.status] ?? lesson.status;
-              const location =
-                locationLabels[lesson.location_type] ?? lesson.location_type;
+              const location = locationLabels[lesson.location_type] ?? lesson.location_type;
 
               return (
                 <Card key={lesson.id}>
@@ -104,14 +89,11 @@ export function AdminDashboard({
                         {student?.name ?? "Unknown"}
                       </p>
                       <p className="text-sm text-muted dark:text-muted-dark">
-                        {formatTime(lesson.scheduled_at)} &middot;{" "}
-                        {String(lesson.duration_minutes)} min &middot;{" "}
-                        {location}
+                        {formatTime(lesson.scheduled_at)} &middot; {String(lesson.duration_minutes)}{" "}
+                        min &middot; {location}
                       </p>
                     </div>
-                    <span
-                      className={`rounded-full px-2 py-0.5 text-xs font-semibold ${badge}`}
-                    >
+                    <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${badge}`}>
                       {label}
                     </span>
                   </div>
@@ -133,9 +115,7 @@ export function AdminDashboard({
             <p className="text-xs text-muted dark:text-muted-dark">Scheduled</p>
           </Card>
           <Card>
-            <p className="text-2xl font-bold text-green-400">
-              {String(weekCompletedCount)}
-            </p>
+            <p className="text-2xl font-bold text-green-400">{String(weekCompletedCount)}</p>
             <p className="text-xs text-muted dark:text-muted-dark">Completed</p>
           </Card>
           <Card>
@@ -145,9 +125,7 @@ export function AdminDashboard({
             <p className="text-xs text-muted dark:text-muted-dark">Cancelled</p>
           </Card>
           <Card>
-            <p className="text-2xl font-bold text-accent">
-              {String(students.length)}
-            </p>
+            <p className="text-2xl font-bold text-accent">{String(students.length)}</p>
             <p className="text-xs text-muted dark:text-muted-dark">Students</p>
           </Card>
         </div>
@@ -207,39 +185,58 @@ export function AdminDashboard({
                 {String(unreadMessages.length)}
               </span>
             </h2>
-            <Link
-              to="/messages"
-              className="text-sm text-accent hover:underline"
-            >
+            <Link to="/messages" className="text-sm text-accent hover:underline">
               View All
             </Link>
           </div>
           <div className="flex flex-col gap-3">
-            {unreadMessages.slice(0, 3).map((m) => {
-              const sender = studentMap.get(m.sender_id);
-              return (
-                <Link key={m.id} to="/messages" className="no-underline">
-                  <Card>
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <p className="text-sm font-medium text-primary dark:text-primary-dark">
-                          {sender?.name ?? "Student"}
-                        </p>
-                        <p className="line-clamp-1 text-sm text-muted dark:text-muted-dark">
-                          {m.body}
-                        </p>
+            {Array.from(
+              unreadMessages
+                .reduce((groups, m) => {
+                  const existing = groups.get(m.sender_id);
+                  if (existing) {
+                    existing.count++;
+                    if (new Date(m.created_at) > new Date(existing.latest.created_at)) {
+                      existing.latest = m;
+                    }
+                  } else {
+                    groups.set(m.sender_id, { sender_id: m.sender_id, count: 1, latest: m });
+                  }
+                  return groups;
+                }, new Map<string, { sender_id: string; count: number; latest: Message }>())
+                .values(),
+            )
+              .slice(0, 3)
+              .map((g) => {
+                const sender = studentMap.get(g.sender_id);
+                return (
+                  <Link key={g.sender_id} to="/messages" className="no-underline">
+                    <Card>
+                      <div className="flex items-start justify-between">
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-medium text-primary dark:text-primary-dark">
+                            {sender?.name ?? "Student"}
+                            {g.count > 1 ? (
+                              <span className="ml-2 rounded-full bg-accent/20 px-2 py-0.5 text-xs font-semibold text-accent">
+                                {String(g.count)}
+                              </span>
+                            ) : null}
+                          </p>
+                          <p className="line-clamp-1 text-sm text-muted dark:text-muted-dark">
+                            {g.latest.body}
+                          </p>
+                        </div>
+                        <span className="ml-3 shrink-0 text-xs text-muted dark:text-muted-dark">
+                          {new Date(g.latest.created_at).toLocaleDateString("en-US", {
+                            month: "short",
+                            day: "numeric",
+                          })}
+                        </span>
                       </div>
-                      <span className="ml-3 shrink-0 text-xs text-muted dark:text-muted-dark">
-                        {new Date(m.created_at).toLocaleDateString("en-US", {
-                          month: "short",
-                          day: "numeric",
-                        })}
-                      </span>
-                    </div>
-                  </Card>
-                </Link>
-              );
-            })}
+                    </Card>
+                  </Link>
+                );
+              })}
           </div>
         </section>
       ) : null}
