@@ -136,8 +136,11 @@ begin
   end if;
 
   -- Not too many login attempts, let's check the password.
-  -- NOTE: `password_hash` could be null, this is fine since `NULL = NULL` is null, and null is falsy.
-  if v_user_secret.password_hash != crypt(password, v_user_secret.password_hash) then
+  -- `password_hash` is null for accounts created without a password (OAuth sign-up).
+  -- `!=` evaluates to null there and would skip the reject branch, so the success
+  -- path must be a positive match: a null hash always rejects.
+  if v_user_secret.password_hash is null
+     or v_user_secret.password_hash is distinct from crypt(password, v_user_secret.password_hash) then
     -- Wrong password, bump all the attempt tracking figures
     update app_private.user_secrets
     set
@@ -349,7 +352,8 @@ begin
   end if;
 
   -- Not too many reset attempts, let's check the token
-  if v_user_secret.reset_password_token != reset_token then
+  if v_user_secret.reset_password_token is null
+     or v_user_secret.reset_password_token is distinct from reset_token then
     -- Wrong token, bump all the attempt tracking figures
     update app_private.user_secrets
     set
@@ -509,7 +513,8 @@ begin
   select * into v_user_secret from app_private.user_secrets
   where user_secrets.user_id = v_user.id;
 
-  if v_user_secret.password_hash != crypt(old_password, v_user_secret.password_hash) then
+  if v_user_secret.password_hash is null
+     or v_user_secret.password_hash is distinct from crypt(old_password, v_user_secret.password_hash) then
     raise exception 'Incorrect password' using errcode = 'CREDS';
   end if;
   -- perform app_private.assert_valid_password(new_password);

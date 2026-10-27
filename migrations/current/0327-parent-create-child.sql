@@ -137,7 +137,8 @@ begin
     raise exception 'The reset token has expired. Please request a new one.' using errcode = 'MODAT';
   end if;
 
-  if v_user_secret.child_password_reset_token <> token then
+  if v_user_secret.child_password_reset_token is null
+     or v_user_secret.child_password_reset_token is distinct from token then
     raise exception 'Invalid reset token' using errcode = 'MODAT';
   end if;
 
