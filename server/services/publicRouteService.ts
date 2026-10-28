@@ -65,39 +65,44 @@ export class PublicRouteService extends Effect.Service<PublicRouteService>()("Pu
           city: string;
         },
       ) {
-        yield* db.insertInto("app_public.contact_submissions").values({
-          name: values.name,
-          email: values.email,
-          phone: values.phone ?? null,
-          instrument: values.instrument,
-          format: values.format,
-          message: values.message ?? "",
-          ip_address: geo?.ip ?? null,
-          location_country: geo?.country || null,
-          location_region: geo?.region || null,
-          location_city: geo?.city || null,
-        });
-        yield* db.selectNoFrom((eb) =>
-          eb
-            .fn<unknown>("graphile_worker.add_job", [
-              eb.val("send_email"),
-              sql`${JSON.stringify({
-                options: {
-                  to: env.ADMIN_EMAIL,
-                  subject: `New contact: ${values.name} (${values.instrument})`,
-                },
-                template: "contact_submission.mjml",
-                variables: {
-                  name: values.name,
-                  email: values.email,
-                  phone: values.phone ?? "",
-                  instrument: values.instrument,
-                  format: values.format,
-                  message: values.message ?? "",
-                },
-              })}::json`,
-            ])
-            .as("add_job"),
+        // One transaction: the submission and its notification email exist together or not at all.
+        yield* db.withTransaction(
+          Effect.gen(function* () {
+            yield* db.insertInto("app_public.contact_submissions").values({
+              name: values.name,
+              email: values.email,
+              phone: values.phone ?? null,
+              instrument: values.instrument,
+              format: values.format,
+              message: values.message ?? "",
+              ip_address: geo?.ip ?? null,
+              location_country: geo?.country || null,
+              location_region: geo?.region || null,
+              location_city: geo?.city || null,
+            });
+            yield* db.selectNoFrom((eb) =>
+              eb
+                .fn<unknown>("graphile_worker.add_job", [
+                  eb.val("send_email"),
+                  sql`${JSON.stringify({
+                    options: {
+                      to: env.ADMIN_EMAIL,
+                      subject: `New contact: ${values.name} (${values.instrument})`,
+                    },
+                    template: "contact_submission.mjml",
+                    variables: {
+                      name: values.name,
+                      email: values.email,
+                      phone: values.phone ?? "",
+                      instrument: values.instrument,
+                      format: values.format,
+                      message: values.message ?? "",
+                    },
+                  })}::json`,
+                ])
+                .as("add_job"),
+            );
+          }),
         );
       }),
 

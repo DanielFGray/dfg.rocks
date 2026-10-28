@@ -221,6 +221,19 @@ describe("DFG Portal API", () => {
       expect(contact.status).toBe(200);
       expect(yield* resJson(contact)).toEqual({ success: true });
 
+      const emailJobs = yield* Effect.tryPromise(() =>
+        testDb.query(
+          `select jobs.payload
+             from graphile_worker._private_jobs jobs
+             join graphile_worker._private_tasks tasks on tasks.id = jobs.task_id
+             where tasks.identifier = 'send_email'
+               and jobs.payload ->> 'template' = 'contact_submission.mjml'
+               and jobs.payload -> 'variables' ->> 'email' = $1`,
+          ["jane@example.com"],
+        ),
+      );
+      expect(emailJobs.rows).toHaveLength(1);
+
       const spam = yield* reqEffect("POST", "/api/contact", {
         body: {
           name: "Bot",
@@ -861,7 +874,7 @@ describe("DFG Portal API", () => {
              where tasks.identifier = 'lessons__generate_prepaid_period'
                and jobs.payload ->> 'studentId' = $1
                and jobs.payload ->> 'billingMonth' = $2`,
-           [first.student_id, "2026-08-01"],
+          [first.student_id, "2026-08-01"],
         ),
       );
       expect(jobs.rows).toHaveLength(1);
@@ -878,7 +891,12 @@ describe("DFG Portal API", () => {
         logger: workerLogger,
       } as any;
       yield* Effect.promise(() =>
-        Promise.resolve(generatePrepaidPeriodTask({ studentId: first.student_id, billingMonth: "2026-08-01" }, workerHelpers)),
+        Promise.resolve(
+          generatePrepaidPeriodTask(
+            { studentId: first.student_id, billingMonth: "2026-08-01" },
+            workerHelpers,
+          ),
+        ),
       );
 
       const generated = yield* Effect.tryPromise(() =>
@@ -893,7 +911,12 @@ describe("DFG Portal API", () => {
       expect(generated.rows).toHaveLength(4);
 
       yield* Effect.promise(() =>
-        Promise.resolve(generatePrepaidPeriodTask({ studentId: first.student_id, billingMonth: "2026-08-01" }, workerHelpers)),
+        Promise.resolve(
+          generatePrepaidPeriodTask(
+            { studentId: first.student_id, billingMonth: "2026-08-01" },
+            workerHelpers,
+          ),
+        ),
       );
       const generatedAgain = yield* Effect.tryPromise(() =>
         testDb.query(
@@ -965,10 +988,10 @@ describe("DFG Portal API", () => {
       ).toBe(409);
 
       const bookingFamily = yield* Effect.tryPromise(() =>
-        testDb.query(
-          `insert into app_public.families (slug, name) values ($1, $2) returning id`,
-          [`single-booking-${studentId}`, "Single Booking Family"],
-        ),
+        testDb.query(`insert into app_public.families (slug, name) values ($1, $2) returning id`, [
+          `single-booking-${studentId}`,
+          "Single Booking Family",
+        ]),
       );
       yield* Effect.tryPromise(() =>
         testDb.query(
@@ -1007,7 +1030,6 @@ describe("DFG Portal API", () => {
           deposit_status: "held",
         },
       ]);
-
     }),
   );
 
