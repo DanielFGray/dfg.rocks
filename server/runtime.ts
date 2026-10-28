@@ -11,7 +11,6 @@ import { AuthenticatedRouteService } from "./services/authenticatedRouteService.
 import { AuthRouteService } from "./services/authRouteService.js";
 import { AuthService } from "./services/authService.js";
 import { BillingLedgerService } from "./services/billingLedgerService.js";
-import { EmailService } from "./services/emailService.js";
 import { FileService } from "./services/fileService.js";
 import { FamilyBillingService } from "./services/familyBillingService.js";
 import { GeolocationService } from "./services/geolocation.js";
@@ -43,7 +42,6 @@ const infrastructureLayer = Layer.mergeAll(
 
 // Outside production, E2E browsers share one address, so a real limiter would throttle the suite.
 const rateLimitLayer = env.NODE_ENV === "production" ? RateLimitService.Live : RateLimitService.Test;
-const emailLayer = env.NODE_ENV === "production" ? EmailService.Live : EmailService.Test;
 
 const lessonServicesLayer = Layer.mergeAll(
   AdminRouteService.Default,
@@ -67,7 +65,6 @@ const servicesLayer = Layer.mergeAll(
   AuthService.Default,
   AuthRouteService.Default,
   billingServicesLayer,
-  emailLayer,
   rateLimitLayer,
   FileService.Default,
   GeolocationService.Default,

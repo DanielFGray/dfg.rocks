@@ -62,7 +62,6 @@
           "urlEnv": "AUTH_DATABASE_URL"
         },
         { "_tag": "KvSecret", "path": "secret/data/dfg-rocks", "key": "admin_email", "env": "ADMIN_EMAIL" },
-        { "_tag": "KvSecret", "path": "secret/data/dfg-rocks", "key": "resend_api_key", "env": "RESEND_API_KEY" },
         { "_tag": "KvSecret", "path": "secret/data/dfg-rocks", "key": "google_client_id", "env": "GOOGLE_CLIENT_ID" },
         { "_tag": "KvSecret", "path": "secret/data/dfg-rocks", "key": "google_client_secret", "env": "GOOGLE_CLIENT_SECRET" },
         { "_tag": "KvSecret", "path": "secret/data/dfg-rocks", "key": "google_calendar_client_id", "env": "GOOGLE_CALENDAR_CLIENT_ID" },
@@ -86,6 +85,8 @@
       "environment": [
         { "name": "NODE_ENV", "value": "production" },
         { "name": "VITE_ROOT_URL", "value": "https://dfg.rocks" },
+        { "name": "MAIL_PROVIDER", "value": "cloudflare" },
+        { "name": "EMAIL_FROM", "value": "DFG Music Lessons <noreply@dfg.rocks>" },
         { "name": "DATABASE_VISITOR", "database": "dfg_rocks", "role": "visitor" }
       ],
       "connections": [],
@@ -103,8 +104,7 @@
           "urlEnv": "AUTH_DATABASE_URL"
         },
         { "_tag": "KvSecret", "path": "secret/data/dfg-rocks", "key": "admin_email", "env": "ADMIN_EMAIL" },
-        { "_tag": "KvSecret", "path": "secret/data/dfg-rocks", "key": "aws_access_key_id", "env": "AWS_ACCESS_KEY_ID" },
-        { "_tag": "KvSecret", "path": "secret/data/dfg-rocks", "key": "aws_secret_access_key", "env": "AWS_SECRET_ACCESS_KEY" },
+        { "_tag": "KvSecret", "path": "secret/data/dfg-rocks", "key": "cloudflare_email_api_token", "env": "CLOUDFLARE_EMAIL_API_TOKEN" },
         { "_tag": "KvSecret", "path": "secret/data/dfg-rocks", "key": "google_calendar_client_id", "env": "GOOGLE_CALENDAR_CLIENT_ID" },
         { "_tag": "KvSecret", "path": "secret/data/dfg-rocks", "key": "google_calendar_client_secret", "env": "GOOGLE_CALENDAR_CLIENT_SECRET" }
       ]

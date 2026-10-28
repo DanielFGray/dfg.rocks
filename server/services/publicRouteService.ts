@@ -5,7 +5,6 @@ import { FamilyInviteRole, type Testimonial } from "../../shared/schemas.js";
 import { env } from "../assertEnv.js";
 import { PgRootDB } from "../db.js";
 import { catchPgErrors, HttpError } from "../pgErrors.js";
-import { EmailService } from "./emailService.js";
 import type { UserRow } from "./userService.js";
 import { UserService } from "./userService.js";
 
@@ -78,13 +77,28 @@ export class PublicRouteService extends Effect.Service<PublicRouteService>()("Pu
           location_region: geo?.region || null,
           location_city: geo?.city || null,
         });
-        yield* EmailService.send({
-          to: env.ADMIN_EMAIL,
-          subject: `New contact: ${values.name} (${values.instrument})`,
-          html: `<p><strong>${values.name}</strong> (${values.email}) submitted a contact form.</p>
-<p>Instrument: ${values.instrument} | Format: ${values.format}</p>
-<p>${values.message ?? ""}</p>`,
-        });
+        yield* db.selectNoFrom((eb) =>
+          eb
+            .fn<unknown>("graphile_worker.add_job", [
+              eb.val("send_email"),
+              sql`${JSON.stringify({
+                options: {
+                  to: env.ADMIN_EMAIL,
+                  subject: `New contact: ${values.name} (${values.instrument})`,
+                },
+                template: "contact_submission.mjml",
+                variables: {
+                  name: values.name,
+                  email: values.email,
+                  phone: values.phone ?? "",
+                  instrument: values.instrument,
+                  format: values.format,
+                  message: values.message ?? "",
+                },
+              })}::json`,
+            ])
+            .as("add_job"),
+        );
       }),
 
       linkOrRegisterOAuthUser: Effect.fn("linkOrRegisterOAuthUser")(function* (values: {

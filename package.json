@@ -26,14 +26,13 @@
     "lint": "oxlint .",
     "test": "run-s typecheck lint test:unit test:worker test:e2e",
     "test:unit": "vitest run",
-    "test:worker": "bun test worker/test/bills.test.js",
+    "test:worker": "bun test worker/test/bills.test.js worker/test/send_email.test.js",
     "test:e2e": "playwright test",
     "e2e:server": "bun scripts/e2eServer.ts",
     "migrate": "bun --cwd=worker graphile-worker --schema-only && graphile-migrate migrate",
     "worker:prod": "bun --cwd=worker graphile-worker"
   },
   "dependencies": {
-    "@aws-sdk/client-sesv2": "^3.1088.0",
     "@coderline/alphatab": "^1.9.0-alpha.1861",
     "@effect/experimental": "^0.60.0",
     "@effect/platform": "^0.96.3",
@@ -70,7 +69,6 @@
     "react-aria": "^3.50.0",
     "react-aria-components": "^1.19.0",
     "react-dom": "^19.2.7",
-    "resend": "^6.17.2",
     "tailwindcss": "^4.3.3",
     "typescript": "^7.0.2",
     "vitest": "^3.2.7"
