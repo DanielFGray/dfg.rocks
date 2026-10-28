@@ -785,6 +785,48 @@ export class AdminRouteService extends Effect.Service<AdminRouteService>()("Admi
                 .updateTable("app_public.lesson_deposits")
                 .set({ status: "captured" })
                 .where("id", "=", heldDeposit.id);
+
+              const obligation = yield* db
+                .selectFrom("app_public.bill_line_items as bli")
+                .innerJoin("app_public.bills as b", "b.id", "bli.bill_id")
+                .select(["b.id as bill_id", "b.family_id", "b.status", "b.total_cents"])
+                .where("bli.lesson_id", "=", existing.id)
+                .pipe(Effect.head, Effect.option);
+              if (Option.isSome(obligation) && obligation.value.status === "issued") {
+                const actor = yield* db
+                  .selectFrom(
+                    db
+                      .selectNoFrom(() => sql<string>`app_public.current_user_id()`.as("uid"))
+                      .as("t"),
+                  )
+                  .select(sql<string>`t.uid`.as("user_id"))
+                  .pipe(Effect.head, Effect.map((row) => row.user_id));
+                const credit = yield* db
+                  .insertInto("app_public.family_credits")
+                  .values({
+                    family_id: obligation.value.family_id,
+                    student_id: existing.student_id,
+                    amount_cents: heldDeposit.amount_cents,
+                    reason: `Captured deposit for single booking ${existing.id}`,
+                    created_by: actor,
+                    expires_at: null,
+                  })
+                  .returning("id")
+                  .pipe(Effect.head);
+                yield* db
+                  .insertInto("app_public.family_credit_applications")
+                  .values({
+                    credit_id: credit.id,
+                    bill_id: obligation.value.bill_id,
+                    amount_cents: heldDeposit.amount_cents,
+                  });
+                if (obligation.value.total_cents <= heldDeposit.amount_cents) {
+                  yield* db
+                    .updateTable("app_public.bills")
+                    .set({ status: "paid", paid_at: new Date() })
+                    .where("id", "=", obligation.value.bill_id);
+                }
+              }
             }
             const remainderDue =
               rate.billing_model === "single_booking"

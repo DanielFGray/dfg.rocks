@@ -10,12 +10,15 @@ import { AdminRouteService } from "./services/adminRouteService.js";
 import { AuthenticatedRouteService } from "./services/authenticatedRouteService.js";
 import { AuthRouteService } from "./services/authRouteService.js";
 import { AuthService } from "./services/authService.js";
+import { BillingLedgerService } from "./services/billingLedgerService.js";
 import { EmailService } from "./services/emailService.js";
 import { FileService } from "./services/fileService.js";
+import { FamilyBillingService } from "./services/familyBillingService.js";
 import { GeolocationService } from "./services/geolocation.js";
 import { GoogleCalendarService } from "./services/googleCalendarService.js";
 import { LessonPolicyService } from "./services/lessonPolicyService.js";
 import { PublicRouteService } from "./services/publicRouteService.js";
+import { PdfService } from "./services/pdfService.js";
 import { RateLimitService } from "./services/rateLimiter.js";
 import { RecurringScheduleService } from "./services/recurringScheduleService.js";
 import { RealtimeService } from "./services/realtimeService.js";
@@ -47,6 +50,14 @@ const lessonServicesLayer = Layer.mergeAll(
   RecurringScheduleService.Default,
 ).pipe(Layer.provideMerge(LessonPolicyService.Default));
 
+const billingServicesLayer = Layer.mergeAll(
+  PdfService.Default,
+  BillingLedgerService.Default,
+  FamilyBillingService.Default.pipe(
+    Layer.provide(Layer.mergeAll(PdfService.Default, BillingLedgerService.Default)),
+  ),
+);
+
 const servicesLayer = Layer.mergeAll(
   RealtimeService.Default,
   GoogleCalendarService.Default,
@@ -54,6 +65,7 @@ const servicesLayer = Layer.mergeAll(
   lessonServicesLayer,
   AuthService.Default,
   AuthRouteService.Default,
+  billingServicesLayer,
   emailLayer,
   FileService.Default,
   GeolocationService.Default,

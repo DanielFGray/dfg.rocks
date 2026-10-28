@@ -23,12 +23,14 @@
     "env:init": "bun scripts/generateEnvFile.ts",
     "init": "NOCONFIRM=1 run-s env:init db:setup",
     "worker": "bun --cwd=worker --env-file=../.env graphile-worker",
-    "worker:schema": "run-s 'worker --schema-only'",
     "lint": "oxlint .",
-    "test": "run-s typecheck lint test:unit test:e2e",
+    "test": "run-s typecheck lint test:unit test:worker test:e2e",
     "test:unit": "vitest run",
+    "test:worker": "bun test worker/test/bills.test.js",
     "test:e2e": "playwright test",
-    "e2e:server": "bun scripts/e2eServer.ts"
+    "e2e:server": "bun scripts/e2eServer.ts",
+    "worker:schema": "run-s 'worker --schema-only'",
+    "deploy": "bun run start"
   },
   "dependencies": {
     "@aws-sdk/client-sesv2": "^3.1088.0",
@@ -62,6 +64,7 @@
     "mjml": "^5.4.0",
     "nodemailer": "^8.0.11",
     "pg": "^8.22.0",
+    "pdfkit": "^0.16.0",
     "qrcode.react": "^4.2.0",
     "react": "^19.2.7",
     "react-aria": "^3.50.0",

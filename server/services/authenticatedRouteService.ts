@@ -6,6 +6,7 @@ import { Module, Material, UserRole } from "../../shared/schemas.js";
 import { PgRootDB, withAuthContext, type AuthKyselyDB } from "../db.js";
 import { catchPgErrors, HttpError } from "../pgErrors.js";
 import { GoogleCalendarService } from "./googleCalendarService.js";
+import { calculateDepositAmount } from "./billingCalculation.js";
 import { LessonPolicyService } from "./lessonPolicyService.js";
 import { resolveAssignedTrackIndex } from "./notationService.js";
 import { SessionService } from "./sessionService.js";
@@ -1075,6 +1076,17 @@ export class AuthenticatedRouteService extends Effect.Service<AuthenticatedRoute
                   .updateTable("app_public.lesson_deposits")
                   .set({ status: policy.deposit_outcome })
                   .where("id", "=", heldDeposit.id);
+                if (row.billing_model === "single_booking") {
+                  yield* db.selectNoFrom((eb) =>
+                    eb
+                      .fn<unknown>("app_public.settle_single_booking_cancellation", [
+                        eb.val(row.id),
+                        eb.val(heldDeposit.amount_cents),
+                        eb.val(policy.deposit_outcome === "captured"),
+                      ])
+                      .as("settled"),
+                  );
+                }
               }
               const lesson = yield* db
                 .updateTable("app_public.lessons")
@@ -1193,7 +1205,7 @@ export class AuthenticatedRouteService extends Effect.Service<AuthenticatedRoute
                 }
                 yield* db.insertInto("app_public.lesson_deposits").values({
                   lesson_id: row.id,
-                  amount_cents: Math.ceil(row.rate_cents / 3),
+                  amount_cents: calculateDepositAmount(row.rate_cents),
                   status: "held",
                 });
               }
@@ -1325,9 +1337,17 @@ export class AuthenticatedRouteService extends Effect.Service<AuthenticatedRoute
               if (rate.billing_model === "single_booking") {
                 yield* db.insertInto("app_public.lesson_deposits").values({
                   lesson_id: lesson.id,
-                  amount_cents: Math.ceil(rate.rate_cents / 3),
+                  amount_cents: calculateDepositAmount(rate.rate_cents),
                   status: "held",
                 });
+                yield* db.selectNoFrom((eb) =>
+                  eb
+                    .fn<unknown>("app_public.create_single_booking_obligation", [
+                      eb.val(lesson.id),
+                      eb.val(rate.rate_cents),
+                    ])
+                    .as("bill_id"),
+                );
               }
 
               return { lesson, rate };

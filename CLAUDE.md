@@ -137,9 +137,9 @@ Benign warning, no functionality impact.
 
 ### Server
 
-- Plain async/await, Kysely queries, throw `HttpError` for errors
+- Effect throughout: handlers and services are Effects, and errors are Schema tagged errors in the error channel. When you touch an async/await handler, convert it.
 - Effect HttpApi route groups with shared auth/raw-handler helpers
-- `mapPgError()` for mapping PostgreSQL errcodes to HTTP errors
+- Kysely queries run through `withAuthContext`, and PostgreSQL errcodes map to typed HTTP errors
 
 ### Client
 
@@ -173,6 +173,12 @@ Benign warning, no functionality impact.
 | `server/services/googleCalendarService.ts` | Google Calendar integration                           |
 | `server/pgErrors.ts`                       | HttpError class, PG errcode mapping                   |
 | `migrations/current/`                      | SQL schema (graphile-migrate)                         |
+
+## Rules
+
+- Write migrations in `migrations/current/` as numbered files (`1-schemas.sql`, `2-users.sql`). Graphile Migrate writes `migrations/committed/`.
+- Write SQL keywords in lowercase (`create table`, `primary key`). Graphile placeholders such as `:DATABASE_VISITOR` stay uppercase.
+- When Effect code misbehaves, debug the Effect code.
 
 ## RLS Migration Reference
 

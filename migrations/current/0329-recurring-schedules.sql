@@ -114,7 +114,10 @@ begin
 
   perform graphile_worker.add_job(
     'lessons__generate_prepaid_period',
-    json_build_object('paymentId', payment_id),
+    json_build_object(
+      'studentId', (select mp.student_id from app_public.monthly_payments mp where mp.id = payment_id),
+      'billingMonth', (select to_char(mp.billing_month, 'YYYY-MM-DD') from app_public.monthly_payments mp where mp.id = payment_id)
+    ),
     job_key := 'lessons__generate_prepaid_period:' || payment_id::text,
     job_key_mode := 'replace'
   );

@@ -1,45 +1,48 @@
 // @ts-check
 /** @typedef {import("graphile-worker").Task} Task */
 
-/** @typedef {{ paymentId: string }} GeneratePrepaidPeriodPayload */
+/** @typedef {{ studentId: string, billingMonth: string }} GeneratePrepaidPeriodPayload */
 
 /** @type {Task} */
 export default async (inPayload, { withPgClient, logger }) => {
-  const { paymentId } = /** @type {GeneratePrepaidPeriodPayload} */ (inPayload);
-  if (typeof paymentId !== "string" || paymentId.length === 0) {
-    throw new Error("lessons__generate_prepaid_period requires paymentId");
+  const payload = /** @type {GeneratePrepaidPeriodPayload} */ (inPayload);
+  const studentId = payload.studentId;
+  const billingMonth = payload.billingMonth;
+
+  if (typeof studentId !== "string" || studentId.length === 0 ||
+      typeof billingMonth !== "string" || billingMonth.length === 0) {
+    throw new Error("lessons__generate_prepaid_period requires studentId and billingMonth");
   }
 
+  let generatedCount = 0;
   try {
-    const generatedCount = await withPgClient(async (pgClient) => {
+    generatedCount = await withPgClient(async (pgClient) => {
       await pgClient.query("begin");
       try {
-        const {
-          rows: [payment],
-        } = await pgClient.query(
-          `select id, student_id, billing_month, generation_status
-             from app_public.monthly_payments
-            where id = $1
-            for update`,
-          [paymentId],
-        );
-
-        if (!payment) {
-          throw new Error(`Monthly payment ${paymentId} was not found`);
-        }
-
-        if (payment.generation_status === "generated") {
+        const { rows: paymentRows } = await pgClient.query(
+            `select id, student_id, billing_month, generation_status
+               from app_public.monthly_payments
+              where student_id = $1 and billing_month = $2::date
+              for update`,
+            [studentId, billingMonth],
+          );
+        /** @type {{ id: string, student_id: string, billing_month: string, generation_status?: string } | null} */
+        const payment = paymentRows[0] ?? null;
+        if (payment?.generation_status === "generated") {
           await pgClient.query("commit");
           return 0;
         }
+        if (payment) {
+          await pgClient.query(
+            `update app_public.monthly_payments
+                set generation_status = 'processing', generation_error = null, generated_at = null
+              where id = $1`,
+            [payment.id],
+          );
+        }
 
-        await pgClient.query(
-          `update app_public.monthly_payments
-              set generation_status = 'processing', generation_error = null, generated_at = null
-            where id = $1`,
-          [paymentId],
-        );
-
+        const targetStudentId = studentId;
+        const targetBillingMonth = billingMonth;
         const { rows: schedules } = await pgClient.query(
           `select rs.id,
                   rs.day_of_week,
@@ -59,10 +62,9 @@ export default async (inPayload, { withPgClient, logger }) => {
               and (rs.ends_on is null or rs.ends_on >= $2::date)
             order by rs.id
             for update of rs, sr`,
-          [payment.student_id, payment.billing_month],
+          [targetStudentId, targetBillingMonth],
         );
 
-        let generatedCount = 0;
         for (const schedule of schedules) {
           const { rows: lessons } = await pgClient.query(
             `with occurrence_dates as (
@@ -97,25 +99,16 @@ export default async (inPayload, { withPgClient, logger }) => {
                 )
              ), inserted as (
                insert into app_public.lessons (
-                 student_id,
-                 scheduled_at,
-                 duration_minutes,
-                 location_type,
-                 recurring_schedule_id,
-                 recurrence_date
+                 student_id, scheduled_at, duration_minutes, location_type,
+                 recurring_schedule_id, recurrence_date
                )
-               select $1::uuid,
-                      scheduled_at,
-                      $8::integer,
-                      $9::app_public.location_type,
-                      $10::uuid,
-                      recurrence_date
+               select $1::uuid, scheduled_at, $8::integer, $9::app_public.location_type,
+                      $10::uuid, recurrence_date
                  from available_occurrences
                on conflict (recurring_schedule_id, recurrence_date) do nothing
                returning id, recurrence_date
              )
-             select id
-               from inserted
+             select id from inserted
              union all
              select l.id
                from app_public.lessons l
@@ -124,13 +117,11 @@ export default async (inPayload, { withPgClient, logger }) => {
                 and l.gcal_event_id is null
                 and l.status = 'scheduled'
                 and not exists (
-                  select 1
-                    from inserted i
-                   where i.recurrence_date = od.recurrence_date
+                  select 1 from inserted i where i.recurrence_date = od.recurrence_date
                 )`,
             [
               schedule.student_id,
-              payment.billing_month,
+              targetBillingMonth,
               schedule.day_of_week,
               schedule.local_start_time,
               schedule.timezone,
@@ -157,12 +148,14 @@ export default async (inPayload, { withPgClient, logger }) => {
           }
         }
 
-        await pgClient.query(
-          `update app_public.monthly_payments
-              set generation_status = 'generated', generation_error = null, generated_at = now()
-            where id = $1`,
-          [paymentId],
-        );
+        if (payment) {
+          await pgClient.query(
+            `update app_public.monthly_payments
+                set generation_status = 'generated', generation_error = null, generated_at = now()
+              where id = $1`,
+            [payment.id],
+          );
+        }
         await pgClient.query("commit");
         return generatedCount;
       } catch (error) {
@@ -172,16 +165,16 @@ export default async (inPayload, { withPgClient, logger }) => {
     });
 
     logger.info(
-      `lessons__generate_prepaid_period: payment ${paymentId}, queued ${generatedCount} lessons`,
+      `lessons__generate_prepaid_period: ${studentId} ${billingMonth}, queued ${generatedCount} lessons`,
     );
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     await withPgClient((pgClient) =>
       pgClient.query(
         `update app_public.monthly_payments
-            set generation_status = 'failed', generation_error = left($2, 4000), generated_at = null
-          where id = $1`,
-        [paymentId, message],
+            set generation_status = 'failed', generation_error = left($3, 4000), generated_at = null
+          where student_id = $1 and billing_month = $2::date`,
+        [studentId, billingMonth, message],
       ),
     );
     throw error;

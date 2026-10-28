@@ -454,6 +454,404 @@ export const InviteSearch = S.Struct({
 
 export type InviteSearch = S.Schema.Type<typeof InviteSearch>;
 
+export const BillStatus = S.Union(
+  S.Literal("draft"),
+  S.Literal("issued"),
+  S.Literal("paid"),
+  S.Literal("cancelled"),
+  S.Literal("void"),
+);
+
+export type BillStatus = S.Schema.Type<typeof BillStatus>;
+
+export const PaymentMethod = S.Union(
+  S.Literal("cash"),
+  S.Literal("check"),
+  S.Literal("card"),
+  S.Literal("bank_transfer"),
+  S.Literal("other"),
+);
+
+export type PaymentMethod = S.Schema.Type<typeof PaymentMethod>;
+
+export const LineItemType = S.Union(
+  S.Literal("lesson"),
+  S.Literal("single_booking"),
+  S.Literal("fee"),
+  S.Literal("adjustment"),
+  S.Literal("credit"),
+);
+
+export type LineItemType = S.Schema.Type<typeof LineItemType>;
+
+export const Bill = S.Struct({
+  id: S.String,
+  family_id: S.String,
+  bill_number: S.Number,
+  status: BillStatus,
+  billing_period_start: S.String,
+  billing_period_end: S.String,
+  due_date: S.NullOr(S.String),
+  subtotal_cents: S.Number,
+  discount_cents: S.Number,
+  tax_cents: S.Number,
+  total_cents: S.Number,
+  notes: S.NullOr(S.String),
+  created_at: S.String,
+  updated_at: S.String,
+  issued_at: S.NullOr(S.String),
+  paid_at: S.NullOr(S.String),
+  cancelled_at: S.NullOr(S.String),
+  voided_at: S.NullOr(S.String),
+});
+
+export type Bill = S.Schema.Type<typeof Bill>;
+
+export const Payment = S.Struct({
+  id: S.String,
+  family_id: S.String,
+  payment_number: S.Number,
+  amount_cents: S.Number,
+  method: PaymentMethod,
+  reference: S.NullOr(S.String),
+  received_at: S.String,
+  notes: S.NullOr(S.String),
+  created_at: S.String,
+  updated_at: S.String,
+});
+
+export type Payment = S.Schema.Type<typeof Payment>;
+
+// Family-facing billing views deliberately exclude internal notes and actor IDs.
+export const FamilyBill = S.Struct({
+  id: S.String,
+  family_id: S.String,
+  bill_number: S.Number,
+  status: BillStatus,
+  billing_period_start: S.String,
+  billing_period_end: S.String,
+  due_date: S.NullOr(S.String),
+  subtotal_cents: S.Number,
+  discount_cents: S.Number,
+  tax_cents: S.Number,
+  total_cents: S.Number,
+  created_at: S.String,
+  updated_at: S.String,
+  issued_at: S.NullOr(S.String),
+  paid_at: S.NullOr(S.String),
+  cancelled_at: S.NullOr(S.String),
+  voided_at: S.NullOr(S.String),
+});
+export type FamilyBill = S.Schema.Type<typeof FamilyBill>;
+
+export const FamilyPayment = S.Struct({
+  id: S.String,
+  family_id: S.String,
+  payment_number: S.Number,
+  amount_cents: S.Number,
+  method: PaymentMethod,
+  reference: S.NullOr(S.String),
+  received_at: S.String,
+  created_at: S.String,
+  updated_at: S.String,
+});
+export type FamilyPayment = S.Schema.Type<typeof FamilyPayment>;
+
+export const FamilyCredit = S.Struct({
+  id: S.String,
+  family_id: S.String,
+  student_id: S.NullOr(S.String),
+  amount_cents: S.Number,
+  reason: S.String,
+  expires_at: S.NullOr(S.String),
+  consumed_at: S.NullOr(S.String),
+  created_at: S.String,
+});
+
+export type FamilyCredit = S.Schema.Type<typeof FamilyCredit>;
+
+export const AdminFamilyCredit = S.Struct({
+  id: S.String,
+  family_id: S.String,
+  student_id: S.NullOr(S.String),
+  amount_cents: S.Number,
+  reason: S.String,
+  created_by: S.String,
+  expires_at: S.NullOr(S.String),
+  consumed_at: S.NullOr(S.String),
+  created_at: S.String,
+});
+export type AdminFamilyCredit = S.Schema.Type<typeof AdminFamilyCredit>;
+
+export const FamilyBillDetailResponse = S.Struct({
+  id: S.String,
+  family_id: S.String,
+  bill_number: S.Number,
+  status: BillStatus,
+  billing_period_start: S.String,
+  billing_period_end: S.String,
+  due_date: S.NullOr(S.String),
+  subtotal_cents: S.Number,
+  discount_cents: S.Number,
+  tax_cents: S.Number,
+  total_cents: S.Number,
+  created_at: S.String,
+  updated_at: S.String,
+  issued_at: S.NullOr(S.String),
+  paid_at: S.NullOr(S.String),
+  cancelled_at: S.NullOr(S.String),
+  voided_at: S.NullOr(S.String),
+  line_items: S.Array(S.Struct({
+    id: S.String,
+    bill_id: S.String,
+    student_id: S.String,
+    line_type: LineItemType,
+    description: S.String,
+    quantity: S.Number,
+    unit_price_cents: S.Number,
+    amount_cents: S.Number,
+    created_at: S.String,
+  })),
+  adjustments: S.Array(S.Struct({
+    id: S.String,
+    bill_id: S.String,
+    amount_cents: S.Number,
+    created_at: S.String,
+  })),
+  credit_applications: S.Array(S.Struct({
+    id: S.String,
+    credit_id: S.String,
+    bill_id: S.String,
+    amount_cents: S.Number,
+    created_at: S.String,
+  })),
+});
+export type FamilyBillDetailResponse = S.Schema.Type<typeof FamilyBillDetailResponse>;
+
+export const FamilyPaymentDetail = S.Struct({
+  ...FamilyPayment.fields,
+  allocations: S.Array(S.Struct({
+    id: S.String,
+    payment_id: S.String,
+    bill_id: S.String,
+    amount_cents: S.Number,
+    created_at: S.String,
+  })),
+});
+export type FamilyPaymentDetail = S.Schema.Type<typeof FamilyPaymentDetail>;
+
+export const BillDetailResponse = S.Struct({
+  id: S.String,
+  family_id: S.String,
+  bill_number: S.Number,
+  status: BillStatus,
+  billing_period_start: S.String,
+  billing_period_end: S.String,
+  due_date: S.NullOr(S.String),
+  subtotal_cents: S.Number,
+  discount_cents: S.Number,
+  tax_cents: S.Number,
+  total_cents: S.Number,
+  notes: S.NullOr(S.String),
+  created_at: S.String,
+  updated_at: S.String,
+  issued_at: S.NullOr(S.String),
+  paid_at: S.NullOr(S.String),
+  cancelled_at: S.NullOr(S.String),
+  voided_at: S.NullOr(S.String),
+  line_items: S.Array(
+    S.Struct({
+      id: S.String,
+      bill_id: S.String,
+      student_id: S.String,
+      line_type: LineItemType,
+      description: S.String,
+      quantity: S.Number,
+      unit_price_cents: S.Number,
+      amount_cents: S.Number,
+      created_at: S.String,
+    }),
+  ),
+  adjustments: S.Array(
+    S.Struct({
+      id: S.String,
+      bill_id: S.String,
+      amount_cents: S.Number,
+      reason: S.String,
+      created_at: S.String,
+    }),
+  ),
+  credit_applications: S.Array(
+    S.Struct({
+      id: S.String,
+      credit_id: S.String,
+      bill_id: S.String,
+      amount_cents: S.Number,
+      created_at: S.String,
+    }),
+  ),
+});
+
+export type BillDetailResponse = S.Schema.Type<typeof BillDetailResponse>;
+
+export const PaymentDetail = S.Struct({
+  id: S.String,
+  family_id: S.String,
+  payment_number: S.Number,
+  amount_cents: S.Number,
+  method: PaymentMethod,
+  reference: S.NullOr(S.String),
+  received_at: S.String,
+  notes: S.NullOr(S.String),
+  created_at: S.String,
+  updated_at: S.String,
+  allocations: S.Array(
+    S.Struct({
+      id: S.String,
+      payment_id: S.String,
+      bill_id: S.String,
+      amount_cents: S.Number,
+      created_at: S.String,
+    }),
+  ),
+});
+
+export type PaymentDetail = S.Schema.Type<typeof PaymentDetail>;
+
+export const FamilyBillingBalance = S.Struct({
+  outstanding_cents: S.Number,
+  credit_balance_cents: S.Number,
+  available_credit_cents: S.Number,
+  overdue_cents: S.Number,
+  gross_outstanding_cents: S.Number,
+  net_due_cents: S.Number,
+});
+
+export type FamilyBillingBalance = S.Schema.Type<typeof FamilyBillingBalance>;
+
+export const FamilyBillingOverview = S.Struct({
+  family_id: S.String,
+  family_name: S.String,
+  balance: FamilyBillingBalance,
+  open_bills: S.Array(FamilyBill),
+  overdue_bills: S.Array(FamilyBill),
+  recent_payments: S.Array(FamilyPayment),
+  credits: S.Array(FamilyCredit),
+});
+
+export type FamilyBillingOverview = S.Schema.Type<typeof FamilyBillingOverview>;
+
+export const FamilyBillingSummary = S.Struct({
+  family_id: S.String,
+  family_name: S.String,
+  bill_count: S.Number,
+  total_billed_cents: S.Number,
+  total_paid_cents: S.Number,
+  outstanding_cents: S.Number,
+  overdue_cents: S.Number,
+  credit_balance_cents: S.Number,
+});
+
+export type FamilyBillingSummary = S.Schema.Type<typeof FamilyBillingSummary>;
+
+export const FamilyBillingDetailBalance = S.Struct({
+  outstanding_cents: S.Number,
+  overdue_cents: S.Number,
+  credit_balance_cents: S.Number,
+});
+
+export type FamilyBillingDetailBalance = S.Schema.Type<typeof FamilyBillingDetailBalance>;
+
+export const FamilyBillingDetail = S.Struct({
+  family_id: S.String,
+  family_name: S.String,
+  balance: FamilyBillingDetailBalance,
+  bills: S.Array(FamilyBill),
+  payments: S.Array(FamilyPayment),
+  credits: S.Array(FamilyCredit),
+});
+
+export type FamilyBillingDetail = S.Schema.Type<typeof FamilyBillingDetail>;
+
+export const FamilyDiscount = S.Struct({
+  id: S.String,
+  family_id: S.String,
+  label: S.String,
+  discount_type: S.Union(S.Literal("percentage"), S.Literal("fixed")),
+  discount_value: S.Number,
+  applies_to: S.Union(S.Literal("all"), S.Literal("tuition"), S.Literal("fees")),
+  effective_from: S.String,
+  effective_until: S.NullOr(S.String),
+  is_active: S.Boolean,
+  created_by: S.String,
+  created_at: S.String,
+  updated_at: S.String,
+});
+
+export type FamilyDiscount = S.Schema.Type<typeof FamilyDiscount>;
+
+export const TaxRate = S.Struct({
+  id: S.String,
+  label: S.String,
+  jurisdiction: S.String,
+  rate_percent: S.Number,
+  applies_to: S.Union(S.Literal("all"), S.Literal("tuition"), S.Literal("fees")),
+  effective_from: S.String,
+  effective_until: S.NullOr(S.String),
+  is_active: S.Boolean,
+  created_by: S.String,
+  created_at: S.String,
+  updated_at: S.String,
+});
+
+export type TaxRate = S.Schema.Type<typeof TaxRate>;
+
+export const FamilyTaxExemption = S.Struct({
+  id: S.String,
+  family_id: S.String,
+  tax_rate_id: S.String,
+  exemption_reason: S.String,
+  effective_from: S.String,
+  effective_until: S.NullOr(S.String),
+  created_by: S.String,
+  created_at: S.String,
+});
+
+export type FamilyTaxExemption = S.Schema.Type<typeof FamilyTaxExemption>;
+
+export const Refund = S.Struct({
+  id: S.String,
+  payment_id: S.String,
+  amount_cents: S.Number,
+  reason: S.String,
+  created_by: S.String,
+  refunded_at: S.String,
+  notes: S.NullOr(S.String),
+  created_at: S.String,
+});
+
+export type Refund = S.Schema.Type<typeof Refund>;
+
+export const Adjustment = S.Struct({
+  id: S.String,
+  bill_id: S.String,
+  amount_cents: S.Number,
+  reason: S.String,
+  created_at: S.String,
+});
+
+export type Adjustment = S.Schema.Type<typeof Adjustment>;
+
+export const CreditApplication = S.Struct({
+  id: S.String,
+  credit_id: S.String,
+  bill_id: S.String,
+  amount_cents: S.Number,
+  created_at: S.String,
+});
+
+export type CreditApplication = S.Schema.Type<typeof CreditApplication>;
+
 export const CreateChildPayload = S.Struct({
   name: S.String.pipe(S.minLength(1), S.maxLength(200)),
 });

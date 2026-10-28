@@ -1,5 +1,4 @@
 import { it, expect, describe, beforeAll, afterAll, vi } from "@effect/vitest";
-import * as Command from "@effect/platform/Command";
 import * as FileSystem from "@effect/platform/FileSystem";
 import * as NodeContext from "@effect/platform-node/NodeContext";
 import * as NodeFileSystem from "@effect/platform-node/NodeFileSystem";
@@ -29,15 +28,6 @@ function requiredEnv(name: string): string {
   return value;
 }
 
-function withDatabaseSuffix(connectionString: string, suffix: string): string {
-  const url = new URL(connectionString);
-  const databaseName = url.pathname.replace(/^\/+/, "");
-  if (!databaseName)
-    throw new Error(`Connection string is missing a database name: ${connectionString}`);
-  url.pathname = `/${databaseName}${suffix}`;
-  return url.toString();
-}
-
 function forceIpv4(urlString: string): string {
   const url = new URL(urlString);
   if (url.hostname === "localhost" || url.hostname === "::1") url.hostname = "127.0.0.1";
@@ -47,21 +37,6 @@ function forceIpv4(urlString: string): string {
 function runPlatform<A, E>(effect: Effect.Effect<A, E, NodeContext.NodeContext>): Promise<A> {
   return Effect.runPromise(effect.pipe(Effect.provide(NodeContext.layer)));
 }
-
-const runCommand = Effect.fnUntraced(function* (
-  command: string,
-  args: ReadonlyArray<string>,
-  environment: Record<string, string>,
-) {
-  const exitCode = yield* Command.make(command, ...args).pipe(
-    Command.env(environment),
-    Command.workingDirectory(process.cwd()),
-    Command.stderr("inherit"),
-    Command.exitCode,
-  );
-  if (exitCode !== 0)
-    throw new Error(`Command failed (${exitCode}): ${[command, ...args].join(" ")}`);
-});
 
 const TEST_ROOT_URL = "http://127.0.0.1:3000";
 type TitledItem = { title: string };
@@ -116,8 +91,8 @@ function resJson(res: HttpClientResponse.HttpClientResponse): Effect.Effect<any,
 
 describe("DFG Portal API", () => {
   beforeAll(async () => {
-    const dbUrl = forceIpv4(withDatabaseSuffix(requiredEnv("DATABASE_URL"), "_test"));
-    const authDbUrl = forceIpv4(withDatabaseSuffix(requiredEnv("AUTH_DATABASE_URL"), "_test"));
+    const dbUrl = forceIpv4(requiredEnv("DATABASE_URL"));
+    const authDbUrl = forceIpv4(requiredEnv("AUTH_DATABASE_URL"));
     const viteRootUrl = forceIpv4(process.env.VITE_ROOT_URL || "http://localhost:5174");
     const adminEmail = process.env.ADMIN_EMAIL || "admin@test.com";
     const childEnv = Object.fromEntries(
@@ -143,22 +118,15 @@ describe("DFG Portal API", () => {
         APPLE_PRIVATE_KEY: process.env.APPLE_PRIVATE_KEY || testApplePrivateKey,
       }).filter((entry): entry is [string, string] => entry[1] !== undefined),
     );
+    Object.assign(process.env, childEnv);
 
     await runPlatform(
       Effect.gen(function* () {
         const fileSystem = yield* FileSystem.FileSystem;
         yield* fileSystem.makeDirectory("generated", { recursive: true });
-        yield* runCommand("bun", ["-b", "graphile-migrate", "reset", "--erase"], childEnv);
-        yield* runCommand(
-          "bun",
-          ["-b", "--cwd=worker", "graphile-worker", "--schema-only"],
-          childEnv,
-        );
-        yield* runCommand("bun", ["-b", "graphile-migrate", "watch", "--once"], childEnv);
       }),
     );
 
-    Object.assign(process.env, childEnv);
     vi.resetModules();
 
     testDb = new pg.Pool({ connectionString: dbUrl });
@@ -890,13 +858,17 @@ describe("DFG Portal API", () => {
           `select jobs.id, jobs.payload
              from graphile_worker._private_jobs jobs
              join graphile_worker._private_tasks tasks on tasks.id = jobs.task_id
-            where tasks.identifier = 'lessons__generate_prepaid_period'
-              and jobs.payload ->> 'paymentId' = $1`,
-          [first.id],
+             where tasks.identifier = 'lessons__generate_prepaid_period'
+               and jobs.payload ->> 'studentId' = $1
+               and jobs.payload ->> 'billingMonth' = $2`,
+           [first.student_id, "2026-08-01"],
         ),
       );
       expect(jobs.rows).toHaveLength(1);
-      expect(jobs.rows[0].payload).toEqual({ paymentId: first.id });
+      expect(jobs.rows[0].payload).toEqual({
+        studentId: first.student_id,
+        billingMonth: "2026-08-01",
+      });
 
       const workerLogger = new Logger(consoleLogFactory, { label: "test" });
       const poolClient = Object.assign(testDb, { release: () => undefined }) as any;
@@ -906,7 +878,7 @@ describe("DFG Portal API", () => {
         logger: workerLogger,
       } as any;
       yield* Effect.promise(() =>
-        Promise.resolve(generatePrepaidPeriodTask({ paymentId: first.id }, workerHelpers)),
+        Promise.resolve(generatePrepaidPeriodTask({ studentId: first.student_id, billingMonth: "2026-08-01" }, workerHelpers)),
       );
 
       const generated = yield* Effect.tryPromise(() =>
@@ -921,7 +893,7 @@ describe("DFG Portal API", () => {
       expect(generated.rows).toHaveLength(4);
 
       yield* Effect.promise(() =>
-        Promise.resolve(generatePrepaidPeriodTask({ paymentId: first.id }, workerHelpers)),
+        Promise.resolve(generatePrepaidPeriodTask({ studentId: first.student_id, billingMonth: "2026-08-01" }, workerHelpers)),
       );
       const generatedAgain = yield* Effect.tryPromise(() =>
         testDb.query(
@@ -991,6 +963,51 @@ describe("DFG Portal API", () => {
       expect(
         (yield* reqEffect("POST", path, { cookie: adminCookie, body: scheduleBody })).status,
       ).toBe(409);
+
+      const bookingFamily = yield* Effect.tryPromise(() =>
+        testDb.query(
+          `insert into app_public.families (slug, name) values ($1, $2) returning id`,
+          [`single-booking-${studentId}`, "Single Booking Family"],
+        ),
+      );
+      yield* Effect.tryPromise(() =>
+        testDb.query(
+          `insert into app_public.family_memberships (family_id, user_id, is_owner, is_billing_contact)
+           values ($1, $2, true, true)`,
+          [bookingFamily.rows[0].id, studentId],
+        ),
+      );
+
+      const bookingResponse = yield* reqEffect("POST", "/api/my-lessons/book", {
+        cookie: studentCookie,
+        body: {
+          scheduled_at: "2027-01-12T22:30:00.000Z",
+          duration_minutes: 60,
+          location_type: "studio",
+        },
+      });
+      expect(bookingResponse.status).toBe(200);
+      const booking = yield* resJson(bookingResponse);
+      const obligation = yield* Effect.tryPromise(() =>
+        testDb.query(
+          `select b.status, b.total_cents, bli.line_type, d.amount_cents, d.status as deposit_status
+             from app_public.bill_line_items bli
+             join app_public.bills b on b.id = bli.bill_id
+             join app_public.lesson_deposits d on d.lesson_id = bli.lesson_id
+            where bli.lesson_id = $1`,
+          [booking.id],
+        ),
+      );
+      expect(obligation.rows).toEqual([
+        {
+          status: "issued",
+          total_cents: 12000,
+          line_type: "single_booking",
+          amount_cents: 4000,
+          deposit_status: "held",
+        },
+      ]);
+
     }),
   );
 

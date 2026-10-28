@@ -5,19 +5,34 @@ import * as HttpApiSchema from "@effect/platform/HttpApiSchema";
 import * as Multipart from "@effect/platform/Multipart";
 import { Schema as S } from "effect";
 import {
+  Adjustment,
   AssignedMaterial,
   AssignmentNote,
   AssignmentProgress,
   AssignmentReview,
+  Bill,
   BillingModel,
+  BillDetailResponse,
+  FamilyBill,
+  FamilyBillDetailResponse,
+  FamilyPayment,
+  FamilyPaymentDetail,
   CancellationPolicySettings,
   Course,
   CourseDetail,
   CreateChildPayload,
   CreateChildResponse,
+  CreditApplication,
   Family,
+  FamilyBillingDetail,
+  FamilyBillingOverview,
+  FamilyBillingSummary,
+  FamilyCredit,
+  AdminFamilyCredit,
+  FamilyDiscount,
   FamilyInviteRole,
   FamilyInvitation,
+  FamilyTaxExemption,
   GcalStatus,
   Lesson,
   LessonCancellationPolicy,
@@ -29,11 +44,15 @@ import {
   Message,
   MonthlyPayment,
   Module,
+  Payment,
+  PaymentMethod,
   PracticeLog,
+  Refund,
   Submission,
   StudentDetail,
   StudentRate,
   RecurringSchedule,
+  TaxRate,
   Testimonial,
   TimeSlot,
   User,
@@ -349,11 +368,6 @@ export const CancelLessonPayload = S.Struct({
 
 export const RescheduleLessonPayload = S.Struct({
   scheduled_at: S.String,
-});
-
-export const SaveCancellationPolicySettingsPayload = S.Struct({
-  cancellation_window_hours: S.Number.pipe(S.between(0, 720)),
-  late_cancel_charge_percent: S.Number.pipe(S.between(0, 100)),
 });
 
 export const CreatePracticeLogPayload = S.Struct({
@@ -812,6 +826,117 @@ export const authenticatedClientGroup = HttpApiGroup.make("authenticated")
   )
   .prefix("/api");
 
+export const SaveCancellationPolicySettingsPayload = S.Struct({
+  cancellation_window_hours: S.Number.pipe(S.between(0, 720)),
+  late_cancel_charge_percent: S.Number.pipe(S.between(0, 100)),
+});
+
+// Billing payloads
+
+const CreateBillLineItemPayload = S.Struct({
+  student_id: S.String,
+  line_type: S.Union(
+    S.Literal("lesson"),
+    S.Literal("single_booking"),
+    S.Literal("fee"),
+    S.Literal("adjustment"),
+    S.Literal("credit"),
+  ),
+  description: S.String,
+  quantity: S.Number,
+  unit_price_cents: S.Number,
+  amount_cents: S.Number,
+});
+
+const CreateBillPayload = S.Struct({
+  family_id: S.String,
+  billing_period_start: S.String,
+  billing_period_end: S.String,
+  due_date: S.optional(S.String),
+  line_items: S.Array(CreateBillLineItemPayload),
+  notes: S.optional(S.String),
+});
+
+const VoidBillPayload = S.Struct({
+  reason: S.String.pipe(S.minLength(1)),
+});
+
+const AdjustBillPayload = S.Struct({
+  amount_cents: S.Number,
+  reason: S.String.pipe(S.minLength(1)),
+});
+
+const PaymentAllocationPayload = S.Struct({
+  bill_id: S.String,
+  amount_cents: S.Number,
+});
+
+const RecordPaymentPayload = S.Struct({
+  family_id: S.String,
+  amount_cents: S.Number,
+  method: PaymentMethod,
+  reference: S.optional(S.String),
+  received_at: S.optional(S.String),
+  notes: S.optional(S.String),
+  allocations: S.Array(PaymentAllocationPayload),
+});
+
+const CreateCreditPayload = S.Struct({
+  family_id: S.String,
+  student_id: S.optional(S.String),
+  amount_cents: S.Number,
+  reason: S.String.pipe(S.minLength(1)),
+  expires_at: S.optional(S.String),
+});
+
+const ApplyCreditPayload = S.Struct({
+  credit_id: S.String,
+  bill_id: S.String,
+  amount_cents: S.Number,
+});
+
+const RefundPaymentPayload = S.Struct({
+  amount_cents: S.Number,
+  reason: S.String.pipe(S.minLength(1)),
+});
+
+const CreateDiscountPayload = S.Struct({
+  family_id: S.String,
+  label: S.String,
+  discount_type: S.Union(S.Literal("percentage"), S.Literal("fixed")),
+  discount_value: S.Number,
+  applies_to: S.Union(S.Literal("all"), S.Literal("tuition"), S.Literal("fees")),
+  effective_from: S.String,
+  effective_until: S.optional(S.String),
+});
+
+const UpdateDiscountPayload = S.Struct({
+  label: S.optional(S.String),
+  discount_type: S.optional(S.Union(S.Literal("percentage"), S.Literal("fixed"))),
+  discount_value: S.optional(S.Number),
+  applies_to: S.optional(S.Union(S.Literal("all"), S.Literal("tuition"), S.Literal("fees"))),
+  effective_from: S.optional(S.String),
+  effective_until: S.optional(S.String),
+  is_active: S.optional(S.Boolean),
+});
+
+const CreateTaxRatePayload = S.Struct({
+  label: S.String,
+  jurisdiction: S.String,
+  rate_percent: S.Number.pipe(S.between(0, 30)),
+  applies_to: S.Union(S.Literal("all"), S.Literal("tuition"), S.Literal("fees")),
+  effective_from: S.String,
+  effective_until: S.optional(S.String),
+});
+
+const CreateTaxExemptionPayload = S.Struct({
+  family_id: S.String,
+  tax_rate_id: S.String,
+  exemption_reason: S.String,
+  effective_from: S.String,
+  effective_until: S.optional(S.String),
+});
+
 export const adminClientGroup = HttpApiGroup.make("admin")
   .addError(BadRequestErrorSchema)
   .addError(UnauthorizedErrorSchema)
@@ -1045,10 +1170,166 @@ export const adminClientGroup = HttpApiGroup.make("admin")
       .setPayload(UpdateTestimonialApprovalPayload)
       .addSuccess(SuccessResponse),
   )
+  // Billing endpoints
+  .add(
+    HttpApiEndpoint.get("billingFamilies", "/billing/families")
+      .addSuccess(S.Array(FamilyBillingSummary)),
+  )
+  .add(
+    HttpApiEndpoint.get("billingFamily", "/billing/families/:familyId")
+      .setPath(params("familyId"))
+      .addSuccess(FamilyBillingDetail),
+  )
+  .add(
+    HttpApiEndpoint.get("billingFamilyBills", "/billing/families/:familyId/bills")
+      .setPath(params("familyId"))
+      .addSuccess(S.Array(Bill)),
+  )
+  .add(
+    HttpApiEndpoint.get("billingFamilyPayments", "/billing/families/:familyId/payments")
+      .setPath(params("familyId"))
+      .addSuccess(S.Array(Payment)),
+  )
+  .add(
+    HttpApiEndpoint.get("billingFamilyCredits", "/billing/families/:familyId/credits")
+      .setPath(params("familyId"))
+      .addSuccess(S.Array(AdminFamilyCredit)),
+  )
+  .add(
+    HttpApiEndpoint.post("createBill", "/billing/bills")
+      .setPayload(CreateBillPayload)
+      .addSuccess(BillDetailResponse),
+  )
+  .add(
+    HttpApiEndpoint.get("getBill", "/billing/bills/:id")
+      .setPath(params("id"))
+      .addSuccess(BillDetailResponse),
+  )
+  .add(
+    HttpApiEndpoint.post("issueBill", "/billing/bills/:id/issue")
+      .setPath(params("id"))
+      .addSuccess(BillDetailResponse),
+  )
+  .add(
+    HttpApiEndpoint.post("cancelBill", "/billing/bills/:id/cancel")
+      .setPath(params("id"))
+      .addSuccess(BillDetailResponse),
+  )
+  .add(
+    HttpApiEndpoint.post("voidBill", "/billing/bills/:id/void")
+      .setPath(params("id"))
+      .setPayload(VoidBillPayload)
+      .addSuccess(BillDetailResponse),
+  )
+  .add(
+    HttpApiEndpoint.post("adjustBill", "/billing/bills/:id/adjust")
+      .setPath(params("id"))
+      .setPayload(AdjustBillPayload)
+      .addSuccess(Adjustment),
+  )
+  .add(
+    HttpApiEndpoint.post("recordPayment", "/billing/payments")
+      .setPayload(RecordPaymentPayload)
+      .addSuccess(Payment),
+  )
+  .add(
+    HttpApiEndpoint.post("refundPayment", "/billing/payments/:id/refund")
+      .setPath(params("id"))
+      .setPayload(RefundPaymentPayload)
+      .addSuccess(Refund),
+  )
+  .add(
+    HttpApiEndpoint.post("createCredit", "/billing/credits")
+      .setPayload(CreateCreditPayload)
+      .addSuccess(AdminFamilyCredit),
+  )
+  .add(
+    HttpApiEndpoint.post("applyCredit", "/billing/credits/apply")
+      .setPayload(ApplyCreditPayload)
+      .addSuccess(CreditApplication),
+  )
+  .add(
+    HttpApiEndpoint.get("familyDiscounts", "/billing/families/:familyId/discounts")
+      .setPath(params("familyId"))
+      .addSuccess(S.Array(FamilyDiscount)),
+  )
+  .add(
+    HttpApiEndpoint.post("createDiscount", "/billing/discounts")
+      .setPayload(CreateDiscountPayload)
+      .addSuccess(FamilyDiscount),
+  )
+  .add(
+    HttpApiEndpoint.patch("updateDiscount", "/billing/discounts/:id")
+      .setPath(params("id"))
+      .setPayload(UpdateDiscountPayload)
+      .addSuccess(FamilyDiscount),
+  )
+  .add(
+    HttpApiEndpoint.get("listTaxRates", "/billing/tax-rates")
+      .addSuccess(S.Array(TaxRate)),
+  )
+  .add(
+    HttpApiEndpoint.post("createTaxRate", "/billing/tax-rates")
+      .setPayload(CreateTaxRatePayload)
+      .addSuccess(TaxRate),
+  )
+  .add(
+    HttpApiEndpoint.get("familyTaxExemptions", "/billing/families/:familyId/tax-exemptions")
+      .setPath(params("familyId"))
+      .addSuccess(S.Array(FamilyTaxExemption)),
+  )
+  .add(
+    HttpApiEndpoint.post("createTaxExemption", "/billing/tax-exemptions")
+      .setPayload(CreateTaxExemptionPayload)
+      .addSuccess(FamilyTaxExemption),
+  )
   .prefix("/api/admin");
+
+export const familyBillingGroup = HttpApiGroup.make("familyBilling")
+  .addError(BadRequestErrorSchema)
+  .addError(UnauthorizedErrorSchema)
+  .addError(ForbiddenErrorSchema)
+  .addError(NotFoundErrorSchema)
+  .addError(InternalServerErrorSchema)
+  .add(
+    HttpApiEndpoint.get("overview", "/billing")
+      .addSuccess(FamilyBillingOverview),
+  )
+  .add(
+  HttpApiEndpoint.get("bills", "/billing/bills")
+      .addSuccess(S.Array(FamilyBill)),
+  )
+  .add(
+    HttpApiEndpoint.get("billDetail", "/billing/bills/:id")
+      .setPath(params("id"))
+      .addSuccess(FamilyBillDetailResponse),
+  )
+  .add(
+  HttpApiEndpoint.get("payments", "/billing/payments")
+      .addSuccess(S.Array(FamilyPayment)),
+  )
+  .add(
+    HttpApiEndpoint.get("paymentDetail", "/billing/payments/:id")
+      .setPath(params("id"))
+      .addSuccess(FamilyPaymentDetail),
+  )
+  .add(
+    HttpApiEndpoint.get("credits", "/billing/credits")
+      .addSuccess(S.Array(FamilyCredit)),
+  )
+  .add(
+    HttpApiEndpoint.get("billPdf", "/billing/bills/:id/pdf")
+      .setPath(params("id")),
+  )
+  .add(
+    HttpApiEndpoint.get("paymentReceipt", "/billing/payments/:id/receipt")
+      .setPath(params("id")),
+  )
+  .prefix("/api/family");
 
 export const clientApi = HttpApi.make("dfg")
   .add(publicGroup)
   .add(authGroup)
   .add(authenticatedClientGroup)
-  .add(adminClientGroup);
+  .add(adminClientGroup)
+  .add(familyBillingGroup);

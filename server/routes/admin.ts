@@ -15,6 +15,7 @@ import { env } from "../assertEnv.js";
 import { adaptHttpApiErrors } from "../httpApiErrors.js";
 import { HttpError } from "../pgErrors.js";
 import { AdminRouteService } from "../services/adminRouteService.js";
+import { BillingLedgerService } from "../services/billingLedgerService.js";
 import {
   RecurringScheduleService,
   serializeMonthlyPayment,
@@ -25,6 +26,16 @@ import { GoogleCalendarService } from "../services/googleCalendarService.js";
 import { SessionService } from "../services/sessionService.js";
 import { TestimonialReminderService } from "../services/testimonialReminderService.js";
 import {
+  type Adjustment as AdjustmentResponse,
+  type Bill as BillResponse,
+  type BillDetailResponse as BillDetailResponseType,
+  type CreditApplication as CreditApplicationResponse,
+  type AdminFamilyCredit as FamilyCreditResponse,
+  type FamilyDiscount as FamilyDiscountResponse,
+  type FamilyTaxExemption as FamilyTaxExemptionResponse,
+  type Payment as PaymentResponse,
+  type Refund as RefundResponse,
+  type TaxRate as TaxRateResponse,
   type LocationType,
   type Material as MaterialResponse,
   type Module as ModuleResponse,
@@ -32,6 +43,19 @@ import {
 import { serializeLesson, serializeLessonNote } from "../../shared/responseMappers.js";
 import { decodeWorkingHoursValue, defaultWorkingHours } from "../../shared/workingHours.js";
 import { params, csrfCheck, type RawRequest } from "./raw.js";
+import type { Selectable } from "kysely";
+import type {
+  AppPublicBills,
+  AppPublicPayments,
+  AppPublicFamilyCredits,
+  AppPublicBillLineItems,
+  AppPublicBillAdjustments,
+  AppPublicFamilyCreditApplications,
+  AppPublicFamilyDiscounts,
+  AppPublicTaxRates,
+  AppPublicFamilyTaxExemptions,
+  AppPublicRefunds,
+} from "../../generated/db.js";
 
 const adminErrorStatuses = [400, 401, 403, 404, 409, 413, 500, 502, 503] as const;
 const materialDownloadErrorStatuses = [401, 403, 404, 500] as const;
@@ -68,6 +92,147 @@ const requireAuthenticatedSession = Effect.fnUntraced(function* (request: RawReq
   }
   return result;
 });
+
+// Billing date serialization helpers
+function isDateLike(value: unknown): value is { toISOString(): string } {
+  return typeof value === "object" && value !== null && "toISOString" in value;
+}
+
+function serializeBillingDate(value: unknown): string | null {
+  if (value === null || value === undefined) return null;
+  if (isDateLike(value)) return value.toISOString();
+  return String(value);
+}
+
+function serializeBillingDateShort(value: unknown): string {
+  if (value === null || value === undefined) return "";
+  if (isDateLike(value)) return value.toISOString().slice(0, 10);
+  return String(value).slice(0, 10);
+}
+
+function serializeBillResponse(bill: Selectable<AppPublicBills>): BillResponse {
+  return {
+    ...bill,
+    billing_period_start: serializeBillingDateShort(bill.billing_period_start),
+    billing_period_end: serializeBillingDateShort(bill.billing_period_end),
+    due_date: bill.due_date ? serializeBillingDateShort(bill.due_date) : null,
+    created_at: serializeBillingDate(bill.created_at)!,
+    updated_at: serializeBillingDate(bill.updated_at)!,
+    issued_at: bill.issued_at ? serializeBillingDate(bill.issued_at) : null,
+    paid_at: bill.paid_at ? serializeBillingDate(bill.paid_at) : null,
+    cancelled_at: bill.cancelled_at ? serializeBillingDate(bill.cancelled_at) : null,
+    voided_at: bill.voided_at ? serializeBillingDate(bill.voided_at) : null,
+  };
+}
+
+function serializePaymentResponse(p: Selectable<AppPublicPayments>): PaymentResponse {
+  return {
+    ...p,
+    received_at: serializeBillingDate(p.received_at)!,
+    created_at: serializeBillingDate(p.created_at)!,
+    updated_at: serializeBillingDate(p.updated_at)!,
+  };
+}
+
+function serializeCreditResponse(c: Selectable<AppPublicFamilyCredits>): FamilyCreditResponse {
+  return {
+    ...c,
+    expires_at: c.expires_at ? serializeBillingDate(c.expires_at) : null,
+    consumed_at: c.consumed_at ? serializeBillingDate(c.consumed_at) : null,
+    created_at: serializeBillingDate(c.created_at)!,
+  };
+}
+
+function serializeAdjustment(a: Selectable<AppPublicBillAdjustments>): AdjustmentResponse {
+  return {
+    id: a.id,
+    bill_id: a.bill_id,
+    amount_cents: a.amount_cents,
+    reason: a.reason,
+    created_at: serializeBillingDate(a.created_at)!,
+  };
+}
+
+function serializeRefund(r: Selectable<AppPublicRefunds>): RefundResponse {
+  return {
+    id: r.id,
+    payment_id: r.payment_id,
+    amount_cents: r.amount_cents,
+    reason: r.reason,
+    created_by: r.created_by,
+    refunded_at: serializeBillingDate(r.refunded_at)!,
+    notes: r.notes,
+    created_at: serializeBillingDate(r.created_at)!,
+  };
+}
+
+function serializeCreditApplication(ca: Selectable<AppPublicFamilyCreditApplications>): CreditApplicationResponse {
+  return {
+    id: ca.id,
+    credit_id: ca.credit_id,
+    bill_id: ca.bill_id,
+    amount_cents: ca.amount_cents,
+    created_at: serializeBillingDate(ca.created_at)!,
+  };
+}
+
+function serializeFamilyDiscount(d: Selectable<AppPublicFamilyDiscounts>): FamilyDiscountResponse {
+  return {
+    ...d,
+    discount_type: d.discount_type as FamilyDiscountResponse["discount_type"],
+    applies_to: d.applies_to as FamilyDiscountResponse["applies_to"],
+    effective_from: serializeBillingDateShort(d.effective_from),
+    effective_until: d.effective_until ? serializeBillingDateShort(d.effective_until) : null,
+    created_at: serializeBillingDate(d.created_at)!,
+    updated_at: serializeBillingDate(d.updated_at)!,
+  };
+}
+
+function serializeTaxRate(r: Selectable<AppPublicTaxRates>): TaxRateResponse {
+  return {
+    ...r,
+    rate_percent: Number(r.rate_percent),
+    applies_to: r.applies_to as TaxRateResponse["applies_to"],
+    effective_from: serializeBillingDateShort(r.effective_from),
+    effective_until: r.effective_until ? serializeBillingDateShort(r.effective_until) : null,
+    created_at: serializeBillingDate(r.created_at)!,
+    updated_at: serializeBillingDate(r.updated_at)!,
+  };
+}
+
+function serializeFamilyTaxExemption(e: Selectable<AppPublicFamilyTaxExemptions>): FamilyTaxExemptionResponse {
+  return {
+    ...e,
+    effective_from: serializeBillingDateShort(e.effective_from),
+    effective_until: e.effective_until ? serializeBillingDateShort(e.effective_until) : null,
+    created_at: serializeBillingDate(e.created_at)!,
+  };
+}
+
+function mapBillDetail(
+  detail: {
+    lineItems: readonly Selectable<AppPublicBillLineItems>[];
+    adjustments: readonly Selectable<AppPublicBillAdjustments>[];
+    creditApplications: readonly Selectable<AppPublicFamilyCreditApplications>[];
+  },
+  bill: Selectable<AppPublicBills>,
+): BillDetailResponseType {
+  return {
+    ...serializeBillResponse(bill),
+    line_items: detail.lineItems.map((li: Selectable<AppPublicBillLineItems>) => ({
+      ...li,
+      created_at: serializeBillingDate(li.created_at)!,
+    })),
+    adjustments: detail.adjustments.map((adj: Selectable<AppPublicBillAdjustments>) => ({
+      ...adj,
+      created_at: serializeBillingDate(adj.created_at)!,
+    })),
+    credit_applications: detail.creditApplications.map((ca: Selectable<AppPublicFamilyCreditApplications>) => ({
+      ...ca,
+      created_at: serializeBillingDate(ca.created_at)!,
+    })),
+  };
+}
 
 export const adminGroup = adminClientGroup
   .add(HttpApiEndpoint.get("gcalConnect", "/api/admin/gcal/connect"))
@@ -768,6 +933,322 @@ export function makeAdminLayer() {
             yield* TestimonialReminderService.scheduleNextReminder(testimonial.user_id);
           }
           return { success: true as const };
+        }, adaptAdminErrors),
+      )
+      // ==================================================================
+      // Admin Billing API
+      // ==================================================================
+      .handle(
+        "billingFamilies",
+        Effect.fnUntraced(function* ({ request }) {
+          const auth = yield* requireAdminSession(request);
+          const summaries = yield* BillingLedgerService.listAllFamiliesWithBilling(auth.session.id);
+          const balances = yield* Effect.all(
+            summaries.map((summary) =>
+              BillingLedgerService.getFamilyBalance(auth.session.id, summary.family_id),
+            ),
+          );
+          return summaries.map((summary, index) => ({
+            ...summary,
+            outstanding_cents: balances[index]?.outstandingCents ?? summary.outstanding_cents,
+            overdue_cents: balances[index]?.overdueCents ?? summary.overdue_cents,
+            credit_balance_cents: balances[index]?.creditBalanceCents ?? summary.credit_balance_cents,
+          }));
+        }, adaptAdminErrors),
+      )
+      .handle(
+        "billingFamily",
+        Effect.fnUntraced(function* ({ request, path }) {
+          const auth = yield* requireAdminSession(request);
+          const detail = yield* BillingLedgerService.getFamilyBillingDetail(
+            auth.session.id,
+            path.familyId,
+          );
+          return {
+            ...detail,
+            bills: detail.bills.map(serializeBillResponse),
+            payments: detail.payments.map(serializePaymentResponse),
+            credits: detail.credits.map(serializeCreditResponse),
+          };
+        }, adaptAdminErrors),
+      )
+      .handle(
+        "billingFamilyBills",
+        Effect.fnUntraced(function* ({ request, path }) {
+          const auth = yield* requireAdminSession(request);
+          const bills = yield* BillingLedgerService.listFamilyBills(
+            auth.session.id,
+            path.familyId,
+          );
+          return bills.map(serializeBillResponse);
+        }, adaptAdminErrors),
+      )
+      .handle(
+        "billingFamilyPayments",
+        Effect.fnUntraced(function* ({ request, path }) {
+          const auth = yield* requireAdminSession(request);
+          const payments = yield* BillingLedgerService.listFamilyPayments(
+            auth.session.id,
+            path.familyId,
+          );
+          return payments.map(serializePaymentResponse);
+        }, adaptAdminErrors),
+      )
+      .handle(
+        "billingFamilyCredits",
+        Effect.fnUntraced(function* ({ request, path }) {
+          const auth = yield* requireAdminSession(request);
+          const credits = yield* BillingLedgerService.listFamilyCredits(
+            auth.session.id,
+            path.familyId,
+          );
+          return credits.map(serializeCreditResponse);
+        }, adaptAdminErrors),
+      )
+      .handle(
+        "createBill",
+        Effect.fnUntraced(function* ({ request, payload }) {
+          const auth = yield* requireAdminSession(request);
+          const bill = yield* BillingLedgerService.createBill(auth.session.id, {
+            familyId: payload.family_id,
+            billingPeriodStart: payload.billing_period_start,
+            billingPeriodEnd: payload.billing_period_end,
+            dueDate: payload.due_date,
+            lineItems: payload.line_items.map((li: { student_id: string; line_type: "lesson" | "single_booking" | "fee" | "adjustment" | "credit"; description: string; quantity: number; unit_price_cents: number; amount_cents: number }) => ({
+              studentId: li.student_id,
+              lineType: li.line_type,
+              description: li.description,
+              quantity: li.quantity,
+              unitPriceCents: li.unit_price_cents,
+              amountCents: li.amount_cents,
+            })),
+            notes: payload.notes,
+          });
+          const lineItems = yield* BillingLedgerService.billLineItems(auth.session.id, bill.id);
+          const result = {
+            ...serializeBillResponse(bill),
+            line_items: lineItems.map((li: Selectable<AppPublicBillLineItems>) => ({
+              ...li,
+              created_at: serializeBillingDate(li.created_at)!,
+            })),
+            adjustments: [],
+            credit_applications: [],
+          };
+          return JSON.parse(JSON.stringify(result));
+        }, adaptAdminErrors),
+      )
+      .handle(
+        "getBill",
+        Effect.fnUntraced(function* ({ request, path }) {
+          const auth = yield* requireAdminSession(request);
+          const result = yield* BillingLedgerService.getBill(auth.session.id, path.id);
+          if (!result) {
+            return yield* new HttpError(404, "Bill not found");
+          }
+          return mapBillDetail(result, result);
+        }, adaptAdminErrors),
+      )
+      .handle(
+        "issueBill",
+        Effect.fnUntraced(function* ({ request, path }) {
+          const auth = yield* requireAdminSession(request);
+          yield* BillingLedgerService.issueBill(auth.session.id, path.id);
+          const result = yield* BillingLedgerService.getBill(auth.session.id, path.id);
+          if (!result) {
+            return yield* new HttpError(404, "Bill not found");
+          }
+          return mapBillDetail(result, result);
+        }, adaptAdminErrors),
+      )
+      .handle(
+        "cancelBill",
+        Effect.fnUntraced(function* ({ request, path }) {
+          const auth = yield* requireAdminSession(request);
+          yield* BillingLedgerService.cancelBill(auth.session.id, path.id);
+          const result = yield* BillingLedgerService.getBill(auth.session.id, path.id);
+          if (!result) {
+            return yield* new HttpError(404, "Bill not found");
+          }
+          return mapBillDetail(result, result);
+        }, adaptAdminErrors),
+      )
+      .handle(
+        "voidBill",
+        Effect.fnUntraced(function* ({ request, path, payload }) {
+          const auth = yield* requireAdminSession(request);
+          yield* BillingLedgerService.voidBill(auth.session.id, {
+            billId: path.id,
+            reason: payload.reason,
+          });
+          const result = yield* BillingLedgerService.getBill(auth.session.id, path.id);
+          if (!result) {
+            return yield* new HttpError(404, "Bill not found");
+          }
+          return mapBillDetail(result, result);
+        }, adaptAdminErrors),
+      )
+      .handle(
+        "adjustBill",
+        Effect.fnUntraced(function* ({ request, path, payload }) {
+          const auth = yield* requireAdminSession(request);
+          const result = yield* BillingLedgerService.createAdjustment(auth.session.id, {
+            billId: path.id,
+            amountCents: payload.amount_cents,
+            reason: payload.reason,
+          });
+          return serializeAdjustment(result);
+        }, adaptAdminErrors),
+      )
+      .handle(
+        "recordPayment",
+        Effect.fnUntraced(function* ({ request, payload }) {
+          const auth = yield* requireAdminSession(request);
+          const result = yield* BillingLedgerService.recordPayment(auth.session.id, {
+            familyId: payload.family_id,
+            amountCents: payload.amount_cents,
+            method: payload.method,
+            reference: payload.reference,
+            receivedAt: payload.received_at ? new Date(payload.received_at) : undefined,
+            notes: payload.notes,
+            allocations: payload.allocations.map((a: { bill_id: string; amount_cents: number }) => ({
+              billId: a.bill_id,
+              amountCents: a.amount_cents,
+            })),
+          });
+          return serializePaymentResponse(result);
+        }, adaptAdminErrors),
+      )
+      .handle(
+        "refundPayment",
+        Effect.fnUntraced(function* ({ request, path, payload }) {
+          const auth = yield* requireAdminSession(request);
+          const result = yield* BillingLedgerService.processRefund(auth.session.id, {
+            paymentId: path.id,
+            amountCents: payload.amount_cents,
+            reason: payload.reason,
+          });
+          return serializeRefund(result);
+        }, adaptAdminErrors),
+      )
+      .handle(
+        "createCredit",
+        Effect.fnUntraced(function* ({ request, payload }) {
+          const auth = yield* requireAdminSession(request);
+          const result = yield* BillingLedgerService.issueCredit(auth.session.id, {
+            familyId: payload.family_id,
+            studentId: payload.student_id,
+            amountCents: payload.amount_cents,
+            reason: payload.reason,
+            expiresAt: payload.expires_at,
+          });
+          return serializeCreditResponse(result);
+        }, adaptAdminErrors),
+      )
+      .handle(
+        "applyCredit",
+        Effect.fnUntraced(function* ({ request, payload }) {
+          const auth = yield* requireAdminSession(request);
+          const result = yield* BillingLedgerService.applyCredit(auth.session.id, {
+            creditId: payload.credit_id,
+            billId: payload.bill_id,
+            amountCents: payload.amount_cents,
+          });
+          return serializeCreditApplication(result);
+        }, adaptAdminErrors),
+      )
+      .handle(
+        "familyDiscounts",
+        Effect.fnUntraced(function* ({ request, path }) {
+          const auth = yield* requireAdminSession(request);
+          const discounts = yield* BillingLedgerService.listFamilyDiscounts(
+            auth.session.id,
+            path.familyId,
+          );
+          return discounts.map(serializeFamilyDiscount);
+        }, adaptAdminErrors),
+      )
+      .handle(
+        "createDiscount",
+        Effect.fnUntraced(function* ({ request, payload }) {
+          const auth = yield* requireAdminSession(request);
+          const result = yield* BillingLedgerService.createDiscount(auth.session.id, {
+            familyId: payload.family_id,
+            label: payload.label,
+            discountType: payload.discount_type,
+            discountValue: payload.discount_value,
+            appliesTo: payload.applies_to,
+            effectiveFrom: payload.effective_from,
+            effectiveUntil: payload.effective_until,
+          });
+          return serializeFamilyDiscount(result);
+        }, adaptAdminErrors),
+      )
+      .handle(
+        "updateDiscount",
+        Effect.fnUntraced(function* ({ request, path, payload }) {
+          const auth = yield* requireAdminSession(request);
+          const result = yield* BillingLedgerService.updateDiscount(
+            auth.session.id,
+            path.id,
+            {
+              label: payload.label,
+              discountType: payload.discount_type,
+              discountValue: payload.discount_value,
+              appliesTo: payload.applies_to,
+              effectiveFrom: payload.effective_from,
+              effectiveUntil: payload.effective_until,
+              isActive: payload.is_active,
+            },
+          );
+          return serializeFamilyDiscount(result);
+        }, adaptAdminErrors),
+      )
+      .handle(
+        "listTaxRates",
+        Effect.fnUntraced(function* ({ request }) {
+          const auth = yield* requireAdminSession(request);
+          const rates = yield* BillingLedgerService.listTaxRates(auth.session.id);
+          return rates.map(serializeTaxRate);
+        }, adaptAdminErrors),
+      )
+      .handle(
+        "createTaxRate",
+        Effect.fnUntraced(function* ({ request, payload }) {
+          const auth = yield* requireAdminSession(request);
+          const result = yield* BillingLedgerService.createTaxRate(auth.session.id, {
+            label: payload.label,
+            jurisdiction: payload.jurisdiction,
+            ratePercent: payload.rate_percent,
+            appliesTo: payload.applies_to,
+            effectiveFrom: payload.effective_from,
+            effectiveUntil: payload.effective_until,
+          });
+          return serializeTaxRate(result);
+        }, adaptAdminErrors),
+      )
+      .handle(
+        "familyTaxExemptions",
+        Effect.fnUntraced(function* ({ request, path }) {
+          const auth = yield* requireAdminSession(request);
+          const exemptions = yield* BillingLedgerService.listFamilyTaxExemptions(
+            auth.session.id,
+            path.familyId,
+          );
+          return exemptions.map(serializeFamilyTaxExemption);
+        }, adaptAdminErrors),
+      )
+      .handle(
+        "createTaxExemption",
+        Effect.fnUntraced(function* ({ request, payload }) {
+          const auth = yield* requireAdminSession(request);
+          const result = yield* BillingLedgerService.createTaxExemption(auth.session.id, {
+            familyId: payload.family_id,
+            taxRateId: payload.tax_rate_id,
+            exemptionReason: payload.exemption_reason,
+            effectiveFrom: payload.effective_from,
+            effectiveUntil: payload.effective_until,
+          });
+          return serializeFamilyTaxExemption(result);
         }, adaptAdminErrors),
       ),
   );

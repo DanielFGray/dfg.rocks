@@ -59,7 +59,7 @@ vi.mock("effect/Layer", () => ({
   provide: () => (layer: unknown) => layer,
 }));
 
-vi.mock("../../shared/httpApi.js", () => ({ authGroup: {}, publicGroup: {} }));
+vi.mock("../../shared/httpApi.js", () => ({ authGroup: {}, publicGroup: {}, familyBillingGroup: {}, adminGroup: {}, authenticatedClientGroup: {} }));
 vi.mock("../routes/admin.js", () => ({
   adminGroup: {},
   makeAdminLayer: () => ({}),
