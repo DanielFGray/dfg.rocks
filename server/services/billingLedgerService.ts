@@ -2,7 +2,7 @@ import type { EffectKysely } from "@effect/sql-kysely/Kysely";
 import { Effect, Option } from "effect";
 import { sql } from "kysely";
 import type { DB } from "../../generated/db.js";
-import { withAuthContext, PgRootDB } from "../db.js";
+import { withAuthContext } from "../db.js";
 import { catchPgErrors, HttpError } from "../pgErrors.js";
 import { allocatePayment } from "./billingCalculation.js";
 
@@ -1371,11 +1371,9 @@ export class BillingLedgerService extends Effect.Service<BillingLedgerService>()
         listAllFamiliesWithBilling: Effect.fn("listAllFamiliesWithBilling")(function* (
           sessionId: string,
         ) {
-          const rootDb = yield* PgRootDB;
-          const families = yield* rootDb
-            .selectFrom("app_public.families")
-            .select(["id", "name"])
-            .orderBy("name");
+          const families = yield* withAuthContext(sessionId, (db: AuthDB) =>
+            db.selectFrom("app_public.families").select(["id", "name"]).orderBy("name"),
+          );
 
           const [allBills, allPayments, allCredits] = yield* Effect.all([
             withAuthContext(sessionId, (db: AuthDB) =>
@@ -1512,12 +1510,12 @@ export class BillingLedgerService extends Effect.Service<BillingLedgerService>()
           sessionId: string,
           familyId: string,
         ) {
-          const rootDb = yield* PgRootDB;
-          const family = yield* rootDb
-            .selectFrom("app_public.families")
-            .select(["id", "name"])
-            .where("id", "=", familyId)
-            .pipe(Effect.head);
+          const family = yield* withAuthContext(sessionId, (db: AuthDB) =>
+            db
+              .selectFrom("app_public.families")
+              .select(["id", "name"])
+              .where("id", "=", familyId),
+          ).pipe(Effect.head);
 
           const [bills, payments, credits] = yield* Effect.all([
             withAuthContext(sessionId, (db: AuthDB) =>

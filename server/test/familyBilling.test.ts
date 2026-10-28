@@ -248,6 +248,8 @@ describe("PDF Service", () => {
         expect(teacherResult._tag).toBe("Failure");
         const otherResult = yield* Effect.exit(svc.billPdf(otherParentSessionId, otherParentUserId, bills[0].id));
         expect(otherResult._tag).toBe("Failure");
+        const otherDetail = yield* Effect.exit(svc.billDetail(otherParentSessionId, otherParentUserId, bills[0].id));
+        expect(otherDetail._tag).toBe("Failure");
         const missingResult = yield* Effect.exit(svc.billPdf(parentSessionId, parentUserId, "00000000-0000-0000-0000-000000000000"));
         expect(missingResult._tag).toBe("Failure");
       }),

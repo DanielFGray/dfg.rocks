@@ -15,6 +15,7 @@ let adminCookie: string;
 let studentCookie: string;
 let teacherCookie: string;
 let familyId: string;
+let otherFamilyId: string;
 let studentId: string;
 let adminUserId: string;
 let rt: ManagedRuntime.ManagedRuntime<any, any>;
@@ -114,6 +115,13 @@ describe("Admin Billing API", () => {
     );
     familyId = familyResult.rows[0].id;
 
+    // A family the admin is not a member of, so only the admin select policy shows it
+    const otherFamilyResult = await testDb.query(
+      `insert into app_public.families (slug, name) values ($1, $2) returning id`,
+      ["billing-test-other-family", "Billing Test Other Family"],
+    );
+    otherFamilyId = otherFamilyResult.rows[0].id;
+
     // Add members
     await testDb.query(
       `insert into app_public.family_memberships (family_id, user_id, is_owner) values ($1, $2, true)`,
@@ -201,6 +209,43 @@ describe("Admin Billing API", () => {
       expect(typeof ourFamily.outstanding_cents).toBe("number");
       expect(typeof ourFamily.credit_balance_cents).toBe("number");
       expect(ourFamily.bill_count).toBeGreaterThanOrEqual(0);
+    },
+  );
+
+  it(
+    "admin sees families they are not a member of and a non-member does not",
+    async () => {
+      const res = await req("GET", "/api/admin/billing/families", { cookie: adminCookie });
+      expect(res.status).toBe(200);
+      const body = await resJson(res);
+      expect(body.some((f: any) => f.family_id === otherFamilyId)).toBe(true);
+
+      const detailRes = await req("GET", `/api/admin/billing/families/${otherFamilyId}`, {
+        cookie: adminCookie,
+      });
+      expect(detailRes.status).toBe(200);
+
+      const session = await testDb.query(
+        `insert into app_private.sessions (user_id) values ($1) returning id`,
+        [studentId],
+      );
+      // Only the API login is a member of the visitor role, as in production.
+      const client = new pg.Client({ connectionString: requiredEnv("AUTH_DATABASE_URL") });
+      await client.connect();
+      try {
+        await client.query("begin");
+        await client.query(`select set_config('role', $1, true), set_config('my.session_id', $2, true)`, [
+          requiredEnv("DATABASE_VISITOR"),
+          session.rows[0].id,
+        ]);
+        const visible = await client.query(`select id from app_public.families`);
+        const ids = visible.rows.map((r) => r.id);
+        expect(ids).toContain(familyId);
+        expect(ids).not.toContain(otherFamilyId);
+      } finally {
+        await client.query("rollback");
+        await client.end();
+      }
     },
   );
 

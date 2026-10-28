@@ -1,7 +1,7 @@
 import { Effect, Option } from "effect";
 import type { EffectKysely } from "@effect/sql-kysely/Kysely";
 import type { DB } from "../../generated/db.js";
-import { withAuthContext, PgRootDB } from "../db.js";
+import { withAuthContext } from "../db.js";
 import { HttpError } from "../pgErrors.js";
 import { PdfService } from "./pdfService.js";
 import { BillingLedgerService } from "./billingLedgerService.js";
@@ -26,16 +26,21 @@ export class FamilyBillingService extends Effect.Service<FamilyBillingService>()
         );
       }
 
+      function getFamily(sessionId: string, familyId: string) {
+        return withAuthContext(sessionId, (db: AuthDB) =>
+          db
+            .selectFrom("app_public.families")
+            .select(["id", "name"])
+            .where("id", "=", familyId)
+            .pipe(Effect.head),
+        );
+      }
+
       return {
         overview: Effect.fn("overview")(function* (sessionId: string, userId: string) {
           const familyId = yield* getFamilyId(sessionId, userId);
 
-          const rootDb = yield* PgRootDB;
-          const family = yield* rootDb
-            .selectFrom("app_public.families")
-            .select(["id", "name"])
-            .where("id", "=", familyId)
-            .pipe(Effect.head);
+          const family = yield* getFamily(sessionId, familyId);
 
           const bills = yield* withAuthContext(sessionId, (db: AuthDB) =>
             db
@@ -245,12 +250,7 @@ export class FamilyBillingService extends Effect.Service<FamilyBillingService>()
             return yield* new HttpError(403, "Forbidden");
           }
 
-          const rootDb = yield* PgRootDB;
-          const family = yield* rootDb
-            .selectFrom("app_public.families")
-            .select("name")
-            .where("id", "=", familyId)
-            .pipe(Effect.head);
+          const family = yield* getFamily(sessionId, familyId);
 
           const lineItems = yield* withAuthContext(sessionId, (db: AuthDB) =>
             db
@@ -311,12 +311,7 @@ export class FamilyBillingService extends Effect.Service<FamilyBillingService>()
             return yield* new HttpError(403, "Forbidden");
           }
 
-          const rootDb = yield* PgRootDB;
-          const family = yield* rootDb
-            .selectFrom("app_public.families")
-            .select("name")
-            .where("id", "=", familyId)
-            .pipe(Effect.head);
+          const family = yield* getFamily(sessionId, familyId);
 
           const allocations = yield* withAuthContext(sessionId, (db: AuthDB) =>
             db
@@ -361,12 +356,7 @@ export class FamilyBillingService extends Effect.Service<FamilyBillingService>()
             return yield* new HttpError(404, "Bill not found");
           }
 
-          const rootDb = yield* PgRootDB;
-          const family = yield* rootDb
-            .selectFrom("app_public.families")
-            .select("name")
-            .where("id", "=", bill.value.family_id)
-            .pipe(Effect.head);
+          const family = yield* getFamily(sessionId, bill.value.family_id);
 
           const lineItems = yield* withAuthContext(sessionId, (db: AuthDB) =>
             db
@@ -422,12 +412,7 @@ export class FamilyBillingService extends Effect.Service<FamilyBillingService>()
             return yield* new HttpError(404, "Payment not found");
           }
 
-          const rootDb = yield* PgRootDB;
-          const family = yield* rootDb
-            .selectFrom("app_public.families")
-            .select("name")
-            .where("id", "=", payment.value.family_id)
-            .pipe(Effect.head);
+          const family = yield* getFamily(sessionId, payment.value.family_id);
 
           const allocations = yield* withAuthContext(sessionId, (db: AuthDB) =>
             db
