@@ -4,24 +4,31 @@ import { env } from "../../server/assertEnv.ts";
 
 /** @typedef {{
   id: string;
-  email: string;
-  token: string;
-}} UserVerifyEmailPayload */
+}} UserEmailsSendVerificationPayload */
 
+/** The queued id is the `app_public.user_emails` row to verify; the token lives in `app_private.user_email_secrets`. */
 /** @type {Task} */
 export default async (inPayload, { addJob, withPgClient }) => {
-  /** @type {UserVerifyEmailPayload} */
+  /** @type {UserEmailsSendVerificationPayload} */
   const payload = inPayload;
-  const { id: userId, email, token } = payload;
   const {
-    rows: [user],
+    rows: [row],
   } = await withPgClient((pgClient) =>
-    pgClient.query(`select users.* from app_public.users where id = $1`, [userId]),
+    pgClient.query(
+      `select user_emails.email::text as email, secrets.verification_token as token
+       from app_public.user_emails
+       inner join app_private.user_email_secrets as secrets
+         on secrets.user_email_id = user_emails.id
+       where user_emails.id = $1
+         and user_emails.is_verified is false`,
+      [payload.id],
+    ),
   );
-  if (!user) {
-    console.error("User not found; aborting");
+  if (!row?.token) {
+    console.error("Unverified email or token not found; aborting");
     return;
   }
+  const { email, token } = row;
 
   /** @type {SendEmailPayload} */
   const sendEmailPayload = {

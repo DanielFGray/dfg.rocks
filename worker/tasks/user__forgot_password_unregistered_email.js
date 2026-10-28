@@ -3,25 +3,23 @@
 
 /** @typedef {{
   email: string;
-  code: string;
-  inviteLink: string;
-}} InvitationPayload */
+}} UserForgotPasswordUnregisteredEmailPayload */
 
 /** @type {Task} */
 export default async (inPayload, { addJob }) => {
-  /** @type {InvitationPayload} */
+  /** @type {UserForgotPasswordUnregisteredEmailPayload} */
   const payload = inPayload;
-  const { email, inviteLink } = payload;
+  const { email } = payload;
 
   /** @type {SendEmailPayload} */
   const sendEmailPayload = {
     options: {
       to: email,
-      subject: "You've been invited to DFG Portal",
+      subject: "Password reset attempt",
     },
-    template: "invitation.mjml",
+    template: "password_reset_unregistered.mjml",
     variables: {
-      inviteLink,
+      email,
     },
   };
   await addJob("send_email", sendEmailPayload);

@@ -26,7 +26,7 @@
     "lint": "oxlint .",
     "test": "run-s typecheck lint test:unit test:worker test:e2e",
     "test:unit": "vitest run",
-    "test:worker": "bun test worker/test/bills.test.js worker/test/send_email.test.js",
+    "test:worker": "bun test worker/test/bills.test.js worker/test/send_email.test.js worker/test/contracts.test.js",
     "test:e2e": "playwright test",
     "e2e:server": "bun scripts/e2eServer.ts",
     "migrate": "bun --cwd=worker graphile-worker --schema-only && graphile-migrate migrate",
