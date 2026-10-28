@@ -10,11 +10,17 @@ bun run dev:app          # Vite + TanStack Start dev server (port 3000)
 bun run typecheck        # tsc --noEmit -p tsconfig.app.json
 bun run db:setup         # Full DB setup (docker + init + reset + migrate)
 bun run db:reset         # Drop and recreate DB, reapply all migrations
-bun run db:latest        # Apply committed migrations only
+bun run db:latest        # Apply committed and current/ migrations
 bun -b graphile-migrate watch --once  # Apply current/ migrations
 bun run db:types         # Regenerate Kysely types from DB schema
 bun run test:e2e         # Playwright E2E tests
 ```
+
+## Deploy
+
+Production runs on the server-ansible platform (`~/build/server-ansible`), described by `cartridge.json`. `ops release` builds the Dockerfile from committed HEAD, so the image never sees `.env` or `generated/`. Traefik ends TLS and sets `X-Real-Ip`, the only client-address header the rate limiter trusts. The platform creates `dfg_rocks_owner` and `dfg_rocks_visitor` group roles, a migration login in the owner role, and a NOINHERIT API login in the visitor role. The server prestart runs `bun run migrate`, which installs the graphile-worker schema and applies committed migrations.
+
+`server/assertEnv.ts` holds only what the server and worker read at runtime. Local database setup values live in `scripts/devEnv.ts`.
 
 ## Architecture
 
@@ -103,7 +109,7 @@ RLS policies derive user context from `current_setting('my.session_id')` joined 
 
 ### Testing
 
-- Rate limiting disabled via `disableRateLimiting()` in test setup
+- Rate limiting uses the in-memory limiter only when `NODE_ENV=production`; other environments get `RateLimitService.Test`
 - Testing API (`/api/testing/*`) creates users, seeds data, clears state — only loaded when `NODE_ENV !== "production"`
 - Playwright fixtures: `testing.login()`, `testing.clear()`, `testing.seedCourse()`, `testing.enroll()`
 
@@ -168,7 +174,7 @@ Benign warning, no functionality impact.
 | `server/routes/authenticated.ts`           | Authed endpoints (courses, messages, lessons)         |
 | `server/routes/admin.ts`                   | Admin endpoints (CRUD, gcal, settings)                |
 | `server/routes/testing.ts`                 | Test data seeding (non-production)                    |
-| `server/services/sessionService.ts`        | Session CRUD (Valkey + PG)                            |
+| `server/services/sessionService.ts`        | Session CRUD (PG)                                     |
 | `server/services/authService.ts`           | Login, password reset                                 |
 | `server/services/googleCalendarService.ts` | Google Calendar integration                           |
 | `server/pgErrors.ts`                       | HttpError class, PG errcode mapping                   |
@@ -176,7 +182,7 @@ Benign warning, no functionality impact.
 
 ## Rules
 
-- Write migrations in `migrations/current/` as numbered files (`1-schemas.sql`, `2-users.sql`). Graphile Migrate writes `migrations/committed/`.
+- Write migrations in `migrations/current/` as numbered files (`1-schemas.sql`, `2-users.sql`). Graphile Migrate writes `migrations/committed/`. Run `graphile-migrate commit` before a release that needs the change; production applies committed migrations only.
 - Write SQL keywords in lowercase (`create table`, `primary key`). Graphile placeholders such as `:DATABASE_VISITOR` stay uppercase.
 - When Effect code misbehaves, debug the Effect code.
 

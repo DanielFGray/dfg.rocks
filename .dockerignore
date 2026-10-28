@@ -1,0 +1,11 @@
+.env
+.env.*
+node_modules
+dist
+generated
+uploads
+test-results
+.playwright-mcp
+type-experiments
+.git
+*.log

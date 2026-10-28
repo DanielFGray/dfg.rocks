@@ -8,19 +8,22 @@ import {
 } from "../services/rateLimiter.js";
 
 describe("rateLimiter", () => {
-  it("extracts the first client hop from trusted proxy headers", () => {
-    expect(
-      clientIdentifierFromHeaders({
-        forwarded: "for=203.0.113.7;proto=https, for=10.0.0.9",
-      }),
-    ).toBe("203.0.113.7");
-
+  it("identifies the client only by the proxy-set X-Real-Ip", () => {
     expect(
       clientIdentifierFromHeaders({
         "x-real-ip": "198.51.100.8",
+        forwarded: "for=203.0.113.7",
         "x-forwarded-for": "203.0.113.7, 10.0.0.9",
+        "cf-connecting-ip": "203.0.113.7",
       }),
     ).toBe("198.51.100.8");
+
+    expect(
+      clientIdentifierFromHeaders({
+        forwarded: "for=203.0.113.7",
+        "x-forwarded-for": "203.0.113.7",
+      }),
+    ).toBeUndefined();
   });
 
   it.layer(RateLimitService.Live)((it) => {
@@ -37,6 +40,15 @@ describe("rateLimiter", () => {
         yield* TestClock.adjust("75 millis");
 
         yield* checkRateLimit("login", headers, 2, 50);
+      }),
+    );
+
+    it.effect("limits requests that carry no proxy-set address", () =>
+      Effect.gen(function* () {
+        yield* checkRateLimit("login", {}, 1, 60000);
+
+        const exceeded = yield* Effect.exit(checkRateLimit("login", {}, 1, 60000));
+        expect(exceeded).toStrictEqual(Exit.fail(new RateLimitError()));
       }),
     );
   });

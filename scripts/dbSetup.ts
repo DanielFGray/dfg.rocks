@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 import { Redacted } from "effect";
 import pg from "pg";
-import { env } from "../server/assertEnv.js";
+import { devEnv } from "./devEnv.js";
 
 function getErrorCode(error: unknown): string | undefined {
   return typeof error === "object" && error !== null && "code" in error
@@ -31,15 +31,15 @@ async function connectWithRetry(connectionString: string, retries = 10) {
 }
 
 async function main() {
-  const client = await connectWithRetry(env.ROOT_DATABASE_URL);
+  const client = await connectWithRetry(devEnv.ROOT_DATABASE_URL);
 
-  const dbName = env.DATABASE_NAME;
-  const owner = env.DATABASE_OWNER;
-  const ownerPw = Redacted.value(env.DATABASE_OWNER_PASSWORD);
-  const auth = env.DATABASE_AUTHENTICATOR;
-  const authPw = Redacted.value(env.DATABASE_AUTHENTICATOR_PASSWORD);
-  const visitor = env.DATABASE_VISITOR;
-  const shadowPw = Redacted.value(env.SHADOW_DATABASE_PASSWORD);
+  const dbName = devEnv.DATABASE_NAME;
+  const owner = devEnv.DATABASE_OWNER;
+  const ownerPw = Redacted.value(devEnv.DATABASE_OWNER_PASSWORD);
+  const auth = devEnv.DATABASE_AUTHENTICATOR;
+  const authPw = Redacted.value(devEnv.DATABASE_AUTHENTICATOR_PASSWORD);
+  const visitor = devEnv.DATABASE_VISITOR;
+  const shadowPw = Redacted.value(devEnv.SHADOW_DATABASE_PASSWORD);
 
   const sql = (s: string) =>
     client.query(s).catch((error) => {

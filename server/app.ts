@@ -16,7 +16,6 @@ import { makeAuthLayer } from "./routes/auth.js";
 import { authenticatedGroup, makeAuthenticatedLayer } from "./routes/authenticated.js";
 import { makePublicLayer } from "./routes/public.js";
 import { serverRuntime } from "./runtime.js";
-import { RateLimitService } from "./services/rateLimiter.js";
 
 type WebHandler = (request: Request) => Promise<Response>;
 
@@ -43,7 +42,6 @@ async function createHandler() {
     const api = baseApi.add(testingGroup);
     const apiLayer = HttpApiBuilder.api(api).pipe(
       Layer.provide([...baseRouteLayers, makeTestingLayer()] as const),
-      Layer.provide(RateLimitService.Test),
       Layer.provide(TestingService.Default),
     );
 

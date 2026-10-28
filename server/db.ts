@@ -62,7 +62,7 @@ export const withAuthContext = Effect.fnUntraced(function* <A, E, R>(
     db
       .selectNoFrom((eb) => [
         eb
-          .fn<void>("set_config", [sql.lit("role"), eb.val(databaseVisitor), eb.lit(false)])
+          .fn<void>("set_config", [sql.lit("role"), eb.val(databaseVisitor), eb.lit(true)])
           .as("_1"),
         eb
           .fn<void>("set_config", [sql.lit("my.session_id"), eb.val(sessionId), eb.lit(true)])

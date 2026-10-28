@@ -19,7 +19,7 @@
     "db:watch": "run-s 'gm watch'",
     "db:reset": "run-s 'gm reset --erase'",
     "db:types": "bun -b kysely-codegen",
-    "db:setup": "run-s db:init db:reset worker:schema db:latest",
+    "db:setup": "run-s db:init db:reset db:latest",
     "env:init": "bun scripts/generateEnvFile.ts",
     "init": "NOCONFIRM=1 run-s env:init db:setup",
     "worker": "bun --cwd=worker --env-file=../.env graphile-worker",
@@ -29,8 +29,8 @@
     "test:worker": "bun test worker/test/bills.test.js",
     "test:e2e": "playwright test",
     "e2e:server": "bun scripts/e2eServer.ts",
-    "worker:schema": "run-s 'worker --schema-only'",
-    "deploy": "bun run start"
+    "migrate": "bun --cwd=worker graphile-worker --schema-only && graphile-migrate migrate",
+    "worker:prod": "bun --cwd=worker graphile-worker"
   },
   "dependencies": {
     "@aws-sdk/client-sesv2": "^3.1088.0",

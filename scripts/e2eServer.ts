@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 import { spawn, spawnSync } from "node:child_process";
-import { env } from "../server/assertEnv.js";
+import { devEnv } from "./devEnv.js";
 
 function withDatabaseSuffix(connectionString: string, suffix: string): string {
   const url = new URL(connectionString);
@@ -25,9 +25,9 @@ function forceIpv4(urlString: string): string {
 const vitePort = process.env.PLAYWRIGHT_VITE_PORT || process.env.VITE_PORT || "4174";
 const childEnv: NodeJS.ProcessEnv = {
   ...process.env,
-  DATABASE_URL: forceIpv4(withDatabaseSuffix(env.DATABASE_URL, "_test")),
-  AUTH_DATABASE_URL: forceIpv4(withDatabaseSuffix(env.AUTH_DATABASE_URL, "_test")),
-  ROOT_DATABASE_URL: forceIpv4(env.ROOT_DATABASE_URL),
+  DATABASE_URL: forceIpv4(withDatabaseSuffix(devEnv.DATABASE_URL, "_test")),
+  AUTH_DATABASE_URL: forceIpv4(withDatabaseSuffix(devEnv.AUTH_DATABASE_URL, "_test")),
+  ROOT_DATABASE_URL: forceIpv4(devEnv.ROOT_DATABASE_URL),
   DATABASE_HOST: "127.0.0.1",
   VITE_ROOT_URL: `http://127.0.0.1:${vitePort}`,
   HOST: "127.0.0.1",
@@ -50,7 +50,6 @@ function run(command: string, args: string[], cwd = process.cwd()): void {
 
 run("bun", ["run", "db:ensure"]);
 run("bun", ["-b", "graphile-migrate", "reset", "--erase"]);
-run("bun", ["-b", "graphile-worker", "--schema-only"], `${process.cwd()}/worker`);
 run("bun", ["-b", "graphile-migrate", "watch", "--once"]);
 
 const server = spawn("bun", ["-b", "vite", "dev"], {

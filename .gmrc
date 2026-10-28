@@ -3,11 +3,15 @@
     "search_path": "app_public,app_private,public"
   },
   "placeholders": {
-    ":DATABASE_AUTHENTICATOR": "!ENV",
     ":DATABASE_VISITOR": "!ENV"
   },
-  "afterReset": ["afterReset.sql"],
-  "afterAllMigrations": [
-    { "_": "command", "command": "bun db:types" }
+  // Migrations enqueue graphile-worker jobs, so every reset database gets the worker schema first.
+  "afterReset": [
+    "afterReset.sql",
+    { "_": "command", "command": "DATABASE_URL=\"$GM_DBURL\" bun --cwd=worker graphile-worker --schema-only" }
+  ],
+  // Production images do not install kysely-codegen, so codegen runs only on the dev `current/` path.
+  "afterCurrent": [
+    { "_": "command", "shadow": false, "command": "bun db:types --url 'env(GM_DBURL)'" }
   ]
 }

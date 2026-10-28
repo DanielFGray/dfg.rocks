@@ -39,9 +39,10 @@ const infrastructureLayer = Layer.mergeAll(
   FetchHttpClient.layer,
   rootDatabaseLayer,
   PgAuthDB.Live,
-  RateLimitService.Live,
 );
 
+// Outside production, E2E browsers share one address, so a real limiter would throttle the suite.
+const rateLimitLayer = env.NODE_ENV === "production" ? RateLimitService.Live : RateLimitService.Test;
 const emailLayer = env.NODE_ENV === "production" ? EmailService.Live : EmailService.Test;
 
 const lessonServicesLayer = Layer.mergeAll(
@@ -67,6 +68,7 @@ const servicesLayer = Layer.mergeAll(
   AuthRouteService.Default,
   billingServicesLayer,
   emailLayer,
+  rateLimitLayer,
   FileService.Default,
   GeolocationService.Default,
   PublicRouteService.Default,

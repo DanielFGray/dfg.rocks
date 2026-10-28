@@ -44,6 +44,5 @@ export default function setup() {
 
   run("bun", ["run", "db:ensure"], process.env);
   run("bun", ["-b", "graphile-migrate", "reset", "--erase"], testEnv);
-  run("bun", ["-b", "--cwd=worker", "graphile-worker", "--schema-only"], testEnv);
   run("bun", ["-b", "graphile-migrate", "watch", "--once"], testEnv);
 }

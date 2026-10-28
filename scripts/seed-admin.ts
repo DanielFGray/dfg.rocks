@@ -3,12 +3,12 @@
  * Seed script for production — creates the initial admin user.
  * Usage: bun scripts/seed-admin.ts
  *
- * Reads ADMIN_USERNAME, ADMIN_EMAIL, ADMIN_NAME, ADMIN_PASSWORD from env.
+ * Reads ADMIN_USERNAME, ADMIN_EMAIL, ADMIN_NAME, ADMIN_PASSWORD from devEnv.
  */
 import { Effect, Option } from "effect";
 import * as Redacted from "effect/Redacted";
 import { sql } from "kysely";
-import { env } from "../server/assertEnv.js";
+import { devEnv } from "./devEnv.js";
 import { PgRootDB } from "../server/db.js";
 import { serverRuntime } from "../server/runtime.js";
 
@@ -17,10 +17,10 @@ async function getRootDb() {
 }
 
 async function seedAdmin() {
-  const username = env.ADMIN_USERNAME;
-  const email = env.ADMIN_EMAIL;
-  const name = env.ADMIN_NAME ?? "Admin";
-  const password = env.ADMIN_PASSWORD;
+  const username = devEnv.ADMIN_USERNAME;
+  const email = devEnv.ADMIN_EMAIL;
+  const name = devEnv.ADMIN_NAME ?? "Admin";
+  const password = devEnv.ADMIN_PASSWORD;
 
   if (!username || !email || !password) {
     console.error("Required env vars: ADMIN_USERNAME, ADMIN_EMAIL, ADMIN_PASSWORD");
