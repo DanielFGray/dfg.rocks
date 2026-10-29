@@ -24,6 +24,31 @@ test.describe("authentication", () => {
     await expect(page.getByTestId("dashboard")).toBeVisible();
   });
 
+  test("text typed before hydration survives and logs in", async ({ page, testing }) => {
+    await testing.login({ username: "test_prehydration", role: "student" });
+    await page.context().clearCookies({ name: "session" });
+    // Hold the client entry so the user types into server-rendered HTML.
+    let releaseEntry = () => {};
+    const entryHeld = new Promise<void>((resolve) => (releaseEntry = resolve));
+    await page.route(/default-entry\/client\.tsx/, async (route) => {
+      await entryHeld;
+      await route.continue();
+    });
+    await page.goto("/login", { waitUntil: "domcontentloaded" });
+    await page.getByTestId("login-id").fill("test_prehydration");
+    await page.getByTestId("login-password").fill("testpassword123");
+    releaseEntry();
+    // React attaches its fiber to the DOM node when hydration reaches it.
+    await page.waitForFunction(() => {
+      const input = document.querySelector('[data-testid="login-id"]');
+      return !!input && Object.keys(input).some((key) => key.startsWith("__reactFiber"));
+    });
+    await expect(page.getByTestId("login-id")).toHaveValue("test_prehydration");
+    await expect(page.getByTestId("login-password")).toHaveValue("testpassword123");
+    await page.getByTestId("login-submit").click();
+    await expect(page.getByTestId("dashboard")).toBeVisible();
+  });
+
   test("unauthenticated redirect preserves target url", async ({ page, testing }) => {
     await testing.login({ username: "test_redirect_after_login", role: "student" });
     await page.context().clearCookies();
