@@ -1,4 +1,4 @@
-import { Clock, Effect } from "effect";
+import { Clock, Effect, Context, Layer } from "effect";
 import type {
   BillingModel,
   CancellationPolicySettings,
@@ -53,11 +53,10 @@ function numberSetting(value: unknown, fallback: number): number {
   return typeof value === "number" && Number.isFinite(value) ? value : fallback;
 }
 
-export class LessonPolicyService extends Effect.Service<LessonPolicyService>()(
+export class LessonPolicyService extends Context.Service<LessonPolicyService>()(
   "LessonPolicyService",
   {
-    accessors: true,
-    effect: Effect.gen(function* () {
+    make: Effect.gen(function* () {
       const rootDb = yield* PgRootDB;
 
       const getSettings = Effect.fn("getCancellationPolicySettings")(function* () {
@@ -142,4 +141,6 @@ export class LessonPolicyService extends Effect.Service<LessonPolicyService>()(
       };
     }),
   },
-) {}
+) {
+  static readonly layer = Layer.effect(this, this.make);
+}

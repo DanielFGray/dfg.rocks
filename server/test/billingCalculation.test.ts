@@ -137,24 +137,18 @@ describe("calculateDiscount", () => {
 // ---------------------------------------------------------------------------
 
 describe("calculateLineTax", () => {
-  const tuitionItems = [
-    { amountCents: 10000, category: "tuition" as const },
-  ];
+  const tuitionItems = [{ amountCents: 10000, category: "tuition" as const }];
   const feeItems = [{ amountCents: 5000, category: "fees" as const }];
   const allItems = [...tuitionItems, ...feeItems];
 
   it("applies tax rate to matching category", () => {
-    const rates: TaxRateConfig[] = [
-      { ratePercent: 8.25, appliesTo: "tuition" },
-    ];
+    const rates: TaxRateConfig[] = [{ ratePercent: 8.25, appliesTo: "tuition" }];
     // 8.25% of 10000 = 825
     expect(calculateLineTax(allItems, rates)).toBe(825);
   });
 
   it("applies tax rate to all categories", () => {
-    const rates: TaxRateConfig[] = [
-      { ratePercent: 5, appliesTo: "all" },
-    ];
+    const rates: TaxRateConfig[] = [{ ratePercent: 5, appliesTo: "all" }];
     // 5% of 15000 = 750
     expect(calculateLineTax(allItems, rates)).toBe(750);
   });
@@ -170,9 +164,7 @@ describe("calculateLineTax", () => {
 
   it("rounds to nearest cent", () => {
     const items = [{ amountCents: 333, category: "tuition" as const }];
-    const rates: TaxRateConfig[] = [
-      { ratePercent: 8.25, appliesTo: "tuition" },
-    ];
+    const rates: TaxRateConfig[] = [{ ratePercent: 8.25, appliesTo: "tuition" }];
     // 8.25% of 333 = 27.4725 -> 27
     expect(calculateLineTax(items, rates)).toBe(27);
   });
@@ -204,12 +196,7 @@ describe("getMonthlyOccurrenceDates", () => {
       endsOn: null,
       billingMonth: "2026-07-01",
     });
-    expect(dates).toEqual([
-      "2026-07-07",
-      "2026-07-14",
-      "2026-07-21",
-      "2026-07-28",
-    ]);
+    expect(dates).toEqual(["2026-07-07", "2026-07-14", "2026-07-21", "2026-07-28"]);
   });
 
   it("returns Mondays in July 2026", () => {
@@ -220,12 +207,7 @@ describe("getMonthlyOccurrenceDates", () => {
       endsOn: null,
       billingMonth: "2026-07-01",
     });
-    expect(dates).toEqual([
-      "2026-07-06",
-      "2026-07-13",
-      "2026-07-20",
-      "2026-07-27",
-    ]);
+    expect(dates).toEqual(["2026-07-06", "2026-07-13", "2026-07-20", "2026-07-27"]);
   });
 
   it("returns Sundays in July 2026", () => {
@@ -236,12 +218,7 @@ describe("getMonthlyOccurrenceDates", () => {
       endsOn: null,
       billingMonth: "2026-07-01",
     });
-    expect(dates).toEqual([
-      "2026-07-05",
-      "2026-07-12",
-      "2026-07-19",
-      "2026-07-26",
-    ]);
+    expect(dates).toEqual(["2026-07-05", "2026-07-12", "2026-07-19", "2026-07-26"]);
   });
 
   it("filters by schedule startsOn", () => {
@@ -286,12 +263,7 @@ describe("getMonthlyOccurrenceDates", () => {
       billingMonth: "2026-02-01",
     });
     // Thursdays in Feb 2026: 5, 12, 19, 26
-    expect(dates).toEqual([
-      "2026-02-05",
-      "2026-02-12",
-      "2026-02-19",
-      "2026-02-26",
-    ]);
+    expect(dates).toEqual(["2026-02-05", "2026-02-12", "2026-02-19", "2026-02-26"]);
   });
 
   it("handles a month with 5 occurrences", () => {
@@ -303,13 +275,7 @@ describe("getMonthlyOccurrenceDates", () => {
       endsOn: null,
       billingMonth: "2026-01-01",
     });
-    expect(dates).toEqual([
-      "2026-01-01",
-      "2026-01-08",
-      "2026-01-15",
-      "2026-01-22",
-      "2026-01-29",
-    ]);
+    expect(dates).toEqual(["2026-01-01", "2026-01-08", "2026-01-15", "2026-01-22", "2026-01-29"]);
   });
 });
 
@@ -358,18 +324,12 @@ describe("selectEffectiveRate", () => {
         effectiveUntil: null,
       },
     ];
-    expect(selectEffectiveRate(overlapping, "2026-08-01")).toEqual(
-      overlapping[1],
-    );
-    expect(selectEffectiveRate(overlapping, "2026-06-15")).toEqual(
-      overlapping[0],
-    );
+    expect(selectEffectiveRate(overlapping, "2026-08-01")).toEqual(overlapping[1]);
+    expect(selectEffectiveRate(overlapping, "2026-06-15")).toEqual(overlapping[0]);
   });
 
   it("throws for an invalid date string", () => {
-    expect(() => selectEffectiveRate(rates, "not-a-date")).toThrow(
-      "ISO date",
-    );
+    expect(() => selectEffectiveRate(rates, "not-a-date")).toThrow("ISO date");
   });
 });
 
@@ -409,9 +369,7 @@ describe("resolveBookingOutcome", () => {
 // ---------------------------------------------------------------------------
 
 describe("allocatePayment", () => {
-  function bill(
-    overrides: Partial<BillForAllocation> & { id: string },
-  ): BillForAllocation {
+  function bill(overrides: Partial<BillForAllocation> & { id: string }): BillForAllocation {
     return {
       totalCents: 10000,
       adjustmentsCents: 0,

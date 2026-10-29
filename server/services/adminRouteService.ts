@@ -1,4 +1,4 @@
-import { Effect, Option } from "effect";
+import { Effect, Option, Context, Layer } from "effect";
 import * as S from "effect/Schema";
 import { sql } from "kysely";
 import { extractMaterialIds } from "../../shared/content.js";
@@ -39,9 +39,8 @@ const lessonNoteColumns = [
   "updated_at",
 ] as const;
 
-export class AdminRouteService extends Effect.Service<AdminRouteService>()("AdminRouteService", {
-  accessors: true,
-  effect: Effect.gen(function* () {
+export class AdminRouteService extends Context.Service<AdminRouteService>()("AdminRouteService", {
+  make: Effect.gen(function* () {
     const rootDb = yield* PgRootDB;
     const lessonPolicy = yield* LessonPolicyService;
 
@@ -80,7 +79,7 @@ export class AdminRouteService extends Effect.Service<AdminRouteService>()("Admi
             .pipe(
               Effect.head,
               Effect.catchTags({
-                NoSuchElementException: () => new HttpError(404, "Contact submission not found"),
+                NoSuchElementError: () => new HttpError(404, "Contact submission not found"),
               }),
             ),
         );
@@ -180,15 +179,15 @@ export class AdminRouteService extends Effect.Service<AdminRouteService>()("Admi
             .pipe(
               Effect.head,
               Effect.catchTags({
-                NoSuchElementException: () => new HttpError(404, "Student not found"),
+                NoSuchElementError: () => new HttpError(404, "Student not found"),
               }),
             ),
         );
 
-        const enrolledCourses = yield* S.decodeUnknown(S.Array(EnrolledCourse))(
+        const enrolledCourses = yield* S.decodeUnknownEffect(S.Array(EnrolledCourse))(
           row.enrolled_courses,
         );
-        const assignedMaterials = yield* S.decodeUnknown(S.Array(AssignedMaterial))(
+        const assignedMaterials = yield* S.decodeUnknownEffect(S.Array(AssignedMaterial))(
           row.assigned_materials,
         );
 
@@ -251,7 +250,7 @@ export class AdminRouteService extends Effect.Service<AdminRouteService>()("Admi
             .pipe(
               Effect.head,
               Effect.catchTags({
-                NoSuchElementException: () => new HttpError(500, "Failed to create course"),
+                NoSuchElementError: () => new HttpError(500, "Failed to create course"),
               }),
             ),
         );
@@ -297,7 +296,7 @@ export class AdminRouteService extends Effect.Service<AdminRouteService>()("Admi
             .pipe(
               Effect.head,
               Effect.catchTags({
-                NoSuchElementException: () => new HttpError(404, "Module not found"),
+                NoSuchElementError: () => new HttpError(404, "Module not found"),
               }),
             ),
         );
@@ -326,7 +325,7 @@ export class AdminRouteService extends Effect.Service<AdminRouteService>()("Admi
             .pipe(
               Effect.head,
               Effect.catchTags({
-                NoSuchElementException: () => new HttpError(500, "Failed to create module"),
+                NoSuchElementError: () => new HttpError(500, "Failed to create module"),
               }),
             ),
         );
@@ -365,7 +364,7 @@ export class AdminRouteService extends Effect.Service<AdminRouteService>()("Admi
               .pipe(
                 Effect.head,
                 Effect.catchTags({
-                  NoSuchElementException: () => new HttpError(404, "Module not found"),
+                  NoSuchElementError: () => new HttpError(404, "Module not found"),
                 }),
               );
             if (updates.content !== undefined) {
@@ -492,7 +491,7 @@ export class AdminRouteService extends Effect.Service<AdminRouteService>()("Admi
             .pipe(
               Effect.head,
               Effect.catchTags({
-                NoSuchElementException: () => new HttpError(404, "Material not found"),
+                NoSuchElementError: () => new HttpError(404, "Material not found"),
               }),
             ),
         );
@@ -571,7 +570,7 @@ export class AdminRouteService extends Effect.Service<AdminRouteService>()("Admi
           db.execute(db.insertInto("app_public.families").values(values).returning(["id"])).pipe(
             Effect.head,
             Effect.catchTags({
-              NoSuchElementException: () => new HttpError(500, "Failed to create family"),
+              NoSuchElementError: () => new HttpError(500, "Failed to create family"),
             }),
             catchPgErrors,
           ),
@@ -603,7 +602,7 @@ export class AdminRouteService extends Effect.Service<AdminRouteService>()("Admi
             catchPgErrors,
             Effect.head,
             Effect.catchTags({
-              NoSuchElementException: () => new HttpError(500, "Failed to create QR invite"),
+              NoSuchElementError: () => new HttpError(500, "Failed to create QR invite"),
             }),
           );
       }),
@@ -656,11 +655,13 @@ export class AdminRouteService extends Effect.Service<AdminRouteService>()("Admi
             .pipe(
               Effect.head,
               Effect.catchTags({
-                NoSuchElementException: () => new HttpError(500, "Failed to create lesson"),
+                NoSuchElementError: () => new HttpError(500, "Failed to create lesson"),
               }),
             ),
         );
-        const connected = yield* GoogleCalendarService.isConnected();
+        const connected = yield* GoogleCalendarService.use((googleCalendarService) =>
+          googleCalendarService.isConnected(),
+        );
         if (connected && lesson.scheduled_at) {
           const student = yield* withAuthContext(values.sessionId, (db) =>
             db
@@ -675,12 +676,14 @@ export class AdminRouteService extends Effect.Service<AdminRouteService>()("Admi
           const studentName = Option.getOrNull(student)?.name ?? "Student";
           const startTime = new Date(String(lesson.scheduled_at));
           const endTime = new Date(startTime.getTime() + lesson.duration_minutes * 60000);
-          const eventId = yield* GoogleCalendarService.createEvent({
-            summary: `Lesson: ${studentName}`,
-            description: `${lesson.duration_minutes} min ${lesson.location_type.replace(/_/g, " ")} lesson`,
-            start: startTime.toISOString(),
-            end: endTime.toISOString(),
-          }).pipe(Effect.catchAll(() => Effect.succeed(null)));
+          const eventId = yield* GoogleCalendarService.use((googleCalendarService) =>
+            googleCalendarService.createEvent({
+              summary: `Lesson: ${studentName}`,
+              description: `${lesson.duration_minutes} min ${lesson.location_type.replace(/_/g, " ")} lesson`,
+              start: startTime.toISOString(),
+              end: endTime.toISOString(),
+            }),
+          ).pipe(Effect.catch(() => Effect.succeed(null)));
           if (eventId) {
             yield* withAuthContext(values.sessionId, (db) =>
               db.execute(
@@ -727,7 +730,7 @@ export class AdminRouteService extends Effect.Service<AdminRouteService>()("Admi
             .pipe(
               Effect.head,
               Effect.catchTags({
-                NoSuchElementException: () => new HttpError(404, "Lesson not found"),
+                NoSuchElementError: () => new HttpError(404, "Lesson not found"),
               }),
             ),
         );
@@ -746,12 +749,13 @@ export class AdminRouteService extends Effect.Service<AdminRouteService>()("Admi
             .pipe(
               Effect.head,
               Effect.catchTags({
-                NoSuchElementException: () => new HttpError(404, "Lesson not found"),
+                NoSuchElementError: () => new HttpError(404, "Lesson not found"),
               }),
             ),
         );
         if (lesson.gcal_event_id) {
-          yield* GoogleCalendarService.deleteEvent(lesson.gcal_event_id).pipe(Effect.ignore);
+          const googleCalendarService = yield* GoogleCalendarService;
+          yield* googleCalendarService.deleteEvent(lesson.gcal_event_id).pipe(Effect.ignore);
         }
         return lesson;
       }),
@@ -776,7 +780,7 @@ export class AdminRouteService extends Effect.Service<AdminRouteService>()("Admi
               .pipe(
                 Effect.head,
                 Effect.catchTags({
-                  NoSuchElementException: () => new HttpError(404, "Lesson not found"),
+                  NoSuchElementError: () => new HttpError(404, "Lesson not found"),
                 }),
               );
             if (existing.status !== "scheduled") {
@@ -808,7 +812,8 @@ export class AdminRouteService extends Effect.Service<AdminRouteService>()("Admi
           }),
         );
         if (result.gcalEventId) {
-          yield* GoogleCalendarService.deleteEvent(result.gcalEventId).pipe(Effect.ignore);
+          const googleCalendarService = yield* GoogleCalendarService;
+          yield* googleCalendarService.deleteEvent(result.gcalEventId).pipe(Effect.ignore);
         }
         return result.lesson;
       }),
@@ -829,7 +834,7 @@ export class AdminRouteService extends Effect.Service<AdminRouteService>()("Admi
               .pipe(
                 Effect.head,
                 Effect.catchTags({
-                  NoSuchElementException: () => new HttpError(404, "Lesson not found"),
+                  NoSuchElementError: () => new HttpError(404, "Lesson not found"),
                 }),
               );
             if (existing.status !== "scheduled") {
@@ -846,7 +851,7 @@ export class AdminRouteService extends Effect.Service<AdminRouteService>()("Admi
               .pipe(
                 Effect.head,
                 Effect.catchTags({
-                  NoSuchElementException: () =>
+                  NoSuchElementError: () =>
                     new HttpError(409, "Set a student rate before completing this lesson"),
                 }),
               );
@@ -1025,7 +1030,7 @@ export class AdminRouteService extends Effect.Service<AdminRouteService>()("Admi
             .pipe(
               Effect.head,
               Effect.catchTags({
-                NoSuchElementException: () => new HttpError(500, "Failed to save student rate"),
+                NoSuchElementError: () => new HttpError(500, "Failed to save student rate"),
               }),
             ),
         );
@@ -1102,7 +1107,7 @@ export class AdminRouteService extends Effect.Service<AdminRouteService>()("Admi
             .pipe(
               Effect.head,
               Effect.catchTags({
-                NoSuchElementException: () => new HttpError(500, "Failed to save lesson note"),
+                NoSuchElementError: () => new HttpError(500, "Failed to save lesson note"),
               }),
             ),
         );
@@ -1120,7 +1125,7 @@ export class AdminRouteService extends Effect.Service<AdminRouteService>()("Admi
             .pipe(
               Effect.head,
               Effect.catchTags({
-                NoSuchElementException: () => new HttpError(404, "Lesson note not found"),
+                NoSuchElementError: () => new HttpError(404, "Lesson note not found"),
               }),
             ),
         );
@@ -1142,7 +1147,7 @@ export class AdminRouteService extends Effect.Service<AdminRouteService>()("Admi
             .pipe(
               Effect.head,
               Effect.catchTags({
-                NoSuchElementException: () => new HttpError(404, "Lesson note not found"),
+                NoSuchElementError: () => new HttpError(404, "Lesson note not found"),
               }),
             ),
         );
@@ -1260,7 +1265,7 @@ export class AdminRouteService extends Effect.Service<AdminRouteService>()("Admi
               Effect.option,
               Effect.flatMap(
                 Option.match({
-                  onNone: () => HttpError.make(404, "Testimonial not found"),
+                  onNone: () => new HttpError(404, "Testimonial not found"),
                   onSome: Effect.succeed,
                 }),
               ),
@@ -1269,4 +1274,6 @@ export class AdminRouteService extends Effect.Service<AdminRouteService>()("Admi
       }),
     };
   }),
-}) {}
+}) {
+  static readonly layer = Layer.effect(this, this.make);
+}

@@ -7,7 +7,7 @@ const devEnvSchema = S.Struct({
   ...envSchema.fields,
   ADMIN_USERNAME: S.optional(S.String),
   ADMIN_NAME: S.optional(S.String),
-  ADMIN_PASSWORD: S.optional(S.Redacted(S.String)),
+  ADMIN_PASSWORD: S.optional(S.RedactedFromValue(S.String)),
 });
 
 export const devEnv = S.decodeUnknownSync(devEnvSchema)(process.env);

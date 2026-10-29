@@ -19,7 +19,9 @@ const confirmDeleteAccountAction = createServerFn({ method: "POST" })
   })
   .handler(async ({ data }) => {
     const sessionToken = getCookie("session");
-    const auth = await serverRuntime.runPromise(SessionService.validateSessionToken(sessionToken));
+    const auth = await serverRuntime.runPromise(
+      SessionService.use((sessionService) => sessionService.validateSessionToken(sessionToken)),
+    );
     if (!auth) {
       throw redirect({
         to: "/login",
@@ -28,14 +30,18 @@ const confirmDeleteAccountAction = createServerFn({ method: "POST" })
     }
 
     const deleted = await serverRuntime.runPromise(
-      AuthenticatedRouteService.confirmDeleteAccount(auth.session.id, data.token),
+      AuthenticatedRouteService.use((authenticatedRouteService) =>
+        authenticatedRouteService.confirmDeleteAccount(auth.session.id, data.token),
+      ),
     );
 
     if (!deleted) {
       throw new HttpError(400, "Invalid or expired deletion token");
     }
 
-    await serverRuntime.runPromise(SessionService.deleteAllUserSessions(auth.user.id));
+    await serverRuntime.runPromise(
+      SessionService.use((sessionService) => sessionService.deleteAllUserSessions(auth.user.id)),
+    );
     deleteCookie("session");
     throw redirect({ to: "/" });
   });

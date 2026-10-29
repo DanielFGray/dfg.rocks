@@ -151,14 +151,12 @@ export function StudentDashboard({
                 >
                   <Card>
                     <div className="flex items-start justify-between gap-2">
-                      <p className="text-sm font-medium text-primary dark:text-primary-dark truncate">
+                      <p className="truncate text-sm font-medium text-primary dark:text-primary-dark">
                         {material?.title ?? "Unknown material"}
                       </p>
                     </div>
                     <div className="mt-1 flex items-center gap-2 text-xs text-muted dark:text-muted-dark">
-                      {log.rating != null ? (
-                        <span>{String(log.rating)}/5 ★</span>
-                      ) : null}
+                      {log.rating != null ? <span>{String(log.rating)}/5 ★</span> : null}
                       {log.duration_minutes != null ? (
                         <span>{log.duration_minutes} min</span>
                       ) : null}

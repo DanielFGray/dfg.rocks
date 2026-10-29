@@ -1,7 +1,6 @@
-import * as HttpApi from "@effect/platform/HttpApi";
-import * as HttpApiBuilder from "@effect/platform/HttpApiBuilder";
-import * as HttpApp from "@effect/platform/HttpApp";
-import * as Effect from "effect/Effect";
+import * as HttpApi from "effect/http-api/HttpApi";
+import * as HttpApiBuilder from "effect/http-api/HttpApiBuilder";
+import * as HttpRouter from "effect/http/HttpRouter";
 import * as Layer from "effect/Layer";
 import type * as ManagedRuntime from "effect/ManagedRuntime";
 import { authGroup, publicGroup } from "../shared/httpApi.js";
@@ -17,7 +16,10 @@ import { authenticatedGroup, makeAuthenticatedLayer } from "./routes/authenticat
 import { makePublicLayer } from "./routes/public.js";
 import { serverRuntime } from "./runtime.js";
 
-type WebHandler = (request: Request) => Promise<Response>;
+type WebHandler = {
+  readonly handler: (request: Request) => Promise<Response>;
+  readonly dispose: () => Promise<void>;
+};
 
 let handlerPromise: Promise<WebHandler> | undefined;
 
@@ -40,34 +42,43 @@ async function createHandler() {
     const { makeTestingLayer, testingGroup } = await import("./routes/testing.js");
     const { TestingService } = await import("./services/testingService.js");
     const api = baseApi.add(testingGroup);
-    const apiLayer = HttpApiBuilder.api(api).pipe(
-      Layer.provide([...baseRouteLayers, makeTestingLayer()] as const),
-      Layer.provide(TestingService.Default),
+    const apiLayer = HttpApiBuilder.layer(api).pipe(
+      Layer.provide(Layer.mergeAll(...baseRouteLayers, makeTestingLayer())),
+      HttpRouter.provideRequest(TestingService.layer),
     );
 
     return makeWebHandler(apiLayer);
   }
 
-  const apiLayer = HttpApiBuilder.api(baseApi).pipe(Layer.provide(baseRouteLayers));
+  const apiLayer = HttpApiBuilder.layer(baseApi).pipe(
+    Layer.provide(Layer.mergeAll(...baseRouteLayers)),
+  );
 
   return makeWebHandler(apiLayer);
 }
 
-type ApplicationServices = ManagedRuntime.ManagedRuntime.Context<typeof serverRuntime>;
+type ApplicationServices = ManagedRuntime.ManagedRuntime.Services<typeof serverRuntime>;
+
+// Route layers need the application services when they are built, and handlers need them again per request.
+type RouteRequirements =
+  | HttpRouter.HttpRouter
+  | ApplicationServices
+  | HttpRouter.Request<"Requires", ApplicationServices>;
 
 async function makeWebHandler(
-  apiLayer: Layer.Layer<HttpApi.Api, never, ApplicationServices>,
-) {
-  const handlerLayer = Layer.mergeAll(
-    apiLayer,
-    HttpApiBuilder.Router.Live,
-    HttpApiBuilder.Middleware.layer,
+  apiLayer: Layer.Layer<never, never, RouteRequirements>,
+): Promise<WebHandler> {
+  const services = await serverRuntime.context();
+  const web = HttpRouter.toWebHandler(
+    apiLayer.pipe(Layer.provide(Layer.succeedContext(services))),
+    {
+      disableLogger: true,
+    },
   );
-  const httpApp = await serverRuntime.runPromise(
-    HttpApiBuilder.httpApp.pipe(Effect.provide(handlerLayer)),
-  );
-  const runtime = await serverRuntime.runtime();
-  return HttpApp.toWebHandlerRuntime(runtime)(httpApp);
+  return {
+    handler: (request) => web.handler(request, services),
+    dispose: web.dispose,
+  };
 }
 
 async function getWebHandler() {
@@ -80,10 +91,12 @@ async function getWebHandler() {
 
 export async function handleApiRequest(request: Request): Promise<Response> {
   const handler = await getWebHandler();
-  return handler(request);
+  return handler.handler(request);
 }
 
 export async function disposeApiHandler(): Promise<void> {
+  const handler = handlerPromise;
   handlerPromise = undefined;
+  await (await handler)?.dispose();
   await serverRuntime.dispose();
 }

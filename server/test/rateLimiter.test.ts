@@ -1,5 +1,6 @@
 import { it, expect, describe } from "@effect/vitest";
-import { Effect, Exit, TestClock } from "effect";
+import { Effect, Exit } from "effect";
+import { TestClock } from "effect/testing";
 import {
   checkRateLimit,
   clientIdentifierFromHeaders,

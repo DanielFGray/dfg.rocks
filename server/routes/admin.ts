@@ -1,8 +1,8 @@
-import * as HttpApi from "@effect/platform/HttpApi";
-import * as HttpApiBuilder from "@effect/platform/HttpApiBuilder";
-import * as HttpApiGroup from "@effect/platform/HttpApiGroup";
-import * as HttpApiEndpoint from "@effect/platform/HttpApiEndpoint";
-import * as HttpServerResponse from "@effect/platform/HttpServerResponse";
+import * as HttpApi from "effect/http-api/HttpApi";
+import * as HttpApiBuilder from "effect/http-api/HttpApiBuilder";
+import * as HttpApiGroup from "effect/http-api/HttpApiGroup";
+import * as HttpApiEndpoint from "effect/http-api/HttpApiEndpoint";
+import * as HttpServerResponse from "effect/http/HttpServerResponse";
 import { Effect } from "effect";
 import {
   ForbiddenErrorSchema,
@@ -10,7 +10,7 @@ import {
   NotFoundErrorSchema,
   UnauthorizedErrorSchema,
 } from "../../shared/httpApiErrors.js";
-import { adminClientGroup, GcalCallbackQuery } from "../../shared/httpApi.js";
+import { adminClientErrors, adminClientGroup, GcalCallbackQuery } from "../../shared/httpApi.js";
 import { env } from "../assertEnv.js";
 import { adaptHttpApiErrors } from "../httpApiErrors.js";
 import { HttpError } from "../pgErrors.js";
@@ -72,7 +72,9 @@ const requireAdminSession = Effect.fnUntraced(function* (
     csrf?: boolean;
   } = {},
 ) {
-  const result = yield* SessionService.validateSessionToken(request.cookies.session);
+  const result = yield* SessionService.use((sessionService) =>
+    sessionService.validateSessionToken(request.cookies.session),
+  );
   if (!result) {
     return yield* new HttpError(401, "Unauthorized");
   }
@@ -86,7 +88,9 @@ const requireAdminSession = Effect.fnUntraced(function* (
 });
 
 const requireAuthenticatedSession = Effect.fnUntraced(function* (request: RawRequest) {
-  const result = yield* SessionService.validateSessionToken(request.cookies.session);
+  const result = yield* SessionService.use((sessionService) =>
+    sessionService.validateSessionToken(request.cookies.session),
+  );
   if (!result) {
     return yield* new HttpError(401, "Not authenticated");
   }
@@ -166,7 +170,9 @@ function serializeRefund(r: Selectable<AppPublicRefunds>): RefundResponse {
   };
 }
 
-function serializeCreditApplication(ca: Selectable<AppPublicFamilyCreditApplications>): CreditApplicationResponse {
+function serializeCreditApplication(
+  ca: Selectable<AppPublicFamilyCreditApplications>,
+): CreditApplicationResponse {
   return {
     id: ca.id,
     credit_id: ca.credit_id,
@@ -200,7 +206,9 @@ function serializeTaxRate(r: Selectable<AppPublicTaxRates>): TaxRateResponse {
   };
 }
 
-function serializeFamilyTaxExemption(e: Selectable<AppPublicFamilyTaxExemptions>): FamilyTaxExemptionResponse {
+function serializeFamilyTaxExemption(
+  e: Selectable<AppPublicFamilyTaxExemptions>,
+): FamilyTaxExemptionResponse {
   return {
     ...e,
     effective_from: serializeBillingDateShort(e.effective_from),
@@ -227,25 +235,38 @@ function mapBillDetail(
       ...adj,
       created_at: serializeBillingDate(adj.created_at)!,
     })),
-    credit_applications: detail.creditApplications.map((ca: Selectable<AppPublicFamilyCreditApplications>) => ({
-      ...ca,
-      created_at: serializeBillingDate(ca.created_at)!,
-    })),
+    credit_applications: detail.creditApplications.map(
+      (ca: Selectable<AppPublicFamilyCreditApplications>) => ({
+        ...ca,
+        created_at: serializeBillingDate(ca.created_at)!,
+      }),
+    ),
   };
 }
 
 export const adminGroup = adminClientGroup
-  .add(HttpApiEndpoint.get("gcalConnect", "/api/admin/gcal/connect"))
+  .add(HttpApiEndpoint.get("gcalConnect", "/api/admin/gcal/connect", { error: adminClientErrors }))
   .add(
-    HttpApiEndpoint.get("gcalCallback", "/api/admin/gcal/callback").setUrlParams(GcalCallbackQuery),
+    HttpApiEndpoint.get("gcalCallback", "/api/admin/gcal/callback", {
+      error: adminClientErrors,
+      query: GcalCallbackQuery,
+    }),
   );
 
+const materialDownloadErrors = [
+  UnauthorizedErrorSchema,
+  ForbiddenErrorSchema,
+  NotFoundErrorSchema,
+  InternalServerErrorSchema,
+] as const;
+
 export const materialDownloadGroup = HttpApiGroup.make("materialDownload")
-  .addError(UnauthorizedErrorSchema)
-  .addError(ForbiddenErrorSchema)
-  .addError(NotFoundErrorSchema)
-  .addError(InternalServerErrorSchema)
-  .add(HttpApiEndpoint.get("materialDownload", "/materials/:id/download").setPath(params("id")))
+  .add(
+    HttpApiEndpoint.get("materialDownload", "/materials/:id/download", {
+      error: materialDownloadErrors,
+      params: params("id"),
+    }),
+  )
   .prefix("/api");
 
 const adminApi = HttpApi.make("dfg").add(adminGroup);
@@ -260,7 +281,9 @@ export function makeAdminLayer() {
         Effect.fnUntraced(function* (context) {
           yield* requireAdminSession(context.request, { csrf: false });
           const rootUrl = new URL((context.request.source as Request).url).origin;
-          const authorization = yield* GoogleCalendarService.createAuthorizationRequest(rootUrl);
+          const authorization = yield* GoogleCalendarService.use((googleCalendarService) =>
+            googleCalendarService.createAuthorizationRequest(rootUrl),
+          );
           let response = HttpServerResponse.redirect(authorization.url.toString());
           response = yield* HttpServerResponse.setCookie(
             response,
@@ -273,7 +296,7 @@ export function makeAdminLayer() {
       )
       .handle(
         "gcalCallback",
-        Effect.fnUntraced(function* ({ request, urlParams }) {
+        Effect.fnUntraced(function* ({ request, query }) {
           yield* requireAdminSession(request, { csrf: false });
           const rootUrl = new URL((request.source as Request).url).origin;
           const authCookieName = GoogleCalendarService.getAuthCookieName();
@@ -284,39 +307,44 @@ export function makeAdminLayer() {
           // OAuth failures are raw responses so the one-time state cookie is expired on failure.
           const fail = (status: number, message: string) =>
             HttpServerResponse.expireCookie(
-              HttpServerResponse.unsafeJson({ error: message }, { status }),
+              HttpServerResponse.jsonUnsafe({ error: message }, { status }),
               authCookieName,
               cookieOptions,
             );
-          if (urlParams.error) {
-            return fail(400, `Google Calendar OAuth failed (${urlParams.error})`);
+          if (query.error) {
+            return yield* fail(400, `Google Calendar OAuth failed (${query.error})`);
           }
-          if (!urlParams.code || !urlParams.state) {
-            return fail(400, "Missing Google Calendar OAuth callback parameters");
+          if (!query.code || !query.state) {
+            return yield* fail(400, "Missing Google Calendar OAuth callback parameters");
           }
-          if (!authState || authState.state !== urlParams.state) {
-            return fail(400, "Invalid or expired Google Calendar OAuth state");
+          const code = query.code;
+          if (!authState || authState.state !== query.state) {
+            return yield* fail(400, "Invalid or expired Google Calendar OAuth state");
           }
-          yield* GoogleCalendarService.handleCallback(
-            rootUrl,
-            urlParams.code,
-            authState.codeVerifier,
+          yield* GoogleCalendarService.use((googleCalendarService) =>
+            googleCalendarService.handleCallback(rootUrl, code, authState.codeVerifier),
           );
           let response = HttpServerResponse.redirect(
             GoogleCalendarService.getConnectRedirectUrl(rootUrl, authState.redirect),
           );
-          response = HttpServerResponse.expireCookie(response, authCookieName, cookieOptions);
+          response = yield* HttpServerResponse.expireCookie(
+            response,
+            authCookieName,
+            cookieOptions,
+          );
           return response;
         }, adaptAdminErrors),
       )
       .handle(
         "submissions",
-        Effect.fnUntraced(function* ({ request, urlParams }) {
+        Effect.fnUntraced(function* ({ request, query }) {
           const auth = yield* requireAdminSession(request);
-          const rows = yield* AdminRouteService.listSubmissions(
-            auth.session.id,
-            urlParams.limit ?? 50,
-            urlParams.offset ?? 0,
+          const rows = yield* AdminRouteService.use((adminRouteService) =>
+            adminRouteService.listSubmissions(
+              auth.session.id,
+              query.limit ?? 50,
+              query.offset ?? 0,
+            ),
           );
           return rows.map((row) => ({
             ...row,
@@ -326,12 +354,10 @@ export function makeAdminLayer() {
       )
       .handle(
         "updateSubmission",
-        Effect.fnUntraced(function* ({ request, path, payload }) {
+        Effect.fnUntraced(function* ({ request, params, payload }) {
           const auth = yield* requireAdminSession(request);
-          const row = yield* AdminRouteService.updateSubmissionRead(
-            auth.session.id,
-            path.id,
-            payload.is_read,
+          const row = yield* AdminRouteService.use((adminRouteService) =>
+            adminRouteService.updateSubmissionRead(auth.session.id, params.id, payload.is_read),
           );
           if (!row) {
             return yield* new HttpError(404, "Submission not found");
@@ -346,7 +372,9 @@ export function makeAdminLayer() {
           if (auth.user.role !== "admin" && auth.user.role !== "teacher") {
             return yield* new HttpError(403, "Forbidden");
           }
-          const rows = yield* AdminRouteService.listStudents(auth.session.id);
+          const rows = yield* AdminRouteService.use((adminRouteService) =>
+            adminRouteService.listStudents(auth.session.id),
+          );
           return rows.map((row) => ({
             ...row,
             name: row.name ?? "",
@@ -362,8 +390,10 @@ export function makeAdminLayer() {
           if (auth.user.role !== "admin" && auth.user.role !== "teacher") {
             return yield* new HttpError(403, "Forbidden");
           }
-          const { path } = context;
-          const raw = yield* AdminRouteService.getStudent(auth.session.id, path.id);
+          const { params } = context;
+          const raw = yield* AdminRouteService.use((adminRouteService) =>
+            adminRouteService.getStudent(auth.session.id, params.id),
+          );
           return {
             ...raw,
             name: raw.name ?? "",
@@ -376,15 +406,19 @@ export function makeAdminLayer() {
         "courses",
         Effect.fnUntraced(function* (context) {
           const auth = yield* requireAdminSession(context.request);
-          return yield* AdminRouteService.listCourses(auth.session.id);
+          return yield* AdminRouteService.use((adminRouteService) =>
+            adminRouteService.listCourses(auth.session.id),
+          );
         }, adaptAdminErrors),
       )
       .handle(
         "courseStudents",
         Effect.fnUntraced(function* (context) {
           const auth = yield* requireAdminSession(context.request);
-          const { path } = context;
-          const rows = yield* AdminRouteService.listCourseStudents(auth.session.id, path.id);
+          const { params } = context;
+          const rows = yield* AdminRouteService.use((adminRouteService) =>
+            adminRouteService.listCourseStudents(auth.session.id, params.id),
+          );
           return rows.map((row) => ({
             id: row.id,
             username: row.username,
@@ -399,16 +433,18 @@ export function makeAdminLayer() {
         "createCourse",
         Effect.fnUntraced(function* ({ request, payload }) {
           const auth = yield* requireAdminSession(request);
-          return yield* AdminRouteService.createCourse(auth.session.id, {
-            title: payload.title,
-            description: payload.description ?? "",
-            instrument: payload.instrument,
-          });
+          return yield* AdminRouteService.use((adminRouteService) =>
+            adminRouteService.createCourse(auth.session.id, {
+              title: payload.title,
+              description: payload.description ?? "",
+              instrument: payload.instrument,
+            }),
+          );
         }, adaptAdminErrors),
       )
       .handle(
         "updateCourse",
-        Effect.fnUntraced(function* ({ request, path, payload }) {
+        Effect.fnUntraced(function* ({ request, params, payload }) {
           const auth = yield* requireAdminSession(request);
           const updates: Record<string, string> = {};
           const title = payload.title;
@@ -417,7 +453,9 @@ export function makeAdminLayer() {
           if (title !== undefined) updates.title = title;
           if (description !== undefined) updates.description = description;
           if (instrument !== undefined) updates.instrument = instrument;
-          const course = yield* AdminRouteService.updateCourse(auth.session.id, path.id, updates);
+          const course = yield* AdminRouteService.use((adminRouteService) =>
+            adminRouteService.updateCourse(auth.session.id, params.id, updates),
+          );
           if (!course) {
             return yield* new HttpError(404, "Course not found");
           }
@@ -428,24 +466,28 @@ export function makeAdminLayer() {
         "deleteCourse",
         Effect.fnUntraced(function* (context) {
           const auth = yield* requireAdminSession(context.request);
-          const { path } = context;
-          yield* AdminRouteService.deleteCourse(auth.session.id, path.id);
+          const { params } = context;
+          yield* AdminRouteService.use((adminRouteService) =>
+            adminRouteService.deleteCourse(auth.session.id, params.id),
+          );
           return { success: true as const };
         }, adaptAdminErrors),
       )
       .handle(
         "createModule",
-        Effect.fnUntraced(function* ({ request, path, payload }) {
+        Effect.fnUntraced(function* ({ request, params, payload }) {
           const auth = yield* requireAdminSession(request);
-          return (yield* AdminRouteService.createModule(auth.session.id, path.id, {
-            title: payload.title,
-            sort_order: payload.sort_order ?? 0,
-          })) as unknown as ModuleResponse;
+          return (yield* AdminRouteService.use((adminRouteService) =>
+            adminRouteService.createModule(auth.session.id, params.id, {
+              title: payload.title,
+              sort_order: payload.sort_order ?? 0,
+            }),
+          )) as unknown as ModuleResponse;
         }, adaptAdminErrors),
       )
       .handle(
         "updateModule",
-        Effect.fnUntraced(function* ({ request, path, payload }) {
+        Effect.fnUntraced(function* ({ request, params, payload }) {
           const auth = yield* requireAdminSession(request);
           const updates: Record<string, unknown> = {};
           const title = payload.title;
@@ -459,7 +501,9 @@ export function makeAdminLayer() {
           if (sortOrder !== undefined) {
             updates.sort_order = sortOrder;
           }
-          const mod = yield* AdminRouteService.updateModule(auth.session.id, path.id, updates);
+          const mod = yield* AdminRouteService.use((adminRouteService) =>
+            adminRouteService.updateModule(auth.session.id, params.id, updates),
+          );
           if (!mod) {
             return yield* new HttpError(404, "Module not found");
           }
@@ -470,16 +514,20 @@ export function makeAdminLayer() {
         "deleteModule",
         Effect.fnUntraced(function* (context) {
           const auth = yield* requireAdminSession(context.request);
-          const { path } = context;
-          yield* AdminRouteService.deleteModule(auth.session.id, path.id);
+          const { params } = context;
+          yield* AdminRouteService.use((adminRouteService) =>
+            adminRouteService.deleteModule(auth.session.id, params.id),
+          );
           return { success: true as const };
         }, adaptAdminErrors),
       )
       .handle(
         "enrollStudent",
-        Effect.fnUntraced(function* ({ request, path, payload }) {
+        Effect.fnUntraced(function* ({ request, params, payload }) {
           const auth = yield* requireAdminSession(request);
-          yield* AdminRouteService.enrollStudent(auth.session.id, path.id, payload.course_id);
+          yield* AdminRouteService.use((adminRouteService) =>
+            adminRouteService.enrollStudent(auth.session.id, params.id, payload.course_id),
+          );
           return { success: true as const };
         }, adaptAdminErrors),
       )
@@ -487,21 +535,25 @@ export function makeAdminLayer() {
         "unenrollStudent",
         Effect.fnUntraced(function* (context) {
           const auth = yield* requireAdminSession(context.request);
-          const { path } = context;
-          yield* AdminRouteService.unenrollStudent(auth.session.id, path.id, path.courseId);
+          const { params } = context;
+          yield* AdminRouteService.use((adminRouteService) =>
+            adminRouteService.unenrollStudent(auth.session.id, params.id, params.courseId),
+          );
           return { success: true as const };
         }, adaptAdminErrors),
       )
       .handle(
         "assignMaterial",
-        Effect.fnUntraced(function* ({ request, path, payload }) {
+        Effect.fnUntraced(function* ({ request, params, payload }) {
           const auth = yield* requireAdminSession(request);
-          yield* AdminRouteService.assignMaterial({
-            sessionId: auth.session.id,
-            studentId: path.id,
-            materialId: payload.material_id,
-            assignedTrackIndex: payload.assigned_track_index,
-          });
+          yield* AdminRouteService.use((adminRouteService) =>
+            adminRouteService.assignMaterial({
+              sessionId: auth.session.id,
+              studentId: params.id,
+              materialId: payload.material_id,
+              assignedTrackIndex: payload.assigned_track_index,
+            }),
+          );
           return { success: true as const };
         }, adaptAdminErrors),
       )
@@ -509,8 +561,10 @@ export function makeAdminLayer() {
         "unassignMaterial",
         Effect.fnUntraced(function* (context) {
           const auth = yield* requireAdminSession(context.request);
-          const { path } = context;
-          yield* AdminRouteService.unassignMaterial(auth.session.id, path.id, path.materialId);
+          const { params } = context;
+          yield* AdminRouteService.use((adminRouteService) =>
+            adminRouteService.unassignMaterial(auth.session.id, params.id, params.materialId),
+          );
           return { success: true as const };
         }, adaptAdminErrors),
       )
@@ -518,8 +572,10 @@ export function makeAdminLayer() {
         "deleteMaterial",
         Effect.fnUntraced(function* (context) {
           const auth = yield* requireAdminSession(context.request);
-          const { path } = context;
-          const row = yield* AdminRouteService.deleteMaterial(auth.session.id, path.id);
+          const { params } = context;
+          const row = yield* AdminRouteService.use((adminRouteService) =>
+            adminRouteService.deleteMaterial(auth.session.id, params.id),
+          );
           if (!row) {
             return yield* new HttpError(404, "Material not found");
           }
@@ -530,12 +586,14 @@ export function makeAdminLayer() {
         "uploadMaterial",
         Effect.fnUntraced(function* ({ request, payload }) {
           const auth = yield* requireAdminSession(request);
-          return (yield* FileService.upload(
-            payload.file,
-            payload.title,
-            payload.is_global,
-            auth.user.id,
-            auth.session.id,
+          return (yield* FileService.use((fileService) =>
+            fileService.upload(
+              payload.file,
+              payload.title,
+              payload.is_global,
+              auth.user.id,
+              auth.session.id,
+            ),
           )) as MaterialResponse;
         }, adaptAdminErrors),
       )
@@ -543,10 +601,12 @@ export function makeAdminLayer() {
         "createFamily",
         Effect.fnUntraced(function* ({ request, payload }) {
           const auth = yield* requireAdminSession(request);
-          const familyResult = yield* AdminRouteService.createFamily(auth.session.id, {
-            slug: payload.slug,
-            name: payload.name,
-          });
+          const familyResult = yield* AdminRouteService.use((adminRouteService) =>
+            adminRouteService.createFamily(auth.session.id, {
+              slug: payload.slug,
+              name: payload.name,
+            }),
+          );
           const family = Array.isArray(familyResult) ? familyResult[0] : familyResult;
           if (!family) {
             return yield* new HttpError(500, "Failed to create family");
@@ -561,7 +621,9 @@ export function makeAdminLayer() {
         "families",
         Effect.fnUntraced(function* (context) {
           const auth = yield* requireAdminSession(context.request);
-          const rows = yield* AdminRouteService.listFamilies(auth.session.id);
+          const rows = yield* AdminRouteService.use((adminRouteService) =>
+            adminRouteService.listFamilies(auth.session.id),
+          );
           return rows.map((row) => ({
             ...row,
             created_at: row.created_at.toISOString(),
@@ -570,21 +632,23 @@ export function makeAdminLayer() {
       )
       .handle(
         "inviteFamily",
-        Effect.fnUntraced(function* ({ request, path, payload }) {
+        Effect.fnUntraced(function* ({ request, params, payload }) {
           const auth = yield* requireAdminSession(request);
-          yield* AdminRouteService.inviteFamily(auth.session.id, path.familyId, {
-            username: payload.username,
-            email: payload.email,
-            invitedRole: payload.invited_role,
-          });
+          yield* AdminRouteService.use((adminRouteService) =>
+            adminRouteService.inviteFamily(auth.session.id, params.familyId, {
+              username: payload.username,
+              email: payload.email,
+              invitedRole: payload.invited_role,
+            }),
+          );
           return { success: true as const };
         }, adaptAdminErrors),
       )
       .handle(
         "qrInvite",
-        Effect.fnUntraced(function* ({ request, path, payload }) {
+        Effect.fnUntraced(function* ({ request, params, payload }) {
           const auth = yield* requireAdminSession(request);
-          let familyId = path.familyId;
+          let familyId = params.familyId;
           if (familyId === "new") {
             const name = payload.name;
             const slug = payload.slug;
@@ -594,15 +658,16 @@ export function makeAdminLayer() {
                 "Name and slug are required when creating a new family",
               );
             }
-            const family = yield* AdminRouteService.createQrInviteFamily(auth.session.id, {
-              name,
-              slug,
-            });
+            const family = yield* AdminRouteService.use((adminRouteService) =>
+              adminRouteService.createQrInviteFamily(auth.session.id, {
+                name,
+                slug,
+              }),
+            );
             familyId = family.id;
           }
-          const invitation = yield* AdminRouteService.createQrInvite(
-            familyId,
-            payload.invited_role,
+          const invitation = yield* AdminRouteService.use((adminRouteService) =>
+            adminRouteService.createQrInvite(familyId, payload.invited_role),
           );
           const rootUrl = env.VITE_ROOT_URL;
           return {
@@ -617,10 +682,9 @@ export function makeAdminLayer() {
         "familyInvitations",
         Effect.fnUntraced(function* (context) {
           const auth = yield* requireAdminSession(context.request);
-          const { path } = context;
-          return (yield* AdminRouteService.listFamilyInvitations(
-            auth.session.id,
-            path.familyId,
+          const { params } = context;
+          return (yield* AdminRouteService.use((adminRouteService) =>
+            adminRouteService.listFamilyInvitations(auth.session.id, params.familyId),
           )).map((invitation) => ({
             ...invitation,
             invited_role:
@@ -636,20 +700,22 @@ export function makeAdminLayer() {
         "createLesson",
         Effect.fnUntraced(function* ({ request, payload }) {
           const auth = yield* requireAdminSession(request);
-          const lesson = yield* AdminRouteService.createLesson({
-            sessionId: auth.session.id,
-            studentId: payload.student_id,
-            scheduledAt: new Date(payload.scheduled_at),
-            durationMinutes: payload.duration_minutes,
-            locationType: payload.location_type,
-            gcalEventId: null,
-          });
+          const lesson = yield* AdminRouteService.use((adminRouteService) =>
+            adminRouteService.createLesson({
+              sessionId: auth.session.id,
+              studentId: payload.student_id,
+              scheduledAt: new Date(payload.scheduled_at),
+              durationMinutes: payload.duration_minutes,
+              locationType: payload.location_type,
+              gcalEventId: null,
+            }),
+          );
           return serializeLesson(lesson);
         }, adaptAdminErrors),
       )
       .handle(
         "updateLesson",
-        Effect.fnUntraced(function* ({ request, path, payload }) {
+        Effect.fnUntraced(function* ({ request, params, payload }) {
           const auth = yield* requireAdminSession(request);
           const updates: Record<string, unknown> = {};
           const scheduledAt = payload.scheduled_at;
@@ -658,11 +724,13 @@ export function makeAdminLayer() {
           if (scheduledAt !== undefined) updates.scheduled_at = new Date(scheduledAt);
           if (durationMinutes !== undefined) updates.duration_minutes = durationMinutes;
           if (locationType !== undefined) updates.location_type = locationType;
-          const lesson = yield* AdminRouteService.updateLesson(auth.session.id, path.id, {
-            scheduledAt: updates.scheduled_at as Date | undefined,
-            durationMinutes: updates.duration_minutes as number | undefined,
-            locationType: updates.location_type as LocationType | undefined,
-          });
+          const lesson = yield* AdminRouteService.use((adminRouteService) =>
+            adminRouteService.updateLesson(auth.session.id, params.id, {
+              scheduledAt: updates.scheduled_at as Date | undefined,
+              durationMinutes: updates.duration_minutes as number | undefined,
+              locationType: updates.location_type as LocationType | undefined,
+            }),
+          );
           if (!lesson) {
             return yield* new HttpError(404, "Lesson not found");
           }
@@ -673,8 +741,10 @@ export function makeAdminLayer() {
         "deleteLesson",
         Effect.fnUntraced(function* (context) {
           const auth = yield* requireAdminSession(context.request);
-          const { path } = context;
-          const lesson = yield* AdminRouteService.deleteLesson(auth.session.id, path.id);
+          const { params } = context;
+          const lesson = yield* AdminRouteService.use((adminRouteService) =>
+            adminRouteService.deleteLesson(auth.session.id, params.id),
+          );
           if (!lesson) {
             return yield* new HttpError(404, "Lesson not found");
           }
@@ -683,36 +753,38 @@ export function makeAdminLayer() {
       )
       .handle(
         "cancelLesson",
-        Effect.fnUntraced(function* ({ request, path, payload }) {
+        Effect.fnUntraced(function* ({ request, params, payload }) {
           const auth = yield* requireAdminSession(request);
-          const lesson = yield* AdminRouteService.cancelLesson(
-            auth.session.id,
-            path.id,
-            payload.reason ?? null,
+          const lesson = yield* AdminRouteService.use((adminRouteService) =>
+            adminRouteService.cancelLesson(auth.session.id, params.id, payload.reason ?? null),
           );
           return serializeLesson(lesson);
         }, adaptAdminErrors),
       )
       .handle(
         "completeLesson",
-        Effect.fnUntraced(function* ({ request, path }) {
+        Effect.fnUntraced(function* ({ request, params }) {
           const auth = yield* requireAdminSession(request);
-          const lesson = yield* AdminRouteService.completeLesson(auth.session.id, path.id);
+          const lesson = yield* AdminRouteService.use((adminRouteService) =>
+            adminRouteService.completeLesson(auth.session.id, params.id),
+          );
           return serializeLesson(lesson);
         }, adaptAdminErrors),
       )
       .handle(
         "lessons",
-        Effect.fnUntraced(function* ({ request, urlParams }) {
+        Effect.fnUntraced(function* ({ request, query }) {
           const auth = yield* requireAdminSession(request);
-          const lessons = yield* AdminRouteService.listLessons(auth.session.id, {
-            limit: urlParams.limit ?? 50,
-            offset: urlParams.offset ?? 0,
-            studentId: urlParams.student_id,
-            status: urlParams.status,
-            from: urlParams.from ? new Date(urlParams.from) : undefined,
-            to: urlParams.to ? new Date(urlParams.to) : undefined,
-          });
+          const lessons = yield* AdminRouteService.use((adminRouteService) =>
+            adminRouteService.listLessons(auth.session.id, {
+              limit: query.limit ?? 50,
+              offset: query.offset ?? 0,
+              studentId: query.student_id,
+              status: query.status,
+              from: query.from ? new Date(query.from) : undefined,
+              to: query.to ? new Date(query.to) : undefined,
+            }),
+          );
           return lessons.map(serializeLesson);
         }, adaptAdminErrors),
       )
@@ -720,15 +792,17 @@ export function makeAdminLayer() {
         "saveStudentRate",
         Effect.fnUntraced(function* ({ request, payload }) {
           const auth = yield* requireAdminSession(request);
-          const rate = yield* AdminRouteService.saveStudentRate({
-            sessionId: auth.session.id,
-            studentId: payload.student_id,
-            rateCents: payload.rate_cents,
-            lessonDurationMinutes: payload.lesson_duration_minutes,
-            locationType: payload.location_type,
-            billingModel: payload.billing_model,
-            notes: payload.notes ?? null,
-          });
+          const rate = yield* AdminRouteService.use((adminRouteService) =>
+            adminRouteService.saveStudentRate({
+              sessionId: auth.session.id,
+              studentId: payload.student_id,
+              rateCents: payload.rate_cents,
+              lessonDurationMinutes: payload.lesson_duration_minutes,
+              locationType: payload.location_type,
+              billingModel: payload.billing_model,
+              notes: payload.notes ?? null,
+            }),
+          );
           return {
             ...rate,
             created_at: rate.created_at.toISOString(),
@@ -737,12 +811,14 @@ export function makeAdminLayer() {
       )
       .handle(
         "studentRates",
-        Effect.fnUntraced(function* ({ request, path, urlParams }) {
+        Effect.fnUntraced(function* ({ request, params, query }) {
           const auth = yield* requireAdminSession(request);
-          return (yield* AdminRouteService.listStudentRates(
-            auth.session.id,
-            path.studentId,
-            urlParams.location_type,
+          return (yield* AdminRouteService.use((adminRouteService) =>
+            adminRouteService.listStudentRates(
+              auth.session.id,
+              params.studentId,
+              query.location_type,
+            ),
           )).map((row) => ({
             ...row,
             created_at: row.created_at.toISOString(),
@@ -751,74 +827,78 @@ export function makeAdminLayer() {
       )
       .handle(
         "recurringSchedules",
-        Effect.fnUntraced(function* ({ request, path }) {
+        Effect.fnUntraced(function* ({ request, params }) {
           const auth = yield* requireAdminSession(request);
-          const rows = yield* RecurringScheduleService.listSchedules(
-            auth.session.id,
-            path.studentId,
+          const rows = yield* RecurringScheduleService.use((recurringScheduleService) =>
+            recurringScheduleService.listSchedules(auth.session.id, params.studentId),
           );
           return rows.map(serializeRecurringSchedule);
         }, adaptAdminErrors),
       )
       .handle(
         "saveRecurringSchedule",
-        Effect.fnUntraced(function* ({ request, path, payload }) {
+        Effect.fnUntraced(function* ({ request, params, payload }) {
           const auth = yield* requireAdminSession(request);
-          const row = yield* RecurringScheduleService.saveSchedule({
-            sessionId: auth.session.id,
-            studentId: path.studentId,
-            id: payload.id,
-            schedule: {
-              studentRateId: payload.student_rate_id,
-              dayOfWeek: payload.day_of_week,
-              localStartTime: payload.local_start_time,
-              timezone: payload.timezone,
-              startsOn: payload.starts_on,
-              endsOn: payload.ends_on ?? null,
-              active: payload.active ?? true,
-            },
-          });
+          const row = yield* RecurringScheduleService.use((recurringScheduleService) =>
+            recurringScheduleService.saveSchedule({
+              sessionId: auth.session.id,
+              studentId: params.studentId,
+              id: payload.id,
+              schedule: {
+                studentRateId: payload.student_rate_id,
+                dayOfWeek: payload.day_of_week,
+                localStartTime: payload.local_start_time,
+                timezone: payload.timezone,
+                startsOn: payload.starts_on,
+                endsOn: payload.ends_on ?? null,
+                active: payload.active ?? true,
+              },
+            }),
+          );
           return serializeRecurringSchedule(row);
         }, adaptAdminErrors),
       )
       .handle(
         "monthlyPayments",
-        Effect.fnUntraced(function* ({ request, path }) {
+        Effect.fnUntraced(function* ({ request, params }) {
           const auth = yield* requireAdminSession(request);
-          const rows = yield* RecurringScheduleService.listPayments(
-            auth.session.id,
-            path.studentId,
+          const rows = yield* RecurringScheduleService.use((recurringScheduleService) =>
+            recurringScheduleService.listPayments(auth.session.id, params.studentId),
           );
           return rows.map(serializeMonthlyPayment);
         }, adaptAdminErrors),
       )
       .handle(
         "recordMonthlyPayment",
-        Effect.fnUntraced(function* ({ request, path, payload }) {
+        Effect.fnUntraced(function* ({ request, params, payload }) {
           const auth = yield* requireAdminSession(request);
-          const row = yield* RecurringScheduleService.recordPayment({
-            sessionId: auth.session.id,
-            studentId: path.studentId,
-            billingMonth: payload.billing_month,
-            amountCents: payload.amount_cents,
-            paidAt: new Date(payload.paid_at),
-            notes: payload.notes ?? null,
-          });
+          const row = yield* RecurringScheduleService.use((recurringScheduleService) =>
+            recurringScheduleService.recordPayment({
+              sessionId: auth.session.id,
+              studentId: params.studentId,
+              billingMonth: payload.billing_month,
+              amountCents: payload.amount_cents,
+              paidAt: new Date(payload.paid_at),
+              notes: payload.notes ?? null,
+            }),
+          );
           return serializeMonthlyPayment(row);
         }, adaptAdminErrors),
       )
       .handle(
         "saveLessonNote",
-        Effect.fnUntraced(function* ({ request, path, payload }) {
+        Effect.fnUntraced(function* ({ request, params, payload }) {
           const auth = yield* requireAdminSession(request);
-          const note = yield* AdminRouteService.saveLessonNote(auth.session.id, path.id, {
-            topicsCovered: payload.topics_covered ?? null,
-            homework: payload.homework ?? null,
-            progressObservations: payload.progress_observations ?? null,
-            notes: payload.notes ?? null,
-            materialIds: payload.material_ids ? [...payload.material_ids] : null,
-            draft: payload.draft ?? true,
-          });
+          const note = yield* AdminRouteService.use((adminRouteService) =>
+            adminRouteService.saveLessonNote(auth.session.id, params.id, {
+              topicsCovered: payload.topics_covered ?? null,
+              homework: payload.homework ?? null,
+              progressObservations: payload.progress_observations ?? null,
+              notes: payload.notes ?? null,
+              materialIds: payload.material_ids ? [...payload.material_ids] : null,
+              draft: payload.draft ?? true,
+            }),
+          );
           return serializeLessonNote(note);
         }, adaptAdminErrors),
       )
@@ -826,8 +906,10 @@ export function makeAdminLayer() {
         "lessonNote",
         Effect.fnUntraced(function* (context) {
           const auth = yield* requireAdminSession(context.request);
-          const { path } = context;
-          const note = yield* AdminRouteService.getLessonNote(auth.session.id, path.id);
+          const { params } = context;
+          const note = yield* AdminRouteService.use((adminRouteService) =>
+            adminRouteService.getLessonNote(auth.session.id, params.id),
+          );
           if (!note) {
             return yield* new HttpError(404, "Lesson note not found");
           }
@@ -838,8 +920,10 @@ export function makeAdminLayer() {
         "publishLessonNote",
         Effect.fnUntraced(function* (context) {
           const auth = yield* requireAdminSession(context.request);
-          const { path } = context;
-          const note = yield* AdminRouteService.publishLessonNote(auth.session.id, path.id);
+          const { params } = context;
+          const note = yield* AdminRouteService.use((adminRouteService) =>
+            adminRouteService.publishLessonNote(auth.session.id, params.id),
+          );
           if (!note) {
             return yield* new HttpError(404, "Lesson note not found");
           }
@@ -850,7 +934,9 @@ export function makeAdminLayer() {
         "gcalStatus",
         Effect.fnUntraced(function* (context) {
           yield* requireAdminSession(context.request);
-          const status = yield* AdminRouteService.getGoogleCalendarStatus();
+          const status = yield* AdminRouteService.use((adminRouteService) =>
+            adminRouteService.getGoogleCalendarStatus(),
+          );
           return {
             connected: status.connected,
             calendar_id: typeof status.calendar_id === "string" ? status.calendar_id : null,
@@ -861,7 +947,9 @@ export function makeAdminLayer() {
         "gcalDisconnect",
         Effect.fnUntraced(function* (context) {
           yield* requireAdminSession(context.request);
-          yield* AdminRouteService.disconnectGoogleCalendar();
+          yield* AdminRouteService.use((adminRouteService) =>
+            adminRouteService.disconnectGoogleCalendar(),
+          );
           return { success: true as const };
         }, adaptAdminErrors),
       )
@@ -870,7 +958,9 @@ export function makeAdminLayer() {
         Effect.fnUntraced(function* (context) {
           yield* requireAdminSession(context.request);
           return decodeWorkingHoursValue(
-            yield* AdminRouteService.getWorkingHours(),
+            yield* AdminRouteService.use((adminRouteService) =>
+              adminRouteService.getWorkingHours(),
+            ),
             defaultWorkingHours,
           );
         }, adaptAdminErrors),
@@ -879,21 +969,27 @@ export function makeAdminLayer() {
         "cancellationPolicySettings",
         Effect.fnUntraced(function* ({ request }) {
           yield* requireAdminSession(request);
-          return yield* AdminRouteService.getCancellationPolicySettings();
+          return yield* AdminRouteService.use((adminRouteService) =>
+            adminRouteService.getCancellationPolicySettings(),
+          );
         }, adaptAdminErrors),
       )
       .handle(
         "saveCancellationPolicySettings",
         Effect.fnUntraced(function* ({ request, payload }) {
           yield* requireAdminSession(request);
-          return yield* AdminRouteService.saveCancellationPolicySettings(payload);
+          return yield* AdminRouteService.use((adminRouteService) =>
+            adminRouteService.saveCancellationPolicySettings(payload),
+          );
         }, adaptAdminErrors),
       )
       .handle(
         "saveWorkingHours",
         Effect.fnUntraced(function* ({ request, payload }) {
           yield* requireAdminSession(request);
-          yield* AdminRouteService.saveWorkingHours(payload);
+          yield* AdminRouteService.use((adminRouteService) =>
+            adminRouteService.saveWorkingHours(payload),
+          );
           return { success: true as const };
         }, adaptAdminErrors),
       )
@@ -902,7 +998,9 @@ export function makeAdminLayer() {
         Effect.fnUntraced(function* (context) {
           yield* requireAdminSession(context.request);
           return {
-            interval_days: yield* TestimonialReminderService.getIntervalDays(),
+            interval_days: yield* TestimonialReminderService.use((testimonialReminderService) =>
+              testimonialReminderService.getIntervalDays(),
+            ),
           };
         }, adaptAdminErrors),
       )
@@ -910,8 +1008,12 @@ export function makeAdminLayer() {
         "saveTestimonialReminderInterval",
         Effect.fnUntraced(function* ({ request, payload }) {
           yield* requireAdminSession(request);
-          yield* TestimonialReminderService.setIntervalDays(payload.interval_days);
-          yield* TestimonialReminderService.rescheduleAll(payload.interval_days);
+          yield* TestimonialReminderService.use((testimonialReminderService) =>
+            testimonialReminderService.setIntervalDays(payload.interval_days),
+          );
+          yield* TestimonialReminderService.use((testimonialReminderService) =>
+            testimonialReminderService.rescheduleAll(payload.interval_days),
+          );
           return {
             success: true as const,
             interval_days: payload.interval_days,
@@ -920,17 +1022,23 @@ export function makeAdminLayer() {
       )
       .handle(
         "updateTestimonialApproval",
-        Effect.fnUntraced(function* ({ request, path, payload }) {
+        Effect.fnUntraced(function* ({ request, params, payload }) {
           const auth = yield* requireAdminSession(request);
-          const testimonial = yield* AdminRouteService.updateTestimonialApproval(
-            auth.session.id,
-            path.id,
-            payload.is_approved,
+          const testimonial = yield* AdminRouteService.use((adminRouteService) =>
+            adminRouteService.updateTestimonialApproval(
+              auth.session.id,
+              params.id,
+              payload.is_approved,
+            ),
           );
           if (testimonial.is_approved) {
-            yield* TestimonialReminderService.clearReminderState(testimonial.user_id);
+            yield* TestimonialReminderService.use((testimonialReminderService) =>
+              testimonialReminderService.clearReminderState(testimonial.user_id),
+            );
           } else if (testimonial.role === "student" || testimonial.role === "parent") {
-            yield* TestimonialReminderService.scheduleNextReminder(testimonial.user_id);
+            yield* TestimonialReminderService.use((testimonialReminderService) =>
+              testimonialReminderService.scheduleNextReminder(testimonial.user_id),
+            );
           }
           return { success: true as const };
         }, adaptAdminErrors),
@@ -942,27 +1050,31 @@ export function makeAdminLayer() {
         "billingFamilies",
         Effect.fnUntraced(function* ({ request }) {
           const auth = yield* requireAdminSession(request);
-          const summaries = yield* BillingLedgerService.listAllFamiliesWithBilling(auth.session.id);
+          const summaries = yield* BillingLedgerService.use((billingLedgerService) =>
+            billingLedgerService.listAllFamiliesWithBilling(auth.session.id),
+          );
           const balances = yield* Effect.all(
             summaries.map((summary) =>
-              BillingLedgerService.getFamilyBalance(auth.session.id, summary.family_id),
+              BillingLedgerService.use((billingLedgerService) =>
+                billingLedgerService.getFamilyBalance(auth.session.id, summary.family_id),
+              ),
             ),
           );
           return summaries.map((summary, index) => ({
             ...summary,
             outstanding_cents: balances[index]?.outstandingCents ?? summary.outstanding_cents,
             overdue_cents: balances[index]?.overdueCents ?? summary.overdue_cents,
-            credit_balance_cents: balances[index]?.creditBalanceCents ?? summary.credit_balance_cents,
+            credit_balance_cents:
+              balances[index]?.creditBalanceCents ?? summary.credit_balance_cents,
           }));
         }, adaptAdminErrors),
       )
       .handle(
         "billingFamily",
-        Effect.fnUntraced(function* ({ request, path }) {
+        Effect.fnUntraced(function* ({ request, params }) {
           const auth = yield* requireAdminSession(request);
-          const detail = yield* BillingLedgerService.getFamilyBillingDetail(
-            auth.session.id,
-            path.familyId,
+          const detail = yield* BillingLedgerService.use((billingLedgerService) =>
+            billingLedgerService.getFamilyBillingDetail(auth.session.id, params.familyId),
           );
           return {
             ...detail,
@@ -974,33 +1086,30 @@ export function makeAdminLayer() {
       )
       .handle(
         "billingFamilyBills",
-        Effect.fnUntraced(function* ({ request, path }) {
+        Effect.fnUntraced(function* ({ request, params }) {
           const auth = yield* requireAdminSession(request);
-          const bills = yield* BillingLedgerService.listFamilyBills(
-            auth.session.id,
-            path.familyId,
+          const bills = yield* BillingLedgerService.use((billingLedgerService) =>
+            billingLedgerService.listFamilyBills(auth.session.id, params.familyId),
           );
           return bills.map(serializeBillResponse);
         }, adaptAdminErrors),
       )
       .handle(
         "billingFamilyPayments",
-        Effect.fnUntraced(function* ({ request, path }) {
+        Effect.fnUntraced(function* ({ request, params }) {
           const auth = yield* requireAdminSession(request);
-          const payments = yield* BillingLedgerService.listFamilyPayments(
-            auth.session.id,
-            path.familyId,
+          const payments = yield* BillingLedgerService.use((billingLedgerService) =>
+            billingLedgerService.listFamilyPayments(auth.session.id, params.familyId),
           );
           return payments.map(serializePaymentResponse);
         }, adaptAdminErrors),
       )
       .handle(
         "billingFamilyCredits",
-        Effect.fnUntraced(function* ({ request, path }) {
+        Effect.fnUntraced(function* ({ request, params }) {
           const auth = yield* requireAdminSession(request);
-          const credits = yield* BillingLedgerService.listFamilyCredits(
-            auth.session.id,
-            path.familyId,
+          const credits = yield* BillingLedgerService.use((billingLedgerService) =>
+            billingLedgerService.listFamilyCredits(auth.session.id, params.familyId),
           );
           return credits.map(serializeCreditResponse);
         }, adaptAdminErrors),
@@ -1009,22 +1118,35 @@ export function makeAdminLayer() {
         "createBill",
         Effect.fnUntraced(function* ({ request, payload }) {
           const auth = yield* requireAdminSession(request);
-          const bill = yield* BillingLedgerService.createBill(auth.session.id, {
-            familyId: payload.family_id,
-            billingPeriodStart: payload.billing_period_start,
-            billingPeriodEnd: payload.billing_period_end,
-            dueDate: payload.due_date,
-            lineItems: payload.line_items.map((li: { student_id: string; line_type: "lesson" | "single_booking" | "fee" | "adjustment" | "credit"; description: string; quantity: number; unit_price_cents: number; amount_cents: number }) => ({
-              studentId: li.student_id,
-              lineType: li.line_type,
-              description: li.description,
-              quantity: li.quantity,
-              unitPriceCents: li.unit_price_cents,
-              amountCents: li.amount_cents,
-            })),
-            notes: payload.notes,
-          });
-          const lineItems = yield* BillingLedgerService.billLineItems(auth.session.id, bill.id);
+          const bill = yield* BillingLedgerService.use((billingLedgerService) =>
+            billingLedgerService.createBill(auth.session.id, {
+              familyId: payload.family_id,
+              billingPeriodStart: payload.billing_period_start,
+              billingPeriodEnd: payload.billing_period_end,
+              dueDate: payload.due_date,
+              lineItems: payload.line_items.map(
+                (li: {
+                  student_id: string;
+                  line_type: "lesson" | "single_booking" | "fee" | "adjustment" | "credit";
+                  description: string;
+                  quantity: number;
+                  unit_price_cents: number;
+                  amount_cents: number;
+                }) => ({
+                  studentId: li.student_id,
+                  lineType: li.line_type,
+                  description: li.description,
+                  quantity: li.quantity,
+                  unitPriceCents: li.unit_price_cents,
+                  amountCents: li.amount_cents,
+                }),
+              ),
+              notes: payload.notes,
+            }),
+          );
+          const lineItems = yield* BillingLedgerService.use((billingLedgerService) =>
+            billingLedgerService.billLineItems(auth.session.id, bill.id),
+          );
           const result = {
             ...serializeBillResponse(bill),
             line_items: lineItems.map((li: Selectable<AppPublicBillLineItems>) => ({
@@ -1039,9 +1161,11 @@ export function makeAdminLayer() {
       )
       .handle(
         "getBill",
-        Effect.fnUntraced(function* ({ request, path }) {
+        Effect.fnUntraced(function* ({ request, params }) {
           const auth = yield* requireAdminSession(request);
-          const result = yield* BillingLedgerService.getBill(auth.session.id, path.id);
+          const result = yield* BillingLedgerService.use((billingLedgerService) =>
+            billingLedgerService.getBill(auth.session.id, params.id),
+          );
           if (!result) {
             return yield* new HttpError(404, "Bill not found");
           }
@@ -1050,10 +1174,14 @@ export function makeAdminLayer() {
       )
       .handle(
         "issueBill",
-        Effect.fnUntraced(function* ({ request, path }) {
+        Effect.fnUntraced(function* ({ request, params }) {
           const auth = yield* requireAdminSession(request);
-          yield* BillingLedgerService.issueBill(auth.session.id, path.id);
-          const result = yield* BillingLedgerService.getBill(auth.session.id, path.id);
+          yield* BillingLedgerService.use((billingLedgerService) =>
+            billingLedgerService.issueBill(auth.session.id, params.id),
+          );
+          const result = yield* BillingLedgerService.use((billingLedgerService) =>
+            billingLedgerService.getBill(auth.session.id, params.id),
+          );
           if (!result) {
             return yield* new HttpError(404, "Bill not found");
           }
@@ -1062,10 +1190,14 @@ export function makeAdminLayer() {
       )
       .handle(
         "cancelBill",
-        Effect.fnUntraced(function* ({ request, path }) {
+        Effect.fnUntraced(function* ({ request, params }) {
           const auth = yield* requireAdminSession(request);
-          yield* BillingLedgerService.cancelBill(auth.session.id, path.id);
-          const result = yield* BillingLedgerService.getBill(auth.session.id, path.id);
+          yield* BillingLedgerService.use((billingLedgerService) =>
+            billingLedgerService.cancelBill(auth.session.id, params.id),
+          );
+          const result = yield* BillingLedgerService.use((billingLedgerService) =>
+            billingLedgerService.getBill(auth.session.id, params.id),
+          );
           if (!result) {
             return yield* new HttpError(404, "Bill not found");
           }
@@ -1074,13 +1206,17 @@ export function makeAdminLayer() {
       )
       .handle(
         "voidBill",
-        Effect.fnUntraced(function* ({ request, path, payload }) {
+        Effect.fnUntraced(function* ({ request, params, payload }) {
           const auth = yield* requireAdminSession(request);
-          yield* BillingLedgerService.voidBill(auth.session.id, {
-            billId: path.id,
-            reason: payload.reason,
-          });
-          const result = yield* BillingLedgerService.getBill(auth.session.id, path.id);
+          yield* BillingLedgerService.use((billingLedgerService) =>
+            billingLedgerService.voidBill(auth.session.id, {
+              billId: params.id,
+              reason: payload.reason,
+            }),
+          );
+          const result = yield* BillingLedgerService.use((billingLedgerService) =>
+            billingLedgerService.getBill(auth.session.id, params.id),
+          );
           if (!result) {
             return yield* new HttpError(404, "Bill not found");
           }
@@ -1089,13 +1225,15 @@ export function makeAdminLayer() {
       )
       .handle(
         "adjustBill",
-        Effect.fnUntraced(function* ({ request, path, payload }) {
+        Effect.fnUntraced(function* ({ request, params, payload }) {
           const auth = yield* requireAdminSession(request);
-          const result = yield* BillingLedgerService.createAdjustment(auth.session.id, {
-            billId: path.id,
-            amountCents: payload.amount_cents,
-            reason: payload.reason,
-          });
+          const result = yield* BillingLedgerService.use((billingLedgerService) =>
+            billingLedgerService.createAdjustment(auth.session.id, {
+              billId: params.id,
+              amountCents: payload.amount_cents,
+              reason: payload.reason,
+            }),
+          );
           return serializeAdjustment(result);
         }, adaptAdminErrors),
       )
@@ -1103,30 +1241,36 @@ export function makeAdminLayer() {
         "recordPayment",
         Effect.fnUntraced(function* ({ request, payload }) {
           const auth = yield* requireAdminSession(request);
-          const result = yield* BillingLedgerService.recordPayment(auth.session.id, {
-            familyId: payload.family_id,
-            amountCents: payload.amount_cents,
-            method: payload.method,
-            reference: payload.reference,
-            receivedAt: payload.received_at ? new Date(payload.received_at) : undefined,
-            notes: payload.notes,
-            allocations: payload.allocations.map((a: { bill_id: string; amount_cents: number }) => ({
-              billId: a.bill_id,
-              amountCents: a.amount_cents,
-            })),
-          });
+          const result = yield* BillingLedgerService.use((billingLedgerService) =>
+            billingLedgerService.recordPayment(auth.session.id, {
+              familyId: payload.family_id,
+              amountCents: payload.amount_cents,
+              method: payload.method,
+              reference: payload.reference,
+              receivedAt: payload.received_at ? new Date(payload.received_at) : undefined,
+              notes: payload.notes,
+              allocations: payload.allocations.map(
+                (a: { bill_id: string; amount_cents: number }) => ({
+                  billId: a.bill_id,
+                  amountCents: a.amount_cents,
+                }),
+              ),
+            }),
+          );
           return serializePaymentResponse(result);
         }, adaptAdminErrors),
       )
       .handle(
         "refundPayment",
-        Effect.fnUntraced(function* ({ request, path, payload }) {
+        Effect.fnUntraced(function* ({ request, params, payload }) {
           const auth = yield* requireAdminSession(request);
-          const result = yield* BillingLedgerService.processRefund(auth.session.id, {
-            paymentId: path.id,
-            amountCents: payload.amount_cents,
-            reason: payload.reason,
-          });
+          const result = yield* BillingLedgerService.use((billingLedgerService) =>
+            billingLedgerService.processRefund(auth.session.id, {
+              paymentId: params.id,
+              amountCents: payload.amount_cents,
+              reason: payload.reason,
+            }),
+          );
           return serializeRefund(result);
         }, adaptAdminErrors),
       )
@@ -1134,13 +1278,15 @@ export function makeAdminLayer() {
         "createCredit",
         Effect.fnUntraced(function* ({ request, payload }) {
           const auth = yield* requireAdminSession(request);
-          const result = yield* BillingLedgerService.issueCredit(auth.session.id, {
-            familyId: payload.family_id,
-            studentId: payload.student_id,
-            amountCents: payload.amount_cents,
-            reason: payload.reason,
-            expiresAt: payload.expires_at,
-          });
+          const result = yield* BillingLedgerService.use((billingLedgerService) =>
+            billingLedgerService.issueCredit(auth.session.id, {
+              familyId: payload.family_id,
+              studentId: payload.student_id,
+              amountCents: payload.amount_cents,
+              reason: payload.reason,
+              expiresAt: payload.expires_at,
+            }),
+          );
           return serializeCreditResponse(result);
         }, adaptAdminErrors),
       )
@@ -1148,21 +1294,22 @@ export function makeAdminLayer() {
         "applyCredit",
         Effect.fnUntraced(function* ({ request, payload }) {
           const auth = yield* requireAdminSession(request);
-          const result = yield* BillingLedgerService.applyCredit(auth.session.id, {
-            creditId: payload.credit_id,
-            billId: payload.bill_id,
-            amountCents: payload.amount_cents,
-          });
+          const result = yield* BillingLedgerService.use((billingLedgerService) =>
+            billingLedgerService.applyCredit(auth.session.id, {
+              creditId: payload.credit_id,
+              billId: payload.bill_id,
+              amountCents: payload.amount_cents,
+            }),
+          );
           return serializeCreditApplication(result);
         }, adaptAdminErrors),
       )
       .handle(
         "familyDiscounts",
-        Effect.fnUntraced(function* ({ request, path }) {
+        Effect.fnUntraced(function* ({ request, params }) {
           const auth = yield* requireAdminSession(request);
-          const discounts = yield* BillingLedgerService.listFamilyDiscounts(
-            auth.session.id,
-            path.familyId,
+          const discounts = yield* BillingLedgerService.use((billingLedgerService) =>
+            billingLedgerService.listFamilyDiscounts(auth.session.id, params.familyId),
           );
           return discounts.map(serializeFamilyDiscount);
         }, adaptAdminErrors),
@@ -1171,26 +1318,26 @@ export function makeAdminLayer() {
         "createDiscount",
         Effect.fnUntraced(function* ({ request, payload }) {
           const auth = yield* requireAdminSession(request);
-          const result = yield* BillingLedgerService.createDiscount(auth.session.id, {
-            familyId: payload.family_id,
-            label: payload.label,
-            discountType: payload.discount_type,
-            discountValue: payload.discount_value,
-            appliesTo: payload.applies_to,
-            effectiveFrom: payload.effective_from,
-            effectiveUntil: payload.effective_until,
-          });
+          const result = yield* BillingLedgerService.use((billingLedgerService) =>
+            billingLedgerService.createDiscount(auth.session.id, {
+              familyId: payload.family_id,
+              label: payload.label,
+              discountType: payload.discount_type,
+              discountValue: payload.discount_value,
+              appliesTo: payload.applies_to,
+              effectiveFrom: payload.effective_from,
+              effectiveUntil: payload.effective_until,
+            }),
+          );
           return serializeFamilyDiscount(result);
         }, adaptAdminErrors),
       )
       .handle(
         "updateDiscount",
-        Effect.fnUntraced(function* ({ request, path, payload }) {
+        Effect.fnUntraced(function* ({ request, params, payload }) {
           const auth = yield* requireAdminSession(request);
-          const result = yield* BillingLedgerService.updateDiscount(
-            auth.session.id,
-            path.id,
-            {
+          const result = yield* BillingLedgerService.use((billingLedgerService) =>
+            billingLedgerService.updateDiscount(auth.session.id, params.id, {
               label: payload.label,
               discountType: payload.discount_type,
               discountValue: payload.discount_value,
@@ -1198,7 +1345,7 @@ export function makeAdminLayer() {
               effectiveFrom: payload.effective_from,
               effectiveUntil: payload.effective_until,
               isActive: payload.is_active,
-            },
+            }),
           );
           return serializeFamilyDiscount(result);
         }, adaptAdminErrors),
@@ -1207,7 +1354,9 @@ export function makeAdminLayer() {
         "listTaxRates",
         Effect.fnUntraced(function* ({ request }) {
           const auth = yield* requireAdminSession(request);
-          const rates = yield* BillingLedgerService.listTaxRates(auth.session.id);
+          const rates = yield* BillingLedgerService.use((billingLedgerService) =>
+            billingLedgerService.listTaxRates(auth.session.id),
+          );
           return rates.map(serializeTaxRate);
         }, adaptAdminErrors),
       )
@@ -1215,24 +1364,25 @@ export function makeAdminLayer() {
         "createTaxRate",
         Effect.fnUntraced(function* ({ request, payload }) {
           const auth = yield* requireAdminSession(request);
-          const result = yield* BillingLedgerService.createTaxRate(auth.session.id, {
-            label: payload.label,
-            jurisdiction: payload.jurisdiction,
-            ratePercent: payload.rate_percent,
-            appliesTo: payload.applies_to,
-            effectiveFrom: payload.effective_from,
-            effectiveUntil: payload.effective_until,
-          });
+          const result = yield* BillingLedgerService.use((billingLedgerService) =>
+            billingLedgerService.createTaxRate(auth.session.id, {
+              label: payload.label,
+              jurisdiction: payload.jurisdiction,
+              ratePercent: payload.rate_percent,
+              appliesTo: payload.applies_to,
+              effectiveFrom: payload.effective_from,
+              effectiveUntil: payload.effective_until,
+            }),
+          );
           return serializeTaxRate(result);
         }, adaptAdminErrors),
       )
       .handle(
         "familyTaxExemptions",
-        Effect.fnUntraced(function* ({ request, path }) {
+        Effect.fnUntraced(function* ({ request, params }) {
           const auth = yield* requireAdminSession(request);
-          const exemptions = yield* BillingLedgerService.listFamilyTaxExemptions(
-            auth.session.id,
-            path.familyId,
+          const exemptions = yield* BillingLedgerService.use((billingLedgerService) =>
+            billingLedgerService.listFamilyTaxExemptions(auth.session.id, params.familyId),
           );
           return exemptions.map(serializeFamilyTaxExemption);
         }, adaptAdminErrors),
@@ -1241,13 +1391,15 @@ export function makeAdminLayer() {
         "createTaxExemption",
         Effect.fnUntraced(function* ({ request, payload }) {
           const auth = yield* requireAdminSession(request);
-          const result = yield* BillingLedgerService.createTaxExemption(auth.session.id, {
-            familyId: payload.family_id,
-            taxRateId: payload.tax_rate_id,
-            exemptionReason: payload.exemption_reason,
-            effectiveFrom: payload.effective_from,
-            effectiveUntil: payload.effective_until,
-          });
+          const result = yield* BillingLedgerService.use((billingLedgerService) =>
+            billingLedgerService.createTaxExemption(auth.session.id, {
+              familyId: payload.family_id,
+              taxRateId: payload.tax_rate_id,
+              exemptionReason: payload.exemption_reason,
+              effectiveFrom: payload.effective_from,
+              effectiveUntil: payload.effective_until,
+            }),
+          );
           return serializeFamilyTaxExemption(result);
         }, adaptAdminErrors),
       ),
@@ -1260,8 +1412,10 @@ export function makeMaterialDownloadLayer() {
       "materialDownload",
       Effect.fnUntraced(function* (context) {
         const auth = yield* requireAuthenticatedSession(context.request);
-        const { path } = context;
-        const fileInfo = yield* FileService.download(path.id, auth.user.id, auth.session.id);
+        const { params } = context;
+        const fileInfo = yield* FileService.use((fileService) =>
+          fileService.download(params.id, auth.user.id, auth.session.id),
+        );
         return HttpServerResponse.fromWeb(
           new Response(fileInfo.stream as unknown as BodyInit, {
             headers: {

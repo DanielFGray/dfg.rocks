@@ -25,8 +25,7 @@ export function ParentDashboard() {
         {firstName ? `Welcome back, ${firstName}` : "Welcome back"}
       </h1>
       <p className="text-muted dark:text-muted-dark">
-        Select a student below to view their dashboard, assignments, and
-        lessons.
+        Select a student below to view their dashboard, assignments, and lessons.
       </p>
 
       <section className="mt-8">
@@ -41,9 +40,7 @@ export function ParentDashboard() {
                     <p className="font-medium text-primary dark:text-primary-dark">
                       {student.name ?? student.username}
                     </p>
-                    <p className="text-sm text-muted dark:text-muted-dark">
-                      @{student.username}
-                    </p>
+                    <p className="text-sm text-muted dark:text-muted-dark">@{student.username}</p>
                   </div>
                   <Button
                     variant={isActive ? "outline" : "primary"}
@@ -51,11 +48,7 @@ export function ParentDashboard() {
                     disabled={switchStudent.isPending}
                     data-testid={`switch-to-${student.id}`}
                   >
-                    {switchStudent.isPending
-                      ? "Switching..."
-                      : isActive
-                        ? "Current"
-                        : "View"}
+                    {switchStudent.isPending ? "Switching..." : isActive ? "Current" : "View"}
                   </Button>
                 </div>
               </Card>

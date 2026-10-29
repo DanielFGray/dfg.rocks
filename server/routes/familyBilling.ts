@@ -1,6 +1,6 @@
-import * as HttpApi from "@effect/platform/HttpApi";
-import * as HttpApiBuilder from "@effect/platform/HttpApiBuilder";
-import * as HttpServerResponse from "@effect/platform/HttpServerResponse";
+import * as HttpApi from "effect/http-api/HttpApi";
+import * as HttpApiBuilder from "effect/http-api/HttpApiBuilder";
+import * as HttpServerResponse from "effect/http/HttpServerResponse";
 import { Effect } from "effect";
 import { familyBillingGroup } from "../../shared/httpApi.js";
 import {
@@ -38,9 +38,10 @@ const adaptPdfErrors = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
 
 function requireAuth(request: { cookies: Record<string, string | undefined> }) {
   return Effect.flatMap(
-    SessionService.validateSessionToken(request.cookies.session),
-    (auth) =>
-      auth ? Effect.succeed(auth) : HttpError.make(401, "Unauthorized"),
+    SessionService.use((sessionService) =>
+      sessionService.validateSessionToken(request.cookies.session),
+    ),
+    (auth) => (auth ? Effect.succeed(auth) : new HttpError(401, "Unauthorized")),
   );
 }
 
@@ -132,11 +133,10 @@ export function makeFamilyBillingLayer() {
         Effect.fnUntraced(function* ({ request }) {
           const auth: Auth = yield* requireAuth(request);
           if (auth.user.role === "teacher") {
-            return yield* HttpError.make(403, "Forbidden");
+            return yield* new HttpError(403, "Forbidden");
           }
-          const raw = yield* FamilyBillingService.overview(
-            auth.session.id,
-            auth.user.id,
+          const raw = yield* FamilyBillingService.use((familyBillingService) =>
+            familyBillingService.overview(auth.session.id, auth.user.id),
           );
           return {
             ...raw,
@@ -152,26 +152,23 @@ export function makeFamilyBillingLayer() {
         Effect.fnUntraced(function* ({ request }) {
           const auth: Auth = yield* requireAuth(request);
           if (auth.user.role === "teacher") {
-            return yield* HttpError.make(403, "Forbidden");
+            return yield* new HttpError(403, "Forbidden");
           }
-          const bills = yield* FamilyBillingService.bills(
-            auth.session.id,
-            auth.user.id,
+          const bills = yield* FamilyBillingService.use((familyBillingService) =>
+            familyBillingService.bills(auth.session.id, auth.user.id),
           );
           return bills.map(serializeFamilyBill);
         }, adaptFamilyBillingErrors),
       )
       .handle(
         "billDetail",
-        Effect.fnUntraced(function* ({ request, path }) {
+        Effect.fnUntraced(function* ({ request, params }) {
           const auth: Auth = yield* requireAuth(request);
           if (auth.user.role === "teacher") {
-            return yield* HttpError.make(403, "Forbidden");
+            return yield* new HttpError(403, "Forbidden");
           }
-          const result = yield* FamilyBillingService.billDetail(
-            auth.session.id,
-            auth.user.id,
-            path.id,
+          const result = yield* FamilyBillingService.use((familyBillingService) =>
+            familyBillingService.billDetail(auth.session.id, auth.user.id, params.id),
           );
           result.lineItems = result.lineItems ?? [];
           result.adjustments = result.adjustments ?? [];
@@ -188,10 +185,12 @@ export function makeFamilyBillingLayer() {
               amount_cents: adj.amount_cents,
               created_at: serializeDate(adj.created_at)!,
             })),
-            credit_applications: result.creditApplications.map((ca: Selectable<AppPublicFamilyCreditApplications>) => ({
-              ...ca,
-              created_at: serializeDate(ca.created_at)!,
-            })),
+            credit_applications: result.creditApplications.map(
+              (ca: Selectable<AppPublicFamilyCreditApplications>) => ({
+                ...ca,
+                created_at: serializeDate(ca.created_at)!,
+              }),
+            ),
           };
         }, adaptFamilyBillingErrors),
       )
@@ -200,33 +199,32 @@ export function makeFamilyBillingLayer() {
         Effect.fnUntraced(function* ({ request }) {
           const auth: Auth = yield* requireAuth(request);
           if (auth.user.role === "teacher") {
-            return yield* HttpError.make(403, "Forbidden");
+            return yield* new HttpError(403, "Forbidden");
           }
-          const payments = yield* FamilyBillingService.payments(
-            auth.session.id,
-            auth.user.id,
+          const payments = yield* FamilyBillingService.use((familyBillingService) =>
+            familyBillingService.payments(auth.session.id, auth.user.id),
           );
           return payments.map(serializeFamilyPayment);
         }, adaptFamilyBillingErrors),
       )
       .handle(
         "paymentDetail",
-        Effect.fnUntraced(function* ({ request, path }) {
+        Effect.fnUntraced(function* ({ request, params }) {
           const auth: Auth = yield* requireAuth(request);
           if (auth.user.role === "teacher") {
-            return yield* HttpError.make(403, "Forbidden");
+            return yield* new HttpError(403, "Forbidden");
           }
-          const result = yield* FamilyBillingService.paymentDetail(
-            auth.session.id,
-            auth.user.id,
-            path.id,
+          const result = yield* FamilyBillingService.use((familyBillingService) =>
+            familyBillingService.paymentDetail(auth.session.id, auth.user.id, params.id),
           );
           return {
             ...serializeFamilyPayment(result),
-            allocations: (result.allocations ?? []).map((a: Selectable<AppPublicPaymentAllocations>) => ({
-              ...a,
-              created_at: serializeDate(a.created_at)!,
-            })),
+            allocations: (result.allocations ?? []).map(
+              (a: Selectable<AppPublicPaymentAllocations>) => ({
+                ...a,
+                created_at: serializeDate(a.created_at)!,
+              }),
+            ),
           };
         }, adaptFamilyBillingErrors),
       )
@@ -235,32 +233,29 @@ export function makeFamilyBillingLayer() {
         Effect.fnUntraced(function* ({ request }) {
           const auth: Auth = yield* requireAuth(request);
           if (auth.user.role === "teacher") {
-            return yield* HttpError.make(403, "Forbidden");
+            return yield* new HttpError(403, "Forbidden");
           }
-          const credits = yield* FamilyBillingService.credits(
-            auth.session.id,
-            auth.user.id,
+          const credits = yield* FamilyBillingService.use((familyBillingService) =>
+            familyBillingService.credits(auth.session.id, auth.user.id),
           );
           return credits.map(serializeCredit);
         }, adaptFamilyBillingErrors),
       )
       .handle(
         "billPdf",
-        Effect.fnUntraced(function* ({ request, path }) {
+        Effect.fnUntraced(function* ({ request, params }) {
           const auth: Auth = yield* requireAuth(request);
           if (auth.user.role === "teacher") {
-            return yield* HttpError.make(403, "Forbidden");
+            return yield* new HttpError(403, "Forbidden");
           }
-          const buffer = yield* FamilyBillingService.billPdf(
-            auth.session.id,
-            auth.user.id,
-            path.id,
+          const buffer = yield* FamilyBillingService.use((familyBillingService) =>
+            familyBillingService.billPdf(auth.session.id, auth.user.id, params.id),
           );
           return HttpServerResponse.fromWeb(
             new Response(new Uint8Array(buffer), {
               headers: {
                 "Content-Type": "application/pdf",
-                "Content-Disposition": `inline; filename="bill-${path.id}.pdf"`,
+                "Content-Disposition": `inline; filename="bill-${params.id}.pdf"`,
               },
             }),
           );
@@ -268,21 +263,19 @@ export function makeFamilyBillingLayer() {
       )
       .handle(
         "paymentReceipt",
-        Effect.fnUntraced(function* ({ request, path }) {
+        Effect.fnUntraced(function* ({ request, params }) {
           const auth: Auth = yield* requireAuth(request);
           if (auth.user.role === "teacher") {
-            return yield* HttpError.make(403, "Forbidden");
+            return yield* new HttpError(403, "Forbidden");
           }
-          const buffer = yield* FamilyBillingService.paymentReceipt(
-            auth.session.id,
-            auth.user.id,
-            path.id,
+          const buffer = yield* FamilyBillingService.use((familyBillingService) =>
+            familyBillingService.paymentReceipt(auth.session.id, auth.user.id, params.id),
           );
           return HttpServerResponse.fromWeb(
             new Response(new Uint8Array(buffer), {
               headers: {
                 "Content-Type": "application/pdf",
-                "Content-Disposition": `inline; filename="receipt-${path.id}.pdf"`,
+                "Content-Disposition": `inline; filename="receipt-${params.id}.pdf"`,
               },
             }),
           );

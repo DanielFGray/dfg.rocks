@@ -1,5 +1,5 @@
 import crypto from "crypto";
-import { Effect, Option } from "effect";
+import { Effect, Option, Context, Layer } from "effect";
 import * as S from "effect/Schema";
 import { sql } from "kysely";
 import { UserRole } from "../../shared/schemas.js";
@@ -136,9 +136,8 @@ const loadLiveSessionByCookieIdEffect = Effect.fnUntraced(function* (cookieId: s
     );
 });
 
-export class SessionService extends Effect.Service<SessionService>()("SessionService", {
-  accessors: true,
-  effect: Effect.gen(function* () {
+export class SessionService extends Context.Service<SessionService>()("SessionService", {
+  make: Effect.gen(function* () {
     const db = yield* PgRootDB;
     return {
       createSession: Effect.fnUntraced(function* (userId: string) {
@@ -250,4 +249,6 @@ export class SessionService extends Effect.Service<SessionService>()("SessionSer
       }),
     };
   }),
-}) {}
+}) {
+  static readonly layer = Layer.effect(this, this.make);
+}

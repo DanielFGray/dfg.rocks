@@ -34,14 +34,13 @@ type CourseDetailPageData = {
 };
 
 const getCourseDetailData = createServerFn({ method: "GET" })
-  .validator(S.standardSchemaV1(S.Struct({ courseId: S.String })))
+  .validator(S.toStandardSchemaV1(S.Struct({ courseId: S.String })))
   .handler(({ data }) =>
     serverRuntime.runPromise(
       Effect.gen(function* () {
         const session = yield* requireSession(getCookie("session"));
-        const course = yield* AuthenticatedRouteService.courseById(
-          session.session.id,
-          data.courseId,
+        const course = yield* AuthenticatedRouteService.use((authenticatedRouteService) =>
+          authenticatedRouteService.courseById(session.session.id, data.courseId),
         );
 
         if (session.user.role !== "admin") {
@@ -53,8 +52,12 @@ const getCourseDetailData = createServerFn({ method: "GET" })
         }
 
         const [enrolledStudents, allStudents] = yield* Effect.all([
-          AdminRouteService.listCourseStudents(session.session.id, data.courseId),
-          AdminRouteService.listStudents(session.session.id),
+          AdminRouteService.use((adminRouteService) =>
+            adminRouteService.listCourseStudents(session.session.id, data.courseId),
+          ),
+          AdminRouteService.use((adminRouteService) =>
+            adminRouteService.listStudents(session.session.id),
+          ),
         ]);
 
         return toServerFunctionPayload({
@@ -63,8 +66,8 @@ const getCourseDetailData = createServerFn({ method: "GET" })
           allStudents: normalizeStudents(allStudents),
         }) satisfies CourseDetailPageData;
       }).pipe(
-        Effect.provide(AuthenticatedRouteService.Default),
-        Effect.provide(AdminRouteService.Default),
+        Effect.provide(AuthenticatedRouteService.layer),
+        Effect.provide(AdminRouteService.layer),
       ),
     ),
   );
@@ -108,7 +111,7 @@ function CourseDetailPage() {
   // ---- Mutations ----
   const createModuleMutation = useMutation({
     mutationFn: (payload: { title: string }) =>
-      Effect.runPromise(api.admin.createModule({ path: { id }, payload })),
+      Effect.runPromise(api.admin.createModule({ params: { id }, payload })),
     onSuccess: (data) => {
       navigate({
         to: "/courses/$courseId/modules/$moduleId/edit",
@@ -119,7 +122,7 @@ function CourseDetailPage() {
 
   const deleteModuleMutation = useMutation({
     mutationFn: (moduleId: string) =>
-      Effect.runPromise(api.admin.deleteModule({ path: { id: moduleId } })),
+      Effect.runPromise(api.admin.deleteModule({ params: { id: moduleId } })),
     onSettled: () => void router.invalidate(),
   });
 
@@ -127,7 +130,7 @@ function CourseDetailPage() {
     mutationFn: (studentId: string) =>
       Effect.runPromise(
         api.admin.enrollStudent({
-          path: { id: studentId },
+          params: { id: studentId },
           payload: { course_id: id },
         }),
       ),
@@ -138,7 +141,7 @@ function CourseDetailPage() {
     mutationFn: (studentId: string) =>
       Effect.runPromise(
         api.admin.unenrollStudent({
-          path: { id: studentId, courseId: id },
+          params: { id: studentId, courseId: id },
         }),
       ),
     onSettled: () => void router.invalidate(),

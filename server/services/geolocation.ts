@@ -1,5 +1,5 @@
-import { Effect, Schema as S } from "effect";
-import * as HttpClient from "@effect/platform/HttpClient";
+import { Effect, Schema as S, Context, Layer } from "effect";
+import * as HttpClient from "effect/http/HttpClient";
 
 export interface GeoLocation {
   country: string;
@@ -10,7 +10,7 @@ export interface GeoLocation {
 }
 
 const IpApiResponse = S.Struct({
-  status: S.Union(S.Literal("success"), S.Literal("fail")),
+  status: S.Literals(["success", "fail"]),
   message: S.NullishOr(S.String),
   country: S.NullishOr(S.String),
   countryCode: S.NullishOr(S.String),
@@ -21,28 +21,32 @@ const IpApiResponse = S.Struct({
   lon: S.NullishOr(S.Number),
 });
 
-export class GeolocationService extends Effect.Service<GeolocationService>()("GeolocationService", {
-  accessors: true,
-  succeed: {
-    lookupIp: Effect.fnUntraced(function* (ip: string) {
-      const res = yield* HttpClient.get(
-        `http://ip-api.com/json/${encodeURIComponent(ip)}?fields=status,message,country,countryCode,region,regionName,city,lat,lon`,
-      );
-      if (!res || res.status !== 200) return null;
+export class GeolocationService extends Context.Service<GeolocationService>()(
+  "GeolocationService",
+  {
+    make: Effect.succeed({
+      lookupIp: Effect.fnUntraced(function* (ip: string) {
+        const res = yield* HttpClient.get(
+          `http://ip-api.com/json/${encodeURIComponent(ip)}?fields=status,message,country,countryCode,region,regionName,city,lat,lon`,
+        );
+        if (!res || res.status !== 200) return null;
 
-      const data = yield* res.json.pipe(Effect.flatMap(S.decodeUnknown(IpApiResponse)));
-      if (data.status !== "success") return null;
+        const data = yield* res.json.pipe(Effect.flatMap(S.decodeUnknownEffect(IpApiResponse)));
+        if (data.status !== "success") return null;
 
-      const country = data.countryCode;
-      if (!country) return null;
+        const country = data.countryCode;
+        if (!country) return null;
 
-      return {
-        country,
-        region: data.region ?? "",
-        city: data.city ?? "",
-        lat: data.lat ?? 0,
-        lon: data.lon ?? 0,
-      } as GeoLocation;
+        return {
+          country,
+          region: data.region ?? "",
+          city: data.city ?? "",
+          lat: data.lat ?? 0,
+          lon: data.lon ?? 0,
+        } as GeoLocation;
+      }),
     }),
   },
-}) {}
+) {
+  static readonly layer = Layer.effect(this, this.make);
+}

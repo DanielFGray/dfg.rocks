@@ -1,6 +1,6 @@
 import { Layer, ManagedRuntime } from "effect";
-import * as Etag from "@effect/platform/Etag";
-import * as FetchHttpClient from "@effect/platform/FetchHttpClient";
+import * as Etag from "effect/http/Etag";
+import * as FetchHttpClient from "effect/http/FetchHttpClient";
 import * as NodeFileSystem from "@effect/platform-node/NodeFileSystem";
 import * as NodeHttpPlatform from "@effect/platform-node/NodeHttpPlatform";
 import * as NodePath from "@effect/platform-node/NodePath";
@@ -41,34 +41,34 @@ const rateLimitLayer =
   env.NODE_ENV === "production" ? RateLimitService.Live : RateLimitService.Test;
 
 const lessonServicesLayer = Layer.mergeAll(
-  AdminRouteService.Default,
-  AuthenticatedRouteService.Default,
-  RecurringScheduleService.Default,
-).pipe(Layer.provideMerge(LessonPolicyService.Default));
+  AdminRouteService.layer,
+  AuthenticatedRouteService.layer,
+  RecurringScheduleService.layer,
+).pipe(Layer.provideMerge(LessonPolicyService.layer));
 
 const billingServicesLayer = Layer.mergeAll(
-  PdfService.Default,
-  BillingLedgerService.Default,
-  FamilyBillingService.Default.pipe(
-    Layer.provide(Layer.mergeAll(PdfService.Default, BillingLedgerService.Default)),
+  PdfService.layer,
+  BillingLedgerService.layer,
+  FamilyBillingService.layer.pipe(
+    Layer.provide(Layer.mergeAll(PdfService.layer, BillingLedgerService.layer)),
   ),
 );
 
 const servicesLayer = Layer.mergeAll(
-  RealtimeService.Default,
-  GoogleCalendarService.Default,
-  SessionService.Default,
+  RealtimeService.layer,
+  GoogleCalendarService.layer,
+  SessionService.layer,
   lessonServicesLayer,
-  AuthService.Default,
-  AuthRouteService.Default,
+  AuthService.layer,
+  AuthRouteService.layer,
   billingServicesLayer,
   rateLimitLayer,
-  FileService.Default,
-  GeolocationService.Default,
-  PublicRouteService.Default,
-  StorageService.Live,
-  TestimonialReminderService.Default,
-  UserService.Default,
+  FileService.layer,
+  GeolocationService.layer,
+  PublicRouteService.layer,
+  StorageService.layer,
+  TestimonialReminderService.layer,
+  UserService.layer,
 ).pipe(Layer.provideMerge(infrastructureLayer));
 
 export const applicationLayer = servicesLayer;

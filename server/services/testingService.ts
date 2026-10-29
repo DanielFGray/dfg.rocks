@@ -1,6 +1,6 @@
 import crypto from "crypto";
 import fs from "fs/promises";
-import { Effect, Option } from "effect";
+import { Effect, Option, Context, Layer } from "effect";
 import { sql } from "kysely";
 import type { LessonStatus, LocationType } from "../../shared/schemas.js";
 import { HttpError } from "../pgErrors.js";
@@ -9,9 +9,8 @@ import { SessionService } from "./sessionService.js";
 import { StorageService } from "./storageService.js";
 import { PgRootDB } from "../db.js";
 
-export class TestingService extends Effect.Service<TestingService>()("TestingService", {
-  accessors: true,
-  effect: Effect.gen(function* () {
+export class TestingService extends Context.Service<TestingService>()("TestingService", {
+  make: Effect.gen(function* () {
     const db = yield* PgRootDB;
 
     const queries = {
@@ -116,7 +115,9 @@ export class TestingService extends Effect.Service<TestingService>()("TestingSer
             .where("user_id", "=", userId),
         );
 
-        const session = yield* SessionService.createSession(userId);
+        const session = yield* SessionService.use((sessionService) =>
+          sessionService.createSession(userId),
+        );
 
         return {
           user: {
@@ -197,10 +198,12 @@ export class TestingService extends Effect.Service<TestingService>()("TestingSer
         yield* Effect.forEach(
           testMaterialFiles.filter((material) => material.storage_backend === "local"),
           (material) =>
-            StorageService.delete({
-              storageBackend: material.storage_backend,
-              storageKey: material.storage_key,
-            }).pipe(Effect.catchAll(() => Effect.void)),
+            StorageService.use((storageService) =>
+              storageService.delete({
+                storageBackend: material.storage_backend,
+                storageKey: material.storage_key,
+              }),
+            ).pipe(Effect.ignore),
           { discard: true },
         );
       }),
@@ -265,7 +268,7 @@ export class TestingService extends Effect.Service<TestingService>()("TestingSer
             );
 
         const location = StorageService.createTestingLocation(originalFilename);
-        yield* StorageService.put(location, bytes);
+        yield* StorageService.use((storageService) => storageService.put(location, bytes));
 
         const notationTracks = body.source_file_path
           ? yield* extractNotationTracksFromBytes(bytes, originalFilename)
@@ -428,7 +431,7 @@ export class TestingService extends Effect.Service<TestingService>()("TestingSer
             .pipe(
               Effect.head,
               Effect.catchTags({
-                NoSuchElementException: () => new HttpError(500, "No admin user found"),
+                NoSuchElementError: () => new HttpError(500, "No admin user found"),
               }),
             );
 
@@ -510,4 +513,6 @@ export class TestingService extends Effect.Service<TestingService>()("TestingSer
       }),
     };
   }),
-}) {}
+}) {
+  static readonly layer = Layer.effect(this, this.make);
+}

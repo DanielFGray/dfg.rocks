@@ -52,14 +52,14 @@ export const getAuthUser = createServerFn({ method: "GET" }).handler(async () =>
   const token = getCookie("session");
   if (!token) return JSON.stringify(anonymousAuthState());
 
-  const session = await serverRuntime.runPromise(SessionService.validateSessionToken(token));
+  const session = await serverRuntime.runPromise(
+    SessionService.use((sessionService) => sessionService.validateSessionToken(token)),
+  );
   if (!session) return JSON.stringify(anonymousAuthState());
 
   const state = await serverRuntime.runPromise(
-    AuthRouteService.me(
-      session.session.id,
-      session.user.id,
-      session.session.active_student_id,
+    AuthRouteService.use((authRouteService) =>
+      authRouteService.me(session.session.id, session.user.id, session.session.active_student_id),
     ),
   );
   return JSON.stringify(toPlainAuthState(state));

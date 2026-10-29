@@ -31,14 +31,18 @@ type ModuleEditPageData = {
 };
 
 const getModuleEditPageData = createServerFn({ method: "GET" })
-  .validator(S.standardSchemaV1(S.Struct({ courseId: S.String })))
+  .validator(S.toStandardSchemaV1(S.Struct({ courseId: S.String })))
   .handler(({ data }) =>
     serverRuntime.runPromise(
       Effect.gen(function* () {
         const session = yield* requireSession(getCookie("session"));
         const [course, allMaterials] = yield* Effect.all([
-          AuthenticatedRouteService.courseById(session.session.id, data.courseId),
-          AuthenticatedRouteService.library(session.session.id, { limit: 1000, offset: 0 }),
+          AuthenticatedRouteService.use((authenticatedRouteService) =>
+            authenticatedRouteService.courseById(session.session.id, data.courseId),
+          ),
+          AuthenticatedRouteService.use((authenticatedRouteService) =>
+            authenticatedRouteService.library(session.session.id, { limit: 1000, offset: 0 }),
+          ),
         ]);
         return toServerFunctionPayload({
           course: serializeCourseDetail(course),
@@ -91,7 +95,7 @@ function ModuleEditPage() {
     mutationFn: () =>
       Effect.runPromise(
         api.admin.updateModule({
-          path: { id: moduleId },
+          params: { id: moduleId },
           payload: { title, content: content ?? null },
         }),
       ),

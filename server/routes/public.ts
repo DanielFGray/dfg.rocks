@@ -1,6 +1,6 @@
-import * as HttpApi from "@effect/platform/HttpApi";
-import * as HttpApiBuilder from "@effect/platform/HttpApiBuilder";
-import * as HttpServerResponse from "@effect/platform/HttpServerResponse";
+import * as HttpApi from "effect/http-api/HttpApi";
+import * as HttpApiBuilder from "effect/http-api/HttpApiBuilder";
+import * as HttpServerResponse from "effect/http/HttpServerResponse";
 import { Effect } from "effect";
 import { publicGroup } from "../../shared/httpApi.js";
 import { adaptHttpApiErrors } from "../httpApiErrors.js";
@@ -40,14 +40,14 @@ const fetchGoogleUserInfo = Effect.fnUntraced(function* (accessToken: string) {
     catch: (error) => error,
   });
   if (!response.ok) {
-    return yield* HttpError.make(502, "Failed to fetch Google user info");
+    return yield* new HttpError(502, "Failed to fetch Google user info");
   }
   const userInfo = (yield* Effect.tryPromise({
     try: () => response.json() as Promise<Record<string, unknown>>,
     catch: (error) => error,
   })) as Record<string, unknown>;
   if (typeof userInfo.sub !== "string") {
-    return yield* HttpError.make(400, "Google user info is missing subject");
+    return yield* new HttpError(400, "Google user info is missing subject");
   }
   return {
     ...userInfo,
@@ -60,9 +60,7 @@ const publicApi = HttpApi.make("dfg").add(publicGroup);
 export function makePublicLayer() {
   return HttpApiBuilder.group(publicApi, "public", (handlers) =>
     handlers
-      .handle("health", () =>
-        adaptPublicHttpApiErrors(Effect.succeed({ success: true as const })),
-      )
+      .handle("health", () => adaptPublicHttpApiErrors(Effect.succeed({ success: true as const })))
 
       .handle(
         "contact",
@@ -74,7 +72,9 @@ export function makePublicLayer() {
           yield* checkRateLimit("contact", request.headers, 5, 60000);
           const ip = clientIdentifierFromHeaders(request.headers);
           if (ip) {
-            const loc = yield* GeolocationService.lookupIp(ip);
+            const loc = yield* GeolocationService.use((geolocationService) =>
+              geolocationService.lookupIp(ip),
+            );
             const isTexas = loc?.country === "US" && loc?.region === "TX";
 
             if (!isTexas) {
@@ -83,14 +83,18 @@ export function makePublicLayer() {
                 "Sorry, I only accept lesson inquiries from the Houston / Galveston area in Texas. If you're outside Texas, I hope you find a great teacher near you!",
               );
             }
-            yield* PublicRouteService.submitContact(payload, {
-              ip,
-              country: loc?.country ?? "",
-              region: loc?.region ?? "",
-              city: loc?.city ?? "",
-            });
+            yield* PublicRouteService.use((publicRouteService) =>
+              publicRouteService.submitContact(payload, {
+                ip,
+                country: loc?.country ?? "",
+                region: loc?.region ?? "",
+                city: loc?.city ?? "",
+              }),
+            );
           } else {
-            yield* PublicRouteService.submitContact(payload);
+            yield* PublicRouteService.use((publicRouteService) =>
+              publicRouteService.submitContact(payload),
+            );
           }
           return { success: true as const };
         }, adaptPublicHttpApiErrors),
@@ -123,8 +127,8 @@ export function makePublicLayer() {
                 encodeOAuthRedirect(authorization.state.redirect),
                 cookieOptions,
               )
-            : HttpServerResponse.expireCookie(response, redirectCookieName, cookieOptions);
-          return yield* response;
+            : yield* HttpServerResponse.expireCookie(response, redirectCookieName, cookieOptions);
+          return response;
         }, adaptPublicHttpApiErrors),
       )
 
@@ -154,22 +158,26 @@ export function makePublicLayer() {
           const codeVerifier = oauthState.codeVerifier;
           const tokens = yield* exchangeGoogleCode(rootUrl, code, codeVerifier);
           const userInfo = yield* fetchGoogleUserInfo(tokens.accessToken());
-          const user = yield* PublicRouteService.linkOrRegisterOAuthUser({
-            service: "google",
-            identifier: userInfo.sub,
-            profile: userInfo,
-            tokens: tokens.data,
-          });
-          const session = yield* UserService.sessionFromUser(user);
+          const user = yield* PublicRouteService.use((publicRouteService) =>
+            publicRouteService.linkOrRegisterOAuthUser({
+              service: "google",
+              identifier: userInfo.sub,
+              profile: userInfo,
+              tokens: tokens.data,
+            }),
+          );
+          const session = yield* UserService.use((userService) =>
+            userService.sessionFromUser(user),
+          );
           let response = HttpServerResponse.redirect(
             new URL(getOAuthRedirectTarget(redirectTarget), webRequest.url).toString(),
           );
-          response = HttpServerResponse.expireCookie(
+          response = yield* HttpServerResponse.expireCookie(
             response,
             cookieName,
             getOAuthCookieOptions("google", rootUrl),
           );
-          response = HttpServerResponse.expireCookie(
+          response = yield* HttpServerResponse.expireCookie(
             response,
             redirectCookieName,
             getOAuthCookieOptions("google", rootUrl),
@@ -205,8 +213,8 @@ export function makePublicLayer() {
                 encodeOAuthRedirect(authorization.state.redirect),
                 cookieOptions,
               )
-            : HttpServerResponse.expireCookie(response, redirectCookieName, cookieOptions);
-          return yield* response;
+            : yield* HttpServerResponse.expireCookie(response, redirectCookieName, cookieOptions);
+          return response;
         }, adaptPublicHttpApiErrors),
       )
 
@@ -243,22 +251,26 @@ export function makePublicLayer() {
             email: typeof claims.email === "string" ? claims.email : user?.email,
             name: [firstName, lastName].filter(Boolean).join(" ").trim() || undefined,
           };
-          const linkedUser = yield* PublicRouteService.linkOrRegisterOAuthUser({
-            service: "apple",
-            identifier: sub,
-            profile,
-            tokens: tokens.data,
-          });
-          const session = yield* UserService.sessionFromUser(linkedUser);
+          const linkedUser = yield* PublicRouteService.use((publicRouteService) =>
+            publicRouteService.linkOrRegisterOAuthUser({
+              service: "apple",
+              identifier: sub,
+              profile,
+              tokens: tokens.data,
+            }),
+          );
+          const session = yield* UserService.use((userService) =>
+            userService.sessionFromUser(linkedUser),
+          );
           let response = HttpServerResponse.redirect(
             new URL(getOAuthRedirectTarget(redirectTarget), webRequest.url).toString(),
           );
-          response = HttpServerResponse.expireCookie(
+          response = yield* HttpServerResponse.expireCookie(
             response,
             cookieName,
             getOAuthCookieOptions("apple", rootUrl),
           );
-          response = HttpServerResponse.expireCookie(
+          response = yield* HttpServerResponse.expireCookie(
             response,
             redirectCookieName,
             getOAuthCookieOptions("apple", rootUrl),
@@ -272,32 +284,38 @@ export function makePublicLayer() {
         "verifyEmail",
         Effect.fnUntraced(function* ({ request, payload }) {
           yield* csrfCheck(request.headers);
-          yield* PublicRouteService.verifyEmail(payload.token);
+          yield* PublicRouteService.use((publicRouteService) =>
+            publicRouteService.verifyEmail(payload.token),
+          );
           return { success: true as const };
         }, adaptPublicHttpApiErrors),
       )
 
       .handle(
         "invitation",
-        Effect.fnUntraced(function* ({ path, urlParams }) {
-          return yield* PublicRouteService.invitation(path.id, urlParams.code ?? "");
+        Effect.fnUntraced(function* ({ params, query }) {
+          return yield* PublicRouteService.use((publicRouteService) =>
+            publicRouteService.invitation(params.id, query.code ?? ""),
+          );
         }, adaptPublicHttpApiErrors),
       )
 
       .handle(
         "acceptInvitation",
-        Effect.fnUntraced(function* ({ request, path, payload }) {
+        Effect.fnUntraced(function* ({ request, params, payload }) {
           yield* csrfCheck(request.headers);
           yield* checkRateLimit("accept-invite", request.headers, 10, 60000);
-          const session = yield* PublicRouteService.acceptInvitation({
-            invitationId: path.id,
-            code: payload.code,
-            username: payload.username,
-            password: payload.password,
-            name: payload.name,
-            email: payload.email,
-          });
-          let response = HttpServerResponse.unsafeJson(session.response);
+          const session = yield* PublicRouteService.use((publicRouteService) =>
+            publicRouteService.acceptInvitation({
+              invitationId: params.id,
+              code: payload.code,
+              username: payload.username,
+              password: payload.password,
+              name: payload.name,
+              email: payload.email,
+            }),
+          );
+          let response = HttpServerResponse.jsonUnsafe(session.response);
           response = yield* setSessionCookie(response, session.token, session.expiresAt);
           return response;
         }, adaptPublicHttpApiErrors),

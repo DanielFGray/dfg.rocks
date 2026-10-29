@@ -2,8 +2,8 @@ import { createHash, randomUUID } from "node:crypto";
 import { createReadStream } from "node:fs";
 import path from "node:path";
 import { Readable } from "node:stream";
-import * as FileSystem from "@effect/platform/FileSystem";
-import { Effect, Layer } from "effect";
+import * as FileSystem from "effect/FileSystem";
+import { Context, Effect, Layer } from "effect";
 import { env } from "../assertEnv.js";
 
 export type StorageBackend = "local";
@@ -47,7 +47,7 @@ const makeLive = Effect.gen(function* () {
         Effect.flatMap((filePath) =>
           fileSystem
             .makeDirectory(path.dirname(filePath), { recursive: true })
-            .pipe(Effect.zipRight(fileSystem.writeFile(filePath, bytes))),
+            .pipe(Effect.andThen(fileSystem.writeFile(filePath, bytes))),
         ),
       ),
     delete: (location) =>
@@ -101,15 +101,13 @@ const makeTest = Effect.sync(() => {
 });
 
 /**
- * Replaceable storage I/O. Call operations through the generated static accessors
- * and provide either Live or Test at the application boundary.
+ * Replaceable storage I/O. Provide either layer or layerTest at the application boundary.
  */
-export class StorageService extends Effect.Tag("StorageService")<
-  StorageService,
-  StorageServiceShape
->() {
-  static readonly Live = Layer.effect(this, makeLive);
-  static readonly Test = Layer.effect(this, makeTest);
+export class StorageService extends Context.Service<StorageService, StorageServiceShape>()(
+  "StorageService",
+) {
+  static readonly layer = Layer.effect(this, makeLive);
+  static readonly layerTest = Layer.effect(this, makeTest);
 
   static hashBytes(bytes: Uint8Array): string {
     return createHash("sha256").update(bytes).digest("hex");

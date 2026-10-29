@@ -15,19 +15,23 @@ import { PublicRouteService } from "../../server/services/publicRouteService.js"
 const getInvitationPageData = createServerFn({ method: "GET" })
   .validator((data: unknown) => S.decodeUnknownSync(InviteSearch)(data))
   .handler(async ({ data }) => {
-    if (!data.id) {
+    const id = data.id;
+    if (!id) {
       return { invitation: null, error: null };
     }
 
     try {
       const invitation = await serverRuntime.runPromise(
-        PublicRouteService.invitation(data.id, data.code ?? ""),
+        PublicRouteService.use((publicRouteService) =>
+          publicRouteService.invitation(id, data.code ?? ""),
+        ),
       );
       return { invitation, error: null };
     } catch (error) {
       return {
         invitation: null,
-        error: error instanceof Error ? error.message : "This invitation link is invalid or expired.",
+        error:
+          error instanceof Error ? error.message : "This invitation link is invalid or expired.",
       };
     }
   });

@@ -25,15 +25,17 @@ import { toServerFunctionPayload } from "../lib/serverFunctionPayload.js";
 const [logoBefore, logoAfter] = site.logo.split(site.logoDot);
 
 export const getHomePageData = createServerFn({ method: "GET" }).handler(() =>
-  serverRuntime.runPromise(PublicRouteService.homePageData()).then(toServerFunctionPayload),
+  serverRuntime
+    .runPromise(PublicRouteService.use((publicRouteService) => publicRouteService.homePageData()))
+    .then(toServerFunctionPayload),
 );
 
 const ContactFormSchema = S.Struct({
-  name: S.String.pipe(S.nonEmptyString()),
-  email: S.String.pipe(S.nonEmptyString()),
+  name: S.String.pipe(S.check(S.isNonEmpty())),
+  email: S.String.pipe(S.check(S.isNonEmpty())),
   phone: S.optional(S.String),
-  instrument: S.String.pipe(S.nonEmptyString()),
-  format: S.String.pipe(S.nonEmptyString()),
+  instrument: S.String.pipe(S.check(S.isNonEmpty())),
+  format: S.String.pipe(S.check(S.isNonEmpty())),
   message: S.optional(S.String),
   website: S.optional(S.String),
 });
@@ -50,14 +52,16 @@ export const submitContact = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     if (data.website) throw new Error("Invalid submission");
     await serverRuntime.runPromise(
-      PublicRouteService.submitContact({
-        name: data.name,
-        email: data.email,
-        phone: data.phone,
-        instrument: data.instrument,
-        format: data.format,
-        message: data.message,
-      }),
+      PublicRouteService.use((publicRouteService) =>
+        publicRouteService.submitContact({
+          name: data.name,
+          email: data.email,
+          phone: data.phone,
+          instrument: data.instrument,
+          format: data.format,
+          message: data.message,
+        }),
+      ),
     );
     throw redirect({ to: "/", search: { sent: true as const } });
   });
@@ -299,7 +303,11 @@ function LessonsSection() {
 function Testimonials() {
   const { testimonials } = Route.useLoaderData();
   return testimonials.length > 0 ? (
-    <section id="testimonials" data-testid="testimonial-section" className="mx-auto max-w-275 px-5 py-16 md:px-8 md:py-24">
+    <section
+      id="testimonials"
+      data-testid="testimonial-section"
+      className="mx-auto max-w-275 px-5 py-16 md:px-8 md:py-24"
+    >
       <div className="mb-3 text-[0.8rem] font-semibold tracking-[0.15em] text-accent uppercase">
         {testimonialsSection.sectionLabel}
       </div>

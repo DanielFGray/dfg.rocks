@@ -167,7 +167,7 @@ function MessagesPage() {
     mutationFn: (id: string) =>
       Effect.runPromise(
         api.authenticated.markMessageRead({
-          path: { id },
+          params: { id },
           payload: { is_read: true },
         }),
       ),

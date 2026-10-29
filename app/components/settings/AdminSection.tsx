@@ -117,7 +117,7 @@ export function AdminSection({
     mutationFn: ({ testimonialId, isApproved }: { testimonialId: string; isApproved: boolean }) =>
       Effect.runPromise(
         api.admin.updateTestimonialApproval({
-          path: { id: testimonialId },
+          params: { id: testimonialId },
           payload: { is_approved: isApproved },
         }),
       ),
@@ -125,8 +125,10 @@ export function AdminSection({
   });
 
   const savePolicyMutation = useMutation({
-    mutationFn: (payload: { cancellation_window_hours: number; late_cancel_charge_percent: number }) =>
-      Effect.runPromise(api.admin.saveCancellationPolicySettings({ payload })),
+    mutationFn: (payload: {
+      cancellation_window_hours: number;
+      late_cancel_charge_percent: number;
+    }) => Effect.runPromise(api.admin.saveCancellationPolicySettings({ payload })),
     onSuccess: onRefresh,
   });
 

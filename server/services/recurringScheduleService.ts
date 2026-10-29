@@ -1,4 +1,4 @@
-import { Effect, Option } from "effect";
+import { Effect, Option, Context, Layer } from "effect";
 import type { ColumnType, Generated } from "kysely";
 import type { DB } from "../../generated/db.js";
 import type {
@@ -161,11 +161,10 @@ export function validateRecurringSchedule(input: SaveRecurringScheduleInput): st
   return errors;
 }
 
-export class RecurringScheduleService extends Effect.Service<RecurringScheduleService>()(
+export class RecurringScheduleService extends Context.Service<RecurringScheduleService>()(
   "RecurringScheduleService",
   {
-    accessors: true,
-    effect: Effect.succeed({
+    make: Effect.succeed({
       listSchedules: Effect.fn("listRecurringSchedulesForStudent")(function* (
         sessionId: string,
         studentId: string,
@@ -422,4 +421,6 @@ export class RecurringScheduleService extends Effect.Service<RecurringScheduleSe
       }),
     }),
   },
-) {}
+) {
+  static readonly layer = Layer.effect(this, this.make);
+}

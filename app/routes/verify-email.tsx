@@ -8,12 +8,15 @@ import { PublicRouteService } from "../../server/services/publicRouteService.js"
 const verifyEmailPageData = createServerFn({ method: "GET" })
   .validator((data: unknown) => S.decodeUnknownSync(TokenSearch)(data))
   .handler(async ({ data }) => {
-    if (!data.token) {
+    const token = data.token;
+    if (!token) {
       return { status: "missing-token" as const, error: null };
     }
 
     try {
-      await serverRuntime.runPromise(PublicRouteService.verifyEmail(data.token));
+      await serverRuntime.runPromise(
+        PublicRouteService.use((publicRouteService) => publicRouteService.verifyEmail(token)),
+      );
       return { status: "verified" as const, error: null };
     } catch (error) {
       return {

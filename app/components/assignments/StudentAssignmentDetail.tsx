@@ -159,7 +159,7 @@ export function StudentAssignmentDetail({
     mutationFn: (seconds: number) =>
       Effect.runPromise(
         api.authenticated.recordAssignmentPlayback({
-          path: { materialId: material.id },
+          params: { materialId: material.id },
           payload: { seconds },
         }),
       ),
@@ -176,7 +176,7 @@ export function StudentAssignmentDetail({
     mutationFn: (stars: number) =>
       Effect.runPromise(
         api.authenticated.createAssignmentReview({
-          path: { materialId: material.id },
+          params: { materialId: material.id },
           payload: { stars },
         }),
       ),
@@ -235,9 +235,7 @@ export function StudentAssignmentDetail({
   const { data: practiceLogs = [] } = useQuery({
     queryKey: ["practice-logs", material.id],
     queryFn: () =>
-      Effect.runPromise(
-        api.authenticated.practiceLogs({ urlParams: { material_id: material.id } }),
-      ),
+      Effect.runPromise(api.authenticated.practiceLogs({ query: { material_id: material.id } })),
   });
 
   const listenedSeconds = progress?.listened_seconds ?? 0;

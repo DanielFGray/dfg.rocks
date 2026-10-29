@@ -14,12 +14,15 @@ const verifyMagicLogin = createServerFn({ method: "GET" })
     redirect: normalizeLoginRedirect(data.redirect),
   }))
   .handler(async ({ data }) => {
-    if (!data.token) {
+    const token = data.token;
+    if (!token) {
       return { status: "missing-token" as const, error: null, redirect: data.redirect };
     }
 
     try {
-      const session = await serverRuntime.runPromise(AuthRouteService.consumeMagicLink(data.token));
+      const session = await serverRuntime.runPromise(
+        AuthRouteService.use((authRouteService) => authRouteService.consumeMagicLink(token)),
+      );
       setCookie("session", session.token, {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",

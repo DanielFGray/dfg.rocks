@@ -1,8 +1,8 @@
 import path from "node:path";
-import * as FileSystem from "@effect/platform/FileSystem";
-import * as Multipart from "@effect/platform/Multipart";
+import * as FileSystem from "effect/FileSystem";
+import * as Multipart from "effect/http/Multipart";
 import { sql } from "kysely";
-import { Effect, Option } from "effect";
+import { Effect, Option, Context, Layer } from "effect";
 import { withAuthContext } from "../db.js";
 import { HttpError } from "../pgErrors.js";
 import { extractNotationTracksFromBytes } from "./notationService.js";
@@ -87,18 +87,17 @@ const ensureStoredBlobEffect = Effect.fnUntraced(function* (
   bytes: Uint8Array,
 ) {
   const location = toStorageLocation(material);
-  const exists = yield* StorageService.exists(location);
+  const exists = yield* StorageService.use((storageService) => storageService.exists(location));
   if (!exists) {
-    yield* StorageService.put(location, bytes);
+    yield* StorageService.use((storageService) => storageService.put(location, bytes));
   }
 });
 
 /**
  * File upload / download service.
  */
-export class FileService extends Effect.Service<FileService>()("FileService", {
-  accessors: true,
-  effect: Effect.gen(function* () {
+export class FileService extends Context.Service<FileService>()("FileService", {
+  make: Effect.gen(function* () {
     const fileSystem = yield* FileSystem.FileSystem;
     return {
       upload: Effect.fn("fileUpload")(function* (
@@ -149,7 +148,7 @@ export class FileService extends Effect.Service<FileService>()("FileService", {
           return yield* Effect.succeed(toMaterialResponse(existingMaterial));
         }
         const location = StorageService.createMaterialLocation(contentHash);
-        yield* StorageService.put(location, bytes);
+        yield* StorageService.use((storageService) => storageService.put(location, bytes));
         // Handle concurrent uploads with the same content hash (unique constraint race)
         return yield* withAuthContext(sessionId, (db) =>
           db
@@ -180,7 +179,7 @@ export class FileService extends Effect.Service<FileService>()("FileService", {
                 ]),
             )
             .pipe(
-              Effect.catchAll(
+              Effect.catch(
                 Effect.fnUntraced(function* (error: unknown) {
                   const cause = ((
                     error as {
@@ -233,7 +232,7 @@ export class FileService extends Effect.Service<FileService>()("FileService", {
             .pipe(
               Effect.head,
               Effect.catchTags({
-                NoSuchElementException: () => new HttpError(404, "Material not found"),
+                NoSuchElementError: () => new HttpError(404, "Material not found"),
               }),
             ),
         );
@@ -245,7 +244,7 @@ export class FileService extends Effect.Service<FileService>()("FileService", {
             .pipe(
               Effect.head,
               Effect.catchTags({
-                NoSuchElementException: () => new HttpError(404, "User not found"),
+                NoSuchElementError: () => new HttpError(404, "User not found"),
               }),
             ),
         );
@@ -282,11 +281,13 @@ export class FileService extends Effect.Service<FileService>()("FileService", {
           }
         }
         const location = toStorageLocation(material);
-        const exists = yield* StorageService.exists(location);
+        const exists = yield* StorageService.use((storageService) =>
+          storageService.exists(location),
+        );
         if (!exists) {
           return yield* new HttpError(500, "Material blob missing from storage");
         }
-        const stream = yield* StorageService.open(location);
+        const stream = yield* StorageService.use((storageService) => storageService.open(location));
         return {
           stream,
           filename: material.original_filename,
@@ -295,4 +296,6 @@ export class FileService extends Effect.Service<FileService>()("FileService", {
       }),
     };
   }),
-}) {}
+}) {
+  static readonly layer = Layer.effect(this, this.make);
+}

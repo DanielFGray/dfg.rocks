@@ -53,11 +53,7 @@ function ForgotPasswordPage() {
             Enter your email and we'll send a reset link
           </p>
         </div>
-        <form
-          method="post"
-          action={forgotPassword.url}
-          className="flex flex-col gap-5"
-        >
+        <form method="post" action={forgotPassword.url} className="flex flex-col gap-5">
           <Input
             id="forgot-email"
             name="email"

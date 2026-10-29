@@ -1,4 +1,4 @@
-import { Effect } from "effect";
+import { Effect, Context, Layer } from "effect";
 import type { User } from "../../shared/schemas.js";
 import { PgRootDB } from "../db.js";
 import { SessionService } from "./sessionService.js";
@@ -9,9 +9,8 @@ export type UserResponse = Pick<
   "id" | "username" | "name" | "email" | "role" | "is_verified"
 >;
 
-export class UserService extends Effect.Service<UserService>()("UserService", {
-  accessors: true,
-  effect: Effect.gen(function* () {
+export class UserService extends Context.Service<UserService>()("UserService", {
+  make: Effect.gen(function* () {
     const db = yield* PgRootDB;
 
     const primaryEmailForUser = (userId: string) =>
@@ -50,11 +49,13 @@ export class UserService extends Effect.Service<UserService>()("UserService", {
       }, Effect.head),
 
       sessionFromUser: Effect.fn("sessionFromUser")(function* (user: UserRow) {
-        const { token, expiresAt } = yield* SessionService.createSession(user.id);
+        const { token, expiresAt } = yield* SessionService.use((sessionService) =>
+          sessionService.createSession(user.id),
+        );
         const emailResult = yield* primaryEmailForUser(user.id).pipe(
           Effect.head,
           Effect.catchTags({
-            NoSuchElementException: () => Effect.succeed({ email: "" }),
+            NoSuchElementError: () => Effect.succeed({ email: "" }),
           }),
         );
         const email = emailResult.email;
@@ -74,4 +75,6 @@ export class UserService extends Effect.Service<UserService>()("UserService", {
       }),
     };
   }),
-}) {}
+}) {
+  static readonly layer = Layer.effect(this, this.make);
+}

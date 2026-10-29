@@ -62,7 +62,7 @@ function FamilyBillingOverviewPage() {
       <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <Card>
           <div className="p-4">
-            <p className="text-xs font-medium uppercase tracking-wide text-muted dark:text-muted-dark">
+            <p className="text-xs font-medium tracking-wide text-muted uppercase dark:text-muted-dark">
               Gross Outstanding
             </p>
             <p className="mt-1 text-2xl font-bold text-primary dark:text-primary-dark">
@@ -72,7 +72,7 @@ function FamilyBillingOverviewPage() {
         </Card>
         <Card>
           <div className="p-4">
-            <p className="text-xs font-medium uppercase tracking-wide text-muted dark:text-muted-dark">
+            <p className="text-xs font-medium tracking-wide text-muted uppercase dark:text-muted-dark">
               Available Credit
             </p>
             <p className="mt-1 text-2xl font-bold text-green-600 dark:text-green-400">
@@ -82,10 +82,12 @@ function FamilyBillingOverviewPage() {
         </Card>
         <Card>
           <div className="p-4">
-            <p className="text-xs font-medium uppercase tracking-wide text-muted dark:text-muted-dark">
+            <p className="text-xs font-medium tracking-wide text-muted uppercase dark:text-muted-dark">
               Net Due
             </p>
-            <p className={`mt-1 text-2xl font-bold ${balance.net_due_cents > 0 ? "text-red-600 dark:text-red-400" : "text-green-600 dark:text-green-400"}`}>
+            <p
+              className={`mt-1 text-2xl font-bold ${balance.net_due_cents > 0 ? "text-red-600 dark:text-red-400" : "text-green-600 dark:text-green-400"}`}
+            >
               {formatCents(balance.net_due_cents)}
             </p>
           </div>
@@ -95,7 +97,7 @@ function FamilyBillingOverviewPage() {
       <div className="mb-8 grid gap-4 sm:grid-cols-2">
         <Card>
           <div className="p-4">
-            <p className="text-xs font-medium uppercase tracking-wide text-muted dark:text-muted-dark">
+            <p className="text-xs font-medium tracking-wide text-muted uppercase dark:text-muted-dark">
               Outstanding
             </p>
             <p className="mt-1 text-lg font-semibold text-primary dark:text-primary-dark">
@@ -105,7 +107,7 @@ function FamilyBillingOverviewPage() {
         </Card>
         <Card>
           <div className="p-4">
-            <p className="text-xs font-medium uppercase tracking-wide text-red-600 dark:text-red-400">
+            <p className="text-xs font-medium tracking-wide text-red-600 uppercase dark:text-red-400">
               Overdue
             </p>
             <p className="mt-1 text-lg font-semibold text-red-600 dark:text-red-400">
@@ -186,10 +188,7 @@ function FamilyBillingOverviewPage() {
           </div>
         )}
         <div className="mt-4">
-          <Link
-            to="/family/billing/bills"
-            className="text-sm text-accent hover:underline"
-          >
+          <Link to="/family/billing/bills" className="text-sm text-accent hover:underline">
             View all bills &rarr;
           </Link>
         </div>
@@ -212,21 +211,23 @@ function FamilyBillingOverviewPage() {
                 </tr>
               </thead>
               <tbody>
-                {credits.filter((c) => !c.consumed_at).map((c) => (
-                  <tr
-                    key={c.id}
-                    className="border-t border-overlay/8 hover:bg-overlay/4 dark:border-overlay-dark/8 dark:hover:bg-overlay-dark/4"
-                  >
-                    <td className="px-4 py-3 font-medium">{formatCents(c.amount_cents)}</td>
-                    <td className="px-4 py-3 text-muted dark:text-muted-dark">{c.reason}</td>
-                    <td className="px-4 py-3 text-muted dark:text-muted-dark">
-                      {dateLabel(c.created_at)}
-                    </td>
-                    <td className="px-4 py-3 text-muted dark:text-muted-dark">
-                      {c.expires_at ? dateLabel(c.expires_at) : "\u2014"}
-                    </td>
-                  </tr>
-                ))}
+                {credits
+                  .filter((c) => !c.consumed_at)
+                  .map((c) => (
+                    <tr
+                      key={c.id}
+                      className="border-t border-overlay/8 hover:bg-overlay/4 dark:border-overlay-dark/8 dark:hover:bg-overlay-dark/4"
+                    >
+                      <td className="px-4 py-3 font-medium">{formatCents(c.amount_cents)}</td>
+                      <td className="px-4 py-3 text-muted dark:text-muted-dark">{c.reason}</td>
+                      <td className="px-4 py-3 text-muted dark:text-muted-dark">
+                        {dateLabel(c.created_at)}
+                      </td>
+                      <td className="px-4 py-3 text-muted dark:text-muted-dark">
+                        {c.expires_at ? dateLabel(c.expires_at) : "\u2014"}
+                      </td>
+                    </tr>
+                  ))}
               </tbody>
             </table>
           </div>
@@ -266,19 +267,13 @@ function BillTable({ bills }: { bills: readonly any[] }) {
                 </Link>
               </td>
               <td className="px-4 py-3">
-                <span className={billStatusBadge(bill.status)}>
-                  {statusLabel(bill.status)}
-                </span>
+                <span className={billStatusBadge(bill.status)}>{statusLabel(bill.status)}</span>
               </td>
               <td className="px-4 py-3 text-muted dark:text-muted-dark">
                 {dateLabel(bill.billing_period_start)} \u2013 {dateLabel(bill.billing_period_end)}
               </td>
-              <td className="px-4 py-3">
-                {bill.due_date ? dateLabel(bill.due_date) : "\u2014"}
-              </td>
-              <td className="px-4 py-3 font-medium">
-                {formatCents(bill.total_cents)}
-              </td>
+              <td className="px-4 py-3">{bill.due_date ? dateLabel(bill.due_date) : "\u2014"}</td>
+              <td className="px-4 py-3 font-medium">{formatCents(bill.total_cents)}</td>
               <td className="px-4 py-3">
                 <a
                   href={`/api/family/billing/bills/${bill.id}/pdf`}

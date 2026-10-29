@@ -33,11 +33,7 @@ function PasswordForm({
   const [password, setPassword] = useState("");
 
   return (
-    <form
-      method="post"
-      action={loginWithPassword.url}
-      className="flex flex-col gap-5"
-    >
+    <form method="post" action={loginWithPassword.url} className="flex flex-col gap-5">
       {serverError ? (
         <div
           data-testid="login-error"
@@ -125,21 +121,23 @@ function MagicLinkForm({
         value={email}
         onChange={onEmailChange}
       />
-        <button
-          type="submit"
-          data-testid="magic-link-submit"
-          className="mt-2 inline-flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl bg-accent px-6 py-3 text-sm font-semibold text-white transition-all hover:-translate-y-px hover:bg-accent-hover data-disabled:cursor-not-allowed data-disabled:opacity-50 data-disabled:hover:transform-none"
-        >
-          Send Magic Link
-        </button>
-      </form>
-    );
+      <button
+        type="submit"
+        data-testid="magic-link-submit"
+        className="mt-2 inline-flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl bg-accent px-6 py-3 text-sm font-semibold text-white transition-all hover:-translate-y-px hover:bg-accent-hover data-disabled:cursor-not-allowed data-disabled:opacity-50 data-disabled:hover:transform-none"
+      >
+        Send Magic Link
+      </button>
+    </form>
+  );
 }
 
 function LoginPage() {
   const { redirect, error, magic_sent, login_method } = Route.useSearch();
   const [email, setEmail] = useState("");
-  const [selectedTab, setSelectedTab] = useState<Key>(login_method === "magic" ? "magic" : "password");
+  const [selectedTab, setSelectedTab] = useState<Key>(
+    login_method === "magic" ? "magic" : "password",
+  );
 
   useEffect(() => {
     setSelectedTab(login_method === "magic" ? "magic" : "password");

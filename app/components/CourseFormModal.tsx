@@ -49,7 +49,7 @@ export function CourseFormModal({ open, onClose, course, onSuccess }: CourseForm
       title: string;
       instrument: string;
       description?: string;
-    }) => Effect.runPromise(api.admin.updateCourse({ path: { id }, payload })),
+    }) => Effect.runPromise(api.admin.updateCourse({ params: { id }, payload })),
   });
 
   const form = useForm({

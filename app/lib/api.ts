@@ -1,7 +1,7 @@
-import * as FetchHttpClient from "@effect/platform/FetchHttpClient";
-import * as HttpApiClient from "@effect/platform/HttpApiClient";
-import * as HttpClient from "@effect/platform/HttpClient";
-import * as HttpClientRequest from "@effect/platform/HttpClientRequest";
+import * as FetchHttpClient from "effect/http/FetchHttpClient";
+import * as HttpApiClient from "effect/http-api/HttpApiClient";
+import * as HttpClient from "effect/http/HttpClient";
+import * as HttpClientRequest from "effect/http/HttpClientRequest";
 import { Layer, ManagedRuntime } from "effect";
 import { clientApi } from "../../shared/httpApi.js";
 

@@ -1,5 +1,6 @@
-import { Clock, Effect, Option } from "effect";
+import { Clock, Effect, Option, Context, Layer } from "effect";
 import * as S from "effect/Schema";
+import * as Struct from "effect/Struct";
 import { sql } from "kysely";
 import type { LessonStatus } from "../../shared/schemas.js";
 import { Module, Material, UserRole } from "../../shared/schemas.js";
@@ -12,9 +13,8 @@ import { resolveAssignedTrackIndex } from "./notationService.js";
 import { SessionService } from "./sessionService.js";
 import { TestimonialReminderService } from "./testimonialReminderService.js";
 
-const CourseMaterial = S.extend(
-  Material,
-  S.Struct({
+const CourseMaterial = Material.mapFields(
+  Struct.assign({
     module_id: S.String,
     sort_order: S.Number,
   }),
@@ -49,7 +49,7 @@ function assertAssignedMaterial(db: Database, materialId: string) {
     .pipe(
       Effect.head,
       Effect.catchTags({
-        NoSuchElementException: () => new HttpError(404, "Assignment not found"),
+        NoSuchElementError: () => new HttpError(404, "Assignment not found"),
       }),
     );
 }
@@ -75,11 +75,10 @@ function testimonialSelect(db: Database, userId: string) {
   );
 }
 
-export class AuthenticatedRouteService extends Effect.Service<AuthenticatedRouteService>()(
+export class AuthenticatedRouteService extends Context.Service<AuthenticatedRouteService>()(
   "AuthenticatedRouteService",
   {
-    accessors: true,
-    sync: () => {
+    make: Effect.sync(() => {
       return {
         courses: Effect.fn("courses")(function* (sessionId: string, studentId?: string) {
           return yield* withAuthContext(sessionId, (db) => {
@@ -159,12 +158,12 @@ export class AuthenticatedRouteService extends Effect.Service<AuthenticatedRoute
                 .pipe(
                   Effect.head,
                   Effect.catchTags({
-                    NoSuchElementException: () => new HttpError(404, "Course not found"),
+                    NoSuchElementError: () => new HttpError(404, "Course not found"),
                   }),
                 );
 
-              const modulesJson = yield* S.decodeUnknown(S.Array(Module))(rows.modules_json);
-              const materialsJson = yield* S.decodeUnknown(S.Array(CourseMaterial))(
+              const modulesJson = yield* S.decodeUnknownEffect(S.Array(Module))(rows.modules_json);
+              const materialsJson = yield* S.decodeUnknownEffect(S.Array(CourseMaterial))(
                 rows.materials_json,
               );
 
@@ -338,8 +337,7 @@ export class AuthenticatedRouteService extends Effect.Service<AuthenticatedRoute
                 .pipe(
                   Effect.head,
                   Effect.catchTags({
-                    NoSuchElementException: () =>
-                      new HttpError(500, "Failed to create practice log"),
+                    NoSuchElementError: () => new HttpError(500, "Failed to create practice log"),
                   }),
                 );
             }),
@@ -387,8 +385,7 @@ export class AuthenticatedRouteService extends Effect.Service<AuthenticatedRoute
                   .pipe(
                     Effect.head,
                     Effect.catchTags({
-                      NoSuchElementException: () =>
-                        new HttpError(500, "Failed to update practice log"),
+                      NoSuchElementError: () => new HttpError(500, "Failed to update practice log"),
                     }),
                   );
               }
@@ -414,8 +411,7 @@ export class AuthenticatedRouteService extends Effect.Service<AuthenticatedRoute
                 .pipe(
                   Effect.head,
                   Effect.catchTags({
-                    NoSuchElementException: () =>
-                      new HttpError(500, "Failed to create practice log"),
+                    NoSuchElementError: () => new HttpError(500, "Failed to create practice log"),
                   }),
                 );
             }),
@@ -459,7 +455,7 @@ export class AuthenticatedRouteService extends Effect.Service<AuthenticatedRoute
                 .pipe(
                   Effect.head,
                   Effect.catchTags({
-                    NoSuchElementException: () =>
+                    NoSuchElementError: () =>
                       new HttpError(500, "Failed to record assignment playback"),
                   }),
                 );
@@ -491,7 +487,7 @@ export class AuthenticatedRouteService extends Effect.Service<AuthenticatedRoute
                 .pipe(
                   Effect.head,
                   Effect.catchTags({
-                    NoSuchElementException: () => new HttpError(404, "Assignment not found"),
+                    NoSuchElementError: () => new HttpError(404, "Assignment not found"),
                   }),
                 );
 
@@ -510,7 +506,7 @@ export class AuthenticatedRouteService extends Effect.Service<AuthenticatedRoute
                 .pipe(
                   Effect.head,
                   Effect.catchTags({
-                    NoSuchElementException: () =>
+                    NoSuchElementError: () =>
                       new HttpError(500, "Failed to create assignment review"),
                   }),
                 );
@@ -570,8 +566,7 @@ export class AuthenticatedRouteService extends Effect.Service<AuthenticatedRoute
                 .pipe(
                   Effect.head,
                   Effect.catchTags({
-                    NoSuchElementException: () =>
-                      new HttpError(500, "Failed to save assignment notes"),
+                    NoSuchElementError: () => new HttpError(500, "Failed to save assignment notes"),
                   }),
                 );
             }),
@@ -634,7 +629,7 @@ export class AuthenticatedRouteService extends Effect.Service<AuthenticatedRoute
                 .pipe(
                   Effect.head,
                   Effect.catchTags({
-                    NoSuchElementException: () => new HttpError(400, "No staff user found"),
+                    NoSuchElementError: () => new HttpError(400, "No staff user found"),
                   }),
                 ),
             );
@@ -654,7 +649,7 @@ export class AuthenticatedRouteService extends Effect.Service<AuthenticatedRoute
               ),
             ).pipe(
               Effect.catchTags({
-                NoSuchElementException: () => HttpError.make(500, "Failed to send message"),
+                NoSuchElementError: () => new HttpError(500, "Failed to send message"),
               }),
             ),
           );
@@ -753,7 +748,7 @@ export class AuthenticatedRouteService extends Effect.Service<AuthenticatedRoute
                 .pipe(
                   Effect.head,
                   Effect.catchTags({
-                    NoSuchElementException: () => new HttpError(404, "Lesson not found"),
+                    NoSuchElementError: () => new HttpError(404, "Lesson not found"),
                   }),
                 );
             }),
@@ -815,7 +810,7 @@ export class AuthenticatedRouteService extends Effect.Service<AuthenticatedRoute
                 .pipe(
                   Effect.head,
                   Effect.catchTags({
-                    NoSuchElementException: () => new HttpError(404, "Lesson note not found"),
+                    NoSuchElementError: () => new HttpError(404, "Lesson note not found"),
                   }),
                 );
             }),
@@ -882,7 +877,7 @@ export class AuthenticatedRouteService extends Effect.Service<AuthenticatedRoute
                 .pipe(
                   Effect.head,
                   Effect.catchTags({
-                    NoSuchElementException: () => new HttpError(500, "Failed to add email"),
+                    NoSuchElementError: () => new HttpError(500, "Failed to add email"),
                   }),
                 );
             }),
@@ -903,7 +898,7 @@ export class AuthenticatedRouteService extends Effect.Service<AuthenticatedRoute
                 .pipe(
                   Effect.head,
                   Effect.catchTags({
-                    NoSuchElementException: () => new HttpError(404, "Email not found"),
+                    NoSuchElementError: () => new HttpError(404, "Email not found"),
                   }),
                 );
               if (email.is_primary) {
@@ -928,7 +923,7 @@ export class AuthenticatedRouteService extends Effect.Service<AuthenticatedRoute
                 .pipe(
                   Effect.head,
                   Effect.catchTags({
-                    NoSuchElementException: () => new HttpError(404, "Email not found"),
+                    NoSuchElementError: () => new HttpError(404, "Email not found"),
                   }),
                 );
               yield* db.execute(
@@ -948,7 +943,7 @@ export class AuthenticatedRouteService extends Effect.Service<AuthenticatedRoute
                 .pipe(
                   Effect.head,
                   Effect.catchTags({
-                    NoSuchElementException: () => new HttpError(404, "Email not found"),
+                    NoSuchElementError: () => new HttpError(404, "Email not found"),
                   }),
                 );
               return updated;
@@ -973,7 +968,7 @@ export class AuthenticatedRouteService extends Effect.Service<AuthenticatedRoute
                 .pipe(
                   Effect.head,
                   Effect.catchTags({
-                    NoSuchElementException: () => new HttpError(404, "Email not found"),
+                    NoSuchElementError: () => new HttpError(404, "Email not found"),
                   }),
                 );
               if (email.is_verified) {
@@ -1021,12 +1016,14 @@ export class AuthenticatedRouteService extends Effect.Service<AuthenticatedRoute
               return yield* testimonialSelect(db, userId).pipe(
                 Effect.head,
                 Effect.catchTags({
-                  NoSuchElementException: () => HttpError.make(500, "Failed to save testimonial"),
+                  NoSuchElementError: () => new HttpError(500, "Failed to save testimonial"),
                 }),
               );
             }),
           );
-          yield* TestimonialReminderService.clearReminderState(userId);
+          yield* TestimonialReminderService.use((testimonialReminderService) =>
+            testimonialReminderService.clearReminderState(userId),
+          );
           return row;
         }),
 
@@ -1047,12 +1044,14 @@ export class AuthenticatedRouteService extends Effect.Service<AuthenticatedRoute
                 .pipe(
                   Effect.head,
                   Effect.catchTags({
-                    NoSuchElementException: () => new HttpError(404, "Testimonial not found"),
+                    NoSuchElementError: () => new HttpError(404, "Testimonial not found"),
                   }),
                 );
             }),
           );
-          yield* TestimonialReminderService.scheduleNextReminder(userId);
+          yield* TestimonialReminderService.use((testimonialReminderService) =>
+            testimonialReminderService.scheduleNextReminder(userId),
+          );
         }),
 
         myLessonCancellationPolicy: Effect.fn("myLessonCancellationPolicy")(function* (values: {
@@ -1077,7 +1076,7 @@ export class AuthenticatedRouteService extends Effect.Service<AuthenticatedRoute
               .pipe(
                 Effect.head,
                 Effect.catchTags({
-                  NoSuchElementException: () => new HttpError(404, "Lesson not found"),
+                  NoSuchElementError: () => new HttpError(404, "Lesson not found"),
                 }),
               ),
           );
@@ -1099,13 +1098,15 @@ export class AuthenticatedRouteService extends Effect.Service<AuthenticatedRoute
               )
               .pipe(Effect.head, Effect.option),
           );
-          return yield* LessonPolicyService.evaluate({
-            billingModel: row.billing_model,
-            scheduledAt: new Date(row.scheduled_at),
-            rateCents: row.rate_cents,
-            heldDepositCents: Option.getOrNull(deposit)?.amount_cents ?? null,
-            now,
-          });
+          return yield* LessonPolicyService.use((lessonPolicyService) =>
+            lessonPolicyService.evaluate({
+              billingModel: row.billing_model,
+              scheduledAt: new Date(row.scheduled_at),
+              rateCents: row.rate_cents,
+              heldDepositCents: Option.getOrNull(deposit)?.amount_cents ?? null,
+              now,
+            }),
+          );
         }),
 
         cancelMyLesson: Effect.fn("cancelMyLesson")(function* (values: {
@@ -1114,7 +1115,9 @@ export class AuthenticatedRouteService extends Effect.Service<AuthenticatedRoute
           lessonId: string;
           reason: string | null;
         }) {
-          const settings = yield* LessonPolicyService.getSettings();
+          const settings = yield* LessonPolicyService.use((lessonPolicyService) =>
+            lessonPolicyService.getSettings(),
+          );
           const now = new Date(yield* Clock.currentTimeMillis);
           const result = yield* withAuthContext(
             values.sessionId,
@@ -1143,7 +1146,7 @@ export class AuthenticatedRouteService extends Effect.Service<AuthenticatedRoute
                 .pipe(
                   Effect.head,
                   Effect.catchTags({
-                    NoSuchElementException: () => new HttpError(404, "Lesson not found"),
+                    NoSuchElementError: () => new HttpError(404, "Lesson not found"),
                   }),
                 );
               if (row.status !== "scheduled") {
@@ -1163,14 +1166,16 @@ export class AuthenticatedRouteService extends Effect.Service<AuthenticatedRoute
                 )
                 .pipe(Effect.head, Effect.option);
               const heldDeposit = Option.getOrNull(deposit);
-              const policy = yield* LessonPolicyService.evaluate({
-                billingModel: row.billing_model,
-                scheduledAt: new Date(row.scheduled_at),
-                rateCents: row.rate_cents,
-                heldDepositCents: heldDeposit?.amount_cents ?? null,
-                settings,
-                now,
-              });
+              const policy = yield* LessonPolicyService.use((lessonPolicyService) =>
+                lessonPolicyService.evaluate({
+                  billingModel: row.billing_model,
+                  scheduledAt: new Date(row.scheduled_at),
+                  rateCents: row.rate_cents,
+                  heldDepositCents: heldDeposit?.amount_cents ?? null,
+                  settings,
+                  now,
+                }),
+              );
               if (heldDeposit && policy.deposit_outcome !== "none") {
                 yield* db.execute(
                   db
@@ -1212,7 +1217,8 @@ export class AuthenticatedRouteService extends Effect.Service<AuthenticatedRoute
             }),
           );
           if (result.gcalEventId) {
-            yield* GoogleCalendarService.deleteEvent(result.gcalEventId).pipe(Effect.ignore);
+            const googleCalendarService = yield* GoogleCalendarService;
+            yield* googleCalendarService.deleteEvent(result.gcalEventId).pipe(Effect.ignore);
           }
           return result.lesson;
         }),
@@ -1239,7 +1245,7 @@ export class AuthenticatedRouteService extends Effect.Service<AuthenticatedRoute
               .pipe(
                 Effect.head,
                 Effect.catchTags({
-                  NoSuchElementException: () => new HttpError(404, "Lesson not found"),
+                  NoSuchElementError: () => new HttpError(404, "Lesson not found"),
                 }),
               ),
           );
@@ -1247,11 +1253,13 @@ export class AuthenticatedRouteService extends Effect.Service<AuthenticatedRoute
             return yield* new HttpError(409, "Only future scheduled lessons can be rescheduled");
           }
           if (
-            yield* LessonPolicyService.hasScheduledOverlap({
-              lessonId: values.lessonId,
-              scheduledAt: values.scheduledAt,
-              durationMinutes: existing.duration_minutes,
-            })
+            yield* LessonPolicyService.use((lessonPolicyService) =>
+              lessonPolicyService.hasScheduledOverlap({
+                lessonId: values.lessonId,
+                scheduledAt: values.scheduledAt,
+                durationMinutes: existing.duration_minutes,
+              }),
+            )
           ) {
             return yield* new HttpError(409, "The new lesson time overlaps another lesson");
           }
@@ -1262,13 +1270,16 @@ export class AuthenticatedRouteService extends Effect.Service<AuthenticatedRoute
             values.scheduledAt.getTime() + existing.duration_minutes * 60 * 1000,
           );
           if (existing.gcal_event_id) {
-            yield* GoogleCalendarService.updateEvent(existing.gcal_event_id, {
+            const googleCalendarService = yield* GoogleCalendarService;
+            yield* googleCalendarService.updateEvent(existing.gcal_event_id, {
               start: values.scheduledAt.toISOString(),
               end: newEnd.toISOString(),
             });
           }
 
-          const settings = yield* LessonPolicyService.getSettings();
+          const settings = yield* LessonPolicyService.use((lessonPolicyService) =>
+            lessonPolicyService.getSettings(),
+          );
           const persist = withAuthContext(
             values.sessionId,
             Effect.fnUntraced(function* (db) {
@@ -1311,14 +1322,16 @@ export class AuthenticatedRouteService extends Effect.Service<AuthenticatedRoute
                   )
                   .pipe(Effect.head, Effect.option);
                 const heldDeposit = Option.getOrNull(deposit);
-                const policy = yield* LessonPolicyService.evaluate({
-                  billingModel: row.billing_model,
-                  scheduledAt: oldStart,
-                  rateCents: row.rate_cents,
-                  heldDepositCents: heldDeposit?.amount_cents ?? null,
-                  settings,
-                  now,
-                });
+                const policy = yield* LessonPolicyService.use((lessonPolicyService) =>
+                  lessonPolicyService.evaluate({
+                    billingModel: row.billing_model,
+                    scheduledAt: oldStart,
+                    rateCents: row.rate_cents,
+                    heldDepositCents: heldDeposit?.amount_cents ?? null,
+                    settings,
+                    now,
+                  }),
+                );
                 if (heldDeposit && policy.deposit_outcome !== "none") {
                   yield* db.execute(
                     db
@@ -1352,14 +1365,17 @@ export class AuthenticatedRouteService extends Effect.Service<AuthenticatedRoute
           );
 
           return yield* persist.pipe(
-            Effect.catchAll((error) =>
-              existing.gcal_event_id
-                ? GoogleCalendarService.updateEvent(existing.gcal_event_id, {
-                    start: oldStart.toISOString(),
-                    end: oldEnd.toISOString(),
-                  }).pipe(Effect.ignore, Effect.zipRight(Effect.fail(error)))
-                : Effect.fail(error),
-            ),
+            Effect.catch((error) => {
+              const gcalEventId = existing.gcal_event_id;
+              return gcalEventId
+                ? GoogleCalendarService.use((googleCalendarService) =>
+                    googleCalendarService.updateEvent(gcalEventId, {
+                      start: oldStart.toISOString(),
+                      end: oldEnd.toISOString(),
+                    }),
+                  ).pipe(Effect.ignore, Effect.andThen(Effect.fail(error)))
+                : Effect.fail(error);
+            }),
           );
         }),
 
@@ -1423,7 +1439,7 @@ export class AuthenticatedRouteService extends Effect.Service<AuthenticatedRoute
                 preflight.lesson_duration_minutes == null ||
                 preflight.billing_model == null
               ) {
-                return yield* HttpError.make(
+                return yield* new HttpError(
                   404,
                   "No rate configured for this location type. Please contact your teacher.",
                 );
@@ -1465,7 +1481,7 @@ export class AuthenticatedRouteService extends Effect.Service<AuthenticatedRoute
                 .pipe(
                   Effect.head,
                   Effect.catchTags({
-                    NoSuchElementException: () => new HttpError(500, "Failed to create lesson"),
+                    NoSuchElementError: () => new HttpError(500, "Failed to create lesson"),
                   }),
                 );
 
@@ -1493,7 +1509,9 @@ export class AuthenticatedRouteService extends Effect.Service<AuthenticatedRoute
             }),
           );
 
-          const connected = yield* GoogleCalendarService.isConnected();
+          const connected = yield* GoogleCalendarService.use((googleCalendarService) =>
+            googleCalendarService.isConnected(),
+          );
           if (connected) {
             const student = yield* withAuthContext(values.sessionId, (db) =>
               db
@@ -1506,17 +1524,19 @@ export class AuthenticatedRouteService extends Effect.Service<AuthenticatedRoute
                 .pipe(
                   Effect.head,
                   Effect.catchTags({
-                    NoSuchElementException: () => new HttpError(404, "Student not found"),
+                    NoSuchElementError: () => new HttpError(404, "Student not found"),
                   }),
                 ),
             );
             const studentName = student.name || student.username || "Student";
-            const eventId = yield* GoogleCalendarService.createEvent({
-              summary: `Lesson: ${studentName}`,
-              description: `${values.durationMinutes} min ${values.locationType.replace(/_/g, " ")} lesson`,
-              start: values.scheduledAt.toISOString(),
-              end: slotEnd.toISOString(),
-            });
+            const eventId = yield* GoogleCalendarService.use((googleCalendarService) =>
+              googleCalendarService.createEvent({
+                summary: `Lesson: ${studentName}`,
+                description: `${values.durationMinutes} min ${values.locationType.replace(/_/g, " ")} lesson`,
+                start: values.scheduledAt.toISOString(),
+                end: slotEnd.toISOString(),
+              }),
+            );
             if (eventId) {
               yield* withAuthContext(values.sessionId, (db) =>
                 db.execute(
@@ -1559,7 +1579,9 @@ export class AuthenticatedRouteService extends Effect.Service<AuthenticatedRoute
             return yield* new HttpError(403, "Student is not in your family");
           }
 
-          yield* SessionService.updateActiveStudent(sessionId, studentId);
+          yield* SessionService.use((sessionService) =>
+            sessionService.updateActiveStudent(sessionId, studentId),
+          );
         }),
 
         createChild: Effect.fnUntraced(function* (sessionId: string, userId: string, name: string) {
@@ -1606,7 +1628,9 @@ export class AuthenticatedRouteService extends Effect.Service<AuthenticatedRoute
               .pipe(Effect.head),
           );
 
-          yield* SessionService.updateActiveStudent(sessionId, child.id);
+          yield* SessionService.use((sessionService) =>
+            sessionService.updateActiveStudent(sessionId, child.id),
+          );
 
           return {
             id: child.id,
@@ -1641,7 +1665,7 @@ export class AuthenticatedRouteService extends Effect.Service<AuthenticatedRoute
                 .pipe(
                   Effect.head,
                   Effect.catchTags({
-                    NoSuchElementException: () => new HttpError(404, "Family not found"),
+                    NoSuchElementError: () => new HttpError(404, "Family not found"),
                   }),
                 );
 
@@ -1713,7 +1737,7 @@ export class AuthenticatedRouteService extends Effect.Service<AuthenticatedRoute
               .pipe(
                 Effect.head,
                 Effect.catchTags({
-                  NoSuchElementException: () =>
+                  NoSuchElementError: () =>
                     new HttpError(403, "Only the family owner can remove members"),
                 }),
               ),
@@ -1750,7 +1774,7 @@ export class AuthenticatedRouteService extends Effect.Service<AuthenticatedRoute
               .pipe(
                 Effect.head,
                 Effect.catchTags({
-                  NoSuchElementException: () =>
+                  NoSuchElementError: () =>
                     new HttpError(403, "Only the family owner can invite members"),
                 }),
               ),
@@ -1845,6 +1869,8 @@ export class AuthenticatedRouteService extends Effect.Service<AuthenticatedRoute
           return { success: true as const };
         }),
       };
-    },
+    }),
   },
-) {}
+) {
+  static readonly layer = Layer.effect(this, this.make);
+}

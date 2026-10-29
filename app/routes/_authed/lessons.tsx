@@ -32,8 +32,12 @@ const getLessonsPageData = createServerFn({ method: "GET" }).handler(() =>
     Effect.gen(function* () {
       const session = yield* requireAdminSession(getCookie("session"));
       const [lessons, students] = yield* Effect.all([
-        AdminRouteService.listLessons(session.session.id, { limit: 50, offset: 0 }),
-        AdminRouteService.listStudents(session.session.id),
+        AdminRouteService.use((adminRouteService) =>
+          adminRouteService.listLessons(session.session.id, { limit: 50, offset: 0 }),
+        ),
+        AdminRouteService.use((adminRouteService) =>
+          adminRouteService.listStudents(session.session.id),
+        ),
       ]);
 
       return toServerFunctionPayload({
@@ -48,12 +52,14 @@ const getLessonsPageData = createServerFn({ method: "GET" }).handler(() =>
 );
 
 const getLessonNote = createServerFn({ method: "GET" })
-  .validator(S.standardSchemaV1(S.Struct({ lessonId: S.String })))
+  .validator(S.toStandardSchemaV1(S.Struct({ lessonId: S.String })))
   .handler(({ data }) =>
     serverRuntime.runPromise(
       Effect.gen(function* () {
         const session = yield* requireAdminSession(getCookie("session"));
-        const note = yield* AdminRouteService.getLessonNote(session.session.id, data.lessonId);
+        const note = yield* AdminRouteService.use((adminRouteService) =>
+          adminRouteService.getLessonNote(session.session.id, data.lessonId),
+        );
         return serializeLessonNote(note);
       }),
     ),
@@ -112,8 +118,7 @@ function LessonsPage() {
   });
 
   const completeLessonMutation = useMutation({
-    mutationFn: (id: string) =>
-      Effect.runPromise(api.admin.completeLesson({ path: { id } })),
+    mutationFn: (id: string) => Effect.runPromise(api.admin.completeLesson({ params: { id } })),
     onSettled: () => {
       void router.invalidate();
     },
@@ -121,7 +126,7 @@ function LessonsPage() {
 
   const cancelLessonMutation = useMutation({
     mutationFn: (id: string) =>
-      Effect.runPromise(api.admin.cancelLesson({ path: { id }, payload: {} })),
+      Effect.runPromise(api.admin.cancelLesson({ params: { id }, payload: {} })),
     onSettled: () => {
       void router.invalidate();
     },
@@ -131,7 +136,7 @@ function LessonsPage() {
     mutationFn: (params: { id: string; payload: Record<string, unknown> }) =>
       Effect.runPromise(
         api.admin.updateLesson({
-          path: { id: params.id },
+          params: { id: params.id },
           payload: params.payload,
         }),
       ),
@@ -142,8 +147,7 @@ function LessonsPage() {
   });
 
   const deleteLessonMutation = useMutation({
-    mutationFn: (id: string) =>
-      Effect.runPromise(api.admin.deleteLesson({ path: { id } })),
+    mutationFn: (id: string) => Effect.runPromise(api.admin.deleteLesson({ params: { id } })),
     onSettled: () => {
       setDeleteTarget(null);
       void router.invalidate();
@@ -164,13 +168,13 @@ function LessonsPage() {
     }) => {
       const data = await Effect.runPromise(
         api.admin.saveLessonNote({
-          path: { id: params.lessonId },
+          params: { id: params.lessonId },
           payload: params.payload,
         }),
       );
       if (params.publish) {
         const pubData = await Effect.runPromise(
-          api.admin.publishLessonNote({ path: { id: params.lessonId } }),
+          api.admin.publishLessonNote({ params: { id: params.lessonId } }),
         );
         return { ...data, ...pubData };
       }

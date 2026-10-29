@@ -80,7 +80,7 @@ const appleConfigEffect = Effect.sync(() => {
     !oauthConfig.apple.keyId ||
     !oauthConfig.apple.privateKey
   ) {
-    throw HttpError.make(503, "Apple OAuth is not configured");
+    throw new HttpError(503, "Apple OAuth is not configured");
   }
   return oauthConfig.apple;
 });
@@ -269,7 +269,7 @@ export const verifyAppleIdToken = Effect.fnUntraced(function* (idToken: string) 
         issuer: appleIssuer,
         audience: appleConfig.clientId,
       }).then((verified) => verified.payload),
-    catch: () => HttpError.make(400, "Invalid Apple id_token"),
+    catch: () => new HttpError(400, "Invalid Apple id_token"),
   });
 });
 
@@ -278,10 +278,10 @@ function mapOAuthError(provider: OAuthProvider, error: unknown): HttpError {
     return error;
   }
   if (error instanceof OAuth2RequestError) {
-    return HttpError.make(400, `${providerName(provider)} OAuth request failed (${error.code})`);
+    return new HttpError(400, `${providerName(provider)} OAuth request failed (${error.code})`);
   }
   if (error instanceof ArcticFetchError) {
-    return HttpError.make(502, `${providerName(provider)} OAuth request failed`);
+    return new HttpError(502, `${providerName(provider)} OAuth request failed`);
   }
-  return HttpError.make(502, `${providerName(provider)} OAuth failed`);
+  return new HttpError(502, `${providerName(provider)} OAuth failed`);
 }

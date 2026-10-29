@@ -70,17 +70,12 @@ function timeLabel(value: string) {
 }
 
 function weekdayLabel(day: number) {
-  return (
-    weekdayOptions.find((option) => option.value === String(day))?.label ??
-    `Day ${day}`
-  );
+  return weekdayOptions.find((option) => option.value === String(day))?.label ?? `Day ${day}`;
 }
 
 function statusLabel(value?: string | null) {
   if (!value) return "Pending generation";
-  return value
-    .replaceAll("_", " ")
-    .replace(/^./, (character) => character.toUpperCase());
+  return value.replaceAll("_", " ").replace(/^./, (character) => character.toUpperCase());
 }
 
 function ErrorMessage({ error }: { error: unknown }) {
@@ -95,18 +90,15 @@ function ErrorMessage({ error }: { error: unknown }) {
 export function StudentRecurringBilling({ studentId }: { studentId: string }) {
   const rates = useQuery({
     queryKey: ["admin", "student-rates", studentId],
-    queryFn: () =>
-      Effect.runPromise(api.admin.studentRates({ path: { studentId }, urlParams: {} })),
+    queryFn: () => Effect.runPromise(api.admin.studentRates({ params: { studentId }, query: {} })),
   });
   const schedules = useQuery({
     queryKey: ["admin", "recurring-schedules", studentId],
-    queryFn: () =>
-      Effect.runPromise(api.admin.recurringSchedules({ path: { studentId } })),
+    queryFn: () => Effect.runPromise(api.admin.recurringSchedules({ params: { studentId } })),
   });
   const payments = useQuery({
     queryKey: ["admin", "monthly-payments", studentId],
-    queryFn: () =>
-      Effect.runPromise(api.admin.monthlyPayments({ path: { studentId } })),
+    queryFn: () => Effect.runPromise(api.admin.monthlyPayments({ params: { studentId } })),
   });
 
   const [rateOpen, setRateOpen] = useState(false);
@@ -124,10 +116,7 @@ export function StudentRecurringBilling({ studentId }: { studentId: string }) {
   );
 
   return (
-    <div
-      data-testid="student-recurring-billing"
-      className="mb-10 flex flex-col gap-10"
-    >
+    <div data-testid="student-recurring-billing" className="mb-10 flex flex-col gap-10">
       <section aria-labelledby="student-rates-heading">
         <div className="mb-4 flex items-center justify-between gap-4">
           <div>
@@ -154,9 +143,7 @@ export function StudentRecurringBilling({ studentId }: { studentId: string }) {
           </Button>
         </div>
         {rates.isLoading ? (
-          <p className="text-sm text-muted dark:text-muted-dark">
-            Loading rates...
-          </p>
+          <p className="text-sm text-muted dark:text-muted-dark">Loading rates...</p>
         ) : rates.error ? (
           <ErrorMessage error={rates.error} />
         ) : rates.data?.length ? (
@@ -169,13 +156,11 @@ export function StudentRecurringBilling({ studentId }: { studentId: string }) {
                 >
                   <div>
                     <p className="font-semibold text-primary dark:text-primary-dark">
-                      {formatMoney(rate.rate_cents)} /{" "}
-                      {rate.lesson_duration_minutes} min
+                      {formatMoney(rate.rate_cents)} / {rate.lesson_duration_minutes} min
                     </p>
                     <p className="mt-1 text-sm text-muted dark:text-muted-dark">
-                      {locationOptions.find(
-                        (option) => option.value === rate.location_type,
-                      )?.label ?? rate.location_type}
+                      {locationOptions.find((option) => option.value === rate.location_type)
+                        ?.label ?? rate.location_type}
                     </p>
                     <span className="mt-3 inline-flex rounded-full bg-violet-500/15 px-2 py-1 text-xs font-medium text-violet-700 dark:text-violet-300">
                       {rate.billing_model === "monthly_prepaid"
@@ -183,9 +168,7 @@ export function StudentRecurringBilling({ studentId }: { studentId: string }) {
                         : "Single booking"}
                     </span>
                     {rate.notes ? (
-                      <p className="mt-2 text-xs text-muted dark:text-muted-dark">
-                        {rate.notes}
-                      </p>
+                      <p className="mt-2 text-xs text-muted dark:text-muted-dark">{rate.notes}</p>
                     ) : null}
                   </div>
                   <Button
@@ -243,9 +226,7 @@ export function StudentRecurringBilling({ studentId }: { studentId: string }) {
           </p>
         ) : null}
         {schedules.isLoading ? (
-          <p className="text-sm text-muted dark:text-muted-dark">
-            Loading schedules...
-          </p>
+          <p className="text-sm text-muted dark:text-muted-dark">Loading schedules...</p>
         ) : schedules.error ? (
           <ErrorMessage error={schedules.error} />
         ) : schedules.data?.length ? (
@@ -259,10 +240,8 @@ export function StudentRecurringBilling({ studentId }: { studentId: string }) {
                   <div>
                     <div className="flex flex-wrap items-center gap-2">
                       <p className="font-semibold text-primary dark:text-primary-dark">
-                        {weekdayLabel(
-                          schedule.day_of_week,
-                        )}{" "}
-                        at {timeLabel(schedule.local_start_time)}
+                        {weekdayLabel(schedule.day_of_week)} at{" "}
+                        {timeLabel(schedule.local_start_time)}
                       </p>
                       <span
                         className={`rounded-full px-2 py-0.5 text-xs font-medium ${schedule.active ? "bg-green-500/15 text-green-700 dark:text-green-300" : "bg-overlay/10 text-muted dark:bg-overlay-dark/10 dark:text-muted-dark"}`}
@@ -272,10 +251,8 @@ export function StudentRecurringBilling({ studentId }: { studentId: string }) {
                     </div>
                     <p className="mt-1 text-sm text-muted dark:text-muted-dark">
                       {dateLabel(schedule.starts_on)}
-                      {schedule.ends_on
-                        ? ` – ${dateLabel(schedule.ends_on)}`
-                        : " onward"}{" "}
-                      · {schedule.timezone}
+                      {schedule.ends_on ? ` – ${dateLabel(schedule.ends_on)}` : " onward"} ·{" "}
+                      {schedule.timezone}
                     </p>
                   </div>
                   <Button
@@ -322,9 +299,7 @@ export function StudentRecurringBilling({ studentId }: { studentId: string }) {
           </Button>
         </div>
         {payments.isLoading ? (
-          <p className="text-sm text-muted dark:text-muted-dark">
-            Loading payments...
-          </p>
+          <p className="text-sm text-muted dark:text-muted-dark">Loading payments...</p>
         ) : payments.error ? (
           <ErrorMessage error={payments.error} />
         ) : payments.data?.length ? (
@@ -348,18 +323,11 @@ export function StudentRecurringBilling({ studentId }: { studentId: string }) {
                     <td className="px-4 py-3 font-medium text-primary dark:text-primary-dark">
                       {dateLabel(payment.billing_month)}
                     </td>
-                    <td className="px-4 py-3">
-                      {formatMoney(payment.amount_cents)}
-                    </td>
+                    <td className="px-4 py-3">{formatMoney(payment.amount_cents)}</td>
                     <td className="px-4 py-3">{dateLabel(payment.paid_at)}</td>
-                    <td
-                      className="px-4 py-3"
-                      data-testid="payment-generation-status"
-                    >
+                    <td className="px-4 py-3" data-testid="payment-generation-status">
                       {statusLabel(payment.generation_status)}
-                      {payment.generation_error
-                        ? ` · ${payment.generation_error}`
-                        : ""}
+                      {payment.generation_error ? ` · ${payment.generation_error}` : ""}
                     </td>
                   </tr>
                 ))}
@@ -415,8 +383,7 @@ function RateModal({
   const [amount, setAmount] = useState("");
   const [duration, setDuration] = useState("60");
   const [location, setLocation] = useState<LocationType>("studio");
-  const [billingModel, setBillingModel] =
-    useState<BillingModel>("single_booking");
+  const [billingModel, setBillingModel] = useState<BillingModel>("single_booking");
   const [notes, setNotes] = useState("");
 
   useEffect(() => {
@@ -449,11 +416,7 @@ function RateModal({
   });
 
   return (
-    <Modal
-      open={open}
-      onClose={onClose}
-      title={rate ? "Edit rate" : "Add rate"}
-    >
+    <Modal open={open} onClose={onClose} title={rate ? "Edit rate" : "Add rate"}>
       <form
         data-testid="student-rate-form"
         className="flex flex-col gap-4"
@@ -499,13 +462,7 @@ function RateModal({
           onChange={(value) => setBillingModel(value as BillingModel)}
           data-testid="rate-billing-model"
         />
-        <Textarea
-          id="rate-notes"
-          name="notes"
-          label="Notes"
-          value={notes}
-          onChange={setNotes}
-        />
+        <Textarea id="rate-notes" name="notes" label="Notes" value={notes} onChange={setNotes} />
         <ErrorMessage error={save.error} />
         <div className="mt-2 flex justify-end gap-3">
           <Button variant="ghost" onClick={onClose}>
@@ -513,12 +470,7 @@ function RateModal({
           </Button>
           <Button
             type="submit"
-            disabled={
-              save.isPending ||
-              !amount ||
-              Number(amount) <= 0 ||
-              Number(duration) <= 0
-            }
+            disabled={save.isPending || !amount || Number(amount) <= 0 || Number(duration) <= 0}
           >
             {save.isPending ? "Saving..." : "Save rate"}
           </Button>
@@ -555,9 +507,7 @@ function ScheduleModal({
     setRateId(schedule?.student_rate_id ?? rates[0]?.id ?? "");
     setWeekday(String(schedule?.day_of_week ?? 1));
     setLocalTime(schedule?.local_start_time.slice(0, 5) ?? "16:00");
-    setStartDate(
-      schedule?.starts_on.slice(0, 10) ?? new Date().toISOString().slice(0, 10),
-    );
+    setStartDate(schedule?.starts_on.slice(0, 10) ?? new Date().toISOString().slice(0, 10));
     setEndDate(schedule?.ends_on?.slice(0, 10) ?? "");
     setActive(schedule?.active ?? true);
   }, [open, rates, schedule]);
@@ -566,7 +516,7 @@ function ScheduleModal({
     mutationFn: () =>
       Effect.runPromise(
         api.admin.saveRecurringSchedule({
-          path: { studentId },
+          params: { studentId },
           payload: {
             ...(schedule ? { id: schedule.id } : {}),
             student_rate_id: rateId,
@@ -661,11 +611,7 @@ function ScheduleModal({
             data-testid="schedule-end-date"
           />
         </div>
-        <Switch
-          isSelected={active}
-          onChange={setActive}
-          data-testid="schedule-active"
-        >
+        <Switch isSelected={active} onChange={setActive} data-testid="schedule-active">
           Active
         </Switch>
         <ErrorMessage error={save.error} />
@@ -673,10 +619,7 @@ function ScheduleModal({
           <Button variant="ghost" onClick={onClose}>
             Cancel
           </Button>
-          <Button
-            type="submit"
-            disabled={save.isPending || !rateId || !startDate || !localTime}
-          >
+          <Button type="submit" disabled={save.isPending || !rateId || !startDate || !localTime}>
             {save.isPending ? "Saving..." : "Save schedule"}
           </Button>
         </div>
@@ -714,7 +657,7 @@ function PaymentModal({
     mutationFn: () =>
       Effect.runPromise(
         api.admin.recordMonthlyPayment({
-          path: { studentId },
+          params: { studentId },
           payload: {
             billing_month: `${billingMonth}-01`,
             amount_cents: Math.round(Number(amount) * 100),
@@ -736,11 +679,7 @@ function PaymentModal({
 
   return (
     <Modal open={open} onClose={onClose} title="Record monthly payment">
-      <form
-        data-testid="monthly-payment-form"
-        className="flex flex-col gap-4"
-        onSubmit={submit}
-      >
+      <form data-testid="monthly-payment-form" className="flex flex-col gap-4" onSubmit={submit}>
         <Input
           id="payment-month"
           name="billing_month"
@@ -771,13 +710,7 @@ function PaymentModal({
           onChange={setPaidAt}
           data-testid="payment-paid-at"
         />
-        <Textarea
-          id="payment-notes"
-          name="notes"
-          label="Notes"
-          value={notes}
-          onChange={setNotes}
-        />
+        <Textarea id="payment-notes" name="notes" label="Notes" value={notes} onChange={setNotes} />
         <ErrorMessage error={save.error} />
         <div className="mt-2 flex justify-end gap-3">
           <Button variant="ghost" onClick={onClose}>
@@ -785,13 +718,7 @@ function PaymentModal({
           </Button>
           <Button
             type="submit"
-            disabled={
-              save.isPending ||
-              !billingMonth ||
-              !paidAt ||
-              !amount ||
-              Number(amount) <= 0
-            }
+            disabled={save.isPending || !billingMonth || !paidAt || !amount || Number(amount) <= 0}
           >
             {save.isPending ? "Recording..." : "Record payment"}
           </Button>

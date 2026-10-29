@@ -31,7 +31,9 @@ const getDashboardPageData = createServerFn({ method: "GET" }).handler(() =>
   serverRuntime.runPromise(
     Effect.gen(function* () {
       const token = yield* Effect.sync(() => getCookie("session"));
-      const session = yield* SessionService.validateSessionToken(token);
+      const session = yield* SessionService.use((sessionService) =>
+        sessionService.validateSessionToken(token),
+      );
       if (!session) throw new Error("Unauthorized");
 
       const effectiveStudentId =
@@ -45,24 +47,34 @@ const getDashboardPageData = createServerFn({ method: "GET" }).handler(() =>
         const today = todayRange();
         const week = weekRange();
         const data = yield* Effect.all({
-          students: AdminRouteService.listStudents(session.session.id),
-          messages: AuthenticatedRouteService.messages(session.session.id, {
-            limit: 50,
-            offset: 0,
-          }),
-          todayLessons: AdminRouteService.listLessons(session.session.id, {
-            limit: 50,
-            offset: 0,
-            from: today.from,
-            to: today.to,
-          }),
-          weekLessons: AdminRouteService.listLessons(session.session.id, {
-            limit: 50,
-            offset: 0,
-            from: week.from,
-            to: week.to,
-          }),
-          courses: AdminRouteService.listCourses(session.session.id),
+          students: AdminRouteService.use((adminRouteService) =>
+            adminRouteService.listStudents(session.session.id),
+          ),
+          messages: AuthenticatedRouteService.use((authenticatedRouteService) =>
+            authenticatedRouteService.messages(session.session.id, {
+              limit: 50,
+              offset: 0,
+            }),
+          ),
+          todayLessons: AdminRouteService.use((adminRouteService) =>
+            adminRouteService.listLessons(session.session.id, {
+              limit: 50,
+              offset: 0,
+              from: today.from,
+              to: today.to,
+            }),
+          ),
+          weekLessons: AdminRouteService.use((adminRouteService) =>
+            adminRouteService.listLessons(session.session.id, {
+              limit: 50,
+              offset: 0,
+              from: week.from,
+              to: week.to,
+            }),
+          ),
+          courses: AdminRouteService.use((adminRouteService) =>
+            adminRouteService.listCourses(session.session.id),
+          ),
         });
 
         return toServerFunctionPayload({
@@ -77,21 +89,33 @@ const getDashboardPageData = createServerFn({ method: "GET" }).handler(() =>
 
       const [data, canShowTestimonialPrompt] = yield* Effect.all([
         Effect.all({
-          messages: AuthenticatedRouteService.messages(
-            session.session.id,
-            { limit: 50, offset: 0 },
-            filterStudentId,
+          messages: AuthenticatedRouteService.use((authenticatedRouteService) =>
+            authenticatedRouteService.messages(
+              session.session.id,
+              { limit: 50, offset: 0 },
+              filterStudentId,
+            ),
           ),
-          assignments: AuthenticatedRouteService.assignments(session.session.id, filterStudentId),
-          scheduledLessons: AuthenticatedRouteService.myLessons(
-            session.session.id,
-            { status: "scheduled", limit: 5, offset: 0 },
-            filterStudentId,
+          assignments: AuthenticatedRouteService.use((authenticatedRouteService) =>
+            authenticatedRouteService.assignments(session.session.id, filterStudentId),
           ),
-          courses: AuthenticatedRouteService.courses(session.session.id, filterStudentId),
-          testimonial: AuthenticatedRouteService.testimonial(session.session.id, session.user.id),
+          scheduledLessons: AuthenticatedRouteService.use((authenticatedRouteService) =>
+            authenticatedRouteService.myLessons(
+              session.session.id,
+              { status: "scheduled", limit: 5, offset: 0 },
+              filterStudentId,
+            ),
+          ),
+          courses: AuthenticatedRouteService.use((authenticatedRouteService) =>
+            authenticatedRouteService.courses(session.session.id, filterStudentId),
+          ),
+          testimonial: AuthenticatedRouteService.use((authenticatedRouteService) =>
+            authenticatedRouteService.testimonial(session.session.id, session.user.id),
+          ),
         }),
-        TestimonialReminderService.getPromptEnabled(session.user.id),
+        TestimonialReminderService.use((testimonialReminderService) =>
+          testimonialReminderService.getPromptEnabled(session.user.id),
+        ),
       ]);
 
       return toServerFunctionPayload({

@@ -1,13 +1,13 @@
 import { it, expect, describe, beforeAll, afterAll, vi } from "@effect/vitest";
-import * as FileSystem from "@effect/platform/FileSystem";
-import * as NodeContext from "@effect/platform-node/NodeContext";
+import * as FileSystem from "effect/FileSystem";
+import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as NodeFileSystem from "@effect/platform-node/NodeFileSystem";
-import * as HttpClient from "@effect/platform/HttpClient";
-import * as HttpClientError from "@effect/platform/HttpClientError";
-import * as HttpClientRequest from "@effect/platform/HttpClientRequest";
-import * as HttpClientResponse from "@effect/platform/HttpClientResponse";
-import * as HttpBody from "@effect/platform/HttpBody";
-import * as Cookies from "@effect/platform/Cookies";
+import * as HttpClient from "effect/http/HttpClient";
+import * as HttpClientError from "effect/http/HttpClientError";
+import * as HttpClientRequest from "effect/http/HttpClientRequest";
+import * as HttpClientResponse from "effect/http/HttpClientResponse";
+import * as HttpBody from "effect/http/HttpBody";
+import * as Cookies from "effect/http/Cookies";
 import { Effect, ManagedRuntime, Layer, Option } from "effect";
 import { Logger, consoleLogFactory } from "graphile-worker";
 import pg from "pg";
@@ -34,8 +34,8 @@ function forceIpv4(urlString: string): string {
   return url.toString();
 }
 
-function runPlatform<A, E>(effect: Effect.Effect<A, E, NodeContext.NodeContext>): Promise<A> {
-  return Effect.runPromise(effect.pipe(Effect.provide(NodeContext.layer)));
+function runPlatform<A, E>(effect: Effect.Effect<A, E, NodeServices.NodeServices>): Promise<A> {
+  return Effect.runPromise(effect.pipe(Effect.provide(NodeServices.layer)));
 }
 
 const TEST_ROOT_URL = "http://127.0.0.1:3000";
@@ -157,10 +157,8 @@ describe("DFG Portal API", () => {
           return HttpClientResponse.fromWeb(request, res);
         },
         catch: (cause) =>
-          new HttpClientError.RequestError({
-            request,
-            reason: "Transport",
-            cause: cause as Error,
+          new HttpClientError.HttpClientError({
+            reason: new HttpClientError.TransportError({ request, cause }),
           }),
       }),
     );
@@ -468,10 +466,12 @@ describe("DFG Portal API", () => {
       )).rows[0];
       expect(firstRow.content_hash).toBeTruthy();
 
-      yield* StorageService.delete({
-        storageBackend: firstRow.storage_backend,
-        storageKey: firstRow.storage_key,
-      }).pipe(Effect.provide(StorageService.Live), Effect.provide(NodeFileSystem.layer));
+      yield* StorageService.use((storageService) =>
+        storageService.delete({
+          storageBackend: firstRow.storage_backend,
+          storageKey: firstRow.storage_key,
+        }),
+      ).pipe(Effect.provide(StorageService.layer), Effect.provide(NodeFileSystem.layer));
 
       const missingDownload = yield* reqEffect(
         "GET",
@@ -499,10 +499,12 @@ describe("DFG Portal API", () => {
       );
       expect(matchingRows.rows[0]?.count).toBe(1);
       expect(
-        yield* StorageService.exists({
-          storageBackend: firstRow.storage_backend,
-          storageKey: firstRow.storage_key,
-        }).pipe(Effect.provide(StorageService.Live), Effect.provide(NodeFileSystem.layer)),
+        yield* StorageService.use((storageService) =>
+          storageService.exists({
+            storageBackend: firstRow.storage_backend,
+            storageKey: firstRow.storage_key,
+          }),
+        ).pipe(Effect.provide(StorageService.layer), Effect.provide(NodeFileSystem.layer)),
       ).toBe(true);
     }),
   );
@@ -1113,7 +1115,11 @@ describe("DFG Portal API", () => {
         Promise.all([import("../runtime.js"), import("../services/authRouteService.js")]),
       );
       const directMe = yield* Effect.promise(() =>
-        serverRuntime.runPromise(AuthRouteService.me(sessionResult.rows[0].id, parentId, childId)),
+        serverRuntime.runPromise(
+          AuthRouteService.use((authRouteService) =>
+            authRouteService.me(sessionResult.rows[0].id, parentId, childId),
+          ),
+        ),
       );
       expect(me).toEqual(directMe);
 

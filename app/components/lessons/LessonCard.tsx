@@ -1,12 +1,7 @@
 import { Card } from "../ui/Card.js";
 import { Button } from "../ui/Button.js";
 import type { Lesson } from "../../../shared/schemas.js";
-import {
-  statusBadgeClass,
-  statusLabel,
-  locationLabel,
-  formatDateTime,
-} from "./helpers.js";
+import { statusBadgeClass, statusLabel, locationLabel, formatDateTime } from "./helpers.js";
 
 export function LessonCard({
   lesson,
@@ -36,12 +31,8 @@ export function LessonCard({
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
           <div className="mb-1 flex items-center gap-3">
-            <span className="font-semibold text-primary dark:text-primary-dark">
-              {studentName}
-            </span>
-            <span
-              className={`rounded-full px-2 py-0.5 text-xs font-semibold ${badge}`}
-            >
+            <span className="font-semibold text-primary dark:text-primary-dark">{studentName}</span>
+            <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${badge}`}>
               {label}
             </span>
             {lesson.recurring_schedule_id ? (
@@ -54,8 +45,7 @@ export function LessonCard({
             ) : null}
           </div>
           <p className="text-sm text-muted dark:text-muted-dark">
-            {formatDateTime(lesson.scheduled_at)} · {lesson.duration_minutes}{" "}
-            min · {location}
+            {formatDateTime(lesson.scheduled_at)} · {lesson.duration_minutes} min · {location}
           </p>
           {lesson.cancellation_reason ? (
             <p className="mt-1 text-xs text-red-600/80 dark:text-red-400/80">

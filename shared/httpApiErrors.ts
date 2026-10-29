@@ -1,18 +1,24 @@
-import * as HttpApiSchema from "@effect/platform/HttpApiSchema";
-import { Schema as S } from "effect";
+import * as HttpApiSchema from "effect/http-api/HttpApiSchema";
+import { Schema as S, SchemaTransformation } from "effect";
 
 const WireError = S.Struct({ error: S.String });
 
-function wireSchema<Tag extends string, A extends { readonly _tag: Tag; readonly error: string }>(
-  schema: S.Schema<A, { readonly _tag: Tag; readonly error: string }, never>,
-  make: (error: string) => A,
+// Errors travel as `{ error }` with an HTTP status; decoding rebuilds the tagged error with `make`.
+function wireSchema<Error extends S.Top & { readonly Type: { readonly error: string } }>(
+  schema: Error,
+  make: (error: string) => Error["Type"],
   status: number,
 ) {
-  return S.transform(WireError, S.typeSchema(schema), {
-    strict: true,
-    decode: ({ error }) => make(error),
-    encode: ({ error }) => ({ error }),
-  }).annotations(HttpApiSchema.annotations({ status }));
+  return WireError.pipe(
+    S.decodeTo(
+      S.toType(schema),
+      SchemaTransformation.transform({
+        decode: ({ error }) => make(error),
+        encode: ({ error }) => ({ error }),
+      }),
+    ),
+    HttpApiSchema.status(status),
+  );
 }
 
 export class BadRequestError extends S.TaggedError<BadRequestError>()("BadRequestError", {

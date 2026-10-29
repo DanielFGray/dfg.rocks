@@ -55,7 +55,7 @@ export const extractNotationTracksFromBytes = Effect.fnUntraced(function* (
     const score = importer.ScoreLoader.loadScoreFromBytes(bytes);
     const tracks = Array.isArray(score.tracks) ? score.tracks.map(toMaterialNotationTrack) : [];
     return tracks.length > 0 ? (tracks as MaterialNotationTrack[]) : null;
-  }).pipe(Effect.catchAll(() => Effect.succeed(null)));
+  }).pipe(Effect.catch(() => Effect.succeed(null)));
 });
 
 export const resolveAssignedTrackIndex = Effect.fnUntraced(function* (

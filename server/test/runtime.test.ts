@@ -1,65 +1,60 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const lifecycle = vi.hoisted(() => {
-  const runtime = { id: "canonical-server-runtime" };
+  const services = { id: "canonical-server-services" };
   const handlers: Array<ReturnType<typeof vi.fn>> = [];
 
-  const runPromise = vi.fn(async () => ({ id: "http-app" }));
-  const getRuntime = vi.fn(async () => runtime);
-  const dispose = vi.fn(async () => undefined);
-  const toWebHandlerRuntime = vi.fn((_providedRuntime: unknown) => (_httpApp: unknown) => {
+  const getContext = vi.fn(async () => services);
+  const disposeRuntime = vi.fn(async () => undefined);
+  const disposeWebHandler = vi.fn(async () => undefined);
+  const toWebHandler = vi.fn((_layer: unknown, _options: unknown) => {
     const handlerNumber = handlers.length + 1;
-    const handler = vi.fn(async () =>
-      new Response(null, {
-        status: 204,
-        headers: { "x-test-handler": String(handlerNumber) },
-      }),
+    const handler = vi.fn(
+      async (_request: Request, _services: unknown) =>
+        new Response(null, {
+          status: 204,
+          headers: { "x-test-handler": String(handlerNumber) },
+        }),
     );
     handlers.push(handler);
-    return handler;
+    return { handler, dispose: disposeWebHandler };
   });
 
-  return {
-    dispose,
-    getRuntime,
-    handlers,
-    runPromise,
-    runtime,
-    toWebHandlerRuntime,
-  };
+  return { disposeRuntime, disposeWebHandler, getContext, handlers, services, toWebHandler };
 });
 
 vi.mock("../assertEnv.js", () => ({ env: { NODE_ENV: "production" } }));
 vi.mock("../runtime.js", () => ({
-  serverRuntime: {
-    dispose: lifecycle.dispose,
-    runPromise: lifecycle.runPromise,
-    runtime: lifecycle.getRuntime,
-  },
+  serverRuntime: { context: lifecycle.getContext, dispose: lifecycle.disposeRuntime },
 }));
 
-vi.mock("@effect/platform/HttpApi", () => ({
+vi.mock("effect/http-api/HttpApi", () => ({
   make: () => {
     const api = { add: vi.fn(() => api) };
     return api;
   },
 }));
-vi.mock("@effect/platform/HttpApiBuilder", () => ({
-  Middleware: { layer: {} },
-  Router: { Live: {} },
-  api: () => ({ pipe: () => ({}) }),
-  httpApp: { pipe: () => ({}) },
+vi.mock("effect/http-api/HttpApiBuilder", () => {
+  const layer = { pipe: () => layer };
+  return { layer: () => layer };
+});
+vi.mock("effect/http/HttpRouter", () => ({
+  provideRequest: () => (layer: unknown) => layer,
+  toWebHandler: lifecycle.toWebHandler,
 }));
-vi.mock("@effect/platform/HttpApp", () => ({
-  toWebHandlerRuntime: lifecycle.toWebHandlerRuntime,
-}));
-vi.mock("effect/Effect", () => ({ provide: () => (effect: unknown) => effect }));
 vi.mock("effect/Layer", () => ({
   mergeAll: () => ({}),
   provide: () => (layer: unknown) => layer,
+  succeedContext: () => ({}),
 }));
 
-vi.mock("../../shared/httpApi.js", () => ({ authGroup: {}, publicGroup: {}, familyBillingGroup: {}, adminGroup: {}, authenticatedClientGroup: {} }));
+vi.mock("../../shared/httpApi.js", () => ({
+  authGroup: {},
+  publicGroup: {},
+  familyBillingGroup: {},
+  adminGroup: {},
+  authenticatedClientGroup: {},
+}));
 vi.mock("../routes/admin.js", () => ({
   adminGroup: {},
   makeAdminLayer: () => ({}),
@@ -90,25 +85,23 @@ describe("API runtime lifecycle", () => {
 
     expect(firstResponse.headers.get("x-test-handler")).toBe("1");
     expect(secondResponse.headers.get("x-test-handler")).toBe("1");
-    expect(lifecycle.runPromise).toHaveBeenCalledOnce();
-    expect(lifecycle.getRuntime).toHaveBeenCalledOnce();
-    expect(lifecycle.toWebHandlerRuntime).toHaveBeenCalledOnce();
-    expect(lifecycle.toWebHandlerRuntime).toHaveBeenCalledWith(lifecycle.runtime);
+    expect(lifecycle.getContext).toHaveBeenCalledOnce();
+    expect(lifecycle.toWebHandler).toHaveBeenCalledOnce();
     expect(lifecycle.handlers).toHaveLength(1);
     expect(lifecycle.handlers[0]).toHaveBeenCalledTimes(2);
+    expect(lifecycle.handlers[0]).toHaveBeenCalledWith(expect.any(Request), lifecycle.services);
   });
 
-  it("disposes the canonical runtime after the handler has initialized", async () => {
+  it("disposes the handler and the canonical runtime after the handler has initialized", async () => {
     const { disposeApiHandler, handleApiRequest } = await import("../app.js");
 
     const response = await handleApiRequest(new Request("http://localhost/api/request"));
     await disposeApiHandler();
 
     expect(response.headers.get("x-test-handler")).toBe("1");
-    expect(lifecycle.dispose).toHaveBeenCalledOnce();
-    expect(lifecycle.runPromise).toHaveBeenCalledOnce();
-    expect(lifecycle.getRuntime).toHaveBeenCalledOnce();
-    expect(lifecycle.toWebHandlerRuntime).toHaveBeenCalledWith(lifecycle.runtime);
+    expect(lifecycle.disposeWebHandler).toHaveBeenCalledOnce();
+    expect(lifecycle.disposeRuntime).toHaveBeenCalledOnce();
+    expect(lifecycle.getContext).toHaveBeenCalledOnce();
     expect(lifecycle.handlers).toHaveLength(1);
     expect(lifecycle.handlers[0]).toHaveBeenCalledOnce();
   });
@@ -118,10 +111,10 @@ describe("API runtime lifecycle", () => {
 
     await disposeApiHandler();
 
-    expect(lifecycle.dispose).toHaveBeenCalledOnce();
-    expect(lifecycle.runPromise).not.toHaveBeenCalled();
-    expect(lifecycle.getRuntime).not.toHaveBeenCalled();
-    expect(lifecycle.toWebHandlerRuntime).not.toHaveBeenCalled();
+    expect(lifecycle.disposeRuntime).toHaveBeenCalledOnce();
+    expect(lifecycle.disposeWebHandler).not.toHaveBeenCalled();
+    expect(lifecycle.getContext).not.toHaveBeenCalled();
+    expect(lifecycle.toWebHandler).not.toHaveBeenCalled();
     expect(lifecycle.handlers).toHaveLength(0);
   });
 });

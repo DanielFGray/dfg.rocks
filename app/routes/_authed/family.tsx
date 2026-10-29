@@ -59,7 +59,7 @@ function FamilyPage() {
   const setChildEmailMutation = useMutation({
     mutationFn: ({ childId, email }: { childId: string; email: string }) =>
       Effect.runPromise(
-        api.authenticated.setChildEmail({ path: { childId }, payload: { email } }),
+        api.authenticated.setChildEmail({ params: { childId }, payload: { email } }),
       ),
     onSuccess: () => {
       setChildEmail("");
@@ -74,9 +74,7 @@ function FamilyPage() {
 
   const requestPasswordTokenMutation = useMutation({
     mutationFn: (childId: string) =>
-      Effect.runPromise(
-        api.authenticated.requestChildPasswordSet({ path: { childId } }),
-      ),
+      Effect.runPromise(api.authenticated.requestChildPasswordSet({ params: { childId } })),
     onSuccess: (data) => {
       setPasswordToken(data.token);
       setPasswordTokenFor(null);
@@ -95,7 +93,7 @@ function FamilyPage() {
     }) =>
       Effect.runPromise(
         api.authenticated.setChildPassword({
-          path: { childId },
+          params: { childId },
           payload: { token, password },
         }),
       ),
@@ -111,9 +109,7 @@ function FamilyPage() {
     return (
       <main data-testid="family-page" className="mx-auto max-w-[1100px] px-5 pt-20 pb-16 md:px-8">
         <h1 className="mb-3 text-3xl font-bold tracking-tight">Family</h1>
-        <p className="text-muted dark:text-muted-dark">
-          Only parents can manage family settings.
-        </p>
+        <p className="text-muted dark:text-muted-dark">Only parents can manage family settings.</p>
       </main>
     );
   }
@@ -129,7 +125,8 @@ function FamilyPage() {
     );
   }
 
-  const isOwner = user?.role === "admin" || data?.members.some((m) => m.id === user?.id && m.is_owner);
+  const isOwner =
+    user?.role === "admin" || data?.members.some((m) => m.id === user?.id && m.is_owner);
 
   return (
     <main data-testid="family-page" className="mx-auto max-w-[1100px] px-5 pt-20 pb-16 md:px-8">
@@ -140,19 +137,12 @@ function FamilyPage() {
 
       {data ? (
         <Card className="mb-8">
-          <h2
-            data-testid="family-name"
-            className="mb-1 text-xl font-semibold tracking-tight"
-          >
+          <h2 data-testid="family-name" className="mb-1 text-xl font-semibold tracking-tight">
             {data.name}
           </h2>
-          <p className="text-sm text-muted dark:text-muted-dark">
-            {data.slug}
-          </p>
+          <p className="text-sm text-muted dark:text-muted-dark">{data.slug}</p>
           {data.description ? (
-            <p className="mt-2 text-sm text-muted dark:text-muted-dark">
-              {data.description}
-            </p>
+            <p className="mt-2 text-sm text-muted dark:text-muted-dark">{data.description}</p>
           ) : null}
         </Card>
       ) : null}
@@ -164,10 +154,7 @@ function FamilyPage() {
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {data?.members.map((member) => (
-              <Card
-                key={member.id}
-                data-testid={`family-member-${member.id}`}
-              >
+              <Card key={member.id} data-testid={`family-member-${member.id}`}>
                 <div className="flex items-start justify-between">
                   <div className="min-w-0">
                     <p className="truncate font-medium">{member.name}</p>
@@ -193,7 +180,7 @@ function FamilyPage() {
                       <span className="rounded-full bg-amber-500/10 px-2.5 py-0.5 text-xs font-medium text-amber-600 dark:text-amber-400">
                         Billing
                       </span>
-                     ) : null}
+                    ) : null}
                   </div>
                 </div>
                 {member.role === "student" && isOwner ? (
@@ -256,7 +243,10 @@ function FamilyPage() {
                     {passwordTokenFor === member.id && passwordToken ? (
                       <div className="mt-3 space-y-2">
                         <p className="text-xs text-muted dark:text-muted-dark">
-                          Token: <code className="rounded bg-overlay/5 px-1 py-0.5 text-xs dark:bg-overlay-dark/5">{passwordToken}</code>
+                          Token:{" "}
+                          <code className="rounded bg-overlay/5 px-1 py-0.5 text-xs dark:bg-overlay-dark/5">
+                            {passwordToken}
+                          </code>
                         </p>
                         <Input
                           id={`child-password-${member.id}`}
@@ -305,13 +295,11 @@ function FamilyPage() {
                           requestPasswordTokenMutation.mutate(member.id);
                         }}
                         disabled={
-                          passwordTokenFor === member.id &&
-                          requestPasswordTokenMutation.isPending
+                          passwordTokenFor === member.id && requestPasswordTokenMutation.isPending
                         }
                         data-testid={`request-password-token-${member.id}`}
                       >
-                        {passwordTokenFor === member.id &&
-                        requestPasswordTokenMutation.isPending
+                        {passwordTokenFor === member.id && requestPasswordTokenMutation.isPending
                           ? "Generating Token..."
                           : "Set Password"}
                       </Button>
@@ -375,10 +363,7 @@ function FamilyPage() {
         ) : (
           <div className="grid gap-3">
             {data.pendingInvitations.map((inv) => (
-              <Card
-                key={inv.id}
-                data-testid={`family-invitation-${inv.id}`}
-              >
+              <Card key={inv.id} data-testid={`family-invitation-${inv.id}`}>
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="font-medium">{inv.email ?? "Unknown"}</p>

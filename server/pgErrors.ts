@@ -4,7 +4,7 @@
  * Maps custom errcodes raised by SECURITY DEFINER functions to
  * typed HTTP errors. Unknown SQL errors are rethrown as-is.
  */
-import { SqlError } from "@effect/sql/SqlError";
+import { SqlError } from "effect/sql/SqlError";
 import { Effect } from "effect";
 import * as Schema from "effect/Schema";
 
@@ -19,18 +19,18 @@ export class HttpError extends Schema.TaggedError<HttpError>()("HttpError", {
 /** Custom errcodes raised by our SQL functions. */
 const pg_errcodes: Record<string, (msg: string) => HttpError> = {
   /** Account locked -- too many failed login/reset attempts */
-  LOCKD: (msg) => HttpError.make(423, msg || "Account locked -- too many failed attempts"),
+  LOCKD: (msg) => new HttpError(423, msg || "Account locked -- too many failed attempts"),
   /** Password too weak (< 8 chars) */
-  WEAKP: (msg) => HttpError.make(400, msg || "Password is too weak (minimum 8 characters)"),
+  WEAKP: (msg) => new HttpError(400, msg || "Password is too weak (minimum 8 characters)"),
   /** Cannot delete -- user is a family parent */
   OWNER: (msg) =>
-    HttpError.make(400, msg || "Cannot delete account while you are a parent in a family"),
+    new HttpError(400, msg || "Cannot delete account while you are a parent in a family"),
   /** Not found */
-  NTFND: (msg) => HttpError.make(404, msg || "Not found"),
+  NTFND: (msg) => new HttpError(404, msg || "Not found"),
   /** Denied -- business rule violation */
-  DNIED: (msg) => HttpError.make(400, msg || "Operation denied"),
+  DNIED: (msg) => new HttpError(400, msg || "Operation denied"),
   /** Unique violation (duplicate username, email, etc.) */
-  23505: (msg) => HttpError.make(409, msg || "A record with this value already exists"),
+  23505: (msg) => new HttpError(409, msg || "A record with this value already exists"),
 };
 
 function unwrapSqlError(err: unknown): unknown {

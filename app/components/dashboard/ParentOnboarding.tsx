@@ -37,7 +37,7 @@ export function ParentOnboarding({ isFirstStudent, onSuccess }: Props) {
       <div className="grid gap-8 px-1 py-2 lg:grid-cols-[1.1fr_0.9fr] lg:items-start">
         <div className="space-y-4">
           <div className="space-y-2">
-            <p className="text-sm font-semibold uppercase tracking-[0.2em] text-accent">
+            <p className="text-sm font-semibold tracking-[0.2em] text-accent uppercase">
               Parent Setup
             </p>
             <h2 className="text-3xl font-bold tracking-tight text-primary dark:text-primary-dark">
@@ -52,7 +52,9 @@ export function ParentOnboarding({ isFirstStudent, onSuccess }: Props) {
 
           {isFirstStudent ? (
             <div className="rounded-2xl border border-overlay/8 bg-overlay/3 p-4 dark:border-overlay-dark/8 dark:bg-overlay-dark/3">
-              <p className="text-sm font-medium text-primary dark:text-primary-dark">What happens next</p>
+              <p className="text-sm font-medium text-primary dark:text-primary-dark">
+                What happens next
+              </p>
               <ul className="mt-3 list-disc space-y-2 pl-5 text-sm text-muted dark:text-muted-dark">
                 <li>Your child gets a student profile in this family.</li>
                 <li>They won\u2019t have a password or direct login by default.</li>

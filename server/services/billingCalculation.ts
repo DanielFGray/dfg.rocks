@@ -105,16 +105,12 @@ export function calculateDiscount(
     }
     if (discount.discountType === "fixed") {
       const applicableBase = lineItems
-        .filter(
-          (li) => discount.appliesTo === "all" || li.category === discount.appliesTo,
-        )
+        .filter((li) => discount.appliesTo === "all" || li.category === discount.appliesTo)
         .reduce((sum, li) => sum + assertCents(li.amountCents, "line item amount"), 0);
       totalDiscount += Math.min(Math.round(discount.discountValue), applicableBase);
     } else {
       const applicableBase = lineItems
-        .filter(
-          (li) => discount.appliesTo === "all" || li.category === discount.appliesTo,
-        )
+        .filter((li) => discount.appliesTo === "all" || li.category === discount.appliesTo)
         .reduce((sum, li) => sum + assertCents(li.amountCents, "line item amount"), 0);
       totalDiscount += roundCents((applicableBase * discount.discountValue) / 100);
     }
@@ -147,15 +143,10 @@ export function calculateLineTax(
 function isIsoDate(value: string): boolean {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
   const parsed = new Date(`${value}T00:00:00.000Z`);
-  return (
-    !Number.isNaN(parsed.getTime()) &&
-    parsed.toISOString().slice(0, 10) === value
-  );
+  return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
 }
 
-export function getMonthlyOccurrenceDates(
-  input: MonthlyOccurrenceInput,
-): string[] {
+export function getMonthlyOccurrenceDates(input: MonthlyOccurrenceInput): string[] {
   const { dayOfWeek, startsOn, endsOn, billingMonth } = input;
 
   const [yearStr, monthStr] = billingMonth.split("-");
@@ -163,9 +154,7 @@ export function getMonthlyOccurrenceDates(
   const monthIndex = Number.parseInt(monthStr, 10) - 1;
 
   const scheduleStart = new Date(`${startsOn}T00:00:00.000Z`);
-  const scheduleEnd = endsOn
-    ? new Date(`${endsOn}T23:59:59.999Z`)
-    : null;
+  const scheduleEnd = endsOn ? new Date(`${endsOn}T23:59:59.999Z`) : null;
 
   const jsDow = dayOfWeek % 7;
 
@@ -255,20 +244,15 @@ export function resolveBookingOutcome(
 function outstandingCents(bill: BillForAllocation): number {
   return Math.max(
     0,
-    bill.totalCents +
-      bill.adjustmentsCents -
-      bill.creditsAppliedCents -
-      bill.paidCents,
+    bill.totalCents + bill.adjustmentsCents - bill.creditsAppliedCents - bill.paidCents,
   );
 }
 
-export function allocatePayment(
-  input: {
-    paymentAmountCents: number;
-    bills: BillForAllocation[];
-    explicitAllocations?: PaymentAllocation[];
-  },
-): PaymentAllocation[] {
+export function allocatePayment(input: {
+  paymentAmountCents: number;
+  bills: BillForAllocation[];
+  explicitAllocations?: PaymentAllocation[];
+}): PaymentAllocation[] {
   const { paymentAmountCents, bills, explicitAllocations } = input;
   assertPositiveCents(paymentAmountCents, "paymentAmountCents");
 
@@ -280,10 +264,7 @@ export function allocatePayment(
     for (const allocation of explicitAllocations) {
       assertPositiveCents(allocation.amountCents, "allocation.amountCents");
     }
-    const explicitTotal = explicitAllocations.reduce(
-      (s, a) => s + a.amountCents,
-      0,
-    );
+    const explicitTotal = explicitAllocations.reduce((s, a) => s + a.amountCents, 0);
     if (explicitTotal > paymentAmountCents) {
       throw new Error("Explicit allocations exceed payment amount");
     }
@@ -294,9 +275,7 @@ export function allocatePayment(
         throw new Error(`Bill not found among open bills: ${alloc.billId}`);
       }
       if (alloc.amountCents > outstandingCents(bill)) {
-        throw new Error(
-          `Allocation exceeds outstanding balance for bill ${alloc.billId}`,
-        );
+        throw new Error(`Allocation exceeds outstanding balance for bill ${alloc.billId}`);
       }
     }
 
@@ -326,10 +305,7 @@ export function allocatePayment(
   return oldestFirst(paymentAmountCents, openBills);
 }
 
-function oldestFirst(
-  amount: number,
-  bills: BillForAllocation[],
-): PaymentAllocation[] {
+function oldestFirst(amount: number, bills: BillForAllocation[]): PaymentAllocation[] {
   const sorted = [...bills].sort((a, b) => {
     if (a.dueDate && b.dueDate) {
       const cmp = a.dueDate.localeCompare(b.dueDate);

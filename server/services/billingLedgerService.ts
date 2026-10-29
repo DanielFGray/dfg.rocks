@@ -1,4 +1,4 @@
-import { Effect, Option } from "effect";
+import { Effect, Option, Context, Layer } from "effect";
 import { sql } from "kysely";
 import { type Database, withAuthContext } from "../db.js";
 import { catchPgErrors, HttpError } from "../pgErrors.js";
@@ -144,11 +144,10 @@ export class ValidationError extends HttpError {
   }
 }
 
-export class BillingLedgerService extends Effect.Service<BillingLedgerService>()(
+export class BillingLedgerService extends Context.Service<BillingLedgerService>()(
   "BillingLedgerService",
   {
-    accessors: true,
-    effect: Effect.gen(function* () {
+    make: Effect.gen(function* () {
       yield* Effect.void;
       return {
         createBill: Effect.fn("createBill")(function* (sessionId: string, input: CreateBillInput) {
@@ -1758,4 +1757,6 @@ export class BillingLedgerService extends Effect.Service<BillingLedgerService>()
       };
     }),
   },
-) {}
+) {
+  static readonly layer = Layer.effect(this, this.make);
+}

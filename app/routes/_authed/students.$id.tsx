@@ -9,16 +9,8 @@ import { useForm } from "@tanstack/react-form";
 import { api } from "../../lib/api.js";
 import { requiredValidator } from "../../lib/validators.js";
 import { fieldError } from "../../lib/form.js";
-import type {
-  AssignedMaterial,
-  Course,
-  Material,
-  StudentDetail,
-} from "../../../shared/schemas.js";
-import {
-  findNotationTrack,
-  formatNotationTrackLabel,
-} from "../../../shared/notationTracks.js";
+import type { AssignedMaterial, Course, Material, StudentDetail } from "../../../shared/schemas.js";
+import { findNotationTrack, formatNotationTrackLabel } from "../../../shared/notationTracks.js";
 import { serverRuntime } from "../../../server/runtime.js";
 import { AdminRouteService } from "../../../server/services/adminRouteService.js";
 import { AuthenticatedRouteService } from "../../../server/services/authenticatedRouteService.js";
@@ -44,18 +36,24 @@ type StudentDetailPageData = {
 };
 
 const getStudentDetailPageData = createServerFn({ method: "GET" })
-  .validator(S.standardSchemaV1(S.Struct({ studentId: S.String })))
+  .validator(S.toStandardSchemaV1(S.Struct({ studentId: S.String })))
   .handler(({ data }) =>
     serverRuntime.runPromise(
       Effect.gen(function* () {
         const session = yield* requireAdminSession(getCookie("session"));
         const [student, allCourses, allMaterials] = yield* Effect.all([
-          AdminRouteService.getStudent(session.session.id, data.studentId),
-          AdminRouteService.listCourses(session.session.id),
-          AuthenticatedRouteService.library(session.session.id, {
-            limit: 1000,
-            offset: 0,
-          }),
+          AdminRouteService.use((adminRouteService) =>
+            adminRouteService.getStudent(session.session.id, data.studentId),
+          ),
+          AdminRouteService.use((adminRouteService) =>
+            adminRouteService.listCourses(session.session.id),
+          ),
+          AuthenticatedRouteService.use((authenticatedRouteService) =>
+            authenticatedRouteService.library(session.session.id, {
+              limit: 1000,
+              offset: 0,
+            }),
+          ),
         ]);
         return toServerFunctionPayload({
           student: serializeStudentDetail(student),
@@ -68,8 +66,7 @@ const getStudentDetailPageData = createServerFn({ method: "GET" })
 
 export const Route = createFileRoute("/_authed/students/$id")({
   head: () => ({ meta: [{ title: "Student Detail | DFG Portal" }] }),
-  loader: ({ params }) =>
-    getStudentDetailPageData({ data: { studentId: params.id } }),
+  loader: ({ params }) => getStudentDetailPageData({ data: { studentId: params.id } }),
   component: StudentDetailPage,
   pendingComponent: () => <div>Loading...</div>,
 });
@@ -78,8 +75,7 @@ function StudentDetailPage() {
   const { id } = Route.useParams();
   const queryClient = useQueryClient();
   const router = useRouter();
-  const { student, allCourses, allMaterials } =
-    Route.useLoaderData() as StudentDetailPageData;
+  const { student, allCourses, allMaterials } = Route.useLoaderData() as StudentDetailPageData;
 
   const enrolledIds = new Set(student.enrolled_courses.map((c) => c.id));
   const assignedIds = new Set(student.assigned_materials.map((m) => m.id));
@@ -96,9 +92,7 @@ function StudentDetailPage() {
     id: string;
     title: string;
   } | null>(null);
-  const [unassignTarget, setUnassignTarget] = useState<AssignedMaterial | null>(
-    null,
-  );
+  const [unassignTarget, setUnassignTarget] = useState<AssignedMaterial | null>(null);
 
   const invalidateStudent = () => {
     void queryClient.invalidateQueries({ queryKey: ["admin", "students", id] });
@@ -109,7 +103,7 @@ function StudentDetailPage() {
     mutationFn: (courseId: string) =>
       Effect.runPromise(
         api.admin.enrollStudent({
-          path: { id },
+          params: { id },
           payload: { course_id: courseId },
         }),
       ),
@@ -120,7 +114,7 @@ function StudentDetailPage() {
     mutationFn: (courseId: string) =>
       Effect.runPromise(
         api.admin.unenrollStudent({
-          path: { id, courseId },
+          params: { id, courseId },
         }),
       ),
     onSettled: () => invalidateStudent(),
@@ -136,7 +130,7 @@ function StudentDetailPage() {
     }) =>
       Effect.runPromise(
         api.admin.assignMaterial({
-          path: { id },
+          params: { id },
           payload: {
             material_id: materialId,
             assigned_track_index: assignedTrackIndex,
@@ -150,7 +144,7 @@ function StudentDetailPage() {
     mutationFn: (materialId: string) =>
       Effect.runPromise(
         api.admin.unassignMaterial({
-          path: { id, materialId },
+          params: { id, materialId },
         }),
       ),
     onSettled: () => invalidateStudent(),
@@ -162,8 +156,7 @@ function StudentDetailPage() {
     enrollForm.reset();
   };
 
-  const openUnenroll = (c: { id: string; title: string }) => () =>
-    setUnenrollTarget(c);
+  const openUnenroll = (c: { id: string; title: string }) => () => setUnenrollTarget(c);
   const cancelUnenroll = () => setUnenrollTarget(null);
   const confirmUnenroll = () => {
     if (!unenrollTarget) return;
@@ -210,8 +203,7 @@ function StudentDetailPage() {
     })),
   ];
   const selectedAssignMaterial =
-    availableMaterials.find((material) => material.id === assignMaterialId) ??
-    null;
+    availableMaterials.find((material) => material.id === assignMaterialId) ?? null;
 
   const enrollForm = useForm({
     defaultValues: {
@@ -225,10 +217,7 @@ function StudentDetailPage() {
   });
 
   return (
-    <main
-      data-testid="student-detail"
-      className="mx-auto max-w-[900px] px-5 pt-20 pb-16 md:px-8"
-    >
+    <main data-testid="student-detail" className="mx-auto max-w-[900px] px-5 pt-20 pb-16 md:px-8">
       <div className="mb-8">
         <div className="mb-2 flex items-center gap-3">
           <Link
@@ -338,10 +327,7 @@ function StudentDetailPage() {
                 <span className="text-xs text-muted/60 dark:text-muted-dark/60">
                   {m.original_filename}
                   {(() => {
-                    const track = findNotationTrack(
-                      m.notation_tracks,
-                      m.assigned_track_index,
-                    );
+                    const track = findNotationTrack(m.notation_tracks, m.assigned_track_index);
                     return track ? ` · ${formatNotationTrackLabel(track)}` : "";
                   })()}
                 </span>
@@ -360,11 +346,7 @@ function StudentDetailPage() {
 
       <StudentRecurringBilling studentId={id} />
 
-      <Modal
-        open={enrollModalOpen}
-        onClose={closeEnroll}
-        title="Enroll in Course"
-      >
+      <Modal open={enrollModalOpen} onClose={closeEnroll} title="Enroll in Course">
         <form
           onSubmit={(e) => {
             e.preventDefault();
@@ -398,11 +380,7 @@ function StudentDetailPage() {
         </form>
       </Modal>
 
-      <Modal
-        open={assignModalOpen}
-        onClose={closeAssign}
-        title="Assign Material"
-      >
+      <Modal open={assignModalOpen} onClose={closeAssign} title="Assign Material">
         <form
           onSubmit={(e) => {
             e.preventDefault();
@@ -426,9 +404,7 @@ function StudentDetailPage() {
               {
                 materialId: assignMaterialId,
                 assignedTrackIndex:
-                  assignTrackIndex === ""
-                    ? null
-                    : Number.parseInt(assignTrackIndex, 10),
+                  assignTrackIndex === "" ? null : Number.parseInt(assignTrackIndex, 10),
               },
               {
                 onSuccess: () => closeAssign(),
@@ -450,9 +426,7 @@ function StudentDetailPage() {
               setAssignError(null);
 
               const material =
-                availableMaterials.find(
-                  (candidate) => candidate.id === value,
-                ) ?? null;
+                availableMaterials.find((candidate) => candidate.id === value) ?? null;
               const defaultTrackValue =
                 material?.notation_tracks?.length === 1
                   ? String(material.notation_tracks[0]!.index)
@@ -482,16 +456,12 @@ function StudentDetailPage() {
             <div className="rounded-lg border border-overlay/6 bg-card px-4 py-3 text-sm text-muted dark:border-overlay-dark/6 dark:bg-card-dark dark:text-muted-dark">
               Assigned track:{" "}
               <span className="font-medium text-primary dark:text-primary-dark">
-                {formatNotationTrackLabel(
-                  selectedAssignMaterial.notation_tracks[0]!,
-                )}
+                {formatNotationTrackLabel(selectedAssignMaterial.notation_tracks[0]!)}
               </span>
             </div>
           ) : null}
           {assignError ? (
-            <p className="text-sm text-red-600 dark:text-red-400">
-              {assignError}
-            </p>
+            <p className="text-sm text-red-600 dark:text-red-400">{assignError}</p>
           ) : null}
           <div className="mt-2 flex justify-end gap-3">
             <Button variant="ghost" onClick={closeAssign}>
@@ -507,11 +477,7 @@ function StudentDetailPage() {
       <ConfirmDialog
         open={unenrollTarget !== null}
         title="Unenroll Student"
-        message={
-          unenrollTarget
-            ? `Remove ${student.name} from "${unenrollTarget.title}"?`
-            : ""
-        }
+        message={unenrollTarget ? `Remove ${student.name} from "${unenrollTarget.title}"?` : ""}
         confirmLabel="Unenroll"
         variant="danger"
         onConfirm={confirmUnenroll}
@@ -521,11 +487,7 @@ function StudentDetailPage() {
       <ConfirmDialog
         open={unassignTarget !== null}
         title="Unassign Material"
-        message={
-          unassignTarget
-            ? `Remove "${unassignTarget.title}" from ${student.name}?`
-            : ""
-        }
+        message={unassignTarget ? `Remove "${unassignTarget.title}" from ${student.name}?` : ""}
         confirmLabel="Unassign"
         variant="danger"
         onConfirm={confirmUnassign}

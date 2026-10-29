@@ -1,8 +1,12 @@
-import * as HttpApi from "@effect/platform/HttpApi";
-import * as HttpApiBuilder from "@effect/platform/HttpApiBuilder";
-import * as HttpApiEndpoint from "@effect/platform/HttpApiEndpoint";
-import * as HttpApiGroup from "@effect/platform/HttpApiGroup";
-import * as HttpServer from "@effect/platform/HttpServer";
+import * as HttpApi from "effect/http-api/HttpApi";
+import * as HttpApiBuilder from "effect/http-api/HttpApiBuilder";
+import * as HttpApiEndpoint from "effect/http-api/HttpApiEndpoint";
+import * as HttpApiGroup from "effect/http-api/HttpApiGroup";
+import * as Etag from "effect/http/Etag";
+import * as HttpRouter from "effect/http/HttpRouter";
+import * as NodeFileSystem from "@effect/platform-node/NodeFileSystem";
+import * as NodeHttpPlatform from "@effect/platform-node/NodeHttpPlatform";
+import * as NodePath from "@effect/platform-node/NodePath";
 import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
@@ -23,7 +27,7 @@ const statuses = [400, 401, 403, 404, 409, 413, 423, 429, 500, 502, 503] as cons
 describe("HTTP API error schemas", () => {
   it("encodes a tagged variant with the existing wire body", async () => {
     const encoded = await Effect.runPromise(
-      Schema.encode(BadRequestErrorSchema)(new BadRequestError({ error: "Invalid request" })),
+      Schema.encodeEffect(BadRequestErrorSchema)(new BadRequestError({ error: "Invalid request" })),
     );
 
     expect(encoded).toEqual({ error: "Invalid request" });
@@ -32,7 +36,7 @@ describe("HTTP API error schemas", () => {
 
   it("decodes the wire body into the status-specific tagged variant", async () => {
     const decoded = await Effect.runPromise(
-      Schema.decodeUnknown(BadRequestErrorSchema)({ error: "Invalid request" }),
+      Schema.decodeUnknownEffect(BadRequestErrorSchema)({ error: "Invalid request" }),
     );
 
     expect(decoded).toBeInstanceOf(BadRequestError);
@@ -56,7 +60,7 @@ describe("HTTP API error adapter", () => {
 
     expect(Exit.isFailure(exit)).toBe(true);
     if (Exit.isFailure(exit)) {
-      expect(Cause.failureOption(exit.cause)).toMatchObject({
+      expect(Cause.findErrorOption(exit.cause)).toMatchObject({
         _tag: "Some",
         value: new InternalServerError({ error: "Internal Server Error" }),
       });
@@ -69,7 +73,7 @@ describe("HTTP API error adapter", () => {
 
     expect(Exit.isFailure(exit)).toBe(true);
     if (Exit.isFailure(exit)) {
-      expect(Cause.failureOption(exit.cause)).toMatchObject({ _tag: "Some", value: error });
+      expect(Cause.findErrorOption(exit.cause)).toMatchObject({ _tag: "Some", value: error });
     }
   });
 
@@ -80,7 +84,7 @@ describe("HTTP API error adapter", () => {
 
     expect(Exit.isFailure(exit)).toBe(true);
     if (Exit.isFailure(exit)) {
-      expect(Cause.failureOption(exit.cause)).toMatchObject({
+      expect(Cause.findErrorOption(exit.cause)).toMatchObject({
         _tag: "Some",
         value: new InternalServerError({ error: "Internal Server Error" }),
       });
@@ -94,7 +98,7 @@ describe("HTTP API error adapter", () => {
 
     expect(Exit.isFailure(exit)).toBe(true);
     if (Exit.isFailure(exit)) {
-      expect(Cause.failureOption(exit.cause)).toMatchObject({
+      expect(Cause.findErrorOption(exit.cause)).toMatchObject({
         _tag: "Some",
         value: new InternalServerError({ error: "Internal Server Error" }),
       });
@@ -106,8 +110,8 @@ describe("HTTP API error adapter", () => {
 
     expect(Exit.isFailure(exit)).toBe(true);
     if (Exit.isFailure(exit)) {
-      expect(Cause.isInterrupted(exit.cause)).toBe(true);
-      expect(Cause.failureOption(exit.cause)._tag).toBe("None");
+      expect(Cause.hasInterrupts(exit.cause)).toBe(true);
+      expect(Cause.findErrorOption(exit.cause)._tag).toBe("None");
     }
   });
 });
@@ -128,35 +132,41 @@ describe("HttpApiBuilder status encoding", () => {
       badGateway,
       serviceUnavailable,
     ] = HttpApiErrorSchemas;
-    const endpoint = HttpApiEndpoint.get("fail", "/fail/:status")
-      .setPath(path)
-      .addError(badRequest)
-      .addError(unauthorized)
-      .addError(forbidden)
-      .addError(notFound)
-      .addError(conflict)
-      .addError(payloadTooLarge)
-      .addError(locked)
-      .addError(tooManyRequests)
-      .addError(internalServer)
-      .addError(badGateway)
-      .addError(serviceUnavailable);
+    const endpoint = HttpApiEndpoint.get("fail", "/fail/:status", {
+      params: path,
+      error: [
+        badRequest,
+        unauthorized,
+        forbidden,
+        notFound,
+        conflict,
+        payloadTooLarge,
+        locked,
+        tooManyRequests,
+        internalServer,
+        badGateway,
+        serviceUnavailable,
+      ],
+    });
 
     const group = HttpApiGroup.make("errors").add(endpoint);
     const api = HttpApi.make("error-test").add(group);
     const allowedStatuses = new Set(statuses);
     const routes = HttpApiBuilder.group(api, "errors", (handlers) =>
-      handlers.handle("fail", ({ path }) =>
+      handlers.handle("fail", ({ params }) =>
         adaptHttpApiErrors(
-          Effect.fail(new HttpError(path.status, `status ${path.status}`)),
+          Effect.fail(new HttpError(params.status, `status ${params.status}`)),
           allowedStatuses,
         ),
       ),
     );
-    const apiLayer = HttpApiBuilder.api(api).pipe(Layer.provide(routes));
-    const { dispose, handler } = HttpApiBuilder.toWebHandler(
-      Layer.mergeAll(apiLayer, HttpServer.layerContext),
+    const apiLayer = HttpApiBuilder.layer(api).pipe(
+      Layer.provide(routes),
+      Layer.provide(
+        Layer.mergeAll(NodeHttpPlatform.layer, NodeFileSystem.layer, NodePath.layer, Etag.layer),
+      ),
     );
+    const { dispose, handler } = HttpRouter.toWebHandler(apiLayer, { disableLogger: true });
 
     try {
       for (const status of statuses) {

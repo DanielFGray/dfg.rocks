@@ -10,26 +10,33 @@ const readBytes = (stream: ReadableStream<Uint8Array>) =>
     catch: (error) => error,
   });
 
-const exerciseStorage = (location: StorageLocation) =>
-  Effect.gen(function* () {
-    const bytes = new Uint8Array([1, 2, 3, 255]);
+const exerciseStorage = Effect.fnUntraced(function* (location: StorageLocation) {
+  const bytes = new Uint8Array([1, 2, 3, 255]);
 
-    expect(yield* StorageService.exists(location)).toBe(false);
-    yield* StorageService.put(location, bytes);
-    expect(yield* StorageService.exists(location)).toBe(true);
-    expect(yield* StorageService.open(location).pipe(Effect.flatMap(readBytes))).toEqual(bytes);
-    yield* StorageService.delete(location);
-    expect(yield* StorageService.exists(location)).toBe(false);
-  });
+  expect(yield* StorageService.use((storageService) => storageService.exists(location))).toBe(
+    false,
+  );
+  yield* StorageService.use((storageService) => storageService.put(location, bytes));
+  expect(yield* StorageService.use((storageService) => storageService.exists(location))).toBe(true);
+  expect(
+    yield* StorageService.use((storageService) => storageService.open(location)).pipe(
+      Effect.flatMap(readBytes),
+    ),
+  ).toEqual(bytes);
+  yield* StorageService.use((storageService) => storageService.delete(location));
+  expect(yield* StorageService.use((storageService) => storageService.exists(location))).toBe(
+    false,
+  );
+});
 
 describe("StorageService", () => {
-  it.layer(StorageService.Test)((it) => {
+  it.layer(StorageService.layerTest)((it) => {
     it.effect("provides replaceable in-memory storage through generated accessors", () =>
       exerciseStorage({ storageBackend: "local", storageKey: "test/in-memory.bin" }),
     );
   });
 
-  it.layer(StorageService.Live.pipe(Layer.provide(NodeFileSystem.layer)))((it) => {
+  it.layer(StorageService.layer.pipe(Layer.provide(NodeFileSystem.layer)))((it) => {
     it.effect("uses the platform filesystem and returns a web-readable Node stream", () =>
       exerciseStorage({
         storageBackend: "local",

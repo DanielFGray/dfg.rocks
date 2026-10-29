@@ -34,8 +34,12 @@ const getStudentsPageData = createServerFn({ method: "GET" }).handler(() =>
     Effect.gen(function* () {
       const session = yield* requireAdminSession(getCookie("session"));
       const [students, families] = yield* Effect.all([
-        AdminRouteService.listStudents(session.session.id),
-        AdminRouteService.listFamilies(session.session.id),
+        AdminRouteService.use((adminRouteService) =>
+          adminRouteService.listStudents(session.session.id),
+        ),
+        AdminRouteService.use((adminRouteService) =>
+          adminRouteService.listFamilies(session.session.id),
+        ),
       ]);
       return toServerFunctionPayload({
         students: normalizeStudents(students),
@@ -90,7 +94,7 @@ function StudentsPage() {
     }) =>
       Effect.runPromise(
         api.admin.inviteFamily({
-          path: { familyId },
+          params: { familyId },
           payload: { email, invited_role: invitedRole },
         }),
       ),
@@ -142,7 +146,11 @@ function StudentsPage() {
       <div className="mb-8 flex items-center justify-between">
         <h1 className="text-3xl font-bold tracking-tight">Students</h1>
         <div className="flex gap-3">
-          <Button variant="ghost" onClick={() => setCreateFamilyOpen(true)} data-testid="create-family-btn">
+          <Button
+            variant="ghost"
+            onClick={() => setCreateFamilyOpen(true)}
+            data-testid="create-family-btn"
+          >
             Create Family
           </Button>
           <Button variant="ghost" onClick={() => setQrOpen(true)} data-testid="add-via-qr">

@@ -28,12 +28,12 @@ const getSubmissionsPageData = createServerFn({ method: "GET" }).handler(() =>
         throw new HttpError(403, "Forbidden");
       }
       return toServerFunctionPayload(
-        (yield* AdminRouteService.listSubmissions(session.session.id, 5000, 0)).map(
-          (submission) => ({
-            ...submission,
-            created_at: toIsoString(submission.created_at),
-          }),
-        ),
+        (yield* AdminRouteService.use((adminRouteService) =>
+          adminRouteService.listSubmissions(session.session.id, 5000, 0),
+        )).map((submission) => ({
+          ...submission,
+          created_at: toIsoString(submission.created_at),
+        })),
       ) satisfies Submission[];
     }),
   ),
@@ -67,7 +67,7 @@ function SubmissionsPage() {
     mutationFn: (s: Submission) =>
       Effect.runPromise(
         api.admin.updateSubmission({
-          path: { id: s.id },
+          params: { id: s.id },
           payload: { is_read: !s.is_read },
         }),
       ),

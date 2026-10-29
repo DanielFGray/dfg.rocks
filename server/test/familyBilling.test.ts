@@ -1,6 +1,6 @@
 import { it, expect, describe, beforeAll, afterAll } from "@effect/vitest";
-import * as FileSystem from "@effect/platform/FileSystem";
-import * as NodeContext from "@effect/platform-node/NodeContext";
+import * as FileSystem from "effect/FileSystem";
+import * as NodeServices from "@effect/platform-node/NodeServices";
 import { Effect, Layer } from "effect";
 import pg from "pg";
 import { PgAuthDB, PgRootDB } from "../db.js";
@@ -11,10 +11,10 @@ import { PdfService } from "../services/pdfService.js";
 const familyBillingTestLayer = Layer.mergeAll(
   PgRootDB.Live,
   PgAuthDB.Live,
-  BillingLedgerService.Default,
-  PdfService.Default,
-  FamilyBillingService.Default.pipe(
-    Layer.provide(Layer.mergeAll(PdfService.Default, BillingLedgerService.Default)),
+  BillingLedgerService.layer,
+  PdfService.layer,
+  FamilyBillingService.layer.pipe(
+    Layer.provide(Layer.mergeAll(PdfService.layer, BillingLedgerService.layer)),
   ),
 );
 
@@ -47,17 +47,24 @@ function forceIpv4(urlString: string): string {
   return url.toString();
 }
 
-function runPlatform<A, E>(effect: Effect.Effect<A, E, NodeContext.NodeContext>): Promise<A> {
-  return Effect.runPromise(effect.pipe(Effect.provide(NodeContext.layer)));
+function runPlatform<A, E>(effect: Effect.Effect<A, E, NodeServices.NodeServices>): Promise<A> {
+  return Effect.runPromise(effect.pipe(Effect.provide(NodeServices.layer)));
 }
 
 function extractPdfText(pdfBuffer: Buffer): string {
-  const tmpPath = join(tmpdir(), `pdf-test-${Date.now()}-${Math.random().toString(36).slice(2)}.pdf`);
+  const tmpPath = join(
+    tmpdir(),
+    `pdf-test-${Date.now()}-${Math.random().toString(36).slice(2)}.pdf`,
+  );
   try {
     writeFileSync(tmpPath, pdfBuffer);
     return execSync(`pdftotext "${tmpPath}" -`, { encoding: "utf8", timeout: 5000 });
   } finally {
-    try { unlinkSync(tmpPath); } catch { /* ignore */ }
+    try {
+      unlinkSync(tmpPath);
+    } catch {
+      /* ignore */
+    }
   }
 }
 
@@ -79,7 +86,10 @@ describe("PDF Service", () => {
         `select * from app_private.really_create_user($1::citext, $2, null, true, $3::citext, $4)`,
         [username, name, email, `${username}123`],
       );
-      await testDb.query(`update app_public.users set role = $1 where id = $2`, [role, result.rows[0].id]);
+      await testDb.query(`update app_public.users set role = $1 where id = $2`, [
+        role,
+        result.rows[0].id,
+      ]);
       return result.rows[0].id;
     };
 
@@ -87,7 +97,12 @@ describe("PDF Service", () => {
     const teacherId = await makeUser("fb_teacher", "FB Teacher", "fbteacher@test.com", "teacher");
     const parentId = await makeUser("fb_parent", "FB Parent", "fbparent@test.com", "parent");
     parentUserId = parentId;
-    const otherParentId = await makeUser("fb_other_parent", "FB Other Parent", "fbother@test.com", "parent");
+    const otherParentId = await makeUser(
+      "fb_other_parent",
+      "FB Other Parent",
+      "fbother@test.com",
+      "parent",
+    );
     otherParentUserId = otherParentId;
     studentId = await makeUser("fb_student", "FB Student", "fbstudent@test.com", "student");
 
@@ -180,19 +195,39 @@ describe("PDF Service", () => {
       Effect.gen(function* () {
         const pdf = yield* PdfService;
         const billBuffer = yield* pdf.generateBillPdf({
-          familyName: "Test Family", billNumber: 42, status: "issued",
-          billingPeriodStart: "2026-07-01", billingPeriodEnd: "2026-07-31",
-          dueDate: "2026-07-15", issuedAt: "2026-07-01", paidAt: null,
+          familyName: "Test Family",
+          billNumber: 42,
+          status: "issued",
+          billingPeriodStart: "2026-07-01",
+          billingPeriodEnd: "2026-07-31",
+          dueDate: "2026-07-15",
+          issuedAt: "2026-07-01",
+          paidAt: null,
           createdAt: "2026-07-01",
-          lineItems: [{ description: "Weekly lessons x4", lineType: "lesson", quantity: 4, unitPriceCents: 5000, amountCents: 20000 }],
-          subtotalCents: 20000, discountCents: 2000, taxCents: 1000, totalCents: 19000,
+          lineItems: [
+            {
+              description: "Weekly lessons x4",
+              lineType: "lesson",
+              quantity: 4,
+              unitPriceCents: 5000,
+              amountCents: 20000,
+            },
+          ],
+          subtotalCents: 20000,
+          discountCents: 2000,
+          taxCents: 1000,
+          totalCents: 19000,
         });
         expect(billBuffer.slice(0, 4).toString()).toBe("%PDF");
         expect(extractPdfText(billBuffer)).toContain("$190.00");
 
         const receiptBuffer = yield* pdf.generateReceiptPdf({
-          familyName: "Test Family", paymentNumber: 1, amountCents: 10000,
-          method: "check", reference: "CK-1001", receivedAt: "2026-07-05",
+          familyName: "Test Family",
+          paymentNumber: 1,
+          amountCents: 10000,
+          method: "check",
+          reference: "CK-1001",
+          receivedAt: "2026-07-05",
           allocations: [{ billNumber: 42, amountCents: 10000 }],
         });
         expect(receiptBuffer.slice(0, 4).toString()).toBe("%PDF");
@@ -211,8 +246,14 @@ describe("PDF Service", () => {
         expect(bills.length).toBeGreaterThanOrEqual(1);
         const detail = yield* svc.billDetail(parentSessionId, parentUserId, bills[0].id);
         expect(detail.lineItems.length).toBeGreaterThanOrEqual(1);
-        expect((yield* svc.payments(parentSessionId, parentUserId)).length).toBeGreaterThanOrEqual(1);
-        expect((yield* svc.credits(parentSessionId, parentUserId)).some((c) => c.reason === "Referral bonus")).toBe(true);
+        expect((yield* svc.payments(parentSessionId, parentUserId)).length).toBeGreaterThanOrEqual(
+          1,
+        );
+        expect(
+          (yield* svc.credits(parentSessionId, parentUserId)).some(
+            (c) => c.reason === "Referral bonus",
+          ),
+        ).toBe(true);
       }),
     );
 
@@ -235,8 +276,12 @@ describe("PDF Service", () => {
         const svc = yield* FamilyBillingService;
         const bills = yield* svc.bills(parentSessionId, parentUserId);
         const payments = yield* svc.payments(parentSessionId, parentUserId);
-        expect((yield* svc.adminBillPdf(adminSessionId, bills[0].id)).slice(0, 4).toString()).toBe("%PDF");
-        expect((yield* svc.adminPaymentReceipt(adminSessionId, payments[0].id)).slice(0, 4).toString()).toBe("%PDF");
+        expect((yield* svc.adminBillPdf(adminSessionId, bills[0].id)).slice(0, 4).toString()).toBe(
+          "%PDF",
+        );
+        expect(
+          (yield* svc.adminPaymentReceipt(adminSessionId, payments[0].id)).slice(0, 4).toString(),
+        ).toBe("%PDF");
       }),
     );
 
@@ -244,13 +289,21 @@ describe("PDF Service", () => {
       Effect.gen(function* () {
         const svc = yield* FamilyBillingService;
         const bills = yield* svc.bills(parentSessionId, parentUserId);
-        const teacherResult = yield* Effect.exit(svc.billPdf(teacherSessionId, teacherSessionId, bills[0].id));
+        const teacherResult = yield* Effect.exit(
+          svc.billPdf(teacherSessionId, teacherSessionId, bills[0].id),
+        );
         expect(teacherResult._tag).toBe("Failure");
-        const otherResult = yield* Effect.exit(svc.billPdf(otherParentSessionId, otherParentUserId, bills[0].id));
+        const otherResult = yield* Effect.exit(
+          svc.billPdf(otherParentSessionId, otherParentUserId, bills[0].id),
+        );
         expect(otherResult._tag).toBe("Failure");
-        const otherDetail = yield* Effect.exit(svc.billDetail(otherParentSessionId, otherParentUserId, bills[0].id));
+        const otherDetail = yield* Effect.exit(
+          svc.billDetail(otherParentSessionId, otherParentUserId, bills[0].id),
+        );
         expect(otherDetail._tag).toBe("Failure");
-        const missingResult = yield* Effect.exit(svc.billPdf(parentSessionId, parentUserId, "00000000-0000-0000-0000-000000000000"));
+        const missingResult = yield* Effect.exit(
+          svc.billPdf(parentSessionId, parentUserId, "00000000-0000-0000-0000-000000000000"),
+        );
         expect(missingResult._tag).toBe("Failure");
       }),
     );

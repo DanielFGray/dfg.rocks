@@ -35,7 +35,9 @@ const getAssignmentsPageData = createServerFn({ method: "GET" }).handler(() =>
   serverRuntime.runPromise(
     Effect.gen(function* () {
       const token = yield* Effect.sync(() => getCookie("session"));
-      const session = yield* SessionService.validateSessionToken(token);
+      const session = yield* SessionService.use((sessionService) =>
+        sessionService.validateSessionToken(token),
+      );
       if (!session) throw new Error("Unauthorized");
 
       const effectiveStudentId =
@@ -310,7 +312,7 @@ function StaffAssignmentsPage() {
     }) =>
       Effect.runPromise(
         api.authenticated.assignStudentMaterial({
-          path: { studentId },
+          params: { studentId },
           payload: {
             material_id: materialId,
             assigned_track_index: assignedTrackIndex,
@@ -328,7 +330,7 @@ function StaffAssignmentsPage() {
     mutationFn: async ({ studentId, materialId }: { studentId: string; materialId: string }) =>
       Effect.runPromise(
         api.authenticated.unassignStudentMaterial({
-          path: { studentId, materialId },
+          params: { studentId, materialId },
         }),
       ),
     onSettled: () => {

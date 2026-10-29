@@ -5,11 +5,11 @@ import {
   generateCodeVerifier,
   generateState,
 } from "arctic";
-import { Duration, Effect, Option } from "effect";
+import { Duration, Effect, Option, Context, Layer } from "effect";
 import * as Redacted from "effect/Redacted";
 import * as S from "effect/Schema";
-import * as HttpClient from "@effect/platform/HttpClient";
-import * as HttpBody from "@effect/platform/HttpBody";
+import * as HttpClient from "effect/http/HttpClient";
+import * as HttpBody from "effect/http/HttpBody";
 import { PgRootDB } from "../db.js";
 import { env } from "../assertEnv.js";
 import { HttpError } from "../pgErrors.js";
@@ -103,12 +103,12 @@ function mapGoogleCalendarAuthError(error: unknown): HttpError {
     return error;
   }
   if (error instanceof OAuth2RequestError) {
-    return HttpError.make(400, `Google Calendar OAuth request failed (${error.code})`);
+    return new HttpError(400, `Google Calendar OAuth request failed (${error.code})`);
   }
   if (error instanceof ArcticFetchError) {
-    return HttpError.make(502, "Google Calendar OAuth request failed");
+    return new HttpError(502, "Google Calendar OAuth request failed");
   }
-  return HttpError.make(502, "Google Calendar OAuth failed");
+  return new HttpError(502, "Google Calendar OAuth failed");
 }
 
 // === admin_settings helpers (Effect-native) ===
@@ -116,11 +116,10 @@ function mapGoogleCalendarAuthError(error: unknown): HttpError {
  * Google Calendar integration service. Sync methods are plain functions;
  * all async/IO operations are static Effect-returning methods.
  */
-export class GoogleCalendarService extends Effect.Service<GoogleCalendarService>()(
+export class GoogleCalendarService extends Context.Service<GoogleCalendarService>()(
   "GoogleCalendarService",
   {
-    accessors: true,
-    effect: Effect.gen(function* () {
+    make: Effect.gen(function* () {
       const rootDb = yield* PgRootDB;
 
       const getSettingEffect = Effect.fnUntraced(function* (key: string) {
@@ -184,17 +183,17 @@ export class GoogleCalendarService extends Effect.Service<GoogleCalendarService>
         const res = yield* HttpClient.post(TOKEN_URL, {
           headers: { "Content-Type": "application/x-www-form-urlencoded" },
           body: HttpBody.text(body.toString(), "application/x-www-form-urlencoded"),
-        }).pipe(Effect.catchAll(() => HttpError.make(502, "Token refresh failed")));
+        }).pipe(Effect.catch(() => new HttpError(502, "Token refresh failed")));
         if (res.status !== 200) {
-          const text = yield* res.text.pipe(Effect.catchAll(() => Effect.succeed("")));
+          const text = yield* res.text.pipe(Effect.catch(() => Effect.succeed("")));
           return yield* new HttpError(res.status, `Token refresh failed: ${text}`);
         }
         const json = yield* res.json.pipe(
-          Effect.catchAll(() => HttpError.make(502, "Token refresh response was invalid")),
+          Effect.catch(() => new HttpError(502, "Token refresh response was invalid")),
         );
-        const payload = yield* S.decodeUnknown(RefreshTokenResponseSchema)(json).pipe(
+        const payload = yield* S.decodeUnknownEffect(RefreshTokenResponseSchema)(json).pipe(
           Effect.catchTags({
-            ParseError: () => HttpError.make(502, "Token refresh response was invalid"),
+            SchemaError: () => new HttpError(502, "Token refresh response was invalid"),
           }),
         );
         yield* setSettingEffect("gcal_access_token", payload.access_token);
@@ -224,22 +223,22 @@ export class GoogleCalendarService extends Effect.Service<GoogleCalendarService>
           method === "POST"
             ? HttpClient.post(url, {
                 headers,
-                ...(options.body !== undefined ? { body: HttpBody.unsafeJson(options.body) } : {}),
+                ...(options.body !== undefined ? { body: HttpBody.jsonUnsafe(options.body) } : {}),
               })
             : method === "PATCH"
               ? HttpClient.patch(url, {
                   headers,
                   ...(options.body !== undefined
-                    ? { body: HttpBody.unsafeJson(options.body) }
+                    ? { body: HttpBody.jsonUnsafe(options.body) }
                     : {}),
                 })
               : method === "DELETE"
                 ? HttpClient.del(url, { headers })
                 : HttpClient.get(url, { headers })
-        ).pipe(Effect.catchAll(() => HttpError.make(502, "Google Calendar request failed")));
+        ).pipe(Effect.catch(() => new HttpError(502, "Google Calendar request failed")));
 
         if (res.status < 200 || res.status >= 300) {
-          const text = yield* res.text.pipe(Effect.catchAll(() => Effect.succeed("")));
+          const text = yield* res.text.pipe(Effect.catch(() => Effect.succeed("")));
           return yield* new HttpError(res.status, text);
         }
         return res;
@@ -330,13 +329,11 @@ export class GoogleCalendarService extends Effect.Service<GoogleCalendarService>
             `/calendars/${encodeURIComponent(calId)}/events?${params.toString()}`,
           );
           const json = yield* res.json.pipe(
-            Effect.catchAll(() =>
-              HttpError.make(502, "Google Calendar events response was invalid"),
-            ),
+            Effect.catch(() => new HttpError(502, "Google Calendar events response was invalid")),
           );
-          const decoded = yield* S.decodeUnknown(GcalEventListSchema)(json).pipe(
+          const decoded = yield* S.decodeUnknownEffect(GcalEventListSchema)(json).pipe(
             Effect.catchTags({
-              ParseError: () => HttpError.make(502, "Google Calendar events response was invalid"),
+              SchemaError: () => new HttpError(502, "Google Calendar events response was invalid"),
             }),
           );
           if (decoded.items) all.push(...decoded.items);
@@ -418,13 +415,11 @@ export class GoogleCalendarService extends Effect.Service<GoogleCalendarService>
             body,
           });
           const json = yield* res.json.pipe(
-            Effect.catchAll(() =>
-              HttpError.make(502, "Google Calendar event response was invalid"),
-            ),
+            Effect.catch(() => new HttpError(502, "Google Calendar event response was invalid")),
           );
-          const event = yield* S.decodeUnknown(GcalEventSchema)(json).pipe(
+          const event = yield* S.decodeUnknownEffect(GcalEventSchema)(json).pipe(
             Effect.catchTags({
-              ParseError: () => HttpError.make(502, "Google Calendar event response was invalid"),
+              SchemaError: () => new HttpError(502, "Google Calendar event response was invalid"),
             }),
           );
           return event.id;
@@ -508,14 +503,12 @@ export class GoogleCalendarService extends Effect.Service<GoogleCalendarService>
                 `/calendars/${encodeURIComponent(calId)}/events?${params.toString()}`,
               );
               const json = yield* res.json.pipe(
-                Effect.catchAll(() =>
-                  HttpError.make(502, "Google Calendar sync response was invalid"),
-                ),
+                Effect.catch(() => new HttpError(502, "Google Calendar sync response was invalid")),
               );
-              const decoded = yield* S.decodeUnknown(GcalEventListSchema)(json).pipe(
+              const decoded = yield* S.decodeUnknownEffect(GcalEventListSchema)(json).pipe(
                 Effect.catchTags({
-                  ParseError: () =>
-                    HttpError.make(502, "Google Calendar sync response was invalid"),
+                  SchemaError: () =>
+                    new HttpError(502, "Google Calendar sync response was invalid"),
                 }),
               );
               const nextToken = decoded.nextSyncToken ?? "";
@@ -536,24 +529,22 @@ export class GoogleCalendarService extends Effect.Service<GoogleCalendarService>
                   "Content-Type": "application/json",
                 },
               },
-            ).pipe(Effect.catchAll(() => HttpError.make(502, "Google Calendar request failed")));
+            ).pipe(Effect.catch(() => new HttpError(502, "Google Calendar request failed")));
             if (res.status === 410) {
               // Sync token expired — clear it and loop to do a full sync
               yield* deleteSettingEffect("gcal_sync_token");
               continue;
             }
             if (res.status < 200 || res.status >= 300) {
-              const text = yield* res.text.pipe(Effect.catchAll(() => Effect.succeed("")));
+              const text = yield* res.text.pipe(Effect.catch(() => Effect.succeed("")));
               return yield* new HttpError(res.status, text);
             }
             const json = yield* res.json.pipe(
-              Effect.catchAll(() =>
-                HttpError.make(502, "Google Calendar sync response was invalid"),
-              ),
+              Effect.catch(() => new HttpError(502, "Google Calendar sync response was invalid")),
             );
-            const decoded = yield* S.decodeUnknown(GcalEventListSchema)(json).pipe(
+            const decoded = yield* S.decodeUnknownEffect(GcalEventListSchema)(json).pipe(
               Effect.catchTags({
-                ParseError: () => HttpError.make(502, "Google Calendar sync response was invalid"),
+                SchemaError: () => new HttpError(502, "Google Calendar sync response was invalid"),
               }),
             );
             const nextToken = decoded.nextSyncToken ?? "";
@@ -587,6 +578,8 @@ export class GoogleCalendarService extends Effect.Service<GoogleCalendarService>
     }),
   },
 ) {
+  static readonly layer = Layer.effect(this, this.make);
+
   // Sync helpers — no I/O needed
   static getAuthCookieName(): string {
     return GCAL_AUTH_COOKIE_NAME;
@@ -603,9 +596,9 @@ export class GoogleCalendarService extends Effect.Service<GoogleCalendarService>
   static decodeAuthState(value: unknown) {
     if (typeof value !== "string" || !value) return Effect.succeed(null);
 
-    return S.decodeUnknown(S.parseJson(GoogleCalendarAuthStateSchema))(
+    return S.decodeUnknownEffect(S.fromJsonString(GoogleCalendarAuthStateSchema))(
       Buffer.from(value, "base64url").toString("utf8"),
-    ).pipe(Effect.catchAll(() => Effect.succeed(null)));
+    ).pipe(Effect.catch(() => Effect.succeed(null)));
   }
 
   static getAuthCookieOptions(rootUrl: string) {

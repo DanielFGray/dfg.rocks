@@ -44,18 +44,14 @@ export function FamilyBillingDetailView({
   return (
     <div data-testid="family-billing-detail">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-primary dark:text-primary-dark">
-          {family_name}
-        </h1>
-        <p className="mt-1 text-sm text-muted dark:text-muted-dark">
-          Family billing detail
-        </p>
+        <h1 className="text-2xl font-bold text-primary dark:text-primary-dark">{family_name}</h1>
+        <p className="mt-1 text-sm text-muted dark:text-muted-dark">Family billing detail</p>
       </div>
 
       <div className="mb-6 grid gap-4 sm:grid-cols-3">
         <Card>
           <div className="p-4">
-            <p className="text-xs font-medium uppercase tracking-wide text-muted dark:text-muted-dark">
+            <p className="text-xs font-medium tracking-wide text-muted uppercase dark:text-muted-dark">
               Outstanding
             </p>
             <p className="mt-1 text-2xl font-bold text-primary dark:text-primary-dark">
@@ -65,7 +61,7 @@ export function FamilyBillingDetailView({
         </Card>
         <Card>
           <div className="p-4">
-            <p className="text-xs font-medium uppercase tracking-wide text-red-600 dark:text-red-400">
+            <p className="text-xs font-medium tracking-wide text-red-600 uppercase dark:text-red-400">
               Overdue
             </p>
             <p className="mt-1 text-2xl font-bold text-red-600 dark:text-red-400">
@@ -75,7 +71,7 @@ export function FamilyBillingDetailView({
         </Card>
         <Card>
           <div className="p-4">
-            <p className="text-xs font-medium uppercase tracking-wide text-green-600 dark:text-green-400">
+            <p className="text-xs font-medium tracking-wide text-green-600 uppercase dark:text-green-400">
               Credit Balance
             </p>
             <p className="mt-1 text-2xl font-bold text-green-600 dark:text-green-400">
@@ -87,11 +83,21 @@ export function FamilyBillingDetailView({
 
       <Tabs selectedKey={tab} onSelectionChange={setTab}>
         <TabList>
-          <Tab id="bills" data-testid="tab-bills">Bills</Tab>
-          <Tab id="payments" data-testid="tab-payments">Payments</Tab>
-          <Tab id="credits" data-testid="tab-credits">Credits</Tab>
-          <Tab id="discounts" data-testid="tab-discounts">Discounts</Tab>
-          <Tab id="tax" data-testid="tab-tax">Tax</Tab>
+          <Tab id="bills" data-testid="tab-bills">
+            Bills
+          </Tab>
+          <Tab id="payments" data-testid="tab-payments">
+            Payments
+          </Tab>
+          <Tab id="credits" data-testid="tab-credits">
+            Credits
+          </Tab>
+          <Tab id="discounts" data-testid="tab-discounts">
+            Discounts
+          </Tab>
+          <Tab id="tax" data-testid="tab-tax">
+            Tax
+          </Tab>
         </TabList>
 
         <TabPanel id="bills" className="mt-6">
@@ -101,7 +107,12 @@ export function FamilyBillingDetailView({
           <PaymentsSection payments={payments} familyId={familyId} onRefresh={onRefresh} />
         </TabPanel>
         <TabPanel id="credits" className="mt-6">
-          <CreditsSection credits={credits} familyId={familyId} bills={bills} onRefresh={onRefresh} />
+          <CreditsSection
+            credits={credits}
+            familyId={familyId}
+            bills={bills}
+            onRefresh={onRefresh}
+          />
         </TabPanel>
         <TabPanel id="discounts" className="mt-6">
           <DiscountsSection familyId={familyId} />
@@ -176,19 +187,13 @@ function BillsSection({
                     </button>
                   </td>
                   <td className="px-4 py-3">
-                    <span className={billStatusBadge(bill.status)}>
-                      {statusLabel(bill.status)}
-                    </span>
+                    <span className={billStatusBadge(bill.status)}>{statusLabel(bill.status)}</span>
                   </td>
                   <td className="px-4 py-3 text-muted dark:text-muted-dark">
                     {dateLabel(bill.billing_period_start)} – {dateLabel(bill.billing_period_end)}
                   </td>
-                  <td className="px-4 py-3">
-                    {bill.due_date ? dateLabel(bill.due_date) : "—"}
-                  </td>
-                  <td className="px-4 py-3 font-medium">
-                    {formatCents(bill.total_cents)}
-                  </td>
+                  <td className="px-4 py-3">{bill.due_date ? dateLabel(bill.due_date) : "—"}</td>
+                  <td className="px-4 py-3 font-medium">{formatCents(bill.total_cents)}</td>
                   <td className="px-4 py-3">
                     <BillActions
                       bill={bill}
@@ -236,8 +241,7 @@ function BillActions({
   const [voidOpen, setVoidOpen] = useState(false);
 
   const issue = useMutation({
-    mutationFn: () =>
-      Effect.runPromise(api.admin.issueBill({ path: { id: bill.id } })),
+    mutationFn: () => Effect.runPromise(api.admin.issueBill({ params: { id: bill.id } })),
     onSuccess: onRefresh,
   });
 
@@ -297,9 +301,7 @@ function VoidBillModal({
 
   const save = useMutation({
     mutationFn: () =>
-      Effect.runPromise(
-        api.admin.voidBill({ path: { id: billId }, payload: { reason } }),
-      ),
+      Effect.runPromise(api.admin.voidBill({ params: { id: billId }, payload: { reason } })),
     onSuccess: () => {
       onSaved();
       onClose();
@@ -430,13 +432,7 @@ function CreateBillModal({
             onChange={setDueDate}
           />
         </div>
-        <Textarea
-          id="bill-notes"
-          name="notes"
-          label="Notes"
-          value={notes}
-          onChange={setNotes}
-        />
+        <Textarea id="bill-notes" name="notes" label="Notes" value={notes} onChange={setNotes} />
         {save.error ? (
           <p role="alert" className="text-sm text-red-600 dark:text-red-400">
             {getErrorMessage(save.error)}
@@ -623,13 +619,7 @@ function RecordPaymentModal({
           value={receivedAt}
           onChange={setReceivedAt}
         />
-        <Textarea
-          id="payment-notes"
-          name="notes"
-          label="Notes"
-          value={notes}
-          onChange={setNotes}
-        />
+        <Textarea id="payment-notes" name="notes" label="Notes" value={notes} onChange={setNotes} />
         {save.error ? (
           <p role="alert" className="text-sm text-red-600 dark:text-red-400">
             {getErrorMessage(save.error)}
@@ -715,9 +705,7 @@ function CreditsSection({
                   key={c.id}
                   className="border-t border-overlay/8 hover:bg-overlay/4 dark:border-overlay-dark/8 dark:hover:bg-overlay-dark/4"
                 >
-                  <td className="px-4 py-3 font-medium">
-                    {formatCents(c.amount_cents)}
-                  </td>
+                  <td className="px-4 py-3 font-medium">{formatCents(c.amount_cents)}</td>
                   <td className="px-4 py-3 text-muted dark:text-muted-dark">{c.reason}</td>
                   <td className="px-4 py-3 text-muted dark:text-muted-dark">
                     {dateLabel(c.created_at)}
@@ -841,7 +829,10 @@ function IssueCreditModal({
           <Button variant="ghost" onClick={onClose}>
             Cancel
           </Button>
-          <Button type="submit" disabled={save.isPending || !amount || Number(amount) <= 0 || !reason.trim()}>
+          <Button
+            type="submit"
+            disabled={save.isPending || !amount || Number(amount) <= 0 || !reason.trim()}
+          >
             {save.isPending ? "Issuing..." : "Issue credit"}
           </Button>
         </div>
@@ -954,10 +945,14 @@ function ApplyCreditModal({
 /* ---- Discounts section ---- */
 
 function DiscountsSection({ familyId }: { familyId: string }) {
-  const { data: discounts, isLoading, error, refetch } = useQuery({
+  const {
+    data: discounts,
+    isLoading,
+    error,
+    refetch,
+  } = useQuery({
     queryKey: ["admin", "billing", "discounts", familyId],
-    queryFn: () =>
-      Effect.runPromise(api.admin.familyDiscounts({ path: { familyId } })),
+    queryFn: () => Effect.runPromise(api.admin.familyDiscounts({ params: { familyId } })),
   });
   const [createOpen, setCreateOpen] = useState(false);
 
@@ -1026,7 +1021,7 @@ function DiscountCard({
     mutationFn: () =>
       Effect.runPromise(
         api.admin.updateDiscount({
-          path: { id: discount.id },
+          params: { id: discount.id },
           payload: { is_active: !discount.is_active },
         }),
       ),
@@ -1038,9 +1033,7 @@ function DiscountCard({
       <div className="flex items-start justify-between gap-4 p-4">
         <div>
           <div className="flex flex-wrap items-center gap-2">
-            <p className="font-semibold text-primary dark:text-primary-dark">
-              {discount.label}
-            </p>
+            <p className="font-semibold text-primary dark:text-primary-dark">{discount.label}</p>
             <span
               className={`rounded-full px-2 py-0.5 text-xs font-medium ${
                 discount.is_active
@@ -1071,11 +1064,7 @@ function DiscountCard({
           >
             {discount.is_active ? "Deactivate" : "Activate"}
           </Button>
-          <Button
-            variant="ghost"
-            className="px-2 py-1 text-xs"
-            onClick={() => setEditOpen(true)}
-          >
+          <Button variant="ghost" className="px-2 py-1 text-xs" onClick={() => setEditOpen(true)}>
             Edit
           </Button>
         </div>
@@ -1112,9 +1101,7 @@ function DiscountFormModal({
     discount ? String(discount.discount_value) : "",
   );
   const [appliesTo, setAppliesTo] = useState(discount?.applies_to ?? "tuition");
-  const [effectiveFrom, setEffectiveFrom] = useState(
-    discount?.effective_from?.slice(0, 10) ?? "",
-  );
+  const [effectiveFrom, setEffectiveFrom] = useState(discount?.effective_from?.slice(0, 10) ?? "");
   const [effectiveUntil, setEffectiveUntil] = useState(
     discount?.effective_until?.slice(0, 10) ?? "",
   );
@@ -1124,16 +1111,17 @@ function DiscountFormModal({
       const payload: Record<string, any> = {
         label,
         discount_type: discountType as any,
-        discount_value: discountType === "percentage"
-          ? Math.round(Number(discountValue) * 100) / 100
-          : Math.round(Number(discountValue) * 100),
+        discount_value:
+          discountType === "percentage"
+            ? Math.round(Number(discountValue) * 100) / 100
+            : Math.round(Number(discountValue) * 100),
         applies_to: appliesTo as any,
         effective_from: effectiveFrom,
         ...(effectiveUntil ? { effective_until: effectiveUntil } : {}),
       };
       if (discount) {
         return Effect.runPromise(
-          api.admin.updateDiscount({ path: { id: discount.id }, payload }),
+          api.admin.updateDiscount({ params: { id: discount.id }, payload }),
         );
       }
       return Effect.runPromise(
@@ -1150,11 +1138,7 @@ function DiscountFormModal({
   });
 
   return (
-    <Modal
-      open={open}
-      onClose={onClose}
-      title={discount ? "Edit discount" : "Add discount"}
-    >
+    <Modal open={open} onClose={onClose} title={discount ? "Edit discount" : "Add discount"}>
       <form
         data-testid="discount-form"
         className="flex flex-col gap-4"
@@ -1248,10 +1232,14 @@ function DiscountFormModal({
 /* ---- Tax section ---- */
 
 function TaxSection({ familyId }: { familyId: string }) {
-  const { data: exemptions, isLoading: exLoading, error: exError, refetch: refetchEx } = useQuery({
+  const {
+    data: exemptions,
+    isLoading: exLoading,
+    error: exError,
+    refetch: refetchEx,
+  } = useQuery({
     queryKey: ["admin", "billing", "tax-exemptions", familyId],
-    queryFn: () =>
-      Effect.runPromise(api.admin.familyTaxExemptions({ path: { familyId } })),
+    queryFn: () => Effect.runPromise(api.admin.familyTaxExemptions({ params: { familyId } })),
   });
 
   const { data: taxRates } = useQuery({
@@ -1455,10 +1443,7 @@ function TaxExemptionFormModal({
           <Button variant="ghost" onClick={onClose}>
             Cancel
           </Button>
-          <Button
-            type="submit"
-            disabled={save.isPending || !reason.trim() || !effectiveFrom}
-          >
+          <Button type="submit" disabled={save.isPending || !reason.trim() || !effectiveFrom}>
             {save.isPending ? "Adding..." : "Add exemption"}
           </Button>
         </div>
@@ -1482,8 +1467,7 @@ function BillDetailModal({
 }) {
   const { data, isLoading, error } = useQuery({
     queryKey: ["admin", "billing", "bill", billId],
-    queryFn: () =>
-      Effect.runPromise(api.admin.getBill({ path: { id: billId } })),
+    queryFn: () => Effect.runPromise(api.admin.getBill({ params: { id: billId } })),
     enabled: open,
   });
 
@@ -1491,7 +1475,12 @@ function BillDetailModal({
   const [tab, setTab] = useState<string | number>("details");
 
   return (
-    <Modal open={open} onClose={onClose} title={`Bill #${billData?.bill_number ?? billId}`} className="w-full max-w-3xl outline-hidden">
+    <Modal
+      open={open}
+      onClose={onClose}
+      title={`Bill #${billData?.bill_number ?? billId}`}
+      className="w-full max-w-3xl outline-hidden"
+    >
       {isLoading ? (
         <p className="text-sm text-muted dark:text-muted-dark">Loading bill...</p>
       ) : error ? (
@@ -1499,13 +1488,34 @@ function BillDetailModal({
           Failed to load bill.
         </p>
       ) : billData ? (
-        <BillDetailBody bill={billData} billId={billId} tab={tab} setTab={setTab} onRefresh={onRefresh} onClose={onClose} />
+        <BillDetailBody
+          bill={billData}
+          billId={billId}
+          tab={tab}
+          setTab={setTab}
+          onRefresh={onRefresh}
+          onClose={onClose}
+        />
       ) : null}
     </Modal>
   );
 }
 
-function BillDetailBody({ bill, billId, tab, setTab, onRefresh, onClose }: { bill: BillDetailResponse; billId: string; tab: string | number; setTab: (t: string | number) => void; onRefresh: () => void; onClose: () => void }) {
+function BillDetailBody({
+  bill,
+  billId,
+  tab,
+  setTab,
+  onRefresh,
+  onClose,
+}: {
+  bill: BillDetailResponse;
+  billId: string;
+  tab: string | number;
+  setTab: (t: string | number) => void;
+  onRefresh: () => void;
+  onClose: () => void;
+}) {
   return (
     <div data-testid="bill-detail">
       <div className="mb-4 flex flex-wrap items-center gap-3">
@@ -1528,175 +1538,172 @@ function BillDetailBody({ bill, billId, tab, setTab, onRefresh, onClose }: { bil
 
         <TabPanel id="details" className="mt-4">
           {bill.line_items.length === 0 ? (
-                <p className="text-sm text-muted dark:text-muted-dark">No line items.</p>
-              ) : (
-                <div className="overflow-x-auto rounded-lg border border-overlay/10 dark:border-overlay-dark/10">
-                  <table className="w-full text-left text-sm">
-                    <thead className="bg-overlay/4 text-xs text-muted dark:bg-overlay-dark/4 dark:text-muted-dark">
-                      <tr>
-                        <th className="px-4 py-3 font-medium">Description</th>
-                        <th className="px-4 py-3 font-medium">Type</th>
-                        <th className="px-4 py-3 font-medium">Qty</th>
-                        <th className="px-4 py-3 font-medium">Unit Price</th>
-                        <th className="px-4 py-3 font-medium">Amount</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {bill.line_items.map((li) => (
-                        <tr
-                          key={li.id}
-                          className="border-t border-overlay/8 dark:border-overlay-dark/8"
-                        >
-                          <td className="px-4 py-3 font-medium text-primary dark:text-primary-dark">
-                            {li.description}
-                          </td>
-                          <td className="px-4 py-3 text-muted dark:text-muted-dark">
-                            {statusLabel(li.line_type)}
-                          </td>
-                          <td className="px-4 py-3">{li.quantity}</td>
-                          <td className="px-4 py-3">
-                            {formatCents(li.unit_price_cents)}
-                          </td>
-                          <td className="px-4 py-3 font-medium">
-                            {formatCents(li.amount_cents)}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                    <tfoot className="bg-overlay/4 text-xs dark:bg-overlay-dark/4">
-                      <tr>
-                        <td colSpan={4} className="px-4 py-2 text-right font-medium">
-                          Subtotal
-                        </td>
-                        <td className="px-4 py-2 font-medium">
-                          {formatCents(bill.subtotal_cents)}
-                        </td>
-                      </tr>
-                      {bill.discount_cents > 0 && (
-                        <tr>
-                          <td colSpan={4} className="px-4 py-2 text-right text-muted dark:text-muted-dark">
-                            Discount
-                          </td>
-                          <td className="px-4 py-2 text-green-600 dark:text-green-400">
-                            -{formatCents(bill.discount_cents)}
-                          </td>
-                        </tr>
-                      )}
-                      {bill.tax_cents > 0 && (
-                        <tr>
-                          <td colSpan={4} className="px-4 py-2 text-right text-muted dark:text-muted-dark">
-                            Tax
-                          </td>
-                          <td className="px-4 py-2">
-                            {formatCents(bill.tax_cents)}
-                          </td>
-                        </tr>
-                      )}
-                      <tr>
-                        <td colSpan={4} className="px-4 py-2 text-right font-semibold text-primary dark:text-primary-dark">
-                          Total
-                        </td>
-                        <td className="px-4 py-2 font-bold text-primary dark:text-primary-dark">
-                          {formatCents(bill.total_cents)}
-                        </td>
-                      </tr>
-                    </tfoot>
-                  </table>
-                </div>
-              )}
-            </TabPanel>
+            <p className="text-sm text-muted dark:text-muted-dark">No line items.</p>
+          ) : (
+            <div className="overflow-x-auto rounded-lg border border-overlay/10 dark:border-overlay-dark/10">
+              <table className="w-full text-left text-sm">
+                <thead className="bg-overlay/4 text-xs text-muted dark:bg-overlay-dark/4 dark:text-muted-dark">
+                  <tr>
+                    <th className="px-4 py-3 font-medium">Description</th>
+                    <th className="px-4 py-3 font-medium">Type</th>
+                    <th className="px-4 py-3 font-medium">Qty</th>
+                    <th className="px-4 py-3 font-medium">Unit Price</th>
+                    <th className="px-4 py-3 font-medium">Amount</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {bill.line_items.map((li) => (
+                    <tr
+                      key={li.id}
+                      className="border-t border-overlay/8 dark:border-overlay-dark/8"
+                    >
+                      <td className="px-4 py-3 font-medium text-primary dark:text-primary-dark">
+                        {li.description}
+                      </td>
+                      <td className="px-4 py-3 text-muted dark:text-muted-dark">
+                        {statusLabel(li.line_type)}
+                      </td>
+                      <td className="px-4 py-3">{li.quantity}</td>
+                      <td className="px-4 py-3">{formatCents(li.unit_price_cents)}</td>
+                      <td className="px-4 py-3 font-medium">{formatCents(li.amount_cents)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot className="bg-overlay/4 text-xs dark:bg-overlay-dark/4">
+                  <tr>
+                    <td colSpan={4} className="px-4 py-2 text-right font-medium">
+                      Subtotal
+                    </td>
+                    <td className="px-4 py-2 font-medium">{formatCents(bill.subtotal_cents)}</td>
+                  </tr>
+                  {bill.discount_cents > 0 && (
+                    <tr>
+                      <td
+                        colSpan={4}
+                        className="px-4 py-2 text-right text-muted dark:text-muted-dark"
+                      >
+                        Discount
+                      </td>
+                      <td className="px-4 py-2 text-green-600 dark:text-green-400">
+                        -{formatCents(bill.discount_cents)}
+                      </td>
+                    </tr>
+                  )}
+                  {bill.tax_cents > 0 && (
+                    <tr>
+                      <td
+                        colSpan={4}
+                        className="px-4 py-2 text-right text-muted dark:text-muted-dark"
+                      >
+                        Tax
+                      </td>
+                      <td className="px-4 py-2">{formatCents(bill.tax_cents)}</td>
+                    </tr>
+                  )}
+                  <tr>
+                    <td
+                      colSpan={4}
+                      className="px-4 py-2 text-right font-semibold text-primary dark:text-primary-dark"
+                    >
+                      Total
+                    </td>
+                    <td className="px-4 py-2 font-bold text-primary dark:text-primary-dark">
+                      {formatCents(bill.total_cents)}
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          )}
+        </TabPanel>
 
-            <TabPanel id="adjustments" className="mt-4">
-              <div className="mb-4">
-                <AdjustBillSection billId={billId} onSaved={onRefresh} />
-              </div>
-              {bill.adjustments.length === 0 ? (
-                <p className="text-sm text-muted dark:text-muted-dark">No adjustments.</p>
-              ) : (
-                <div className="overflow-x-auto rounded-lg border border-overlay/10 dark:border-overlay-dark/10">
-                  <table className="w-full text-left text-sm">
-                    <thead className="bg-overlay/4 text-xs text-muted dark:bg-overlay-dark/4 dark:text-muted-dark">
-                      <tr>
-                        <th className="px-4 py-3 font-medium">Amount</th>
-                        <th className="px-4 py-3 font-medium">Reason</th>
-                        <th className="px-4 py-3 font-medium">Date</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {bill.adjustments.map((adj) => (
-                        <tr
-                          key={adj.id}
-                          className="border-t border-overlay/8 dark:border-overlay-dark/8"
+        <TabPanel id="adjustments" className="mt-4">
+          <div className="mb-4">
+            <AdjustBillSection billId={billId} onSaved={onRefresh} />
+          </div>
+          {bill.adjustments.length === 0 ? (
+            <p className="text-sm text-muted dark:text-muted-dark">No adjustments.</p>
+          ) : (
+            <div className="overflow-x-auto rounded-lg border border-overlay/10 dark:border-overlay-dark/10">
+              <table className="w-full text-left text-sm">
+                <thead className="bg-overlay/4 text-xs text-muted dark:bg-overlay-dark/4 dark:text-muted-dark">
+                  <tr>
+                    <th className="px-4 py-3 font-medium">Amount</th>
+                    <th className="px-4 py-3 font-medium">Reason</th>
+                    <th className="px-4 py-3 font-medium">Date</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {bill.adjustments.map((adj) => (
+                    <tr
+                      key={adj.id}
+                      className="border-t border-overlay/8 dark:border-overlay-dark/8"
+                    >
+                      <td className="px-4 py-3 font-medium">
+                        <span
+                          className={
+                            adj.amount_cents < 0
+                              ? "text-red-600 dark:text-red-400"
+                              : "text-green-600 dark:text-green-400"
+                          }
                         >
-                          <td className="px-4 py-3 font-medium">
-                            <span className={adj.amount_cents < 0 ? "text-red-600 dark:text-red-400" : "text-green-600 dark:text-green-400"}>
-                              {adj.amount_cents < 0 ? "-" : "+"}
-                              {formatCents(Math.abs(adj.amount_cents))}
-                            </span>
-                          </td>
-                          <td className="px-4 py-3 text-muted dark:text-muted-dark">
-                            {adj.reason}
-                          </td>
-                          <td className="px-4 py-3 text-muted dark:text-muted-dark">
-                            {dateTimeLabel(adj.created_at)}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </TabPanel>
+                          {adj.amount_cents < 0 ? "-" : "+"}
+                          {formatCents(Math.abs(adj.amount_cents))}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-muted dark:text-muted-dark">{adj.reason}</td>
+                      <td className="px-4 py-3 text-muted dark:text-muted-dark">
+                        {dateTimeLabel(adj.created_at)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </TabPanel>
 
-            <TabPanel id="credits" className="mt-4">
-              {bill.credit_applications.length === 0 ? (
-                <p className="text-sm text-muted dark:text-muted-dark">
-                  No credit applications.
-                </p>
-              ) : (
-                <div className="overflow-x-auto rounded-lg border border-overlay/10 dark:border-overlay-dark/10">
-                  <table className="w-full text-left text-sm">
-                    <thead className="bg-overlay/4 text-xs text-muted dark:bg-overlay-dark/4 dark:text-muted-dark">
-                      <tr>
-                        <th className="px-4 py-3 font-medium">Amount</th>
-                        <th className="px-4 py-3 font-medium">Date</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {bill.credit_applications.map((ca) => (
-                        <tr
-                          key={ca.id}
-                          className="border-t border-overlay/8 dark:border-overlay-dark/8"
-                        >
-                          <td className="px-4 py-3 font-medium text-green-600 dark:text-green-400">
-                            -{formatCents(ca.amount_cents)}
-                          </td>
-                          <td className="px-4 py-3 text-muted dark:text-muted-dark">
-                            {dateTimeLabel(ca.created_at)}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </TabPanel>
+        <TabPanel id="credits" className="mt-4">
+          {bill.credit_applications.length === 0 ? (
+            <p className="text-sm text-muted dark:text-muted-dark">No credit applications.</p>
+          ) : (
+            <div className="overflow-x-auto rounded-lg border border-overlay/10 dark:border-overlay-dark/10">
+              <table className="w-full text-left text-sm">
+                <thead className="bg-overlay/4 text-xs text-muted dark:bg-overlay-dark/4 dark:text-muted-dark">
+                  <tr>
+                    <th className="px-4 py-3 font-medium">Amount</th>
+                    <th className="px-4 py-3 font-medium">Date</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {bill.credit_applications.map((ca) => (
+                    <tr
+                      key={ca.id}
+                      className="border-t border-overlay/8 dark:border-overlay-dark/8"
+                    >
+                      <td className="px-4 py-3 font-medium text-green-600 dark:text-green-400">
+                        -{formatCents(ca.amount_cents)}
+                      </td>
+                      <td className="px-4 py-3 text-muted dark:text-muted-dark">
+                        {dateTimeLabel(ca.created_at)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </TabPanel>
 
-            <TabPanel id="actions" className="mt-4">
-              <BillActionsPanel bill={bill} onRefresh={onRefresh} onClose={onClose} />
-            </TabPanel>
-          </Tabs>
-        </div>
-      );
-    }
-    
-    function AdjustBillSection({
-  billId,
-  onSaved,
-}: {
-  billId: string;
-  onSaved: () => void;
-}) {
+        <TabPanel id="actions" className="mt-4">
+          <BillActionsPanel bill={bill} onRefresh={onRefresh} onClose={onClose} />
+        </TabPanel>
+      </Tabs>
+    </div>
+  );
+}
+
+function AdjustBillSection({ billId, onSaved }: { billId: string; onSaved: () => void }) {
   const [amount, setAmount] = useState("");
   const [reason, setReason] = useState("");
 
@@ -1704,7 +1711,7 @@ function BillDetailBody({ bill, billId, tab, setTab, onRefresh, onClose }: { bil
     mutationFn: () =>
       Effect.runPromise(
         api.admin.adjustBill({
-          path: { id: billId },
+          params: { id: billId },
           payload: {
             amount_cents: Math.round(Number(amount) * 100),
             reason,
@@ -1768,8 +1775,7 @@ function BillActionsPanel({
   const [voidOpen, setVoidOpen] = useState(false);
 
   const issue = useMutation({
-    mutationFn: () =>
-      Effect.runPromise(api.admin.issueBill({ path: { id: bill.id } })),
+    mutationFn: () => Effect.runPromise(api.admin.issueBill({ params: { id: bill.id } })),
     onSuccess: () => {
       onRefresh();
       onClose();
@@ -1777,8 +1783,7 @@ function BillActionsPanel({
   });
 
   const cancel = useMutation({
-    mutationFn: () =>
-      Effect.runPromise(api.admin.cancelBill({ path: { id: bill.id } })),
+    mutationFn: () => Effect.runPromise(api.admin.cancelBill({ params: { id: bill.id } })),
     onSuccess: () => {
       onRefresh();
       onClose();
@@ -1797,11 +1802,7 @@ function BillActionsPanel({
           <Button variant="outline" onClick={() => cancel.mutate()} disabled={cancel.isPending}>
             {cancel.isPending ? "Cancelling..." : "Cancel bill"}
           </Button>
-          <Button
-            variant="danger"
-            onClick={() => setVoidOpen(true)}
-            disabled={voidOpen}
-          >
+          <Button variant="danger" onClick={() => setVoidOpen(true)} disabled={voidOpen}>
             Void bill
           </Button>
         </>

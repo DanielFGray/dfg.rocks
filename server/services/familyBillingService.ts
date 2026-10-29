@@ -1,14 +1,13 @@
-import { Effect, Option } from "effect";
+import { Effect, Option, Context, Layer } from "effect";
 import { type Database, withAuthContext } from "../db.js";
 import { HttpError } from "../pgErrors.js";
 import { PdfService } from "./pdfService.js";
 import { BillingLedgerService } from "./billingLedgerService.js";
 
-export class FamilyBillingService extends Effect.Service<FamilyBillingService>()(
+export class FamilyBillingService extends Context.Service<FamilyBillingService>()(
   "FamilyBillingService",
   {
-    accessors: true,
-    effect: Effect.gen(function* () {
+    make: Effect.gen(function* () {
       const pdf = yield* PdfService;
       const ledger = yield* BillingLedgerService;
 
@@ -453,4 +452,6 @@ export class FamilyBillingService extends Effect.Service<FamilyBillingService>()
       };
     }),
   },
-) {}
+) {
+  static readonly layer = Layer.effect(this, this.make);
+}

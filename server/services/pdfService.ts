@@ -1,11 +1,10 @@
-import { Effect } from "effect";
+import { Effect, Context, Layer } from "effect";
 import PDFDocument from "pdfkit";
 
-export class PdfService extends Effect.Service<PdfService>()("PdfService", {
-  accessors: true,
-  sync: () => {
+export class PdfService extends Context.Service<PdfService>()("PdfService", {
+  make: Effect.sync(() => {
     function renderPdf(doc: PDFKit.PDFDocument): Effect.Effect<Buffer, Error> {
-      return Effect.async<Buffer, Error>((resume) => {
+      return Effect.callback<Buffer, Error>((resume) => {
         const chunks: Buffer[] = [];
         doc.on("data", (chunk: Buffer) => chunks.push(chunk));
         doc.on("end", () => resume(Effect.succeed(Buffer.concat(chunks))));
@@ -39,11 +38,15 @@ export class PdfService extends Effect.Service<PdfService>()("PdfService", {
     }): PDFKit.PDFDocument {
       const doc = new PDFDocument({ margin: 50, size: "A4" });
 
-      const { familyName, billNumber, status, billingPeriodStart, billingPeriodEnd, dueDate } = params;
+      const { familyName, billNumber, status, billingPeriodStart, billingPeriodEnd, dueDate } =
+        params;
 
       doc.fontSize(20).font("Helvetica-Bold").text("Bill", { align: "center" });
       doc.moveDown(0.3);
-      doc.fontSize(10).font("Helvetica").fillColor("#666")
+      doc
+        .fontSize(10)
+        .font("Helvetica")
+        .fillColor("#666")
         .text(`Bill #${billNumber}`, { align: "center" })
         .moveDown(0.5);
 
@@ -81,9 +84,7 @@ export class PdfService extends Effect.Service<PdfService>()("PdfService", {
           doc.addPage();
           rowY = 50;
         }
-        const label = li.studentName
-          ? `${li.description} (${li.studentName})`
-          : li.description;
+        const label = li.studentName ? `${li.description} (${li.studentName})` : li.description;
         doc.text(label, 50, rowY, { width: 160 });
         doc.text(li.lineType.replace(/_/g, " "), 210, rowY, { width: 100 });
         doc.text(String(li.quantity), 320, rowY, { width: 40, align: "right" });
@@ -98,12 +99,18 @@ export class PdfService extends Effect.Service<PdfService>()("PdfService", {
       doc.fontSize(9);
 
       doc.text("Subtotal", 370, rowY + 6, { width: 70, align: "right" });
-      doc.text(formatCentsShort(params.subtotalCents), 440, rowY + 6, { width: 70, align: "right" });
+      doc.text(formatCentsShort(params.subtotalCents), 440, rowY + 6, {
+        width: 70,
+        align: "right",
+      });
       rowY += 16;
 
       if (params.discountCents > 0) {
         doc.text("Discount", 370, rowY, { width: 70, align: "right" });
-        doc.text(`-${formatCentsShort(params.discountCents)}`, 440, rowY, { width: 70, align: "right" });
+        doc.text(`-${formatCentsShort(params.discountCents)}`, 440, rowY, {
+          width: 70,
+          align: "right",
+        });
         rowY += 16;
       }
 
@@ -138,11 +145,15 @@ export class PdfService extends Effect.Service<PdfService>()("PdfService", {
     }): PDFKit.PDFDocument {
       const doc = new PDFDocument({ margin: 50, size: "A4" });
 
-      const { familyName, paymentNumber, amountCents, method, reference, receivedAt, allocations } = params;
+      const { familyName, paymentNumber, amountCents, method, reference, receivedAt, allocations } =
+        params;
 
       doc.fontSize(20).font("Helvetica-Bold").text("Payment Receipt", { align: "center" });
       doc.moveDown(0.3);
-      doc.fontSize(10).font("Helvetica").fillColor("#666")
+      doc
+        .fontSize(10)
+        .font("Helvetica")
+        .fillColor("#666")
         .text(`Receipt #${paymentNumber}`, { align: "center" })
         .moveDown(0.5);
 
@@ -180,9 +191,11 @@ export class PdfService extends Effect.Service<PdfService>()("PdfService", {
       generateBillPdf: Effect.fn("generateBillPdf")((params: Parameters<typeof buildBillDoc>[0]) =>
         renderPdf(buildBillDoc(params)),
       ),
-      generateReceiptPdf: Effect.fn("generateReceiptPdf")((params: Parameters<typeof buildReceiptDoc>[0]) =>
-        renderPdf(buildReceiptDoc(params)),
+      generateReceiptPdf: Effect.fn("generateReceiptPdf")(
+        (params: Parameters<typeof buildReceiptDoc>[0]) => renderPdf(buildReceiptDoc(params)),
       ),
     };
-  },
-}) {}
+  }),
+}) {
+  static readonly layer = Layer.effect(this, this.make);
+}

@@ -25,7 +25,9 @@ const getCoursesPageData = createServerFn({ method: "GET" }).handler(() =>
   serverRuntime.runPromise(
     Effect.gen(function* () {
       const session = yield* requireSession(getCookie("session"));
-      const data = yield* AuthenticatedRouteService.courses(session.session.id);
+      const data = yield* AuthenticatedRouteService.use((authenticatedRouteService) =>
+        authenticatedRouteService.courses(session.session.id),
+      );
       return toServerFunctionPayload(data.map(serializeCourse)) satisfies CoursesPageData;
     }),
   ),
@@ -53,7 +55,7 @@ export function AdminCourses({ courses }: { courses: readonly Course[] }) {
   const [deleteTarget, setDeleteTarget] = useState<Course | null>(null);
 
   const deleteCourseMutation = useMutation({
-    mutationFn: (id: string) => Effect.runPromise(api.admin.deleteCourse({ path: { id } })),
+    mutationFn: (id: string) => Effect.runPromise(api.admin.deleteCourse({ params: { id } })),
     onSettled: () => {
       void router.invalidate();
     },

@@ -27,10 +27,12 @@ const getLibraryPageData = createServerFn({ method: "GET" }).handler(() =>
       if (session.user.role !== "admin") {
         return null;
       }
-      const data = yield* AuthenticatedRouteService.library(session.session.id, {
-        limit: 1000,
-        offset: 0,
-      });
+      const data = yield* AuthenticatedRouteService.use((authenticatedRouteService) =>
+        authenticatedRouteService.library(session.session.id, {
+          limit: 1000,
+          offset: 0,
+        }),
+      );
       return toServerFunctionPayload(data) as Material[];
     }),
   ),
@@ -85,7 +87,7 @@ function LibraryPage() {
   }, [loaderMaterials]);
 
   const deleteMutation = useMutation({
-    mutationFn: (id: string) => Effect.runPromise(api.admin.deleteMaterial({ path: { id } })),
+    mutationFn: (id: string) => Effect.runPromise(api.admin.deleteMaterial({ params: { id } })),
     onSuccess: (_, id) => {
       setDeleteTarget(null);
       setPendingCreated((current) => current.filter((item) => item.id !== id));

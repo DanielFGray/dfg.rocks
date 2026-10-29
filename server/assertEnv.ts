@@ -12,15 +12,15 @@ export const envSchema = S.Struct({
   UPLOADS_DIR: S.optional(S.String),
   MAIL_PROVIDER: S.optional(S.String),
   EMAIL_FROM: S.optional(S.String),
-  CLOUDFLARE_EMAIL_API_TOKEN: S.optional(S.Redacted(S.String)),
+  CLOUDFLARE_EMAIL_API_TOKEN: S.optional(S.RedactedFromValue(S.String)),
   GOOGLE_CALENDAR_CLIENT_ID: S.optional(S.String),
-  GOOGLE_CALENDAR_CLIENT_SECRET: S.optional(S.Redacted(S.String)),
+  GOOGLE_CALENDAR_CLIENT_SECRET: S.optional(S.RedactedFromValue(S.String)),
   GOOGLE_CLIENT_ID: S.optional(S.String),
-  GOOGLE_CLIENT_SECRET: S.optional(S.Redacted(S.String)),
+  GOOGLE_CLIENT_SECRET: S.optional(S.RedactedFromValue(S.String)),
   APPLE_CLIENT_ID: S.optional(S.String),
   APPLE_TEAM_ID: S.optional(S.String),
   APPLE_KEY_ID: S.optional(S.String),
-  APPLE_PRIVATE_KEY: S.optional(S.Redacted(S.String)),
+  APPLE_PRIVATE_KEY: S.optional(S.RedactedFromValue(S.String)),
 });
 
 declare namespace NodeJS {

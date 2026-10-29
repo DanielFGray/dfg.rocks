@@ -23,13 +23,13 @@ function formDataToObject(formData: FormData): Record<string, unknown> {
   return obj;
 }
 
-function validateFormData<A>(schema: S.Schema<A>, formData: FormData): A {
+function validateFormData<A>(schema: S.ConstraintDecoder<A>, formData: FormData): A {
   return S.decodeUnknownSync(schema)(formDataToObject(formData));
 }
 
 const PasswordLoginSchema = S.Struct({
-  id: S.String.pipe(S.nonEmptyString()),
-  password: S.String.pipe(S.nonEmptyString()),
+  id: S.String.pipe(S.check(S.isNonEmpty())),
+  password: S.String.pipe(S.check(S.isNonEmpty())),
   redirect: S.optional(S.String),
 });
 
@@ -39,26 +39,32 @@ export const loginWithPassword = createServerFn({ method: "POST" })
     return validateFormData(PasswordLoginSchema, data);
   })
   .handler(async ({ data }) => {
-    const result = await serverRuntime.runPromise(
-      Effect.gen(function* () {
-        const login = yield* AuthService.login({ id: data.id, password: data.password });
-        yield* UserService.primaryEmailForUser(login.user.user_id);
-        return {
-          token: login.token,
-          expiresAt: login.expiresAt,
-          redirectTo: normalizeLoginRedirect(data.redirect) ?? "/dashboard",
-        };
-      }),
-    ).catch((error) => {
-      const message = messageFromError(error, "Login failed");
-      throw redirect({
-        to: "/login",
-        search: {
-          ...(data.redirect ? { redirect: data.redirect } : {}),
-          error: message,
-        },
+    const result = await serverRuntime
+      .runPromise(
+        Effect.gen(function* () {
+          const login = yield* AuthService.use((authService) =>
+            authService.login({ id: data.id, password: data.password }),
+          );
+          yield* UserService.use((userService) =>
+            userService.primaryEmailForUser(login.user.user_id),
+          );
+          return {
+            token: login.token,
+            expiresAt: login.expiresAt,
+            redirectTo: normalizeLoginRedirect(data.redirect) ?? "/dashboard",
+          };
+        }),
+      )
+      .catch((error) => {
+        const message = messageFromError(error, "Login failed");
+        throw redirect({
+          to: "/login",
+          search: {
+            ...(data.redirect ? { redirect: data.redirect } : {}),
+            error: message,
+          },
+        });
       });
-    });
     setCookie("session", result.token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
@@ -71,7 +77,7 @@ export const loginWithPassword = createServerFn({ method: "POST" })
   });
 
 const MagicLinkSchema = S.Struct({
-  email: S.String.pipe(S.nonEmptyString()),
+  email: S.String.pipe(S.check(S.isNonEmpty())),
   redirect: S.optional(S.String),
 });
 
@@ -81,7 +87,9 @@ export const requestMagicLink = createServerFn({ method: "POST" })
     return validateFormData(MagicLinkSchema, data);
   })
   .handler(async ({ data }) => {
-    await serverRuntime.runPromise(AuthRouteService.generateMagicLink(data.email));
+    await serverRuntime.runPromise(
+      AuthRouteService.use((authRouteService) => authRouteService.generateMagicLink(data.email)),
+    );
     throw redirect({
       to: "/login",
       search: {
@@ -93,7 +101,7 @@ export const requestMagicLink = createServerFn({ method: "POST" })
   });
 
 const ForgotPasswordSchema = S.Struct({
-  email: S.String.pipe(S.nonEmptyString()),
+  email: S.String.pipe(S.check(S.isNonEmpty())),
 });
 
 export const forgotPassword = createServerFn({ method: "POST" })
@@ -102,13 +110,15 @@ export const forgotPassword = createServerFn({ method: "POST" })
     return validateFormData(ForgotPasswordSchema, data);
   })
   .handler(async ({ data }) => {
-    await serverRuntime.runPromise(AuthService.forgotPassword({ email: data.email }));
+    await serverRuntime.runPromise(
+      AuthService.use((authService) => authService.forgotPassword({ email: data.email })),
+    );
     throw redirect({ to: "/forgot-password", search: { sent: true as const } });
   });
 
 const ResetPasswordSchema = S.Struct({
-  token: S.String.pipe(S.nonEmptyString()),
-  password: S.String.pipe(S.minLength(6)),
+  token: S.String.pipe(S.check(S.isNonEmpty())),
+  password: S.String.pipe(S.check(S.isMinLength(6))),
 });
 
 export const resetPassword = createServerFn({ method: "POST" })
@@ -118,7 +128,11 @@ export const resetPassword = createServerFn({ method: "POST" })
   })
   .handler(async ({ data }) => {
     const result = await serverRuntime
-      .runPromise(AuthService.resetPassword({ token: data.token, password: data.password }))
+      .runPromise(
+        AuthService.use((authService) =>
+          authService.resetPassword({ token: data.token, password: data.password }),
+        ),
+      )
       .catch((error) => {
         throw redirect({
           to: "/reset-password",
@@ -140,12 +154,12 @@ export const resetPassword = createServerFn({ method: "POST" })
   });
 
 const AcceptInviteSchema = S.Struct({
-  id: S.String.pipe(S.nonEmptyString()),
+  id: S.String.pipe(S.check(S.isNonEmpty())),
   code: S.optional(S.String),
-  name: S.String.pipe(S.nonEmptyString()),
-  username: S.String.pipe(S.minLength(3)),
+  name: S.String.pipe(S.check(S.isNonEmpty())),
+  username: S.String.pipe(S.check(S.isMinLength(3))),
   email: S.optional(S.String),
-  password: S.String.pipe(S.minLength(6)),
+  password: S.String.pipe(S.check(S.isMinLength(6))),
 });
 
 export const acceptInvitation = createServerFn({ method: "POST" })
@@ -156,14 +170,16 @@ export const acceptInvitation = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const session = await serverRuntime
       .runPromise(
-        PublicRouteService.acceptInvitation({
-          invitationId: data.id,
-          code: data.code,
-          username: data.username,
-          password: data.password,
-          name: data.name,
-          email: data.email,
-        }),
+        PublicRouteService.use((publicRouteService) =>
+          publicRouteService.acceptInvitation({
+            invitationId: data.id,
+            code: data.code,
+            username: data.username,
+            password: data.password,
+            name: data.name,
+            email: data.email,
+          }),
+        ),
       )
       .catch((err) => {
         throw redirect({

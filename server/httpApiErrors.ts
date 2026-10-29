@@ -1,6 +1,6 @@
 import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
-import * as Either from "effect/Either";
+import * as Result from "effect/Result";
 import {
   BadGatewayError,
   BadRequestError,
@@ -25,28 +25,27 @@ export type AllowedHttpApiErrorStatuses =
   | readonly HttpApiErrorStatus[]
   | ReadonlySet<HttpApiErrorStatus>;
 
-export type HttpApiErrorForStatus<Status extends HttpApiErrorStatus> =
-  Status extends 400
-    ? BadRequestError
-    : Status extends 401
-      ? UnauthorizedError
-      : Status extends 403
-        ? ForbiddenError
-        : Status extends 404
-          ? NotFoundError
-          : Status extends 409
-            ? ConflictError
-            : Status extends 413
-              ? PayloadTooLargeError
-              : Status extends 423
-                ? LockedError
-                : Status extends 429
-                  ? TooManyRequestsError
-                  : Status extends 500
-                    ? InternalServerError
-                    : Status extends 502
-                      ? BadGatewayError
-                      : ServiceUnavailableError;
+export type HttpApiErrorForStatus<Status extends HttpApiErrorStatus> = Status extends 400
+  ? BadRequestError
+  : Status extends 401
+    ? UnauthorizedError
+    : Status extends 403
+      ? ForbiddenError
+      : Status extends 404
+        ? NotFoundError
+        : Status extends 409
+          ? ConflictError
+          : Status extends 413
+            ? PayloadTooLargeError
+            : Status extends 423
+              ? LockedError
+              : Status extends 429
+                ? TooManyRequestsError
+                : Status extends 500
+                  ? InternalServerError
+                  : Status extends 502
+                    ? BadGatewayError
+                    : ServiceUnavailableError;
 
 type AllowedStatus<Allowed extends AllowedHttpApiErrorStatuses> =
   Allowed extends readonly (infer Status extends HttpApiErrorStatus)[]
@@ -143,50 +142,37 @@ export function httpErrorToHttpApiError(error: HttpError): HttpApiError | undefi
  * Defects and unsupported failures are logged with their full cause and exposed as a
  * sanitized 500 error.
  */
-export function adaptHttpApiErrors<
-  A,
-  E,
-  R,
-  const Allowed extends AllowedHttpApiErrorStatuses,
->(
+export function adaptHttpApiErrors<A, E, R, const Allowed extends AllowedHttpApiErrorStatuses>(
   self: Effect.Effect<A, E, R>,
   allowedStatuses: Allowed,
 ): Effect.Effect<A, HttpApiErrorForStatus<AllowedStatus<Allowed>>, R> {
-  return Effect.catchAllCause(self, (cause) => {
-    if (Cause.isInterrupted(cause)) {
-      return Effect.failCause(
-        cause as Cause.Cause<HttpApiErrorForStatus<AllowedStatus<Allowed>>>,
-      );
+  return Effect.catchCause(self, (cause) => {
+    if (Cause.hasInterrupts(cause)) {
+      return Effect.failCause(cause as Cause.Cause<HttpApiErrorForStatus<AllowedStatus<Allowed>>>);
     }
 
-    const failure = Cause.failureOrCause(cause);
-    if (Either.isLeft(failure)) {
+    const failure = Cause.findError(cause);
+    if (Result.isSuccess(failure)) {
       if (
-        isHttpApiError(failure.left) &&
-        isAllowedStatus(allowedStatuses, httpApiErrorStatus(failure.left))
+        isHttpApiError(failure.success) &&
+        isAllowedStatus(allowedStatuses, httpApiErrorStatus(failure.success))
       ) {
-        return Effect.fail(
-          failure.left as HttpApiErrorForStatus<AllowedStatus<Allowed>>,
-        );
+        return Effect.fail(failure.success as HttpApiErrorForStatus<AllowedStatus<Allowed>>);
       }
       if (
-        failure.left instanceof HttpError &&
-        isAllowedStatus(allowedStatuses, failure.left.status)
+        failure.success instanceof HttpError &&
+        isAllowedStatus(allowedStatuses, failure.success.status)
       ) {
-        const apiError = httpErrorToHttpApiError(failure.left);
+        const apiError = httpErrorToHttpApiError(failure.success);
         if (apiError !== undefined) {
-          return Effect.fail(
-            apiError as HttpApiErrorForStatus<AllowedStatus<Allowed>>,
-          );
+          return Effect.fail(apiError as HttpApiErrorForStatus<AllowedStatus<Allowed>>);
         }
       }
     }
 
     return Effect.logError("Unexpected HTTP API failure", cause).pipe(
-      Effect.zipRight(
-        Effect.fail(
-          internalServerError() as HttpApiErrorForStatus<AllowedStatus<Allowed>>,
-        ),
+      Effect.andThen(
+        Effect.fail(internalServerError() as HttpApiErrorForStatus<AllowedStatus<Allowed>>),
       ),
     );
   });

@@ -17,10 +17,13 @@ export const Route = createFileRoute("/_authed/billing/")({
 
 function BillingPage() {
   const { isAdmin } = useAuth();
-  const { data: families, isLoading, error } = useQuery({
+  const {
+    data: families,
+    isLoading,
+    error,
+  } = useQuery({
     queryKey: ["admin", "billing", "families"],
-    queryFn: () =>
-      Effect.runPromise(api.admin.billingFamilies()),
+    queryFn: () => Effect.runPromise(api.admin.billingFamilies()),
     enabled: isAdmin,
   });
 
@@ -35,15 +38,13 @@ function BillingPage() {
     <Main>
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-primary dark:text-primary-dark">Billing</h1>
-        <p className="mt-1 text-sm text-muted dark:text-muted-dark">
-          Family accounts receivable
-        </p>
+        <p className="mt-1 text-sm text-muted dark:text-muted-dark">Family accounts receivable</p>
       </div>
 
       <div className="mb-6 grid gap-4 sm:grid-cols-3">
         <Card>
           <div className="p-4">
-            <p className="text-xs font-medium uppercase tracking-wide text-muted dark:text-muted-dark">
+            <p className="text-xs font-medium tracking-wide text-muted uppercase dark:text-muted-dark">
               Outstanding
             </p>
             <p className="mt-1 text-2xl font-bold text-primary dark:text-primary-dark">
@@ -53,7 +54,7 @@ function BillingPage() {
         </Card>
         <Card>
           <div className="p-4">
-            <p className="text-xs font-medium uppercase tracking-wide text-red-600 dark:text-red-400">
+            <p className="text-xs font-medium tracking-wide text-red-600 uppercase dark:text-red-400">
               Overdue
             </p>
             <p className="mt-1 text-2xl font-bold text-red-600 dark:text-red-400">
@@ -63,7 +64,7 @@ function BillingPage() {
         </Card>
         <Card>
           <div className="p-4">
-            <p className="text-xs font-medium uppercase tracking-wide text-muted dark:text-muted-dark">
+            <p className="text-xs font-medium tracking-wide text-muted uppercase dark:text-muted-dark">
               Family Credit
             </p>
             <p className="mt-1 text-2xl font-bold text-green-600 dark:text-green-400">
@@ -110,21 +111,15 @@ function BillingPage() {
                       {f.family_name}
                     </Link>
                   </td>
-                  <td className="px-4 py-3 text-muted dark:text-muted-dark">
-                    {f.bill_count}
-                  </td>
+                  <td className="px-4 py-3 text-muted dark:text-muted-dark">{f.bill_count}</td>
                   <td className="px-4 py-3">{formatCents(f.total_billed_cents)}</td>
                   <td className="px-4 py-3">{formatCents(f.total_paid_cents)}</td>
-                  <td className="px-4 py-3 font-medium">
-                    {formatCents(f.outstanding_cents)}
-                  </td>
+                  <td className="px-4 py-3 font-medium">{formatCents(f.outstanding_cents)}</td>
                   <td className="px-4 py-3 text-red-600 dark:text-red-400">
                     {f.overdue_cents > 0 ? formatCents(f.overdue_cents) : "—"}
                   </td>
                   <td className="px-4 py-3 text-green-600 dark:text-green-400">
-                    {f.credit_balance_cents > 0
-                      ? formatCents(f.credit_balance_cents)
-                      : "—"}
+                    {f.credit_balance_cents > 0 ? formatCents(f.credit_balance_cents) : "—"}
                   </td>
                 </tr>
               ))}

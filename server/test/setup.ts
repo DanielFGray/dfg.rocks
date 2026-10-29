@@ -12,5 +12,6 @@ if (process.env.TEST_DATABASE_URL && process.env.AUTH_DATABASE_URL) {
   process.env.APPLE_CLIENT_ID ||= "apple-client-id";
   process.env.APPLE_TEAM_ID ||= "apple-team-id";
   process.env.APPLE_KEY_ID ||= "apple-key-id";
-  process.env.APPLE_PRIVATE_KEY ||= "-----BEGIN PRIVATE KEY-----\\nAQAB\\n-----END PRIVATE KEY-----";
+  process.env.APPLE_PRIVATE_KEY ||=
+    "-----BEGIN PRIVATE KEY-----\\nAQAB\\n-----END PRIVATE KEY-----";
 }

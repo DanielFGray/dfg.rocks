@@ -35,23 +35,19 @@ export function dateTimeLabel(value: string): string {
 
 const statusStyles: Record<BillStatus, string> = {
   draft: "bg-overlay/10 text-muted dark:bg-overlay-dark/10 dark:text-muted-dark",
-  issued:
-    "bg-blue-500/15 text-blue-700 dark:text-blue-300",
+  issued: "bg-blue-500/15 text-blue-700 dark:text-blue-300",
   paid: "bg-green-500/15 text-green-700 dark:text-green-300",
   cancelled: "bg-amber-500/15 text-amber-700 dark:text-amber-300",
   void: "bg-red-500/15 text-red-700 dark:text-red-300",
 };
 
 export function billStatusBadge(status: BillStatus): string {
-  const base =
-    "inline-flex rounded-full px-2 py-0.5 text-xs font-medium";
+  const base = "inline-flex rounded-full px-2 py-0.5 text-xs font-medium";
   return `${base} ${statusStyles[status] ?? statusStyles.draft}`;
 }
 
 export function statusLabel(status: string): string {
-  return status
-    .replaceAll("_", " ")
-    .replace(/^./, (c) => c.toUpperCase());
+  return status.replaceAll("_", " ").replace(/^./, (c) => c.toUpperCase());
 }
 
 export const paymentMethodOptions = [

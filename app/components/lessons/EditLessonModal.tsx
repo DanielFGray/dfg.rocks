@@ -8,11 +8,7 @@ import { TimeField } from "../ui/TimeField.js";
 import { Select } from "../ui/Select.js";
 import { Button } from "../ui/Button.js";
 import type { Lesson, LocationType } from "../../../shared/schemas.js";
-import {
-  requiredValidator,
-  durationOptions,
-  locationOptions,
-} from "../lessons/helpers.js";
+import { requiredValidator, durationOptions, locationOptions } from "../lessons/helpers.js";
 
 const requiredLocationValidator = {
   onChange: ({ value }: { value: "" | LocationType }) => (value ? undefined : "Required"),
@@ -62,9 +58,7 @@ export function EditLessonModal({
       const newDuration = Number(value.duration_minutes);
       const newLocation = value.location_type || undefined;
 
-      if (
-        `${dateValue.toString()}T${newTime}:00` !== lesson.scheduled_at
-      ) {
+      if (`${dateValue.toString()}T${newTime}:00` !== lesson.scheduled_at) {
         payload.scheduled_at = `${dateValue.toString()}T${newTime}:00`;
       }
       if (newDuration !== lesson.duration_minutes) {
@@ -92,9 +86,7 @@ export function EditLessonModal({
       >
         {/* Student is read-only in edit mode */}
         <div className="flex flex-col gap-1">
-          <label className="text-sm font-medium text-muted dark:text-muted-dark">
-            Student
-          </label>
+          <label className="text-sm font-medium text-muted dark:text-muted-dark">Student</label>
           <p className="text-sm text-primary dark:text-primary-dark">
             {studentOptions.find((s) => s.value === lesson.student_id)?.label ?? "Unknown"}
           </p>

@@ -1,6 +1,6 @@
-import * as Cookies from "@effect/platform/Cookies";
-import * as HttpServerRequest from "@effect/platform/HttpServerRequest";
-import * as HttpServerResponse from "@effect/platform/HttpServerResponse";
+import * as Cookies from "effect/http/Cookies";
+import * as HttpServerRequest from "effect/http/HttpServerRequest";
+import * as HttpServerResponse from "effect/http/HttpServerResponse";
 import { Effect, Schema as S } from "effect";
 import { env } from "../assertEnv.js";
 import { HttpError } from "../pgErrors.js";
@@ -42,17 +42,17 @@ export function csrfCheck(
 ): Effect.Effect<void, HttpError> {
   return headers["x-requested-with"]
     ? Effect.void
-    : Effect.fail(HttpError.make(400, "Missing CSRF header"));
+    : Effect.fail(new HttpError(400, "Missing CSRF header"));
 }
 
 export function normalizeToResponse(value: unknown): HttpServerResponse.HttpServerResponse {
   if (value instanceof Response) {
     return HttpServerResponse.fromWeb(value);
   }
-  if (HttpServerResponse.isServerResponse(value)) {
+  if (HttpServerResponse.isHttpServerResponse(value)) {
     return value;
   }
   return value === undefined
     ? HttpServerResponse.empty({ status: 204 })
-    : HttpServerResponse.unsafeJson(value);
+    : HttpServerResponse.jsonUnsafe(value);
 }

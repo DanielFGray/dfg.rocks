@@ -1,11 +1,12 @@
-import * as HttpApi from "@effect/platform/HttpApi";
-import * as HttpApiEndpoint from "@effect/platform/HttpApiEndpoint";
-import * as HttpApiGroup from "@effect/platform/HttpApiGroup";
-import * as HttpApiSchema from "@effect/platform/HttpApiSchema";
-import * as Multipart from "@effect/platform/Multipart";
+import * as HttpApi from "effect/http-api/HttpApi";
+import * as HttpApiEndpoint from "effect/http-api/HttpApiEndpoint";
+import * as HttpApiGroup from "effect/http-api/HttpApiGroup";
+import * as HttpApiSchema from "effect/http-api/HttpApiSchema";
+import * as Multipart from "effect/http/Multipart";
 import { Schema as S } from "effect";
 import {
   Adjustment,
+  BooleanFromString,
   AssignedMaterial,
   AssignmentNote,
   AssignmentProgress,
@@ -176,14 +177,12 @@ const AppleUserPayload = S.Struct({
   ),
 });
 
-const AppleCallbackPayload = HttpApiSchema.Multipart(
-  S.Struct({
-    error: S.optional(S.String),
-    code: S.optional(S.String),
-    state: S.optional(S.String),
-    user: S.optional(S.parseJson(AppleUserPayload)),
-  }),
-);
+const AppleCallbackPayload = S.Struct({
+  error: S.optional(S.String),
+  code: S.optional(S.String),
+  state: S.optional(S.String),
+  user: S.optional(S.fromJsonString(AppleUserPayload)),
+}).pipe(HttpApiSchema.asMultipart());
 
 const AssignStudentMaterialPayload = S.Struct({
   material_id: S.String,
@@ -251,7 +250,7 @@ const AddEmailPayload = S.Struct({
 });
 
 const TestimonialPayload = S.Struct({
-  body: S.String.pipe(S.minLength(20), S.maxLength(2000)),
+  body: S.String.pipe(S.check(S.isMinLength(20)), S.check(S.isMaxLength(2000))),
 });
 
 const UpdateSubmissionPayload = S.Struct({
@@ -328,16 +327,14 @@ const SaveLessonNotePayload = S.Struct({
   draft: S.optional(S.Boolean),
 });
 
-const UploadMaterialPayload = HttpApiSchema.Multipart(
-  S.Struct({
-    file: Multipart.SingleFileSchema,
-    title: S.String,
-    is_global: S.BooleanFromString,
-  }),
-);
+const UploadMaterialPayload = S.Struct({
+  file: Multipart.SingleFileSchema,
+  title: S.String,
+  is_global: BooleanFromString,
+}).pipe(HttpApiSchema.asMultipart());
 
 const SaveReminderIntervalPayload = S.Struct({
-  interval_days: S.Number.pipe(S.between(1, 365)),
+  interval_days: S.Number.pipe(S.check(S.isBetween({ minimum: 1, maximum: 365 }))),
 });
 
 const SwitchActiveStudentPayload = S.Struct({
@@ -355,15 +352,15 @@ export const CreateFamilyPayload = S.Struct({
 
 export const SaveStudentRatePayload = S.Struct({
   student_id: S.String,
-  rate_cents: S.Number.pipe(S.int(), S.positive()),
-  lesson_duration_minutes: S.Union(S.Literal(30), S.Literal(60)),
+  rate_cents: S.Number.pipe(S.check(S.isInt()), S.check(S.isGreaterThan(0))),
+  lesson_duration_minutes: S.Literals([30, 60]),
   location_type: LocationType,
   billing_model: BillingModel,
   notes: S.optional(S.String),
 });
 
 export const CancelLessonPayload = S.Struct({
-  reason: S.optional(S.String.pipe(S.maxLength(1000))),
+  reason: S.optional(S.String.pipe(S.check(S.isMaxLength(1000)))),
 });
 
 export const RescheduleLessonPayload = S.Struct({
@@ -372,13 +369,13 @@ export const RescheduleLessonPayload = S.Struct({
 
 export const CreatePracticeLogPayload = S.Struct({
   material_id: S.String,
-  rating: S.optional(S.Number.pipe(S.between(1, 5))),
+  rating: S.optional(S.Number.pipe(S.check(S.isBetween({ minimum: 1, maximum: 5 })))),
   duration_minutes: S.optional(S.Number),
 });
 
 export const RatePracticeLogPayload = S.Struct({
   material_id: S.String,
-  rating: S.Number.pipe(S.between(1, 5)),
+  rating: S.Number.pipe(S.check(S.isBetween({ minimum: 1, maximum: 5 }))),
 });
 
 export const GcalCallbackQuery = S.Struct({
@@ -394,7 +391,7 @@ export const StudentRatesQuery = S.Struct({
 export const SaveRecurringSchedulePayload = S.Struct({
   id: S.optional(S.String),
   student_rate_id: S.String,
-  day_of_week: S.Number.pipe(S.int(), S.between(1, 7)),
+  day_of_week: S.Number.pipe(S.check(S.isInt()), S.check(S.isBetween({ minimum: 1, maximum: 7 }))),
   local_start_time: S.String,
   timezone: S.String,
   starts_on: S.String,
@@ -406,7 +403,7 @@ export type SaveRecurringSchedulePayload = S.Schema.Type<typeof SaveRecurringSch
 
 export const RecordMonthlyPaymentPayload = S.Struct({
   billing_month: S.String,
-  amount_cents: S.Number.pipe(S.int(), S.positive()),
+  amount_cents: S.Number.pipe(S.check(S.isInt()), S.check(S.isGreaterThan(0))),
   paid_at: S.String,
   notes: S.optional(S.NullishOr(S.String)),
 });
@@ -418,7 +415,7 @@ export const TestingLoginQuery = S.Struct({
   username: S.optional(S.String),
   password: S.optional(S.String),
   role: S.optional(
-    S.Union(S.Literal("admin"), S.Literal("teacher"), S.Literal("student"), S.Literal("parent")),
+    S.Union([S.Literal("admin"), S.Literal("teacher"), S.Literal("student"), S.Literal("parent")]),
   ),
   name: S.optional(S.String),
   email: S.optional(S.String),
@@ -426,7 +423,7 @@ export const TestingLoginQuery = S.Struct({
 
 export const TestingTestimonialReminderQuery = S.Struct({
   username: S.String,
-  prompt_enabled: S.optional(S.BooleanFromString),
+  prompt_enabled: S.optional(BooleanFromString),
   next_prompt_at: S.optional(S.String),
 });
 
@@ -473,8 +470,8 @@ export const TestingSeedFamilyQuery = S.Struct({
 export const TestingSeedFamilyMembershipQuery = S.Struct({
   username: S.String,
   family_slug: S.String,
-  is_owner: S.optional(S.BooleanFromString),
-  is_billing_contact: S.optional(S.BooleanFromString),
+  is_owner: S.optional(BooleanFromString),
+  is_billing_contact: S.optional(BooleanFromString),
 });
 
 export const TestingSeedInvitationQuery = S.Struct({
@@ -496,81 +493,115 @@ export const TestingSeedLessonQuery = S.Struct({
   status: S.optional(LessonStatus),
 });
 
+const publicErrors = [
+  BadRequestErrorSchema,
+  ForbiddenErrorSchema,
+  NotFoundErrorSchema,
+  ConflictErrorSchema,
+  TooManyRequestsErrorSchema,
+  InternalServerErrorSchema,
+  BadGatewayErrorSchema,
+  ServiceUnavailableErrorSchema,
+] as const;
+
 export const publicGroup = HttpApiGroup.make("public")
-  .addError(BadRequestErrorSchema)
-  .addError(ForbiddenErrorSchema)
-  .addError(NotFoundErrorSchema)
-  .addError(ConflictErrorSchema)
-  .addError(TooManyRequestsErrorSchema)
-  .addError(InternalServerErrorSchema)
-  .addError(BadGatewayErrorSchema)
-  .addError(ServiceUnavailableErrorSchema)
-  .add(HttpApiEndpoint.get("health", "/health").addSuccess(SuccessResponse))
+  .add(HttpApiEndpoint.get("health", "/health", { error: publicErrors, success: SuccessResponse }))
   .add(
-    HttpApiEndpoint.post("contact", "/contact")
-      .setPayload(ContactPayload)
-      .addSuccess(SuccessResponse),
+    HttpApiEndpoint.post("contact", "/contact", {
+      error: publicErrors,
+      payload: ContactPayload,
+      success: SuccessResponse,
+    }),
   )
-  .add(HttpApiEndpoint.get("oauthGoogle", "/oauth/google"))
-  .add(HttpApiEndpoint.get("oauthGoogleCallback", "/oauth/google/callback"))
-  .add(HttpApiEndpoint.get("oauthApple", "/oauth/apple"))
+  .add(HttpApiEndpoint.get("oauthGoogle", "/oauth/google", { error: publicErrors }))
   .add(
-    HttpApiEndpoint.post("oauthAppleCallback", "/oauth/apple/callback").setPayload(
-      AppleCallbackPayload,
-    ),
+    HttpApiEndpoint.get("oauthGoogleCallback", "/oauth/google/callback", { error: publicErrors }),
+  )
+  .add(HttpApiEndpoint.get("oauthApple", "/oauth/apple", { error: publicErrors }))
+  .add(
+    HttpApiEndpoint.post("oauthAppleCallback", "/oauth/apple/callback", {
+      error: publicErrors,
+      payload: AppleCallbackPayload,
+    }),
   )
   .add(
-    HttpApiEndpoint.post("verifyEmail", "/verify-email")
-      .setPayload(TokenPayload)
-      .addSuccess(SuccessResponse),
+    HttpApiEndpoint.post("verifyEmail", "/verify-email", {
+      error: publicErrors,
+      payload: TokenPayload,
+      success: SuccessResponse,
+    }),
   )
   .add(
-    HttpApiEndpoint.get("invitation", "/invitation/:id")
-      .setPath(params("id"))
-      .setUrlParams(InvitationUrlParams)
-      .addSuccess(InvitationResponse),
+    HttpApiEndpoint.get("invitation", "/invitation/:id", {
+      error: publicErrors,
+      params: params("id"),
+      query: InvitationUrlParams,
+      success: InvitationResponse,
+    }),
   )
   .add(
-    HttpApiEndpoint.post("acceptInvitation", "/invitation/:id/accept")
-      .setPath(params("id"))
-      .setPayload(AcceptInvitationPayload)
-      .addSuccess(User),
+    HttpApiEndpoint.post("acceptInvitation", "/invitation/:id/accept", {
+      error: publicErrors,
+      params: params("id"),
+      payload: AcceptInvitationPayload,
+      success: User,
+    }),
   )
   .prefix("/api");
 
+const authErrors = [
+  BadRequestErrorSchema,
+  UnauthorizedErrorSchema,
+  NotFoundErrorSchema,
+  ConflictErrorSchema,
+  LockedErrorSchema,
+  TooManyRequestsErrorSchema,
+  InternalServerErrorSchema,
+] as const;
+
 export const authGroup = HttpApiGroup.make("auth")
-  .addError(BadRequestErrorSchema)
-  .addError(UnauthorizedErrorSchema)
-  .addError(NotFoundErrorSchema)
-  .addError(ConflictErrorSchema)
-  .addError(LockedErrorSchema)
-  .addError(TooManyRequestsErrorSchema)
-  .addError(InternalServerErrorSchema)
-  .add(HttpApiEndpoint.post("login", "/login").setPayload(LoginPayload).addSuccess(User))
   .add(
-    HttpApiEndpoint.post("magicLink", "/magic-link")
-      .setPayload(MagicLinkPayload)
-      .addSuccess(SuccessResponse),
+    HttpApiEndpoint.post("login", "/login", {
+      error: authErrors,
+      payload: LoginPayload,
+      success: User,
+    }),
   )
   .add(
-    HttpApiEndpoint.post("verifyMagicLink", "/magic-link/verify")
-      .setPayload(VerifyMagicLinkPayload)
-      .addSuccess(User),
-  )
-  .add(HttpApiEndpoint.post("logout", "/logout").addSuccess(SuccessResponse))
-  .add(
-    HttpApiEndpoint.post("forgotPassword", "/forgot-password")
-      .setPayload(MagicLinkPayload)
-      .addSuccess(SuccessResponse),
+    HttpApiEndpoint.post("magicLink", "/magic-link", {
+      error: authErrors,
+      payload: MagicLinkPayload,
+      success: SuccessResponse,
+    }),
   )
   .add(
-    HttpApiEndpoint.post("resetPassword", "/reset-password")
-      .setPayload(ResetPasswordPayload)
-      .addSuccess(SuccessResponse),
+    HttpApiEndpoint.post("verifyMagicLink", "/magic-link/verify", {
+      error: authErrors,
+      payload: VerifyMagicLinkPayload,
+      success: User,
+    }),
   )
-  .add(HttpApiEndpoint.get("me", "/me").addSuccess(MeResponse))
+  .add(HttpApiEndpoint.post("logout", "/logout", { error: authErrors, success: SuccessResponse }))
   .add(
-    HttpApiEndpoint.post("resendVerification", "/resend-verification").addSuccess(SuccessResponse),
+    HttpApiEndpoint.post("forgotPassword", "/forgot-password", {
+      error: authErrors,
+      payload: MagicLinkPayload,
+      success: SuccessResponse,
+    }),
+  )
+  .add(
+    HttpApiEndpoint.post("resetPassword", "/reset-password", {
+      error: authErrors,
+      payload: ResetPasswordPayload,
+      success: SuccessResponse,
+    }),
+  )
+  .add(HttpApiEndpoint.get("me", "/me", { error: authErrors, success: MeResponse }))
+  .add(
+    HttpApiEndpoint.post("resendVerification", "/resend-verification", {
+      error: authErrors,
+      success: SuccessResponse,
+    }),
   )
   .prefix("/api");
 
@@ -622,226 +653,323 @@ const ChildPasswordResetTokenResponse = S.Struct({
   token: S.String,
 });
 
+export const authenticatedClientErrors = [
+  BadRequestErrorSchema,
+  UnauthorizedErrorSchema,
+  ForbiddenErrorSchema,
+  NotFoundErrorSchema,
+  ConflictErrorSchema,
+  InternalServerErrorSchema,
+  BadGatewayErrorSchema,
+  ServiceUnavailableErrorSchema,
+] as const;
+
 export const authenticatedClientGroup = HttpApiGroup.make("authenticated")
-  .addError(BadRequestErrorSchema)
-  .addError(UnauthorizedErrorSchema)
-  .addError(ForbiddenErrorSchema)
-  .addError(NotFoundErrorSchema)
-  .addError(ConflictErrorSchema)
-  .addError(InternalServerErrorSchema)
-  .addError(BadGatewayErrorSchema)
-  .addError(ServiceUnavailableErrorSchema)
-  .add(HttpApiEndpoint.get("courses", "/courses").addSuccess(S.Array(Course)))
   .add(
-    HttpApiEndpoint.get("courseById", "/courses/:id")
-      .setPath(params("id"))
-      .addSuccess(CourseDetail),
+    HttpApiEndpoint.get("courses", "/courses", {
+      error: authenticatedClientErrors,
+      success: S.Array(Course),
+    }),
   )
   .add(
-    HttpApiEndpoint.get("library", "/library")
-      .setUrlParams(PaginationQuery)
-      .addSuccess(S.Array(Material)),
-  )
-  .add(HttpApiEndpoint.get("assignments", "/assignments").addSuccess(S.Array(AssignedMaterial)))
-  .add(
-    HttpApiEndpoint.post("assignStudentMaterial", "/assignments/students/:studentId/assign")
-      .setPath(params("studentId"))
-      .setPayload(AssignStudentMaterialPayload)
-      .addSuccess(SuccessResponse),
+    HttpApiEndpoint.get("courseById", "/courses/:id", {
+      error: authenticatedClientErrors,
+      params: params("id"),
+      success: CourseDetail,
+    }),
   )
   .add(
-    HttpApiEndpoint.del(
+    HttpApiEndpoint.get("library", "/library", {
+      error: authenticatedClientErrors,
+      query: PaginationQuery,
+      success: S.Array(Material),
+    }),
+  )
+  .add(
+    HttpApiEndpoint.get("assignments", "/assignments", {
+      error: authenticatedClientErrors,
+      success: S.Array(AssignedMaterial),
+    }),
+  )
+  .add(
+    HttpApiEndpoint.post("assignStudentMaterial", "/assignments/students/:studentId/assign", {
+      error: authenticatedClientErrors,
+      params: params("studentId"),
+      payload: AssignStudentMaterialPayload,
+      success: SuccessResponse,
+    }),
+  )
+  .add(
+    HttpApiEndpoint.delete(
       "unassignStudentMaterial",
       "/assignments/students/:studentId/assign/:materialId",
-    )
-      .setPath(params("studentId", "materialId"))
-      .addSuccess(SuccessResponse),
+      {
+        error: authenticatedClientErrors,
+        params: params("studentId", "materialId"),
+        success: SuccessResponse,
+      },
+    ),
   )
   .add(
-    HttpApiEndpoint.get("practiceLogs", "/practice-logs")
-      .setUrlParams(PracticeLogQuery)
-      .addSuccess(S.Array(PracticeLog)),
+    HttpApiEndpoint.get("practiceLogs", "/practice-logs", {
+      error: authenticatedClientErrors,
+      query: PracticeLogQuery,
+      success: S.Array(PracticeLog),
+    }),
   )
   .add(
-    HttpApiEndpoint.post("createPracticeLog", "/practice-logs")
-      .setPayload(CreatePracticeLogPayload)
-      .addSuccess(PracticeLog),
+    HttpApiEndpoint.post("createPracticeLog", "/practice-logs", {
+      error: authenticatedClientErrors,
+      payload: CreatePracticeLogPayload,
+      success: PracticeLog,
+    }),
   )
   .add(
-    HttpApiEndpoint.post("ratePracticeLog", "/practice-logs/rate")
-      .setPayload(RatePracticeLogPayload)
-      .addSuccess(PracticeLog),
+    HttpApiEndpoint.post("ratePracticeLog", "/practice-logs/rate", {
+      error: authenticatedClientErrors,
+      payload: RatePracticeLogPayload,
+      success: PracticeLog,
+    }),
   )
   .add(
-    HttpApiEndpoint.post("recordAssignmentPlayback", "/assignments/:materialId/playback")
-      .setPath(params("materialId"))
-      .setPayload(RecordAssignmentPlaybackPayload)
-      .addSuccess(AssignmentProgress),
+    HttpApiEndpoint.post("recordAssignmentPlayback", "/assignments/:materialId/playback", {
+      error: authenticatedClientErrors,
+      params: params("materialId"),
+      payload: RecordAssignmentPlaybackPayload,
+      success: AssignmentProgress,
+    }),
   )
   .add(
-    HttpApiEndpoint.post("createAssignmentReview", "/assignments/:materialId/reviews")
-      .setPath(params("materialId"))
-      .setPayload(CreateAssignmentReviewPayload)
-      .addSuccess(AssignmentReview),
+    HttpApiEndpoint.post("createAssignmentReview", "/assignments/:materialId/reviews", {
+      error: authenticatedClientErrors,
+      params: params("materialId"),
+      payload: CreateAssignmentReviewPayload,
+      success: AssignmentReview,
+    }),
   )
   .add(
-    HttpApiEndpoint.get("assignmentNotes", "/assignments/:materialId/notes")
-      .setPath(params("materialId"))
-      .addSuccess(S.NullOr(AssignmentNote)),
+    HttpApiEndpoint.get("assignmentNotes", "/assignments/:materialId/notes", {
+      error: authenticatedClientErrors,
+      params: params("materialId"),
+      success: S.NullOr(AssignmentNote),
+    }),
   )
   .add(
-    HttpApiEndpoint.put("upsertAssignmentNotes", "/assignments/:materialId/notes")
-      .setPath(params("materialId"))
-      .setPayload(AssignmentNotePayload)
-      .addSuccess(AssignmentNote),
+    HttpApiEndpoint.put("upsertAssignmentNotes", "/assignments/:materialId/notes", {
+      error: authenticatedClientErrors,
+      params: params("materialId"),
+      payload: AssignmentNotePayload,
+      success: AssignmentNote,
+    }),
   )
   .add(
-    HttpApiEndpoint.get("messages", "/messages")
-      .setUrlParams(MessageListQuery)
-      .addSuccess(S.Array(Message)),
+    HttpApiEndpoint.get("messages", "/messages", {
+      error: authenticatedClientErrors,
+      query: MessageListQuery,
+      success: S.Array(Message),
+    }),
   )
   .add(
-    HttpApiEndpoint.post("createMessage", "/messages")
-      .setPayload(CreateMessagePayload)
-      .addSuccess(Message),
+    HttpApiEndpoint.post("createMessage", "/messages", {
+      error: authenticatedClientErrors,
+      payload: CreateMessagePayload,
+      success: Message,
+    }),
   )
   .add(
-    HttpApiEndpoint.patch("markMessageRead", "/messages/:id")
-      .setPath(params("id"))
-      .setPayload(MarkMessageReadPayload)
-      .addSuccess(SuccessResponse),
+    HttpApiEndpoint.patch("markMessageRead", "/messages/:id", {
+      error: authenticatedClientErrors,
+      params: params("id"),
+      payload: MarkMessageReadPayload,
+      success: SuccessResponse,
+    }),
   )
   .add(
-    HttpApiEndpoint.get("myLessons", "/my-lessons")
-      .setUrlParams(MyLessonsQuery)
-      .addSuccess(S.Array(Lesson)),
+    HttpApiEndpoint.get("myLessons", "/my-lessons", {
+      error: authenticatedClientErrors,
+      query: MyLessonsQuery,
+      success: S.Array(Lesson),
+    }),
   )
   .add(
-    HttpApiEndpoint.get("myLessonCancellationPolicy", "/my-lessons/:id/cancellation-policy")
-      .setPath(params("id"))
-      .addSuccess(LessonCancellationPolicy),
+    HttpApiEndpoint.get("myLessonCancellationPolicy", "/my-lessons/:id/cancellation-policy", {
+      error: authenticatedClientErrors,
+      params: params("id"),
+      success: LessonCancellationPolicy,
+    }),
   )
   .add(
-    HttpApiEndpoint.post("cancelMyLesson", "/my-lessons/:id/cancel")
-      .setPath(params("id"))
-      .setPayload(CancelLessonPayload)
-      .addSuccess(Lesson),
+    HttpApiEndpoint.post("cancelMyLesson", "/my-lessons/:id/cancel", {
+      error: authenticatedClientErrors,
+      params: params("id"),
+      payload: CancelLessonPayload,
+      success: Lesson,
+    }),
   )
   .add(
-    HttpApiEndpoint.post("rescheduleMyLesson", "/my-lessons/:id/reschedule")
-      .setPath(params("id"))
-      .setPayload(RescheduleLessonPayload)
-      .addSuccess(Lesson),
+    HttpApiEndpoint.post("rescheduleMyLesson", "/my-lessons/:id/reschedule", {
+      error: authenticatedClientErrors,
+      params: params("id"),
+      payload: RescheduleLessonPayload,
+      success: Lesson,
+    }),
   )
   .add(
-    HttpApiEndpoint.post("requestDeleteAccount", "/request-delete-account")
-      .addSuccess(SuccessResponse),
+    HttpApiEndpoint.post("requestDeleteAccount", "/request-delete-account", {
+      error: authenticatedClientErrors,
+      success: SuccessResponse,
+    }),
   )
   .add(
-    HttpApiEndpoint.post("confirmDeleteAccount", "/confirm-delete-account")
-      .setPayload(ConfirmDeleteAccountPayload)
-      .addSuccess(SuccessResponse),
+    HttpApiEndpoint.post("confirmDeleteAccount", "/confirm-delete-account", {
+      error: authenticatedClientErrors,
+      payload: ConfirmDeleteAccountPayload,
+      success: SuccessResponse,
+    }),
   )
   .add(
-    HttpApiEndpoint.get("myLessonNotesList", "/my-lesson-notes")
-      .setUrlParams(PaginationQuery)
-      .addSuccess(S.Array(LessonNote)),
-  )
-  .add(HttpApiEndpoint.get("myEmails", "/me/emails").addSuccess(S.Array(UserEmail)))
-  .add(
-    HttpApiEndpoint.post("addMyEmail", "/me/emails")
-      .setPayload(AddEmailPayload)
-      .addSuccess(UserEmail),
+    HttpApiEndpoint.get("myLessonNotesList", "/my-lesson-notes", {
+      error: authenticatedClientErrors,
+      query: PaginationQuery,
+      success: S.Array(LessonNote),
+    }),
   )
   .add(
-    HttpApiEndpoint.del("deleteMyEmail", "/me/emails/:id")
-      .setPath(params("id"))
-      .addSuccess(SuccessResponse),
+    HttpApiEndpoint.get("myEmails", "/me/emails", {
+      error: authenticatedClientErrors,
+      success: S.Array(UserEmail),
+    }),
   )
   .add(
-    HttpApiEndpoint.post("makePrimaryEmail", "/me/emails/:id/make-primary")
-      .setPath(params("id"))
-      .addSuccess(UserEmail),
+    HttpApiEndpoint.post("addMyEmail", "/me/emails", {
+      error: authenticatedClientErrors,
+      payload: AddEmailPayload,
+      success: UserEmail,
+    }),
   )
   .add(
-    HttpApiEndpoint.post("resendEmailVerification", "/me/emails/:id/resend-verification")
-      .setPath(params("id"))
-      .addSuccess(SuccessResponse),
+    HttpApiEndpoint.delete("deleteMyEmail", "/me/emails/:id", {
+      error: authenticatedClientErrors,
+      params: params("id"),
+      success: SuccessResponse,
+    }),
   )
   .add(
-    HttpApiEndpoint.put("upsertTestimonial", "/testimonials")
-      .setPayload(TestimonialPayload)
-      .addSuccess(Testimonial),
-  )
-  .add(HttpApiEndpoint.del("deleteTestimonial", "/testimonials").addSuccess(SuccessResponse))
-  .add(
-    HttpApiEndpoint.get("availableSlots", "/available-slots")
-      .setUrlParams(AvailableSlotsQuery)
-      .addSuccess(S.Array(TimeSlot)),
+    HttpApiEndpoint.post("makePrimaryEmail", "/me/emails/:id/make-primary", {
+      error: authenticatedClientErrors,
+      params: params("id"),
+      success: UserEmail,
+    }),
   )
   .add(
-    HttpApiEndpoint.post("bookLesson", "/my-lessons/book")
-      .setPayload(BookLessonPayload)
-      .addSuccess(Lesson),
+    HttpApiEndpoint.post("resendEmailVerification", "/me/emails/:id/resend-verification", {
+      error: authenticatedClientErrors,
+      params: params("id"),
+      success: SuccessResponse,
+    }),
   )
   .add(
-    HttpApiEndpoint.post("switchActiveStudent", "/switch-active-student")
-      .setPayload(SwitchActiveStudentPayload)
-      .addSuccess(SuccessResponse),
+    HttpApiEndpoint.put("upsertTestimonial", "/testimonials", {
+      error: authenticatedClientErrors,
+      payload: TestimonialPayload,
+      success: Testimonial,
+    }),
   )
   .add(
-    HttpApiEndpoint.post("createChild", "/create-child")
-      .setPayload(CreateChildPayload)
-      .addSuccess(CreateChildResponse),
+    HttpApiEndpoint.delete("deleteTestimonial", "/testimonials", {
+      error: authenticatedClientErrors,
+      success: SuccessResponse,
+    }),
   )
   .add(
-    HttpApiEndpoint.get("family", "/family").addSuccess(FamilyInfo),
+    HttpApiEndpoint.get("availableSlots", "/available-slots", {
+      error: authenticatedClientErrors,
+      query: AvailableSlotsQuery,
+      success: S.Array(TimeSlot),
+    }),
   )
   .add(
-    HttpApiEndpoint.post("removeFamilyMember", "/family/remove-member")
-      .setPayload(RemoveMemberPayload)
-      .addSuccess(SuccessResponse),
+    HttpApiEndpoint.post("bookLesson", "/my-lessons/book", {
+      error: authenticatedClientErrors,
+      payload: BookLessonPayload,
+      success: Lesson,
+    }),
   )
   .add(
-    HttpApiEndpoint.post("inviteFamilyMember", "/family/invite")
-      .setPayload(InviteFamilyMemberPayload)
-      .addSuccess(SuccessResponse),
+    HttpApiEndpoint.post("switchActiveStudent", "/switch-active-student", {
+      error: authenticatedClientErrors,
+      payload: SwitchActiveStudentPayload,
+      success: SuccessResponse,
+    }),
   )
   .add(
-    HttpApiEndpoint.post("setChildEmail", "/family/child/:childId/email")
-      .setPath(params("childId"))
-      .setPayload(SetChildEmailPayload)
-      .addSuccess(SuccessResponse),
+    HttpApiEndpoint.post("createChild", "/create-child", {
+      error: authenticatedClientErrors,
+      payload: CreateChildPayload,
+      success: CreateChildResponse,
+    }),
   )
   .add(
-    HttpApiEndpoint.post("requestChildPasswordSet", "/family/child/:childId/request-password-set")
-      .setPath(params("childId"))
-      .addSuccess(ChildPasswordResetTokenResponse),
+    HttpApiEndpoint.get("family", "/family", {
+      error: authenticatedClientErrors,
+      success: FamilyInfo,
+    }),
   )
   .add(
-    HttpApiEndpoint.post("setChildPassword", "/family/child/:childId/set-password")
-      .setPath(params("childId"))
-      .setPayload(SetChildPasswordPayload)
-      .addSuccess(SuccessResponse),
+    HttpApiEndpoint.post("removeFamilyMember", "/family/remove-member", {
+      error: authenticatedClientErrors,
+      payload: RemoveMemberPayload,
+      success: SuccessResponse,
+    }),
+  )
+  .add(
+    HttpApiEndpoint.post("inviteFamilyMember", "/family/invite", {
+      error: authenticatedClientErrors,
+      payload: InviteFamilyMemberPayload,
+      success: SuccessResponse,
+    }),
+  )
+  .add(
+    HttpApiEndpoint.post("setChildEmail", "/family/child/:childId/email", {
+      error: authenticatedClientErrors,
+      params: params("childId"),
+      payload: SetChildEmailPayload,
+      success: SuccessResponse,
+    }),
+  )
+  .add(
+    HttpApiEndpoint.post("requestChildPasswordSet", "/family/child/:childId/request-password-set", {
+      error: authenticatedClientErrors,
+      params: params("childId"),
+      success: ChildPasswordResetTokenResponse,
+    }),
+  )
+  .add(
+    HttpApiEndpoint.post("setChildPassword", "/family/child/:childId/set-password", {
+      error: authenticatedClientErrors,
+      params: params("childId"),
+      payload: SetChildPasswordPayload,
+      success: SuccessResponse,
+    }),
   )
   .prefix("/api");
 
 export const SaveCancellationPolicySettingsPayload = S.Struct({
-  cancellation_window_hours: S.Number.pipe(S.between(0, 720)),
-  late_cancel_charge_percent: S.Number.pipe(S.between(0, 100)),
+  cancellation_window_hours: S.Number.pipe(S.check(S.isBetween({ minimum: 0, maximum: 720 }))),
+  late_cancel_charge_percent: S.Number.pipe(S.check(S.isBetween({ minimum: 0, maximum: 100 }))),
 });
 
 // Billing payloads
 
 const CreateBillLineItemPayload = S.Struct({
   student_id: S.String,
-  line_type: S.Union(
+  line_type: S.Union([
     S.Literal("lesson"),
     S.Literal("single_booking"),
     S.Literal("fee"),
     S.Literal("adjustment"),
     S.Literal("credit"),
-  ),
+  ]),
   description: S.String,
   quantity: S.Number,
   unit_price_cents: S.Number,
@@ -858,12 +986,12 @@ const CreateBillPayload = S.Struct({
 });
 
 const VoidBillPayload = S.Struct({
-  reason: S.String.pipe(S.minLength(1)),
+  reason: S.String.pipe(S.check(S.isMinLength(1))),
 });
 
 const AdjustBillPayload = S.Struct({
   amount_cents: S.Number,
-  reason: S.String.pipe(S.minLength(1)),
+  reason: S.String.pipe(S.check(S.isMinLength(1))),
 });
 
 const PaymentAllocationPayload = S.Struct({
@@ -885,7 +1013,7 @@ const CreateCreditPayload = S.Struct({
   family_id: S.String,
   student_id: S.optional(S.String),
   amount_cents: S.Number,
-  reason: S.String.pipe(S.minLength(1)),
+  reason: S.String.pipe(S.check(S.isMinLength(1))),
   expires_at: S.optional(S.String),
 });
 
@@ -897,24 +1025,24 @@ const ApplyCreditPayload = S.Struct({
 
 const RefundPaymentPayload = S.Struct({
   amount_cents: S.Number,
-  reason: S.String.pipe(S.minLength(1)),
+  reason: S.String.pipe(S.check(S.isMinLength(1))),
 });
 
 const CreateDiscountPayload = S.Struct({
   family_id: S.String,
   label: S.String,
-  discount_type: S.Union(S.Literal("percentage"), S.Literal("fixed")),
+  discount_type: S.Literals(["percentage", "fixed"]),
   discount_value: S.Number,
-  applies_to: S.Union(S.Literal("all"), S.Literal("tuition"), S.Literal("fees")),
+  applies_to: S.Union([S.Literal("all"), S.Literal("tuition"), S.Literal("fees")]),
   effective_from: S.String,
   effective_until: S.optional(S.String),
 });
 
 const UpdateDiscountPayload = S.Struct({
   label: S.optional(S.String),
-  discount_type: S.optional(S.Union(S.Literal("percentage"), S.Literal("fixed"))),
+  discount_type: S.optional(S.Literals(["percentage", "fixed"])),
   discount_value: S.optional(S.Number),
-  applies_to: S.optional(S.Union(S.Literal("all"), S.Literal("tuition"), S.Literal("fees"))),
+  applies_to: S.optional(S.Union([S.Literal("all"), S.Literal("tuition"), S.Literal("fees")])),
   effective_from: S.optional(S.String),
   effective_until: S.optional(S.String),
   is_active: S.optional(S.Boolean),
@@ -923,8 +1051,8 @@ const UpdateDiscountPayload = S.Struct({
 const CreateTaxRatePayload = S.Struct({
   label: S.String,
   jurisdiction: S.String,
-  rate_percent: S.Number.pipe(S.between(0, 30)),
-  applies_to: S.Union(S.Literal("all"), S.Literal("tuition"), S.Literal("fees")),
+  rate_percent: S.Number.pipe(S.check(S.isBetween({ minimum: 0, maximum: 30 }))),
+  applies_to: S.Union([S.Literal("all"), S.Literal("tuition"), S.Literal("fees")]),
   effective_from: S.String,
   effective_until: S.optional(S.String),
 });
@@ -937,393 +1065,572 @@ const CreateTaxExemptionPayload = S.Struct({
   effective_until: S.optional(S.String),
 });
 
+export const adminClientErrors = [
+  BadRequestErrorSchema,
+  UnauthorizedErrorSchema,
+  ForbiddenErrorSchema,
+  NotFoundErrorSchema,
+  ConflictErrorSchema,
+  PayloadTooLargeErrorSchema,
+  InternalServerErrorSchema,
+  BadGatewayErrorSchema,
+  ServiceUnavailableErrorSchema,
+] as const;
+
 export const adminClientGroup = HttpApiGroup.make("admin")
-  .addError(BadRequestErrorSchema)
-  .addError(UnauthorizedErrorSchema)
-  .addError(ForbiddenErrorSchema)
-  .addError(NotFoundErrorSchema)
-  .addError(ConflictErrorSchema)
-  .addError(PayloadTooLargeErrorSchema)
-  .addError(InternalServerErrorSchema)
-  .addError(BadGatewayErrorSchema)
-  .addError(ServiceUnavailableErrorSchema)
   .add(
-    HttpApiEndpoint.get("submissions", "/submissions")
-      .setUrlParams(PaginationQuery)
-      .addSuccess(S.Array(Submission)),
+    HttpApiEndpoint.get("submissions", "/submissions", {
+      error: adminClientErrors,
+      query: PaginationQuery,
+      success: S.Array(Submission),
+    }),
   )
   .add(
-    HttpApiEndpoint.patch("updateSubmission", "/submissions/:id")
-      .setPath(params("id"))
-      .setPayload(UpdateSubmissionPayload)
-      .addSuccess(SuccessResponse),
-  )
-  .add(HttpApiEndpoint.get("students", "/students").addSuccess(S.Array(User)))
-  .add(
-    HttpApiEndpoint.get("student", "/students/:id").setPath(params("id")).addSuccess(StudentDetail),
-  )
-  .add(HttpApiEndpoint.get("courses", "/courses").addSuccess(S.Array(Course)))
-  .add(
-    HttpApiEndpoint.get("courseStudents", "/courses/:id/students")
-      .setPath(params("id"))
-      .addSuccess(S.Array(User)),
+    HttpApiEndpoint.patch("updateSubmission", "/submissions/:id", {
+      error: adminClientErrors,
+      params: params("id"),
+      payload: UpdateSubmissionPayload,
+      success: SuccessResponse,
+    }),
   )
   .add(
-    HttpApiEndpoint.post("createCourse", "/courses")
-      .setPayload(CreateCoursePayload)
-      .addSuccess(Course),
+    HttpApiEndpoint.get("students", "/students", {
+      error: adminClientErrors,
+      success: S.Array(User),
+    }),
   )
   .add(
-    HttpApiEndpoint.patch("updateCourse", "/courses/:id")
-      .setPath(params("id"))
-      .setPayload(UpdateCoursePayload)
-      .addSuccess(Course),
+    HttpApiEndpoint.get("student", "/students/:id", {
+      error: adminClientErrors,
+      params: params("id"),
+      success: StudentDetail,
+    }),
   )
   .add(
-    HttpApiEndpoint.del("deleteCourse", "/courses/:id")
-      .setPath(params("id"))
-      .addSuccess(SuccessResponse),
+    HttpApiEndpoint.get("courses", "/courses", {
+      error: adminClientErrors,
+      success: S.Array(Course),
+    }),
   )
   .add(
-    HttpApiEndpoint.post("createModule", "/courses/:id/modules")
-      .setPath(params("id"))
-      .setPayload(CreateModulePayload)
-      .addSuccess(Module),
+    HttpApiEndpoint.get("courseStudents", "/courses/:id/students", {
+      error: adminClientErrors,
+      params: params("id"),
+      success: S.Array(User),
+    }),
   )
   .add(
-    HttpApiEndpoint.patch("updateModule", "/modules/:id")
-      .setPath(params("id"))
-      .setPayload(UpdateModulePayload)
-      .addSuccess(Module),
+    HttpApiEndpoint.post("createCourse", "/courses", {
+      error: adminClientErrors,
+      payload: CreateCoursePayload,
+      success: Course,
+    }),
   )
   .add(
-    HttpApiEndpoint.del("deleteModule", "/modules/:id")
-      .setPath(params("id"))
-      .addSuccess(SuccessResponse),
+    HttpApiEndpoint.patch("updateCourse", "/courses/:id", {
+      error: adminClientErrors,
+      params: params("id"),
+      payload: UpdateCoursePayload,
+      success: Course,
+    }),
   )
   .add(
-    HttpApiEndpoint.post("enrollStudent", "/students/:id/enroll")
-      .setPath(params("id"))
-      .setPayload(EnrollStudentPayload)
-      .addSuccess(SuccessResponse),
+    HttpApiEndpoint.delete("deleteCourse", "/courses/:id", {
+      error: adminClientErrors,
+      params: params("id"),
+      success: SuccessResponse,
+    }),
   )
   .add(
-    HttpApiEndpoint.del("unenrollStudent", "/students/:id/enroll/:courseId")
-      .setPath(params("id", "courseId"))
-      .addSuccess(SuccessResponse),
+    HttpApiEndpoint.post("createModule", "/courses/:id/modules", {
+      error: adminClientErrors,
+      params: params("id"),
+      payload: CreateModulePayload,
+      success: Module,
+    }),
   )
   .add(
-    HttpApiEndpoint.post("assignMaterial", "/students/:id/assign")
-      .setPath(params("id"))
-      .setPayload(AssignStudentMaterialPayload)
-      .addSuccess(SuccessResponse),
+    HttpApiEndpoint.patch("updateModule", "/modules/:id", {
+      error: adminClientErrors,
+      params: params("id"),
+      payload: UpdateModulePayload,
+      success: Module,
+    }),
   )
   .add(
-    HttpApiEndpoint.del("unassignMaterial", "/students/:id/assign/:materialId")
-      .setPath(params("id", "materialId"))
-      .addSuccess(SuccessResponse),
+    HttpApiEndpoint.delete("deleteModule", "/modules/:id", {
+      error: adminClientErrors,
+      params: params("id"),
+      success: SuccessResponse,
+    }),
   )
   .add(
-    HttpApiEndpoint.del("deleteMaterial", "/materials/:id")
-      .setPath(params("id"))
-      .addSuccess(SuccessResponse),
+    HttpApiEndpoint.post("enrollStudent", "/students/:id/enroll", {
+      error: adminClientErrors,
+      params: params("id"),
+      payload: EnrollStudentPayload,
+      success: SuccessResponse,
+    }),
   )
   .add(
-    HttpApiEndpoint.post("uploadMaterial", "/materials/upload")
-      .setPayload(UploadMaterialPayload)
-      .addSuccess(Material),
-  )
-  .add(HttpApiEndpoint.get("families", "/families").addSuccess(S.Array(Family)))
-  .add(
-    HttpApiEndpoint.post("createFamily", "/families")
-      .setPayload(CreateFamilyPayload)
-      .addSuccess(Family),
+    HttpApiEndpoint.delete("unenrollStudent", "/students/:id/enroll/:courseId", {
+      error: adminClientErrors,
+      params: params("id", "courseId"),
+      success: SuccessResponse,
+    }),
   )
   .add(
-    HttpApiEndpoint.post("inviteFamily", "/families/:familyId/invite")
-      .setPath(params("familyId"))
-      .setPayload(InviteFamilyPayload)
-      .addSuccess(SuccessResponse),
+    HttpApiEndpoint.post("assignMaterial", "/students/:id/assign", {
+      error: adminClientErrors,
+      params: params("id"),
+      payload: AssignStudentMaterialPayload,
+      success: SuccessResponse,
+    }),
   )
   .add(
-    HttpApiEndpoint.post("qrInvite", "/families/:familyId/qr-invite")
-      .setPath(params("familyId"))
-      .setPayload(QrInvitePayload)
-      .addSuccess(QrInviteResponse),
+    HttpApiEndpoint.delete("unassignMaterial", "/students/:id/assign/:materialId", {
+      error: adminClientErrors,
+      params: params("id", "materialId"),
+      success: SuccessResponse,
+    }),
   )
   .add(
-    HttpApiEndpoint.get("familyInvitations", "/families/:familyId/invitations")
-      .setPath(params("familyId"))
-      .addSuccess(S.Array(FamilyInvitation)),
+    HttpApiEndpoint.delete("deleteMaterial", "/materials/:id", {
+      error: adminClientErrors,
+      params: params("id"),
+      success: SuccessResponse,
+    }),
   )
   .add(
-    HttpApiEndpoint.post("saveStudentRate", "/student-rates")
-      .setPayload(SaveStudentRatePayload)
-      .addSuccess(StudentRate),
+    HttpApiEndpoint.post("uploadMaterial", "/materials/upload", {
+      error: adminClientErrors,
+      payload: UploadMaterialPayload,
+      success: Material,
+    }),
   )
   .add(
-    HttpApiEndpoint.get("studentRates", "/student-rates/:studentId")
-      .setPath(params("studentId"))
-      .setUrlParams(StudentRatesQuery)
-      .addSuccess(S.Array(StudentRate)),
+    HttpApiEndpoint.get("families", "/families", {
+      error: adminClientErrors,
+      success: S.Array(Family),
+    }),
   )
   .add(
-    HttpApiEndpoint.get("recurringSchedules", "/students/:studentId/recurring-schedules")
-      .setPath(params("studentId"))
-      .addSuccess(S.Array(RecurringSchedule)),
+    HttpApiEndpoint.post("createFamily", "/families", {
+      error: adminClientErrors,
+      payload: CreateFamilyPayload,
+      success: Family,
+    }),
   )
   .add(
-    HttpApiEndpoint.post("saveRecurringSchedule", "/students/:studentId/recurring-schedules")
-      .setPath(params("studentId"))
-      .setPayload(SaveRecurringSchedulePayload)
-      .addSuccess(RecurringSchedule),
+    HttpApiEndpoint.post("inviteFamily", "/families/:familyId/invite", {
+      error: adminClientErrors,
+      params: params("familyId"),
+      payload: InviteFamilyPayload,
+      success: SuccessResponse,
+    }),
   )
   .add(
-    HttpApiEndpoint.get("monthlyPayments", "/students/:studentId/monthly-payments")
-      .setPath(params("studentId"))
-      .addSuccess(S.Array(MonthlyPayment)),
+    HttpApiEndpoint.post("qrInvite", "/families/:familyId/qr-invite", {
+      error: adminClientErrors,
+      params: params("familyId"),
+      payload: QrInvitePayload,
+      success: QrInviteResponse,
+    }),
   )
   .add(
-    HttpApiEndpoint.post("recordMonthlyPayment", "/students/:studentId/monthly-payments")
-      .setPath(params("studentId"))
-      .setPayload(RecordMonthlyPaymentPayload)
-      .addSuccess(MonthlyPayment),
+    HttpApiEndpoint.get("familyInvitations", "/families/:familyId/invitations", {
+      error: adminClientErrors,
+      params: params("familyId"),
+      success: S.Array(FamilyInvitation),
+    }),
   )
   .add(
-    HttpApiEndpoint.post("createLesson", "/lessons")
-      .setPayload(CreateLessonPayload)
-      .addSuccess(Lesson),
+    HttpApiEndpoint.post("saveStudentRate", "/student-rates", {
+      error: adminClientErrors,
+      payload: SaveStudentRatePayload,
+      success: StudentRate,
+    }),
   )
   .add(
-    HttpApiEndpoint.patch("updateLesson", "/lessons/:id")
-      .setPath(params("id"))
-      .setPayload(UpdateLessonPayload)
-      .addSuccess(Lesson),
+    HttpApiEndpoint.get("studentRates", "/student-rates/:studentId", {
+      error: adminClientErrors,
+      params: params("studentId"),
+      query: StudentRatesQuery,
+      success: S.Array(StudentRate),
+    }),
   )
   .add(
-    HttpApiEndpoint.get("lessons", "/lessons")
-      .setUrlParams(AdminLessonsQuery)
-      .addSuccess(S.Array(Lesson)),
+    HttpApiEndpoint.get("recurringSchedules", "/students/:studentId/recurring-schedules", {
+      error: adminClientErrors,
+      params: params("studentId"),
+      success: S.Array(RecurringSchedule),
+    }),
   )
   .add(
-    HttpApiEndpoint.post("cancelLesson", "/lessons/:id/cancel")
-      .setPath(params("id"))
-      .setPayload(CancelLessonPayload)
-      .addSuccess(Lesson),
+    HttpApiEndpoint.post("saveRecurringSchedule", "/students/:studentId/recurring-schedules", {
+      error: adminClientErrors,
+      params: params("studentId"),
+      payload: SaveRecurringSchedulePayload,
+      success: RecurringSchedule,
+    }),
   )
   .add(
-    HttpApiEndpoint.post("completeLesson", "/lessons/:id/complete")
-      .setPath(params("id"))
-      .addSuccess(Lesson),
+    HttpApiEndpoint.get("monthlyPayments", "/students/:studentId/monthly-payments", {
+      error: adminClientErrors,
+      params: params("studentId"),
+      success: S.Array(MonthlyPayment),
+    }),
   )
   .add(
-    HttpApiEndpoint.del("deleteLesson", "/lessons/:id")
-      .setPath(params("id"))
-      .addSuccess(SuccessResponse),
+    HttpApiEndpoint.post("recordMonthlyPayment", "/students/:studentId/monthly-payments", {
+      error: adminClientErrors,
+      params: params("studentId"),
+      payload: RecordMonthlyPaymentPayload,
+      success: MonthlyPayment,
+    }),
   )
   .add(
-    HttpApiEndpoint.post("saveLessonNote", "/lessons/:id/notes")
-      .setPath(params("id"))
-      .setPayload(SaveLessonNotePayload)
-      .addSuccess(LessonNote),
+    HttpApiEndpoint.post("createLesson", "/lessons", {
+      error: adminClientErrors,
+      payload: CreateLessonPayload,
+      success: Lesson,
+    }),
   )
   .add(
-    HttpApiEndpoint.get("lessonNote", "/lessons/:id/notes")
-      .setPath(params("id"))
-      .addSuccess(LessonNote),
+    HttpApiEndpoint.patch("updateLesson", "/lessons/:id", {
+      error: adminClientErrors,
+      params: params("id"),
+      payload: UpdateLessonPayload,
+      success: Lesson,
+    }),
   )
   .add(
-    HttpApiEndpoint.patch("publishLessonNote", "/lessons/:id/notes/publish")
-      .setPath(params("id"))
-      .addSuccess(LessonNote),
-  )
-  .add(HttpApiEndpoint.get("gcalStatus", "/gcal/status").addSuccess(GcalStatus))
-  .add(HttpApiEndpoint.post("gcalDisconnect", "/gcal/disconnect").addSuccess(SuccessResponse))
-  .add(HttpApiEndpoint.get("workingHours", "/working-hours").addSuccess(WorkingHours))
-  .add(
-    HttpApiEndpoint.get("cancellationPolicySettings", "/cancellation-policy").addSuccess(
-      CancellationPolicySettings,
-    ),
+    HttpApiEndpoint.get("lessons", "/lessons", {
+      error: adminClientErrors,
+      query: AdminLessonsQuery,
+      success: S.Array(Lesson),
+    }),
   )
   .add(
-    HttpApiEndpoint.post("saveCancellationPolicySettings", "/cancellation-policy")
-      .setPayload(SaveCancellationPolicySettingsPayload)
-      .addSuccess(CancellationPolicySettings),
+    HttpApiEndpoint.post("cancelLesson", "/lessons/:id/cancel", {
+      error: adminClientErrors,
+      params: params("id"),
+      payload: CancelLessonPayload,
+      success: Lesson,
+    }),
   )
   .add(
-    HttpApiEndpoint.post("saveWorkingHours", "/working-hours")
-      .setPayload(WorkingHours)
-      .addSuccess(SuccessResponse),
+    HttpApiEndpoint.post("completeLesson", "/lessons/:id/complete", {
+      error: adminClientErrors,
+      params: params("id"),
+      success: Lesson,
+    }),
   )
   .add(
-    HttpApiEndpoint.get("testimonialReminderInterval", "/testimonial-reminder-interval")
-      .addSuccess(TestimonialReminderIntervalResponse),
+    HttpApiEndpoint.delete("deleteLesson", "/lessons/:id", {
+      error: adminClientErrors,
+      params: params("id"),
+      success: SuccessResponse,
+    }),
   )
   .add(
-    HttpApiEndpoint.post("saveTestimonialReminderInterval", "/testimonial-reminder-interval")
-      .setPayload(SaveReminderIntervalPayload)
-      .addSuccess(ReminderIntervalResponse),
+    HttpApiEndpoint.post("saveLessonNote", "/lessons/:id/notes", {
+      error: adminClientErrors,
+      params: params("id"),
+      payload: SaveLessonNotePayload,
+      success: LessonNote,
+    }),
   )
   .add(
-    HttpApiEndpoint.patch("updateTestimonialApproval", "/testimonials/:id")
-      .setPath(params("id"))
-      .setPayload(UpdateTestimonialApprovalPayload)
-      .addSuccess(SuccessResponse),
+    HttpApiEndpoint.get("lessonNote", "/lessons/:id/notes", {
+      error: adminClientErrors,
+      params: params("id"),
+      success: LessonNote,
+    }),
+  )
+  .add(
+    HttpApiEndpoint.patch("publishLessonNote", "/lessons/:id/notes/publish", {
+      error: adminClientErrors,
+      params: params("id"),
+      success: LessonNote,
+    }),
+  )
+  .add(
+    HttpApiEndpoint.get("gcalStatus", "/gcal/status", {
+      error: adminClientErrors,
+      success: GcalStatus,
+    }),
+  )
+  .add(
+    HttpApiEndpoint.post("gcalDisconnect", "/gcal/disconnect", {
+      error: adminClientErrors,
+      success: SuccessResponse,
+    }),
+  )
+  .add(
+    HttpApiEndpoint.get("workingHours", "/working-hours", {
+      error: adminClientErrors,
+      success: WorkingHours,
+    }),
+  )
+  .add(
+    HttpApiEndpoint.get("cancellationPolicySettings", "/cancellation-policy", {
+      error: adminClientErrors,
+      success: CancellationPolicySettings,
+    }),
+  )
+  .add(
+    HttpApiEndpoint.post("saveCancellationPolicySettings", "/cancellation-policy", {
+      error: adminClientErrors,
+      payload: SaveCancellationPolicySettingsPayload,
+      success: CancellationPolicySettings,
+    }),
+  )
+  .add(
+    HttpApiEndpoint.post("saveWorkingHours", "/working-hours", {
+      error: adminClientErrors,
+      payload: WorkingHours,
+      success: SuccessResponse,
+    }),
+  )
+  .add(
+    HttpApiEndpoint.get("testimonialReminderInterval", "/testimonial-reminder-interval", {
+      error: adminClientErrors,
+      success: TestimonialReminderIntervalResponse,
+    }),
+  )
+  .add(
+    HttpApiEndpoint.post("saveTestimonialReminderInterval", "/testimonial-reminder-interval", {
+      error: adminClientErrors,
+      payload: SaveReminderIntervalPayload,
+      success: ReminderIntervalResponse,
+    }),
+  )
+  .add(
+    HttpApiEndpoint.patch("updateTestimonialApproval", "/testimonials/:id", {
+      error: adminClientErrors,
+      params: params("id"),
+      payload: UpdateTestimonialApprovalPayload,
+      success: SuccessResponse,
+    }),
   )
   // Billing endpoints
   .add(
-    HttpApiEndpoint.get("billingFamilies", "/billing/families")
-      .addSuccess(S.Array(FamilyBillingSummary)),
+    HttpApiEndpoint.get("billingFamilies", "/billing/families", {
+      error: adminClientErrors,
+      success: S.Array(FamilyBillingSummary),
+    }),
   )
   .add(
-    HttpApiEndpoint.get("billingFamily", "/billing/families/:familyId")
-      .setPath(params("familyId"))
-      .addSuccess(FamilyBillingDetail),
+    HttpApiEndpoint.get("billingFamily", "/billing/families/:familyId", {
+      error: adminClientErrors,
+      params: params("familyId"),
+      success: FamilyBillingDetail,
+    }),
   )
   .add(
-    HttpApiEndpoint.get("billingFamilyBills", "/billing/families/:familyId/bills")
-      .setPath(params("familyId"))
-      .addSuccess(S.Array(Bill)),
+    HttpApiEndpoint.get("billingFamilyBills", "/billing/families/:familyId/bills", {
+      error: adminClientErrors,
+      params: params("familyId"),
+      success: S.Array(Bill),
+    }),
   )
   .add(
-    HttpApiEndpoint.get("billingFamilyPayments", "/billing/families/:familyId/payments")
-      .setPath(params("familyId"))
-      .addSuccess(S.Array(Payment)),
+    HttpApiEndpoint.get("billingFamilyPayments", "/billing/families/:familyId/payments", {
+      error: adminClientErrors,
+      params: params("familyId"),
+      success: S.Array(Payment),
+    }),
   )
   .add(
-    HttpApiEndpoint.get("billingFamilyCredits", "/billing/families/:familyId/credits")
-      .setPath(params("familyId"))
-      .addSuccess(S.Array(AdminFamilyCredit)),
+    HttpApiEndpoint.get("billingFamilyCredits", "/billing/families/:familyId/credits", {
+      error: adminClientErrors,
+      params: params("familyId"),
+      success: S.Array(AdminFamilyCredit),
+    }),
   )
   .add(
-    HttpApiEndpoint.post("createBill", "/billing/bills")
-      .setPayload(CreateBillPayload)
-      .addSuccess(BillDetailResponse),
+    HttpApiEndpoint.post("createBill", "/billing/bills", {
+      error: adminClientErrors,
+      payload: CreateBillPayload,
+      success: BillDetailResponse,
+    }),
   )
   .add(
-    HttpApiEndpoint.get("getBill", "/billing/bills/:id")
-      .setPath(params("id"))
-      .addSuccess(BillDetailResponse),
+    HttpApiEndpoint.get("getBill", "/billing/bills/:id", {
+      error: adminClientErrors,
+      params: params("id"),
+      success: BillDetailResponse,
+    }),
   )
   .add(
-    HttpApiEndpoint.post("issueBill", "/billing/bills/:id/issue")
-      .setPath(params("id"))
-      .addSuccess(BillDetailResponse),
+    HttpApiEndpoint.post("issueBill", "/billing/bills/:id/issue", {
+      error: adminClientErrors,
+      params: params("id"),
+      success: BillDetailResponse,
+    }),
   )
   .add(
-    HttpApiEndpoint.post("cancelBill", "/billing/bills/:id/cancel")
-      .setPath(params("id"))
-      .addSuccess(BillDetailResponse),
+    HttpApiEndpoint.post("cancelBill", "/billing/bills/:id/cancel", {
+      error: adminClientErrors,
+      params: params("id"),
+      success: BillDetailResponse,
+    }),
   )
   .add(
-    HttpApiEndpoint.post("voidBill", "/billing/bills/:id/void")
-      .setPath(params("id"))
-      .setPayload(VoidBillPayload)
-      .addSuccess(BillDetailResponse),
+    HttpApiEndpoint.post("voidBill", "/billing/bills/:id/void", {
+      error: adminClientErrors,
+      params: params("id"),
+      payload: VoidBillPayload,
+      success: BillDetailResponse,
+    }),
   )
   .add(
-    HttpApiEndpoint.post("adjustBill", "/billing/bills/:id/adjust")
-      .setPath(params("id"))
-      .setPayload(AdjustBillPayload)
-      .addSuccess(Adjustment),
+    HttpApiEndpoint.post("adjustBill", "/billing/bills/:id/adjust", {
+      error: adminClientErrors,
+      params: params("id"),
+      payload: AdjustBillPayload,
+      success: Adjustment,
+    }),
   )
   .add(
-    HttpApiEndpoint.post("recordPayment", "/billing/payments")
-      .setPayload(RecordPaymentPayload)
-      .addSuccess(Payment),
+    HttpApiEndpoint.post("recordPayment", "/billing/payments", {
+      error: adminClientErrors,
+      payload: RecordPaymentPayload,
+      success: Payment,
+    }),
   )
   .add(
-    HttpApiEndpoint.post("refundPayment", "/billing/payments/:id/refund")
-      .setPath(params("id"))
-      .setPayload(RefundPaymentPayload)
-      .addSuccess(Refund),
+    HttpApiEndpoint.post("refundPayment", "/billing/payments/:id/refund", {
+      error: adminClientErrors,
+      params: params("id"),
+      payload: RefundPaymentPayload,
+      success: Refund,
+    }),
   )
   .add(
-    HttpApiEndpoint.post("createCredit", "/billing/credits")
-      .setPayload(CreateCreditPayload)
-      .addSuccess(AdminFamilyCredit),
+    HttpApiEndpoint.post("createCredit", "/billing/credits", {
+      error: adminClientErrors,
+      payload: CreateCreditPayload,
+      success: AdminFamilyCredit,
+    }),
   )
   .add(
-    HttpApiEndpoint.post("applyCredit", "/billing/credits/apply")
-      .setPayload(ApplyCreditPayload)
-      .addSuccess(CreditApplication),
+    HttpApiEndpoint.post("applyCredit", "/billing/credits/apply", {
+      error: adminClientErrors,
+      payload: ApplyCreditPayload,
+      success: CreditApplication,
+    }),
   )
   .add(
-    HttpApiEndpoint.get("familyDiscounts", "/billing/families/:familyId/discounts")
-      .setPath(params("familyId"))
-      .addSuccess(S.Array(FamilyDiscount)),
+    HttpApiEndpoint.get("familyDiscounts", "/billing/families/:familyId/discounts", {
+      error: adminClientErrors,
+      params: params("familyId"),
+      success: S.Array(FamilyDiscount),
+    }),
   )
   .add(
-    HttpApiEndpoint.post("createDiscount", "/billing/discounts")
-      .setPayload(CreateDiscountPayload)
-      .addSuccess(FamilyDiscount),
+    HttpApiEndpoint.post("createDiscount", "/billing/discounts", {
+      error: adminClientErrors,
+      payload: CreateDiscountPayload,
+      success: FamilyDiscount,
+    }),
   )
   .add(
-    HttpApiEndpoint.patch("updateDiscount", "/billing/discounts/:id")
-      .setPath(params("id"))
-      .setPayload(UpdateDiscountPayload)
-      .addSuccess(FamilyDiscount),
+    HttpApiEndpoint.patch("updateDiscount", "/billing/discounts/:id", {
+      error: adminClientErrors,
+      params: params("id"),
+      payload: UpdateDiscountPayload,
+      success: FamilyDiscount,
+    }),
   )
   .add(
-    HttpApiEndpoint.get("listTaxRates", "/billing/tax-rates")
-      .addSuccess(S.Array(TaxRate)),
+    HttpApiEndpoint.get("listTaxRates", "/billing/tax-rates", {
+      error: adminClientErrors,
+      success: S.Array(TaxRate),
+    }),
   )
   .add(
-    HttpApiEndpoint.post("createTaxRate", "/billing/tax-rates")
-      .setPayload(CreateTaxRatePayload)
-      .addSuccess(TaxRate),
+    HttpApiEndpoint.post("createTaxRate", "/billing/tax-rates", {
+      error: adminClientErrors,
+      payload: CreateTaxRatePayload,
+      success: TaxRate,
+    }),
   )
   .add(
-    HttpApiEndpoint.get("familyTaxExemptions", "/billing/families/:familyId/tax-exemptions")
-      .setPath(params("familyId"))
-      .addSuccess(S.Array(FamilyTaxExemption)),
+    HttpApiEndpoint.get("familyTaxExemptions", "/billing/families/:familyId/tax-exemptions", {
+      error: adminClientErrors,
+      params: params("familyId"),
+      success: S.Array(FamilyTaxExemption),
+    }),
   )
   .add(
-    HttpApiEndpoint.post("createTaxExemption", "/billing/tax-exemptions")
-      .setPayload(CreateTaxExemptionPayload)
-      .addSuccess(FamilyTaxExemption),
+    HttpApiEndpoint.post("createTaxExemption", "/billing/tax-exemptions", {
+      error: adminClientErrors,
+      payload: CreateTaxExemptionPayload,
+      success: FamilyTaxExemption,
+    }),
   )
   .prefix("/api/admin");
 
+const familyBillingErrors = [
+  BadRequestErrorSchema,
+  UnauthorizedErrorSchema,
+  ForbiddenErrorSchema,
+  NotFoundErrorSchema,
+  InternalServerErrorSchema,
+] as const;
+
 export const familyBillingGroup = HttpApiGroup.make("familyBilling")
-  .addError(BadRequestErrorSchema)
-  .addError(UnauthorizedErrorSchema)
-  .addError(ForbiddenErrorSchema)
-  .addError(NotFoundErrorSchema)
-  .addError(InternalServerErrorSchema)
   .add(
-    HttpApiEndpoint.get("overview", "/billing")
-      .addSuccess(FamilyBillingOverview),
+    HttpApiEndpoint.get("overview", "/billing", {
+      error: familyBillingErrors,
+      success: FamilyBillingOverview,
+    }),
   )
   .add(
-  HttpApiEndpoint.get("bills", "/billing/bills")
-      .addSuccess(S.Array(FamilyBill)),
+    HttpApiEndpoint.get("bills", "/billing/bills", {
+      error: familyBillingErrors,
+      success: S.Array(FamilyBill),
+    }),
   )
   .add(
-    HttpApiEndpoint.get("billDetail", "/billing/bills/:id")
-      .setPath(params("id"))
-      .addSuccess(FamilyBillDetailResponse),
+    HttpApiEndpoint.get("billDetail", "/billing/bills/:id", {
+      error: familyBillingErrors,
+      params: params("id"),
+      success: FamilyBillDetailResponse,
+    }),
   )
   .add(
-  HttpApiEndpoint.get("payments", "/billing/payments")
-      .addSuccess(S.Array(FamilyPayment)),
+    HttpApiEndpoint.get("payments", "/billing/payments", {
+      error: familyBillingErrors,
+      success: S.Array(FamilyPayment),
+    }),
   )
   .add(
-    HttpApiEndpoint.get("paymentDetail", "/billing/payments/:id")
-      .setPath(params("id"))
-      .addSuccess(FamilyPaymentDetail),
+    HttpApiEndpoint.get("paymentDetail", "/billing/payments/:id", {
+      error: familyBillingErrors,
+      params: params("id"),
+      success: FamilyPaymentDetail,
+    }),
   )
   .add(
-    HttpApiEndpoint.get("credits", "/billing/credits")
-      .addSuccess(S.Array(FamilyCredit)),
+    HttpApiEndpoint.get("credits", "/billing/credits", {
+      error: familyBillingErrors,
+      success: S.Array(FamilyCredit),
+    }),
   )
   .add(
-    HttpApiEndpoint.get("billPdf", "/billing/bills/:id/pdf")
-      .setPath(params("id")),
+    HttpApiEndpoint.get("billPdf", "/billing/bills/:id/pdf", {
+      error: familyBillingErrors,
+      params: params("id"),
+    }),
   )
   .add(
-    HttpApiEndpoint.get("paymentReceipt", "/billing/payments/:id/receipt")
-      .setPath(params("id")),
+    HttpApiEndpoint.get("paymentReceipt", "/billing/payments/:id/receipt", {
+      error: familyBillingErrors,
+      params: params("id"),
+    }),
   )
   .prefix("/api/family");
 

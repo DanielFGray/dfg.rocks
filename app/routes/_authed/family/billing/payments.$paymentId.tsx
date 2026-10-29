@@ -6,11 +6,7 @@ import { useAuth } from "../../../../lib/hooks/useAuth.js";
 import { Main } from "../../../../components/ui/Container.js";
 import { Card } from "../../../../components/ui/Card.js";
 import { Button } from "../../../../components/ui/Button.js";
-import {
-  formatCents,
-  dateLabel,
-  dateTimeLabel,
-} from "../../../../components/billing/helpers.js";
+import { formatCents, dateLabel, dateTimeLabel } from "../../../../components/billing/helpers.js";
 
 export const Route = createFileRoute("/_authed/family/billing/payments/$paymentId")({
   head: () => ({ meta: [{ title: "Payment Receipt | DFG Portal" }] }),
@@ -25,7 +21,7 @@ function PaymentDetailPage() {
   const { data, isLoading, error } = useQuery({
     queryKey: ["family", "billing", "payment", paymentId],
     queryFn: () =>
-      Effect.runPromise(api.familyBilling.paymentDetail({ path: { id: paymentId } })),
+      Effect.runPromise(api.familyBilling.paymentDetail({ params: { id: paymentId } })),
     enabled: !!user && user.role !== "admin",
   });
 
@@ -89,7 +85,7 @@ function PaymentDetailPage() {
       <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Card>
           <div className="p-4">
-            <p className="text-xs font-medium uppercase tracking-wide text-muted dark:text-muted-dark">
+            <p className="text-xs font-medium tracking-wide text-muted uppercase dark:text-muted-dark">
               Amount
             </p>
             <p className="mt-1 text-xl font-bold text-primary dark:text-primary-dark">
@@ -99,17 +95,17 @@ function PaymentDetailPage() {
         </Card>
         <Card>
           <div className="p-4">
-            <p className="text-xs font-medium uppercase tracking-wide text-muted dark:text-muted-dark">
+            <p className="text-xs font-medium tracking-wide text-muted uppercase dark:text-muted-dark">
               Method
             </p>
-            <p className="mt-1 text-lg font-semibold text-primary dark:text-primary-dark capitalize">
+            <p className="mt-1 text-lg font-semibold text-primary capitalize dark:text-primary-dark">
               {payment.method.replaceAll("_", " ")}
             </p>
           </div>
         </Card>
         <Card>
           <div className="p-4">
-            <p className="text-xs font-medium uppercase tracking-wide text-muted dark:text-muted-dark">
+            <p className="text-xs font-medium tracking-wide text-muted uppercase dark:text-muted-dark">
               Received
             </p>
             <p className="mt-1 text-lg font-semibold text-primary dark:text-primary-dark">
@@ -119,7 +115,7 @@ function PaymentDetailPage() {
         </Card>
         <Card>
           <div className="p-4">
-            <p className="text-xs font-medium uppercase tracking-wide text-muted dark:text-muted-dark">
+            <p className="text-xs font-medium tracking-wide text-muted uppercase dark:text-muted-dark">
               Reference
             </p>
             <p className="mt-1 text-lg font-semibold text-primary dark:text-primary-dark">
@@ -158,9 +154,7 @@ function PaymentDetailPage() {
                         #{a.bill_number}
                       </Link>
                     </td>
-                    <td className="px-4 py-3 font-medium">
-                      {formatCents(a.amount_cents)}
-                    </td>
+                    <td className="px-4 py-3 font-medium">{formatCents(a.amount_cents)}</td>
                     <td className="px-4 py-3 text-muted dark:text-muted-dark">
                       {dateTimeLabel(a.created_at)}
                     </td>

@@ -18,8 +18,7 @@ function FamilyBillingPage() {
 
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ["admin", "billing", "family", familyId],
-    queryFn: () =>
-      Effect.runPromise(api.admin.billingFamily({ path: { familyId } })),
+    queryFn: () => Effect.runPromise(api.admin.billingFamily({ params: { familyId } })),
     enabled: isAdmin,
   });
 

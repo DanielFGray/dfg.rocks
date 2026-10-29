@@ -93,19 +93,16 @@ function BillsPage() {
                     </Link>
                   </td>
                   <td className="px-4 py-3">
-                    <span className={billStatusBadge(bill.status)}>
-                      {statusLabel(bill.status)}
-                    </span>
+                    <span className={billStatusBadge(bill.status)}>{statusLabel(bill.status)}</span>
                   </td>
                   <td className="px-4 py-3 text-muted dark:text-muted-dark">
-                    {dateLabel(bill.billing_period_start)} &ndash; {dateLabel(bill.billing_period_end)}
+                    {dateLabel(bill.billing_period_start)} &ndash;{" "}
+                    {dateLabel(bill.billing_period_end)}
                   </td>
                   <td className="px-4 py-3">
                     {bill.due_date ? dateLabel(bill.due_date) : "\u2014"}
                   </td>
-                  <td className="px-4 py-3 font-medium">
-                    {formatCents(bill.total_cents)}
-                  </td>
+                  <td className="px-4 py-3 font-medium">{formatCents(bill.total_cents)}</td>
                   <td className="px-4 py-3">
                     <a
                       href={`/api/family/billing/bills/${bill.id}/pdf`}

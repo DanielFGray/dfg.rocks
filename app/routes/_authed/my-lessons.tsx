@@ -216,14 +216,14 @@ function MyLessonsPage() {
 
   const policyMutation = useMutation({
     mutationFn: (lessonId: string) =>
-      Effect.runPromise(api.authenticated.myLessonCancellationPolicy({ path: { id: lessonId } })),
+      Effect.runPromise(api.authenticated.myLessonCancellationPolicy({ params: { id: lessonId } })),
   });
 
   const cancelMutation = useMutation({
     mutationFn: ({ lessonId, reason }: { lessonId: string; reason?: string }) =>
       Effect.runPromise(
         api.authenticated.cancelMyLesson({
-          path: { id: lessonId },
+          params: { id: lessonId },
           payload: reason ? { reason } : {},
         }),
       ),
@@ -239,7 +239,7 @@ function MyLessonsPage() {
     mutationFn: ({ lessonId, scheduledAt }: { lessonId: string; scheduledAt: string }) =>
       Effect.runPromise(
         api.authenticated.rescheduleMyLesson({
-          path: { id: lessonId },
+          params: { id: lessonId },
           payload: { scheduled_at: scheduledAt },
         }),
       ),

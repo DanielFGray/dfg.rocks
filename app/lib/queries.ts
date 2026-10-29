@@ -36,7 +36,7 @@ export const adminFamiliesQuery = queryOptions({
 
 export const adminLessonsQuery = queryOptions({
   queryKey: ["admin-lessons"],
-  queryFn: () => Effect.runPromise(api.admin.lessons({ urlParams: {} })),
+  queryFn: () => Effect.runPromise(api.admin.lessons({ query: {} })),
 });
 
 export const adminTodayLessonsQuery = (instant?: Date) => {
@@ -48,7 +48,7 @@ export const adminTodayLessonsQuery = (instant?: Date) => {
     queryFn: () =>
       Effect.runPromise(
         api.admin.lessons({
-          urlParams: { from, to },
+          query: { from, to },
         }),
       ),
   });
@@ -60,37 +60,37 @@ export const adminWeekLessonsQuery = (instant?: Date) => {
   const to = range.to.toISOString();
   return queryOptions({
     queryKey: ["admin", "lessons", "week", from, to],
-    queryFn: () => Effect.runPromise(api.admin.lessons({ urlParams: { from, to } })),
+    queryFn: () => Effect.runPromise(api.admin.lessons({ query: { from, to } })),
   });
 };
 
 export const adminSubmissionsQuery = queryOptions({
   queryKey: ["admin", "submissions"],
-  queryFn: () => Effect.runPromise(api.admin.submissions({ urlParams: {} })),
+  queryFn: () => Effect.runPromise(api.admin.submissions({ query: {} })),
 });
 
 export const courseStudentsQuery = (id: string) =>
   queryOptions({
     queryKey: ["admin", "courses", id, "students"],
-    queryFn: () => Effect.runPromise(api.admin.courseStudents({ path: { id } })),
+    queryFn: () => Effect.runPromise(api.admin.courseStudents({ params: { id } })),
   });
 
 export const studentDetailQuery = (id: string) =>
   queryOptions({
     queryKey: ["admin", "students", id],
-    queryFn: () => Effect.runPromise(api.admin.student({ path: { id } })),
+    queryFn: () => Effect.runPromise(api.admin.student({ params: { id } })),
   });
 
 // ---- Shared / student queries ----
 
 export const libraryQuery = queryOptions({
   queryKey: ["library"],
-  queryFn: () => Effect.runPromise(api.authenticated.library({ urlParams: {} })),
+  queryFn: () => Effect.runPromise(api.authenticated.library({ query: {} })),
 });
 
 export const messagesQuery = queryOptions({
   queryKey: ["messages"],
-  queryFn: () => Effect.runPromise(api.authenticated.messages({ urlParams: {} })),
+  queryFn: () => Effect.runPromise(api.authenticated.messages({ query: {} })),
 });
 
 export const assignmentsQuery = queryOptions({
@@ -100,7 +100,7 @@ export const assignmentsQuery = queryOptions({
 
 export const practiceLogsQuery = queryOptions({
   queryKey: ["practice-logs"],
-  queryFn: () => Effect.runPromise(api.authenticated.practiceLogs({ urlParams: {} })),
+  queryFn: () => Effect.runPromise(api.authenticated.practiceLogs({ query: {} })),
 });
 
 export const coursesQuery = queryOptions({
@@ -111,26 +111,23 @@ export const coursesQuery = queryOptions({
 export const courseDetailQuery = (id: string) =>
   queryOptions({
     queryKey: ["courses", id],
-    queryFn: () => Effect.runPromise(api.authenticated.courseById({ path: { id } })),
+    queryFn: () => Effect.runPromise(api.authenticated.courseById({ params: { id } })),
   });
 
 export const scheduledLessonsQuery = queryOptions({
   queryKey: ["my-lessons", "scheduled"],
   queryFn: () =>
-    Effect.runPromise(
-      api.authenticated.myLessons({ urlParams: { status: "scheduled", limit: 5 } }),
-    ),
+    Effect.runPromise(api.authenticated.myLessons({ query: { status: "scheduled", limit: 5 } })),
 });
 
 export const myLessonsQuery = queryOptions({
   queryKey: ["my-lessons"],
-  queryFn: () => Effect.runPromise(api.authenticated.myLessons({ urlParams: {} })),
+  queryFn: () => Effect.runPromise(api.authenticated.myLessons({ query: {} })),
 });
 
 export const myLessonNotesQuery = queryOptions({
   queryKey: ["my-lesson-notes"],
-  queryFn: () =>
-    Effect.runPromise(api.authenticated.myLessonNotesList({ urlParams: { limit: 100 } })),
+  queryFn: () => Effect.runPromise(api.authenticated.myLessonNotesList({ query: { limit: 100 } })),
 });
 
 export const myEmailsQuery = queryOptions({
@@ -153,7 +150,7 @@ export const availableSlotsQuery = (date: string) =>
     queryKey: ["available-slots", date],
     queryFn: () =>
       Effect.runPromise(
-        api.authenticated.availableSlots({ urlParams: { date, days: 7, duration: 60 } }),
+        api.authenticated.availableSlots({ query: { date, days: 7, duration: 60 } }),
       ),
   });
 

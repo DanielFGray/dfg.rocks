@@ -1,5 +1,18 @@
-import { Effect, Option, Schema, Stream } from "effect";
-import { PgClient } from "@effect/sql-pg/PgClient";
+import {
+  Config,
+  Context,
+  Deferred,
+  Effect,
+  Layer,
+  Option,
+  Queue,
+  Redacted,
+  Schedule,
+  Stream,
+} from "effect";
+import { ConnectionError, SqlError } from "effect/sql/SqlError";
+import { sql } from "kysely";
+import pg from "pg";
 import { PgRootDB } from "../db.js";
 import { realtimeBus } from "./realtimeBus.js";
 
@@ -41,21 +54,13 @@ const CHANNEL_QUERY_KEYS: Record<string, QueryKey[]> = {
   "rt:assignment_reviews": [["assignments"]],
 };
 
-const RealtimePayload = Schema.parseJson(
-  Schema.Struct({
-    event: Schema.optional(Schema.String),
-    subject: Schema.optional(Schema.String),
-  }),
-);
-
 function dedupe(values: Iterable<string>): string[] {
   return [...new Set([...values].filter((value) => value.length > 0))];
 }
 
-export class RealtimeService extends Effect.Service<RealtimeService>()("RealtimeService", {
-  accessors: true,
-  scoped: Effect.gen(function* () {
-    const client = yield* PgClient;
+export class RealtimeService extends Context.Service<RealtimeService>()("RealtimeService", {
+  make: Effect.gen(function* () {
+    const databaseUrl = yield* Config.Redacted("DATABASE_URL");
     const db = yield* PgRootDB;
 
     let staffCache: { ids: string[]; expiresAt: number } | null = null;
@@ -201,25 +206,17 @@ export class RealtimeService extends Effect.Service<RealtimeService>()("Realtime
       }
     });
 
-    const processNotification = Effect.fnUntraced(function* (channel: string, rawPayload: string) {
-      const queryKeys = CHANNEL_QUERY_KEYS[channel];
+    const processEvent = Effect.fnUntraced(function* (row: {
+      readonly topic: string;
+      readonly event: string;
+      readonly subject: string;
+    }) {
+      const queryKeys = CHANNEL_QUERY_KEYS[row.topic];
       if (!queryKeys) {
         return;
       }
 
-      const parsed = yield* Schema.decodeUnknown(RealtimePayload)(rawPayload).pipe(
-        Effect.catchAll(() => Effect.succeed(null)),
-      );
-      if (!parsed) {
-        return;
-      }
-
-      const subject = parsed.subject;
-      if (!subject) {
-        return;
-      }
-
-      const userIds = yield* resolveUserIds(channel, subject);
+      const userIds = yield* resolveUserIds(row.topic, row.subject);
       if (userIds.length === 0) {
         return;
       }
@@ -228,30 +225,112 @@ export class RealtimeService extends Effect.Service<RealtimeService>()("Realtime
         Effect.sync(() =>
           realtimeBus.publish({
             userId,
-            event: parsed.event ?? channel,
-            subject,
+            event: row.event,
+            subject: row.subject,
             queryKeys,
           }),
         ),
       );
     });
 
-    yield* Effect.forEach(
-      Object.keys(CHANNEL_QUERY_KEYS),
-      Effect.fnUntraced(function* (channel) {
-        yield* Effect.forkScoped(
-          client.listen(channel).pipe(
-            Stream.mapEffect((rawPayload) => processNotification(channel, rawPayload), {
-              concurrency: "unbounded",
-            }),
+    // Events written before this process started were delivered by whoever listened then.
+    let highWater =
+      (yield* db.execute(
+        db
+          .selectFrom("app_private.realtime_events")
+          .select((eb) => eb.fn.coalesce(eb.fn.max("id"), eb.lit(0)).as("max")),
+      ))[0]?.max ?? 0;
+
+    const drainNewRows = Effect.gen(function* () {
+      const rows = yield* db.execute(
+        db
+          .selectFrom("app_private.realtime_events")
+          .select(["id", "topic", "event", "subject"])
+          .where("id", ">", highWater)
+          .orderBy("id"),
+      );
+      for (const row of rows) {
+        yield* processEvent(row);
+        highWater = row.id;
+      }
+    });
+
+    // One connection's lifetime: LISTEN, read rows that arrived while nothing
+    // listened, then read again on each notification until the connection is lost.
+    const listen = Effect.scoped(
+      Effect.gen(function* () {
+        const lost = yield* Deferred.make<never, SqlError>();
+        const client = yield* connectListenClient(databaseUrl, lost);
+        const notifications = yield* Queue.unbounded<void>();
+        client.on("notification", () => {
+          Queue.offerUnsafe(notifications, undefined);
+        });
+        yield* Effect.tryPromise({
+          try: () => client.query("LISTEN realtime_events"),
+          catch: toSqlError("LISTEN realtime_events failed"),
+        });
+        yield* drainNewRows;
+        yield* Effect.raceFirst(
+          Stream.fromQueue(notifications).pipe(
+            Stream.mapEffect(() => drainNewRows),
             Stream.runDrain,
           ),
+          Deferred.await(lost),
         );
-        yield* Effect.sleep("10 millis");
       }),
-      { concurrency: 1 },
+    );
+
+    yield* Effect.forkScoped(
+      listen.pipe(
+        Effect.tapError((error) =>
+          Effect.logWarning("Realtime listener lost its connection", error),
+        ),
+        Effect.retry(Schedule.spaced("5 seconds").pipe(Schedule.jittered)),
+      ),
+    );
+
+    yield* Effect.forkScoped(
+      db
+        .execute(
+          db
+            .deleteFrom("app_private.realtime_events")
+            .where("created_at", "<", sql<Date>`now() - interval '24 hours'`),
+        )
+        .pipe(
+          Effect.catch((error) => Effect.logWarning("Realtime cleanup failed", error)),
+          Effect.repeat(Schedule.spaced("1 hour")),
+        ),
     );
 
     return {};
   }),
-}) {}
+}) {
+  static readonly layer = Layer.effect(this, this.make);
+}
+
+const toSqlError = (message: string) => (cause: unknown) =>
+  new SqlError({ reason: new ConnectionError({ cause, message }) });
+
+/**
+ * A dedicated LISTEN connection outside the pool. pg reports a dropped
+ * connection as an 'error' event, which crashes the process when nothing
+ * handles it, so the handler is attached before connect and fails `lost`.
+ */
+const connectListenClient = (url: Redacted.Redacted, lost: Deferred.Deferred<never, SqlError>) =>
+  Effect.acquireRelease(
+    Effect.tryPromise({
+      try: async () => {
+        const client = new pg.Client({ connectionString: Redacted.value(url) });
+        client.on("error", (cause) => {
+          Deferred.doneUnsafe(
+            lost,
+            Effect.fail(toSqlError("Realtime listen connection lost")(cause)),
+          );
+        });
+        await client.connect();
+        return client;
+      },
+      catch: toSqlError("Realtime listen connection failed"),
+    }),
+    (client) => Effect.promise(() => client.end().catch(() => undefined)),
+  );

@@ -1,6 +1,6 @@
 import net from "node:net";
-import { RateLimiter as ExperimentalRateLimiter } from "@effect/experimental";
 import { Context, Duration, Effect, Layer } from "effect";
+import * as PersistenceRateLimiter from "effect/persistence/RateLimiter";
 import { HttpError } from "../pgErrors.js";
 
 export class RateLimitError extends HttpError {
@@ -14,17 +14,16 @@ interface RateLimitServiceShape {
     key: string,
     max: number,
     windowMs: number,
-  ) => Effect.Effect<void, RateLimitError | ExperimentalRateLimiter.RateLimitStoreError>;
+  ) => Effect.Effect<void, RateLimitError | PersistenceRateLimiter.RateLimiterError>;
 }
 
-export class RateLimitService extends Context.Tag("RateLimitService")<
-  RateLimitService,
-  RateLimitServiceShape
->() {
+export class RateLimitService extends Context.Service<RateLimitService, RateLimitServiceShape>()(
+  "RateLimitService",
+) {
   static readonly Live = Layer.effect(
     this,
     Effect.gen(function* () {
-      const limiter = yield* ExperimentalRateLimiter.RateLimiter;
+      const limiter = yield* PersistenceRateLimiter.RateLimiter;
 
       return {
         consume: (key, max, windowMs) =>
@@ -37,10 +36,8 @@ export class RateLimitService extends Context.Tag("RateLimitService")<
               onExceeded: "fail",
             })
             .pipe(
-              Effect.mapError((error) =>
-                error instanceof ExperimentalRateLimiter.RateLimitExceeded
-                  ? new RateLimitError()
-                  : error,
+              Effect.catchReason("RateLimiterError", "RateLimitExceeded", () =>
+                Effect.fail(new RateLimitError()),
               ),
               Effect.asVoid,
             ),
@@ -48,7 +45,7 @@ export class RateLimitService extends Context.Tag("RateLimitService")<
     }),
   ).pipe(
     Layer.provide(
-      ExperimentalRateLimiter.layer.pipe(Layer.provide(ExperimentalRateLimiter.layerStoreMemory)),
+      PersistenceRateLimiter.layer.pipe(Layer.provide(PersistenceRateLimiter.layerStoreMemory)),
     ),
   );
 

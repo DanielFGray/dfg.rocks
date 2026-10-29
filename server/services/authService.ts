@@ -1,4 +1,4 @@
-import { Effect, Option } from "effect";
+import { Effect, Option, Context, Layer } from "effect";
 import { PgRootDB } from "../db.js";
 import { catchPgErrors, HttpError } from "../pgErrors.js";
 import { SessionService } from "./sessionService.js";
@@ -24,10 +24,8 @@ export class AccountLockedError extends HttpError {
 /**
  * Authentication service.
  */
-export class AuthService extends Effect.Service<AuthService>()("AuthService", {
-  accessors: true,
-  // dependencies: [PgRootDB.Live, SessionService.Default],
-  effect: Effect.gen(function* () {
+export class AuthService extends Context.Service<AuthService>()("AuthService", {
+  make: Effect.gen(function* () {
     const rootDb = yield* PgRootDB;
     return {
       login: Effect.fnUntraced(function* ({ id, password }: { id: string; password: string }) {
@@ -51,12 +49,14 @@ export class AuthService extends Effect.Service<AuthService>()("AuthService", {
               .innerJoin("app_public.users as u", "u.id", "s.user_id")
               .select(["s.id", "s.user_id", "u.username", "u.role", "u.name", "u.is_verified"]),
           )
-          .pipe(catchPgErrors, Effect.head, Effect.optionFromOptional);
+          .pipe(catchPgErrors, Effect.head, Effect.catchNoSuchElement);
         if (Option.isNone(session)) {
           return yield* new InvalidCredentialsError();
         }
 
-        const createdSession = yield* SessionService.issueTokenForSession(session.value.id);
+        const createdSession = yield* SessionService.use((sessionService) =>
+          sessionService.issueTokenForSession(session.value.id),
+        );
 
         return { user: session.value, ...createdSession };
       }),
@@ -66,7 +66,7 @@ export class AuthService extends Effect.Service<AuthService>()("AuthService", {
           return;
         }
 
-        yield* SessionService.deleteSession(cookieId);
+        yield* SessionService.use((sessionService) => sessionService.deleteSession(cookieId));
       }),
 
       forgotPassword: Effect.fnUntraced(function* ({ email }: { email: string }) {
@@ -113,15 +113,19 @@ export class AuthService extends Effect.Service<AuthService>()("AuthService", {
               .selectFrom("s")
               .select(["id", "user_id"]),
           )
-          .pipe(catchPgErrors, Effect.head, Effect.optionFromOptional);
+          .pipe(catchPgErrors, Effect.head, Effect.catchNoSuchElement);
         if (Option.isNone(session)) {
           return yield* new InvalidTokenError();
         }
 
-        const freshSession = yield* SessionService.issueTokenForSession(session.value.id);
+        const freshSession = yield* SessionService.use((sessionService) =>
+          sessionService.issueTokenForSession(session.value.id),
+        );
 
         return { token: freshSession.token, expiresAt: freshSession.expiresAt };
       }),
     };
   }),
-}) {}
+}) {
+  static readonly layer = Layer.effect(this, this.make);
+}

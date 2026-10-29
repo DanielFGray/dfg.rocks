@@ -41,14 +41,16 @@ const getBookLessonPageData = createServerFn({ method: "GET" })
   .handler(async ({ data }) => {
     const token = getCookie("session");
     await serverRuntime.runPromise(
-      requireSession(token).pipe(Effect.catchAll(() => Effect.fail(new Error("Unauthorized")))),
+      requireSession(token).pipe(Effect.catch(() => Effect.fail(new Error("Unauthorized")))),
     );
     return serverRuntime.runPromise(
-      GoogleCalendarService.getAvailableSlots({
-        date: data.date,
-        days: 7,
-        duration: 60,
-      }),
+      GoogleCalendarService.use((googleCalendarService) =>
+        googleCalendarService.getAvailableSlots({
+          date: data.date,
+          days: 7,
+          duration: 60,
+        }),
+      ),
     );
   });
 

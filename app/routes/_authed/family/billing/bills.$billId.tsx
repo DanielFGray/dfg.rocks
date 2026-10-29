@@ -29,8 +29,7 @@ function BillDetailPage() {
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["family", "billing", "bill", billId],
-    queryFn: () =>
-      Effect.runPromise(api.familyBilling.billDetail({ path: { id: billId } })),
+    queryFn: () => Effect.runPromise(api.familyBilling.billDetail({ params: { id: billId } })),
     enabled: !!user && user.role !== "admin",
   });
 
@@ -77,9 +76,7 @@ function BillDetailPage() {
             </h1>
           </div>
           <div className="flex flex-wrap items-center gap-3">
-            <span className={billStatusBadge(bill.status)}>
-              {statusLabel(bill.status)}
-            </span>
+            <span className={billStatusBadge(bill.status)}>{statusLabel(bill.status)}</span>
             <a
               href={`/api/family/billing/bills/${billId}/pdf`}
               target="_blank"
@@ -96,7 +93,7 @@ function BillDetailPage() {
       <div className="mb-6 grid gap-4 sm:grid-cols-4">
         <Card>
           <div className="p-4">
-            <p className="text-xs font-medium uppercase tracking-wide text-muted dark:text-muted-dark">
+            <p className="text-xs font-medium tracking-wide text-muted uppercase dark:text-muted-dark">
               Subtotal
             </p>
             <p className="mt-1 text-lg font-bold text-primary dark:text-primary-dark">
@@ -106,7 +103,7 @@ function BillDetailPage() {
         </Card>
         <Card>
           <div className="p-4">
-            <p className="text-xs font-medium uppercase tracking-wide text-muted dark:text-muted-dark">
+            <p className="text-xs font-medium tracking-wide text-muted uppercase dark:text-muted-dark">
               Discount
             </p>
             <p className="mt-1 text-lg font-bold text-green-600 dark:text-green-400">
@@ -116,7 +113,7 @@ function BillDetailPage() {
         </Card>
         <Card>
           <div className="p-4">
-            <p className="text-xs font-medium uppercase tracking-wide text-muted dark:text-muted-dark">
+            <p className="text-xs font-medium tracking-wide text-muted uppercase dark:text-muted-dark">
               Tax
             </p>
             <p className="mt-1 text-lg font-bold text-primary dark:text-primary-dark">
@@ -126,7 +123,7 @@ function BillDetailPage() {
         </Card>
         <Card>
           <div className="p-4">
-            <p className="text-xs font-medium uppercase tracking-wide text-primary dark:text-primary-dark">
+            <p className="text-xs font-medium tracking-wide text-primary uppercase dark:text-primary-dark">
               Total
             </p>
             <p className="mt-1 text-lg font-bold text-primary dark:text-primary-dark">
@@ -142,7 +139,11 @@ function BillDetailPage() {
         </span>
         {bill.due_date && <span>Due: {dateLabel(bill.due_date)}</span>}
         {bill.issued_at && <span>Issued: {dateTimeLabel(bill.issued_at)}</span>}
-        {bill.paid_at && <span className="text-green-600 dark:text-green-400">Paid: {dateTimeLabel(bill.paid_at)}</span>}
+        {bill.paid_at && (
+          <span className="text-green-600 dark:text-green-400">
+            Paid: {dateTimeLabel(bill.paid_at)}
+          </span>
+        )}
       </div>
 
       <Tabs selectedKey={tab} onSelectionChange={setTab}>
@@ -169,7 +170,10 @@ function BillDetailPage() {
                 </thead>
                 <tbody>
                   {bill.line_items.map((li: any) => (
-                    <tr key={li.id} className="border-t border-overlay/8 dark:border-overlay-dark/8">
+                    <tr
+                      key={li.id}
+                      className="border-t border-overlay/8 dark:border-overlay-dark/8"
+                    >
                       <td className="px-4 py-3 font-medium text-primary dark:text-primary-dark">
                         {li.description}
                       </td>
@@ -184,24 +188,45 @@ function BillDetailPage() {
                 </tbody>
                 <tfoot className="bg-overlay/4 text-xs dark:bg-overlay-dark/4">
                   <tr>
-                    <td colSpan={4} className="px-4 py-2 text-right font-medium">Subtotal</td>
+                    <td colSpan={4} className="px-4 py-2 text-right font-medium">
+                      Subtotal
+                    </td>
                     <td className="px-4 py-2 font-medium">{formatCents(bill.subtotal_cents)}</td>
                   </tr>
                   {bill.discount_cents > 0 && (
                     <tr>
-                      <td colSpan={4} className="px-4 py-2 text-right text-muted dark:text-muted-dark">Discount</td>
-                      <td className="px-4 py-2 text-green-600 dark:text-green-400">-{formatCents(bill.discount_cents)}</td>
+                      <td
+                        colSpan={4}
+                        className="px-4 py-2 text-right text-muted dark:text-muted-dark"
+                      >
+                        Discount
+                      </td>
+                      <td className="px-4 py-2 text-green-600 dark:text-green-400">
+                        -{formatCents(bill.discount_cents)}
+                      </td>
                     </tr>
                   )}
                   {bill.tax_cents > 0 && (
                     <tr>
-                      <td colSpan={4} className="px-4 py-2 text-right text-muted dark:text-muted-dark">Tax</td>
+                      <td
+                        colSpan={4}
+                        className="px-4 py-2 text-right text-muted dark:text-muted-dark"
+                      >
+                        Tax
+                      </td>
                       <td className="px-4 py-2">{formatCents(bill.tax_cents)}</td>
                     </tr>
                   )}
                   <tr>
-                    <td colSpan={4} className="px-4 py-2 text-right font-semibold text-primary dark:text-primary-dark">Total</td>
-                    <td className="px-4 py-2 font-bold text-primary dark:text-primary-dark">{formatCents(bill.total_cents)}</td>
+                    <td
+                      colSpan={4}
+                      className="px-4 py-2 text-right font-semibold text-primary dark:text-primary-dark"
+                    >
+                      Total
+                    </td>
+                    <td className="px-4 py-2 font-bold text-primary dark:text-primary-dark">
+                      {formatCents(bill.total_cents)}
+                    </td>
                   </tr>
                 </tfoot>
               </table>
@@ -221,10 +246,20 @@ function BillDetailPage() {
                 </thead>
                 <tbody>
                   {bill.adjustments.map((adj: any) => (
-                    <tr key={adj.id} className="border-t border-overlay/8 dark:border-overlay-dark/8">
+                    <tr
+                      key={adj.id}
+                      className="border-t border-overlay/8 dark:border-overlay-dark/8"
+                    >
                       <td className="px-4 py-3 font-medium">
-                        <span className={adj.amount_cents < 0 ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}>
-                          {adj.amount_cents < 0 ? "-" : "+"}{formatCents(Math.abs(adj.amount_cents))}
+                        <span
+                          className={
+                            adj.amount_cents < 0
+                              ? "text-green-600 dark:text-green-400"
+                              : "text-red-600 dark:text-red-400"
+                          }
+                        >
+                          {adj.amount_cents < 0 ? "-" : "+"}
+                          {formatCents(Math.abs(adj.amount_cents))}
                         </span>
                       </td>
                       <td className="px-4 py-3 text-muted dark:text-muted-dark">
@@ -250,7 +285,10 @@ function BillDetailPage() {
                 </thead>
                 <tbody>
                   {bill.credit_applications.map((ca: any) => (
-                    <tr key={ca.id} className="border-t border-overlay/8 dark:border-overlay-dark/8">
+                    <tr
+                      key={ca.id}
+                      className="border-t border-overlay/8 dark:border-overlay-dark/8"
+                    >
                       <td className="px-4 py-3 font-medium text-green-600 dark:text-green-400">
                         -{formatCents(ca.amount_cents)}
                       </td>

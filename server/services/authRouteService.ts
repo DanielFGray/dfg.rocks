@@ -1,12 +1,11 @@
-import { Effect } from "effect";
+import { Effect, Context, Layer } from "effect";
 import { sql } from "kysely";
-import { PgRootDB, withAuthContext } from "../db.js";
+import { addJob, PgRootDB, withAuthContext } from "../db.js";
 import { HttpError } from "../pgErrors.js";
 import type { UserRow } from "./userService.js";
 import { UserService } from "./userService.js";
-export class AuthRouteService extends Effect.Service<AuthRouteService>()("AuthRouteService", {
-  accessors: true,
-  effect: Effect.gen(function* () {
+export class AuthRouteService extends Context.Service<AuthRouteService>()("AuthRouteService", {
+  make: Effect.gen(function* () {
     const db = yield* PgRootDB;
 
     return {
@@ -32,7 +31,7 @@ export class AuthRouteService extends Effect.Service<AuthRouteService>()("AuthRo
               .pipe(
                 Effect.head,
                 Effect.catchTags({
-                  NoSuchElementException: () => new HttpError(400, "Invalid or expired magic link"),
+                  NoSuchElementError: () => new HttpError(400, "Invalid or expired magic link"),
                 }),
               );
             yield* db.execute(
@@ -49,10 +48,12 @@ export class AuthRouteService extends Effect.Service<AuthRouteService>()("AuthRo
                 .where("id", "=", user.id)
                 .where("is_verified", "=", false),
             );
-            return yield* UserService.sessionFromUser({
-              ...user,
-              is_verified: true,
-            });
+            return yield* UserService.use((userService) =>
+              userService.sessionFromUser({
+                ...user,
+                is_verified: true,
+              }),
+            );
           }),
         );
       }),
@@ -85,7 +86,7 @@ export class AuthRouteService extends Effect.Service<AuthRouteService>()("AuthRo
             .pipe(
               Effect.head,
               Effect.catchTags({
-                NoSuchElementException: () => Effect.succeed(null),
+                NoSuchElementError: () => Effect.succeed(null),
               }),
             ),
         );
@@ -207,18 +208,11 @@ export class AuthRouteService extends Effect.Service<AuthRouteService>()("AuthRo
         );
 
         if (email._tag === "Some") {
-          yield* db.execute(
-            db.selectNoFrom((eb) =>
-              eb
-                .fn<unknown>("graphile_worker.add_job", [
-                  eb.val("user_emails__send_verification"),
-                  sql`${JSON.stringify({ id: email.value.id })}::json`,
-                ])
-                .as("add_job"),
-            ),
-          );
+          yield* addJob(db, "user_emails__send_verification", { id: email.value.id });
         }
       }),
     };
   }),
-}) {}
+}) {
+  static readonly layer = Layer.effect(this, this.make);
+}

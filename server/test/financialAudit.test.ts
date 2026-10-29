@@ -6,7 +6,7 @@ import { PgAuthDB, PgRootDB } from "../db.js";
 import { BillingLedgerService } from "../services/billingLedgerService.js";
 
 const financialAuditServiceLayer = Layer.mergeAll(
-  BillingLedgerService.Default,
+  BillingLedgerService.layer,
   PgRootDB.Live,
   PgAuthDB.Live,
 );

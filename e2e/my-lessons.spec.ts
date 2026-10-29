@@ -26,6 +26,8 @@ function lessonResponse(route: Route, scheduledAt: string, status: "scheduled" |
     completed_at: null,
     cancellation_fee_cents: 0,
     remainder_due_cents: 0,
+    recurring_schedule_id: null,
+    recurrence_date: null,
     created_at: now,
   };
 }

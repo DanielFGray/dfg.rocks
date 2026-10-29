@@ -21,12 +21,16 @@ const getSettingsPageData = createServerFn({ method: "GET" }).handler(() =>
     Effect.gen(function* () {
       const session = yield* requireSession(getCookie("session"));
 
-      const emailsEffect = AuthenticatedRouteService.myEmails(session.session.id);
+      const emailsEffect = AuthenticatedRouteService.use((authenticatedRouteService) =>
+        authenticatedRouteService.myEmails(session.session.id),
+      );
 
       if (session.user.role !== "admin") {
         const [emails, testimonial] = yield* Effect.all([
           emailsEffect,
-          AuthenticatedRouteService.testimonial(session.session.id, session.user.id),
+          AuthenticatedRouteService.use((authenticatedRouteService) =>
+            authenticatedRouteService.testimonial(session.session.id, session.user.id),
+          ),
         ]);
 
         return toServerFunctionPayload({
@@ -42,10 +46,14 @@ const getSettingsPageData = createServerFn({ method: "GET" }).handler(() =>
       const [emails, gcalStatus, workingHours, intervalDays, adminTestimonials] = yield* Effect.all(
         [
           emailsEffect,
-          AdminRouteService.getGoogleCalendarStatus(),
-          AdminRouteService.getWorkingHours(),
-          TestimonialReminderService.getIntervalDays(),
-          AdminRouteService.listTestimonials(session.session.id),
+          AdminRouteService.use((adminRouteService) => adminRouteService.getGoogleCalendarStatus()),
+          AdminRouteService.use((adminRouteService) => adminRouteService.getWorkingHours()),
+          TestimonialReminderService.use((testimonialReminderService) =>
+            testimonialReminderService.getIntervalDays(),
+          ),
+          AdminRouteService.use((adminRouteService) =>
+            adminRouteService.listTestimonials(session.session.id),
+          ),
         ],
       );
 

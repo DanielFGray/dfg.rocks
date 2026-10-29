@@ -1,5 +1,5 @@
 import { sql } from "kysely";
-import { Effect, Option } from "effect";
+import { Effect, Option, Context, Layer } from "effect";
 import { PgRootDB } from "../db.js";
 
 const DEFAULT_INTERVAL_DAYS = 30;
@@ -152,10 +152,9 @@ const makeTestimonialReminderService = Effect.gen(function* () {
 /**
  * Testimonial reminder scheduling service backed by the root database.
  */
-export class TestimonialReminderService extends Effect.Service<TestimonialReminderService>()(
+export class TestimonialReminderService extends Context.Service<TestimonialReminderService>()(
   "TestimonialReminderService",
-  {
-    accessors: true,
-    effect: makeTestimonialReminderService,
-  },
-) {}
+  { make: makeTestimonialReminderService },
+) {
+  static readonly layer = Layer.effect(this, this.make);
+}

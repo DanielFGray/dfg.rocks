@@ -11,13 +11,7 @@ import { Textarea } from "../ui/Textarea.js";
 import { Tabs, TabList, Tab, TabPanel } from "../ui/Tabs.js";
 import { Modal } from "../ui/Modal.js";
 import { getErrorMessage } from "../../lib/errors.js";
-import {
-  formatCents,
-  dateLabel,
-  dateTimeLabel,
-  billStatusBadge,
-  statusLabel,
-} from "./helpers.js";
+import { formatCents, dateLabel, dateTimeLabel, billStatusBadge, statusLabel } from "./helpers.js";
 
 export function BillDetailView({
   bill,
@@ -31,12 +25,12 @@ export function BillDetailView({
   const [adjustOpen, setAdjustOpen] = useState(false);
 
   const issue = useMutation({
-    mutationFn: () => Effect.runPromise(api.admin.issueBill({ path: { id: bill.id } })),
+    mutationFn: () => Effect.runPromise(api.admin.issueBill({ params: { id: bill.id } })),
     onSuccess: onRefresh,
   });
 
   const cancel = useMutation({
-    mutationFn: () => Effect.runPromise(api.admin.cancelBill({ path: { id: bill.id } })),
+    mutationFn: () => Effect.runPromise(api.admin.cancelBill({ params: { id: bill.id } })),
     onSuccess: onRefresh,
   });
 
@@ -60,16 +54,14 @@ export function BillDetailView({
               ) : null}
             </p>
           </div>
-          <span className={billStatusBadge(bill.status)}>
-            {statusLabel(bill.status)}
-          </span>
+          <span className={billStatusBadge(bill.status)}>{statusLabel(bill.status)}</span>
         </div>
       </div>
 
       <div className="mb-6 grid gap-4 sm:grid-cols-4">
         <Card>
           <div className="p-4">
-            <p className="text-xs font-medium uppercase tracking-wide text-muted dark:text-muted-dark">
+            <p className="text-xs font-medium tracking-wide text-muted uppercase dark:text-muted-dark">
               Subtotal
             </p>
             <p className="mt-1 text-lg font-bold text-primary dark:text-primary-dark">
@@ -79,19 +71,17 @@ export function BillDetailView({
         </Card>
         <Card>
           <div className="p-4">
-            <p className="text-xs font-medium uppercase tracking-wide text-muted dark:text-muted-dark">
+            <p className="text-xs font-medium tracking-wide text-muted uppercase dark:text-muted-dark">
               Discount
             </p>
             <p className="mt-1 text-lg font-bold text-green-600 dark:text-green-400">
-              {bill.discount_cents > 0
-                ? `-${formatCents(bill.discount_cents)}`
-                : "—"}
+              {bill.discount_cents > 0 ? `-${formatCents(bill.discount_cents)}` : "—"}
             </p>
           </div>
         </Card>
         <Card>
           <div className="p-4">
-            <p className="text-xs font-medium uppercase tracking-wide text-muted dark:text-muted-dark">
+            <p className="text-xs font-medium tracking-wide text-muted uppercase dark:text-muted-dark">
               Tax
             </p>
             <p className="mt-1 text-lg font-bold text-primary dark:text-primary-dark">
@@ -101,7 +91,7 @@ export function BillDetailView({
         </Card>
         <Card>
           <div className="p-4">
-            <p className="text-xs font-medium uppercase tracking-wide text-primary dark:text-primary-dark">
+            <p className="text-xs font-medium tracking-wide text-primary uppercase dark:text-primary-dark">
               Total
             </p>
             <p className="mt-1 text-lg font-bold text-primary dark:text-primary-dark">
@@ -113,9 +103,7 @@ export function BillDetailView({
 
       <div className="mb-6 flex flex-wrap gap-2">
         {bill.notes ? (
-          <p className="w-full text-sm text-muted dark:text-muted-dark">
-            Notes: {bill.notes}
-          </p>
+          <p className="w-full text-sm text-muted dark:text-muted-dark">Notes: {bill.notes}</p>
         ) : null}
         {bill.issued_at && (
           <span className="text-xs text-muted dark:text-muted-dark">
@@ -170,12 +158,8 @@ export function BillDetailView({
                         {statusLabel(li.line_type)}
                       </td>
                       <td className="px-4 py-3">{li.quantity}</td>
-                      <td className="px-4 py-3">
-                        {formatCents(li.unit_price_cents)}
-                      </td>
-                      <td className="px-4 py-3 font-medium">
-                        {formatCents(li.amount_cents)}
-                      </td>
+                      <td className="px-4 py-3">{formatCents(li.unit_price_cents)}</td>
+                      <td className="px-4 py-3 font-medium">{formatCents(li.amount_cents)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -184,13 +168,14 @@ export function BillDetailView({
                     <td colSpan={4} className="px-4 py-2 text-right font-medium">
                       Subtotal
                     </td>
-                    <td className="px-4 py-2 font-medium">
-                      {formatCents(bill.subtotal_cents)}
-                    </td>
+                    <td className="px-4 py-2 font-medium">{formatCents(bill.subtotal_cents)}</td>
                   </tr>
                   {bill.discount_cents > 0 && (
                     <tr>
-                      <td colSpan={4} className="px-4 py-2 text-right text-muted dark:text-muted-dark">
+                      <td
+                        colSpan={4}
+                        className="px-4 py-2 text-right text-muted dark:text-muted-dark"
+                      >
                         Discount
                       </td>
                       <td className="px-4 py-2 text-green-600 dark:text-green-400">
@@ -200,14 +185,20 @@ export function BillDetailView({
                   )}
                   {bill.tax_cents > 0 && (
                     <tr>
-                      <td colSpan={4} className="px-4 py-2 text-right text-muted dark:text-muted-dark">
+                      <td
+                        colSpan={4}
+                        className="px-4 py-2 text-right text-muted dark:text-muted-dark"
+                      >
                         Tax
                       </td>
                       <td className="px-4 py-2">{formatCents(bill.tax_cents)}</td>
                     </tr>
                   )}
                   <tr>
-                    <td colSpan={4} className="px-4 py-2 text-right font-semibold text-primary dark:text-primary-dark">
+                    <td
+                      colSpan={4}
+                      className="px-4 py-2 text-right font-semibold text-primary dark:text-primary-dark"
+                    >
                       Total
                     </td>
                     <td className="px-4 py-2 font-bold text-primary dark:text-primary-dark">
@@ -254,9 +245,7 @@ export function BillDetailView({
                           {formatCents(Math.abs(adj.amount_cents))}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-muted dark:text-muted-dark">
-                        {adj.reason}
-                      </td>
+                      <td className="px-4 py-3 text-muted dark:text-muted-dark">{adj.reason}</td>
                       <td className="px-4 py-3 text-muted dark:text-muted-dark">
                         {dateTimeLabel(adj.created_at)}
                       </td>
@@ -270,9 +259,7 @@ export function BillDetailView({
 
         <TabPanel id="creditApps" className="mt-6">
           {bill.credit_applications.length === 0 ? (
-            <p className="text-sm text-muted dark:text-muted-dark">
-              No credit applications.
-            </p>
+            <p className="text-sm text-muted dark:text-muted-dark">No credit applications.</p>
           ) : (
             <div className="overflow-x-auto rounded-lg border border-overlay/10 dark:border-overlay-dark/10">
               <table className="w-full text-left text-sm">
@@ -315,11 +302,7 @@ export function BillDetailView({
             )}
             {(bill.status === "draft" || bill.status === "issued") && (
               <>
-                <Button
-                  variant="outline"
-                  onClick={() => setAdjustOpen(true)}
-                  disabled={adjustOpen}
-                >
+                <Button variant="outline" onClick={() => setAdjustOpen(true)} disabled={adjustOpen}>
                   Add adjustment
                 </Button>
                 <Button
@@ -329,10 +312,7 @@ export function BillDetailView({
                 >
                   {cancel.isPending ? "Cancelling..." : "Cancel bill"}
                 </Button>
-                <Button
-                  variant="danger"
-                  onClick={() => setVoidOpen(true)}
-                >
+                <Button variant="danger" onClick={() => setVoidOpen(true)}>
                   Void bill
                 </Button>
               </>
@@ -360,13 +340,7 @@ export function BillDetailView({
 
 /* ---- Adjustment form ---- */
 
-function AdjustmentForm({
-  billId,
-  onSaved,
-}: {
-  billId: string;
-  onSaved: () => void;
-}) {
+function AdjustmentForm({ billId, onSaved }: { billId: string; onSaved: () => void }) {
   const [amount, setAmount] = useState("");
   const [reason, setReason] = useState("");
 
@@ -374,7 +348,7 @@ function AdjustmentForm({
     mutationFn: () =>
       Effect.runPromise(
         api.admin.adjustBill({
-          path: { id: billId },
+          params: { id: billId },
           payload: {
             amount_cents: Math.round(Number(amount) * 100),
             reason,
@@ -446,7 +420,7 @@ function AdjustModal({
     mutationFn: () =>
       Effect.runPromise(
         api.admin.adjustBill({
-          path: { id: billId },
+          params: { id: billId },
           payload: {
             amount_cents: Math.round(Number(amount) * 100),
             reason,
@@ -521,9 +495,7 @@ function VoidModal({
 
   const save = useMutation({
     mutationFn: () =>
-      Effect.runPromise(
-        api.admin.voidBill({ path: { id: billId }, payload: { reason } }),
-      ),
+      Effect.runPromise(api.admin.voidBill({ params: { id: billId }, payload: { reason } })),
     onSuccess: () => {
       onSaved();
       onClose();

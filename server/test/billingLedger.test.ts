@@ -1,13 +1,13 @@
 import { it, expect, describe, beforeAll, afterAll } from "@effect/vitest";
-import * as FileSystem from "@effect/platform/FileSystem";
-import * as NodeContext from "@effect/platform-node/NodeContext";
+import * as FileSystem from "effect/FileSystem";
+import * as NodeServices from "@effect/platform-node/NodeServices";
 import { Effect, Layer } from "effect";
 import pg from "pg";
 import { PgAuthDB, PgRootDB } from "../db.js";
 import { BillingLedgerService } from "../services/billingLedgerService.js";
 
 const billingLedgerTestLayer = Layer.mergeAll(
-  BillingLedgerService.Default,
+  BillingLedgerService.layer,
   PgRootDB.Live,
   PgAuthDB.Live,
 );
@@ -32,8 +32,8 @@ function forceIpv4(urlString: string): string {
   return url.toString();
 }
 
-function runPlatform<A, E>(effect: Effect.Effect<A, E, NodeContext.NodeContext>): Promise<A> {
-  return Effect.runPromise(effect.pipe(Effect.provide(NodeContext.layer)));
+function runPlatform<A, E>(effect: Effect.Effect<A, E, NodeServices.NodeServices>): Promise<A> {
+  return Effect.runPromise(effect.pipe(Effect.provide(NodeServices.layer)));
 }
 
 describe("Billing ledger foundation", () => {
@@ -174,8 +174,8 @@ describe("Billing ledger foundation", () => {
         });
         yield* svc.issueBill(adminSessionId, bill.id);
 
-        const result = yield* Effect.either(svc.issueBill(adminSessionId, bill.id));
-        expect(result._tag).toBe("Left");
+        const result = yield* Effect.result(svc.issueBill(adminSessionId, bill.id));
+        expect(result._tag).toBe("Failure");
       }),
     );
 
@@ -454,14 +454,14 @@ describe("Billing ledger foundation", () => {
               .returning("id"),
           )
           .pipe(Effect.head);
-        const result = yield* Effect.either(
+        const result = yield* Effect.result(
           svc.applyCredit(adminSessionId, {
             creditId: credit.id,
             billId: bill.id,
             amountCents: 5000,
           }),
         );
-        expect(result._tag).toBe("Left");
+        expect(result._tag).toBe("Failure");
       }),
     );
 
@@ -515,14 +515,14 @@ describe("Billing ledger foundation", () => {
             },
           ],
         });
-        const result = yield* Effect.either(
+        const result = yield* Effect.result(
           svc.createAdjustment(adminSessionId, {
             billId: bill.id,
             amountCents: -5000,
             reason: "Late discount",
           }),
         );
-        expect(result._tag).toBe("Left");
+        expect(result._tag).toBe("Failure");
       }),
     );
 
@@ -560,14 +560,14 @@ describe("Billing ledger foundation", () => {
           payment_id: payment.id,
           amount_cents: 10000,
         });
-        const result = yield* Effect.either(
+        const result = yield* Effect.result(
           svc.processRefund(adminSessionId, {
             paymentId: payment.id,
             amountCents: 1,
             reason: "Excess",
           }),
         );
-        expect(result._tag).toBe("Left");
+        expect(result._tag).toBe("Failure");
       }),
     );
 
@@ -578,7 +578,7 @@ describe("Billing ledger foundation", () => {
         expect(balance.outstandingCents).toBeGreaterThanOrEqual(0);
         expect(balance.creditBalanceCents).toBeGreaterThanOrEqual(0);
         expect(Array.isArray(yield* svc.listFamilyBills(teacherSessionId, familyId))).toBe(true);
-        const result = yield* Effect.either(
+        const result = yield* Effect.result(
           svc.createBill(teacherSessionId, {
             familyId,
             billingPeriodStart: "2026-12-01",
@@ -595,7 +595,7 @@ describe("Billing ledger foundation", () => {
             ],
           }),
         );
-        expect(result._tag).toBe("Left");
+        expect(result._tag).toBe("Failure");
       }),
     );
 
@@ -619,7 +619,7 @@ describe("Billing ledger foundation", () => {
           ],
         });
         yield* svc.issueBill(adminSessionId, bill.id);
-        const result = yield* Effect.either(
+        const result = yield* Effect.result(
           db.execute(
             db
               .updateTable("app_public.bills")
@@ -627,7 +627,7 @@ describe("Billing ledger foundation", () => {
               .where("id", "=", bill.id),
           ),
         );
-        expect(result._tag).toBe("Left");
+        expect(result._tag).toBe("Failure");
       }),
     );
 

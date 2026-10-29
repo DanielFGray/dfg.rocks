@@ -1,4 +1,16 @@
 import * as S from "effect/Schema";
+import * as SchemaTransformation from "effect/SchemaTransformation";
+
+// Query strings and form fields carry booleans as "true" / "false".
+export const BooleanFromString = S.Literals(["true", "false"]).pipe(
+  S.decodeTo(
+    S.Boolean,
+    SchemaTransformation.transform({
+      decode: (literal) => literal === "true",
+      encode: (bool) => (bool ? "true" : "false"),
+    }),
+  ),
+);
 
 export type JsonValue =
   | string
@@ -8,27 +20,27 @@ export type JsonValue =
   | ReadonlyArray<JsonValue>
   | { readonly [x: string]: JsonValue };
 
-export const JsonValue: S.Schema<JsonValue> = S.suspend(() =>
-  S.Union(
+export const JsonValue: S.Codec<JsonValue> = S.suspend(() =>
+  S.Union([
     S.String,
     S.Number,
     S.Boolean,
     S.Null,
     S.Array(JsonValue),
-    S.Record({ key: S.String, value: JsonValue }),
-  ),
+    S.Record(S.String, JsonValue),
+  ]),
 );
 
-export const UserRole = S.Union(
+export const UserRole = S.Union([
   S.Literal("admin"),
   S.Literal("student"),
   S.Literal("parent"),
   S.Literal("teacher"),
-);
+]);
 
 export type UserRole = S.Schema.Type<typeof UserRole>;
 
-export const FamilyInviteRole = S.Union(S.Literal("parent"), S.Literal("student"));
+export const FamilyInviteRole = S.Literals(["parent", "student"]);
 
 export type FamilyInviteRole = S.Schema.Type<typeof FamilyInviteRole>;
 
@@ -161,7 +173,7 @@ export const PracticeLog = S.Struct({
   id: S.String,
   student_id: S.String,
   material_id: S.String,
-  rating: S.NullishOr(S.Number.pipe(S.between(1, 5))),
+  rating: S.NullishOr(S.Number.pipe(S.check(S.isBetween({ minimum: 1, maximum: 5 })))),
   duration_minutes: S.NullishOr(S.Number),
   logged_at: S.String,
 });
@@ -190,7 +202,7 @@ export type AssignmentNote = S.Schema.Type<typeof AssignmentNote>;
 export const AssignmentReview = S.Struct({
   id: S.String,
   material_id: S.String,
-  stars: S.Number.pipe(S.between(1, 5)),
+  stars: S.Number.pipe(S.check(S.isBetween({ minimum: 1, maximum: 5 }))),
   listened_seconds: S.Number,
   created_at: S.String,
 });
@@ -230,45 +242,45 @@ export const FamilyInvitation = S.Struct({
 
 export type FamilyInvitation = S.Schema.Type<typeof FamilyInvitation>;
 
-export const LocationType = S.Union(
+export const LocationType = S.Union([
   S.Literal("in_person_teacher_travels"),
   S.Literal("in_person_student_travels"),
   S.Literal("studio"),
   S.Literal("online"),
-);
+]);
 
 export type LocationType = S.Schema.Type<typeof LocationType>;
 
-export const LessonStatus = S.Union(
+export const LessonStatus = S.Union([
   S.Literal("scheduled"),
   S.Literal("completed"),
   S.Literal("cancelled"),
   S.Literal("no_show"),
-);
+]);
 
 export type LessonStatus = S.Schema.Type<typeof LessonStatus>;
 
-export const DepositStatus = S.Union(
+export const DepositStatus = S.Union([
   S.Literal("held"),
   S.Literal("refunded"),
   S.Literal("captured"),
-);
+]);
 
 export type DepositStatus = S.Schema.Type<typeof DepositStatus>;
 
-export const BillingModel = S.Union(S.Literal("single_booking"), S.Literal("monthly_prepaid"));
+export const BillingModel = S.Literals(["single_booking", "monthly_prepaid"]);
 
 export type BillingModel = S.Schema.Type<typeof BillingModel>;
 
-export const DepositPolicyOutcome = S.Union(
+export const DepositPolicyOutcome = S.Union([
   S.Literal("none"),
   S.Literal("refunded"),
   S.Literal("captured"),
-);
+]);
 
 export type DepositPolicyOutcome = S.Schema.Type<typeof DepositPolicyOutcome>;
 
-export const FeePolicyOutcome = S.Union(S.Literal("none"), S.Literal("recorded"));
+export const FeePolicyOutcome = S.Literals(["none", "recorded"]);
 
 export type FeePolicyOutcome = S.Schema.Type<typeof FeePolicyOutcome>;
 
@@ -327,7 +339,7 @@ export const RecurringSchedule = S.Struct({
   id: S.String,
   student_rate_id: S.String,
   student_id: S.String,
-  day_of_week: S.Number.pipe(S.int(), S.between(1, 7)),
+  day_of_week: S.Number.pipe(S.check(S.isInt()), S.check(S.isBetween({ minimum: 1, maximum: 7 }))),
   local_start_time: S.String,
   timezone: S.String,
   starts_on: S.String,
@@ -337,12 +349,12 @@ export const RecurringSchedule = S.Struct({
 
 export type RecurringSchedule = S.Schema.Type<typeof RecurringSchedule>;
 
-export const PaymentGenerationStatus = S.Union(
+export const PaymentGenerationStatus = S.Union([
   S.Literal("pending"),
   S.Literal("processing"),
   S.Literal("generated"),
   S.Literal("failed"),
-);
+]);
 
 export type PaymentGenerationStatus = S.Schema.Type<typeof PaymentGenerationStatus>;
 
@@ -454,33 +466,33 @@ export const InviteSearch = S.Struct({
 
 export type InviteSearch = S.Schema.Type<typeof InviteSearch>;
 
-export const BillStatus = S.Union(
+export const BillStatus = S.Union([
   S.Literal("draft"),
   S.Literal("issued"),
   S.Literal("paid"),
   S.Literal("cancelled"),
   S.Literal("void"),
-);
+]);
 
 export type BillStatus = S.Schema.Type<typeof BillStatus>;
 
-export const PaymentMethod = S.Union(
+export const PaymentMethod = S.Union([
   S.Literal("cash"),
   S.Literal("check"),
   S.Literal("card"),
   S.Literal("bank_transfer"),
   S.Literal("other"),
-);
+]);
 
 export type PaymentMethod = S.Schema.Type<typeof PaymentMethod>;
 
-export const LineItemType = S.Union(
+export const LineItemType = S.Union([
   S.Literal("lesson"),
   S.Literal("single_booking"),
   S.Literal("fee"),
   S.Literal("adjustment"),
   S.Literal("credit"),
-);
+]);
 
 export type LineItemType = S.Schema.Type<typeof LineItemType>;
 
@@ -601,42 +613,50 @@ export const FamilyBillDetailResponse = S.Struct({
   paid_at: S.NullOr(S.String),
   cancelled_at: S.NullOr(S.String),
   voided_at: S.NullOr(S.String),
-  line_items: S.Array(S.Struct({
-    id: S.String,
-    bill_id: S.String,
-    student_id: S.String,
-    line_type: LineItemType,
-    description: S.String,
-    quantity: S.Number,
-    unit_price_cents: S.Number,
-    amount_cents: S.Number,
-    created_at: S.String,
-  })),
-  adjustments: S.Array(S.Struct({
-    id: S.String,
-    bill_id: S.String,
-    amount_cents: S.Number,
-    created_at: S.String,
-  })),
-  credit_applications: S.Array(S.Struct({
-    id: S.String,
-    credit_id: S.String,
-    bill_id: S.String,
-    amount_cents: S.Number,
-    created_at: S.String,
-  })),
+  line_items: S.Array(
+    S.Struct({
+      id: S.String,
+      bill_id: S.String,
+      student_id: S.String,
+      line_type: LineItemType,
+      description: S.String,
+      quantity: S.Number,
+      unit_price_cents: S.Number,
+      amount_cents: S.Number,
+      created_at: S.String,
+    }),
+  ),
+  adjustments: S.Array(
+    S.Struct({
+      id: S.String,
+      bill_id: S.String,
+      amount_cents: S.Number,
+      created_at: S.String,
+    }),
+  ),
+  credit_applications: S.Array(
+    S.Struct({
+      id: S.String,
+      credit_id: S.String,
+      bill_id: S.String,
+      amount_cents: S.Number,
+      created_at: S.String,
+    }),
+  ),
 });
 export type FamilyBillDetailResponse = S.Schema.Type<typeof FamilyBillDetailResponse>;
 
 export const FamilyPaymentDetail = S.Struct({
   ...FamilyPayment.fields,
-  allocations: S.Array(S.Struct({
-    id: S.String,
-    payment_id: S.String,
-    bill_id: S.String,
-    amount_cents: S.Number,
-    created_at: S.String,
-  })),
+  allocations: S.Array(
+    S.Struct({
+      id: S.String,
+      payment_id: S.String,
+      bill_id: S.String,
+      amount_cents: S.Number,
+      created_at: S.String,
+    }),
+  ),
 });
 export type FamilyPaymentDetail = S.Schema.Type<typeof FamilyPaymentDetail>;
 
@@ -777,9 +797,9 @@ export const FamilyDiscount = S.Struct({
   id: S.String,
   family_id: S.String,
   label: S.String,
-  discount_type: S.Union(S.Literal("percentage"), S.Literal("fixed")),
+  discount_type: S.Literals(["percentage", "fixed"]),
   discount_value: S.Number,
-  applies_to: S.Union(S.Literal("all"), S.Literal("tuition"), S.Literal("fees")),
+  applies_to: S.Union([S.Literal("all"), S.Literal("tuition"), S.Literal("fees")]),
   effective_from: S.String,
   effective_until: S.NullOr(S.String),
   is_active: S.Boolean,
@@ -795,7 +815,7 @@ export const TaxRate = S.Struct({
   label: S.String,
   jurisdiction: S.String,
   rate_percent: S.Number,
-  applies_to: S.Union(S.Literal("all"), S.Literal("tuition"), S.Literal("fees")),
+  applies_to: S.Union([S.Literal("all"), S.Literal("tuition"), S.Literal("fees")]),
   effective_from: S.String,
   effective_until: S.NullOr(S.String),
   is_active: S.Boolean,
@@ -853,7 +873,7 @@ export const CreditApplication = S.Struct({
 export type CreditApplication = S.Schema.Type<typeof CreditApplication>;
 
 export const CreateChildPayload = S.Struct({
-  name: S.String.pipe(S.minLength(1), S.maxLength(200)),
+  name: S.String.pipe(S.check(S.isMinLength(1)), S.check(S.isMaxLength(200))),
 });
 
 export type CreateChildPayload = S.Schema.Type<typeof CreateChildPayload>;

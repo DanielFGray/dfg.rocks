@@ -39,7 +39,9 @@ export function QrInviteModal({ open, onClose, families, onSuccess }: QrInviteMo
             invited_role: invitedRole as "parent" | "student",
           }
         : { invited_role: invitedRole as "parent" | "student" };
-      return Effect.runPromise(api.admin.qrInvite({ path: { familyId: targetId }, payload: body }));
+      return Effect.runPromise(
+        api.admin.qrInvite({ params: { familyId: targetId }, payload: body }),
+      );
     },
     onSuccess: (data) => {
       if (data) setQrUrl(data.url);

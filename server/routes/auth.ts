@@ -1,6 +1,6 @@
-import * as HttpApi from "@effect/platform/HttpApi";
-import * as HttpApiBuilder from "@effect/platform/HttpApiBuilder";
-import * as HttpServerResponse from "@effect/platform/HttpServerResponse";
+import * as HttpApi from "effect/http-api/HttpApi";
+import * as HttpApiBuilder from "effect/http-api/HttpApiBuilder";
+import * as HttpServerResponse from "effect/http/HttpServerResponse";
 import { Effect } from "effect";
 import { authGroup } from "../../shared/httpApi.js";
 import { adaptHttpApiErrors } from "../httpApiErrors.js";
@@ -31,9 +31,11 @@ export function makeAuthLayer() {
         Effect.fnUntraced(function* ({ request, payload }) {
           yield* csrfCheck(request.headers);
           yield* checkRateLimit("login", request.headers, 10, 60000);
-          const result = yield* AuthService.login(payload);
-          const { email } = yield* UserService.primaryEmailForUser(result.user.user_id);
-          let response = HttpServerResponse.unsafeJson({
+          const result = yield* AuthService.use((authService) => authService.login(payload));
+          const { email } = yield* UserService.use((userService) =>
+            userService.primaryEmailForUser(result.user.user_id),
+          );
+          let response = HttpServerResponse.jsonUnsafe({
             id: result.user.user_id,
             username: result.user.username,
             name: result.user.name ?? "",
@@ -50,7 +52,9 @@ export function makeAuthLayer() {
         Effect.fnUntraced(function* ({ request, payload }) {
           yield* csrfCheck(request.headers);
           yield* checkRateLimit("magic-link", request.headers, 5, 60000);
-          yield* AuthRouteService.generateMagicLink(payload.email);
+          yield* AuthRouteService.use((authRouteService) =>
+            authRouteService.generateMagicLink(payload.email),
+          );
           return { success: true as const };
         }, adaptAuthHttpApiErrors),
       )
@@ -58,8 +62,10 @@ export function makeAuthLayer() {
         "verifyMagicLink",
         Effect.fnUntraced(function* ({ request, payload }) {
           yield* csrfCheck(request.headers);
-          const session = yield* AuthRouteService.consumeMagicLink(payload.token);
-          let response = HttpServerResponse.unsafeJson(session.response);
+          const session = yield* AuthRouteService.use((authRouteService) =>
+            authRouteService.consumeMagicLink(payload.token),
+          );
+          let response = HttpServerResponse.jsonUnsafe(session.response);
           response = yield* setSessionCookie(response, session.token, session.expiresAt);
           return response;
         }, adaptAuthHttpApiErrors),
@@ -70,15 +76,17 @@ export function makeAuthLayer() {
           yield* csrfCheck(request.headers);
           const token = request.cookies.session;
           const cookieId = token ? cookieIdFromToken(token) : undefined;
-          yield* AuthService.logout(cookieId);
-          return expireSessionCookie(HttpServerResponse.unsafeJson({ success: true as const }));
+          yield* AuthService.use((authService) => authService.logout(cookieId));
+          return yield* expireSessionCookie(
+            HttpServerResponse.jsonUnsafe({ success: true as const }),
+          );
         }, adaptAuthHttpApiErrors),
       )
       .handle(
         "forgotPassword",
         Effect.fnUntraced(function* ({ request, payload }) {
           yield* csrfCheck(request.headers);
-          yield* AuthService.forgotPassword(payload);
+          yield* AuthService.use((authService) => authService.forgotPassword(payload));
           return { success: true as const };
         }, adaptAuthHttpApiErrors),
       )
@@ -86,8 +94,10 @@ export function makeAuthLayer() {
         "resetPassword",
         Effect.fnUntraced(function* ({ request, payload }) {
           yield* csrfCheck(request.headers);
-          const result = yield* AuthService.resetPassword(payload);
-          let response = HttpServerResponse.unsafeJson({
+          const result = yield* AuthService.use((authService) =>
+            authService.resetPassword(payload),
+          );
+          let response = HttpServerResponse.jsonUnsafe({
             success: true as const,
           });
           response = yield* setSessionCookie(response, result.token, result.expiresAt);
@@ -97,7 +107,9 @@ export function makeAuthLayer() {
       .handle(
         "me",
         Effect.fnUntraced(function* ({ request }) {
-          const session = yield* SessionService.validateSessionToken(request.cookies.session);
+          const session = yield* SessionService.use((sessionService) =>
+            sessionService.validateSessionToken(request.cookies.session),
+          );
           if (!session) {
             return {
               user: null,
@@ -107,10 +119,12 @@ export function makeAuthLayer() {
               activeStudent: null,
             };
           }
-          return yield* AuthRouteService.me(
-            session.session.id,
-            session.user.id,
-            session.session.active_student_id,
+          return yield* AuthRouteService.use((authRouteService) =>
+            authRouteService.me(
+              session.session.id,
+              session.user.id,
+              session.session.active_student_id,
+            ),
           );
         }, adaptAuthHttpApiErrors),
       )
@@ -118,11 +132,15 @@ export function makeAuthLayer() {
         "resendVerification",
         Effect.fnUntraced(function* ({ request }) {
           yield* csrfCheck(request.headers);
-          const session = yield* SessionService.validateSessionToken(request.cookies.session);
+          const session = yield* SessionService.use((sessionService) =>
+            sessionService.validateSessionToken(request.cookies.session),
+          );
           if (!session) {
             return { success: true as const };
           }
-          yield* AuthRouteService.resendVerification(session.session.id, session.user.id);
+          yield* AuthRouteService.use((authRouteService) =>
+            authRouteService.resendVerification(session.session.id, session.user.id),
+          );
           return { success: true as const };
         }, adaptAuthHttpApiErrors),
       ),
