@@ -8,19 +8,24 @@ Music lessons business site + student/admin portal. React + TanStack Start front
 bun run dev              # Start all services (app, typecheck, worker)
 bun run dev:app          # Vite + TanStack Start dev server (port 3000)
 bun run typecheck        # tsc --noEmit -p tsconfig.app.json
-bun run db:setup         # Full DB setup (docker + init + reset + migrate)
-bun run db:reset         # Drop and recreate DB, reapply all migrations
-bun run db:latest        # Apply committed and current/ migrations
-bun -b graphile-migrate watch --once  # Apply current/ migrations
+bun run db:up            # Start the shared ops cluster and write DB URLs to .env
+bun run db:setup         # db:up, then db:reset
+bun run db:reset         # Re-provision dfg_rocks through ops, then db:latest
+bun run db:latest        # Install the worker schema, apply committed and current/ migrations
+bun run gm <command>     # graphile-migrate with .env loaded
 bun run db:types         # Regenerate Kysely types from DB schema
 bun run test:e2e         # Playwright E2E tests
 ```
+
+## Local database
+
+Local Postgres is the shared cluster from `ops dev db` (container `ops-dev-pg17`, 127.0.0.1:5417), declared by `cartridge.json`. `ops dev db up` creates `dfg_rocks`, `dfg_rocks_shadow` and `dfg_rocks_test` with the same roles and extensions as production, and writes `DATABASE_URL`, `AUTH_DATABASE_URL`, `SHADOW_DATABASE_URL` and `TEST_DATABASE_URL` to `.env`. It writes no root URL. Unit, worker and E2E tests use `dfg_rocks_test` through `scripts/testDatabase.ts`, which resets it with `ops dev db reset`. `bun -b` does not load `.env`, so scripts that run a binary pass `--env-file=.env`.
 
 ## Deploy
 
 Production runs on the server-ansible platform (`~/build/server-ansible`), described by `cartridge.json`. `ops release` builds the Dockerfile from committed HEAD, so the image never sees `.env` or `generated/`. Traefik ends TLS and sets `X-Real-Ip`, the only client-address header the rate limiter trusts. The platform creates `dfg_rocks_owner` and `dfg_rocks_visitor` group roles, a migration login in the owner role, and a NOINHERIT API login in the visitor role. The server prestart runs `bun run migrate`, which installs the graphile-worker schema and applies committed migrations.
 
-`server/assertEnv.ts` holds only what the server and worker read at runtime. Local database setup values live in `scripts/devEnv.ts`.
+`server/assertEnv.ts` holds only what the server and worker read at runtime. `scripts/devEnv.ts` adds the admin seed values.
 
 ## Architecture
 

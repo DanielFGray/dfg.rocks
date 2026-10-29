@@ -1,16 +1,10 @@
 // @ts-check
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import pg from "pg";
+import { testDatabaseEnv } from "../../scripts/testDatabase.ts";
 
-function testDatabaseUrl(raw) {
-  if (!raw) return raw;
-  const url = new URL(raw);
-  if (!url.pathname.endsWith("_test")) url.pathname = `${url.pathname}_test`;
-  return url.toString();
-}
-
-const DATABASE_URL = testDatabaseUrl(process.env.DATABASE_URL);
-if (!DATABASE_URL) throw new Error("DATABASE_URL required");
+const testEnv = testDatabaseEnv();
+const DATABASE_URL = testEnv.DATABASE_URL;
 
 /** @type {pg.PoolClient} */
 let client;
@@ -338,7 +332,7 @@ describe("bills__issue_monthly — SQL function", () => {
   test("10. security — visitor role cannot execute billing issue functions", async () => {
     // Connect as AUTH_DATABASE_URL (authenticator role → visitor after RLS)
     const authPool = new pg.Pool({
-      connectionString: testDatabaseUrl(process.env.AUTH_DATABASE_URL),
+      connectionString: testEnv.AUTH_DATABASE_URL,
     });
     const authClient = await authPool.connect();
     try {

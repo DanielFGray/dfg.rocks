@@ -1,9 +1,6 @@
 begin;
 
-create extension if not exists plpgsql with schema pg_catalog;
-create extension if not exists "uuid-ossp" with schema public;
-create extension if not exists citext with schema public;
-create extension if not exists pgcrypto with schema public;
+-- Extensions come from cartridge.json through `ops dev db`, not from this file.
 
 grant all on database :DATABASE_NAME to :DATABASE_OWNER;
 

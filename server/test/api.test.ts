@@ -100,8 +100,6 @@ describe("DFG Portal API", () => {
         ...process.env,
         DATABASE_URL: dbUrl,
         AUTH_DATABASE_URL: authDbUrl,
-        ROOT_DATABASE_URL: forceIpv4(process.env.ROOT_DATABASE_URL || ""),
-        DATABASE_HOST: "127.0.0.1",
         NOCONFIRM: "1",
         NODE_ENV: "test",
         PORT: "0",
