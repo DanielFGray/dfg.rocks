@@ -9,7 +9,7 @@
     "typecheck": "tsc --noEmit",
     "typecheck:watch": "tsc --noEmit --watch",
     "build": "NODE_ENV=production bun --env-file=.env -b vite build",
-    "start": "NODE_ENV=production bun dist/server/server.js",
+    "start": "NODE_ENV=production bun serve.ts",
     "preview": "bun -b vite preview",
     "gm": "bun --env-file=.env -b graphile-migrate",
     "db:up": "ops dev db up",

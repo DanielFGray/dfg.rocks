@@ -1,23 +1,26 @@
 #!/usr/bin/env bun
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { resetTestDatabase, testDatabaseEnv } from "./testDatabase.js";
 
-const vitePort = process.env.PLAYWRIGHT_VITE_PORT || process.env.VITE_PORT || "4174";
+// E2E runs against the production build, so tests see what ships and no file
+// write can trigger a dev-server reload mid-test. The server still runs with
+// NODE_ENV=test, which mounts the testing API at runtime.
+const port = process.env.PLAYWRIGHT_VITE_PORT || process.env.VITE_PORT || "4174";
 const childEnv: NodeJS.ProcessEnv = {
   ...process.env,
   ...testDatabaseEnv(),
-  VITE_ROOT_URL: `http://127.0.0.1:${vitePort}`,
+  // Vite inlines VITE_* variables at build time, so the build needs the E2E origin.
+  VITE_ROOT_URL: `http://127.0.0.1:${port}`,
   HOST: "127.0.0.1",
-  VITE_PORT: vitePort,
+  PORT: port,
 };
 
 resetTestDatabase();
 
-const server = spawn("bun", ["-b", "vite", "dev"], {
-  cwd: process.cwd(),
-  env: childEnv,
-  stdio: "inherit",
-});
+const build = spawnSync("bun", ["run", "build"], { env: childEnv, stdio: "inherit" });
+if (build.status !== 0) process.exit(build.status ?? 1);
+
+const server = spawn("bun", ["serve.ts"], { env: childEnv, stdio: "inherit" });
 
 for (const signal of ["SIGINT", "SIGTERM"] as const) {
   process.once(signal, () => server.kill(signal));
