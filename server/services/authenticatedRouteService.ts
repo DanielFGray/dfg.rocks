@@ -3,7 +3,7 @@ import * as S from "effect/Schema";
 import { sql } from "kysely";
 import type { LessonStatus } from "../../shared/schemas.js";
 import { Module, Material, UserRole } from "../../shared/schemas.js";
-import { PgRootDB, withAuthContext, type AuthKyselyDB } from "../db.js";
+import { PgRootDB, withAuthContext, type Database } from "../db.js";
 import { catchPgErrors, HttpError } from "../pgErrors.js";
 import { GoogleCalendarService } from "./googleCalendarService.js";
 import { calculateDepositAmount } from "./billingCalculation.js";
@@ -38,11 +38,14 @@ const lessonColumns = [
   "created_at",
 ] as const;
 
-function assertAssignedMaterial(db: AuthKyselyDB, materialId: string) {
+function assertAssignedMaterial(db: Database, materialId: string) {
   return db
-    .selectFrom("app_public.student_materials")
-    .select("material_id")
-    .where("material_id", "=", materialId)
+    .execute(
+      db
+        .selectFrom("app_public.student_materials")
+        .select("material_id")
+        .where("material_id", "=", materialId),
+    )
     .pipe(
       Effect.head,
       Effect.catchTags({
@@ -51,23 +54,25 @@ function assertAssignedMaterial(db: AuthKyselyDB, materialId: string) {
     );
 }
 
-function testimonialSelect(db: AuthKyselyDB, userId: string) {
-  return db
-    .selectFrom("app_public.testimonials as t")
-    .innerJoin("app_public.users as u", "u.id", "t.user_id")
-    .select([
-      "t.id",
-      "t.user_id",
-      "t.body",
-      "t.is_approved",
-      "t.created_at",
-      "t.updated_at",
-      "u.username",
-      "u.name",
-      "u.role",
-    ])
-    .where("t.user_id", "=", userId)
-    .limit(1);
+function testimonialSelect(db: Database, userId: string) {
+  return db.execute(
+    db
+      .selectFrom("app_public.testimonials as t")
+      .innerJoin("app_public.users as u", "u.id", "t.user_id")
+      .select([
+        "t.id",
+        "t.user_id",
+        "t.body",
+        "t.is_approved",
+        "t.created_at",
+        "t.updated_at",
+        "u.username",
+        "u.name",
+        "u.role",
+      ])
+      .where("t.user_id", "=", userId)
+      .limit(1),
+  );
 }
 
 export class AuthenticatedRouteService extends Effect.Service<AuthenticatedRouteService>()(
@@ -91,7 +96,7 @@ export class AuthenticatedRouteService extends Effect.Service<AuthenticatedRoute
                 ),
               );
             }
-            return q;
+            return db.execute(q);
           });
         }),
 
@@ -100,54 +105,57 @@ export class AuthenticatedRouteService extends Effect.Service<AuthenticatedRoute
             sessionId,
             Effect.fnUntraced(function* (db) {
               const rows = yield* db
-                .with("course_data", (qb) =>
-                  qb
-                    .selectFrom("app_public.courses")
-                    .select(["id", "title", "description", "instrument"])
-                    .where("id", "=", courseId),
-                )
-                .with("mods", (qb) =>
-                  qb
-                    .selectFrom("app_public.modules")
-                    .select(["id", "course_id", "title", "content", "sort_order"])
-                    .where("course_id", "=", courseId)
-                    .orderBy("sort_order"),
-                )
-                .with("mod_mats", (qb) =>
-                  qb
-                    .selectFrom("app_public.module_materials as mm")
-                    .innerJoin("app_public.materials as mat", "mat.id", "mm.material_id")
-                    .innerJoin("app_public.modules as mod", "mod.id", "mm.module_id")
-                    .where("mod.course_id", "=", courseId)
+                .execute(
+                  db
+                    .with("course_data", (qb) =>
+                      qb
+                        .selectFrom("app_public.courses")
+                        .select(["id", "title", "description", "instrument"])
+                        .where("id", "=", courseId),
+                    )
+                    .with("mods", (qb) =>
+                      qb
+                        .selectFrom("app_public.modules")
+                        .select(["id", "course_id", "title", "content", "sort_order"])
+                        .where("course_id", "=", courseId)
+                        .orderBy("sort_order"),
+                    )
+                    .with("mod_mats", (qb) =>
+                      qb
+                        .selectFrom("app_public.module_materials as mm")
+                        .innerJoin("app_public.materials as mat", "mat.id", "mm.material_id")
+                        .innerJoin("app_public.modules as mod", "mod.id", "mm.module_id")
+                        .where("mod.course_id", "=", courseId)
+                        .select((eb) => [
+                          "mm.module_id",
+                          "mat.id",
+                          "mat.title",
+                          "mat.original_filename",
+                          "mat.mime_type",
+                          eb.cast("mat.file_size", "integer").as("file_size"),
+                          "mat.is_global",
+                          "mat.notation_tracks",
+                          "mm.sort_order",
+                        ])
+                        .orderBy("mm.sort_order"),
+                    )
+                    .selectFrom("course_data")
+                    .selectAll("course_data")
                     .select((eb) => [
-                      "mm.module_id",
-                      "mat.id",
-                      "mat.title",
-                      "mat.original_filename",
-                      "mat.mime_type",
-                      eb.cast("mat.file_size", "integer").as("file_size"),
-                      "mat.is_global",
-                      "mat.notation_tracks",
-                      "mm.sort_order",
-                    ])
-                    .orderBy("mm.sort_order"),
+                      eb.fn
+                        .coalesce(
+                          sql`(SELECT json_agg(row_to_json(mods.*)) FROM mods)`,
+                          sql`'[]'::json`,
+                        )
+                        .as("modules_json"),
+                      eb.fn
+                        .coalesce(
+                          sql`(SELECT json_agg(row_to_json(mod_mats.*)) FROM mod_mats)`,
+                          sql`'[]'::json`,
+                        )
+                        .as("materials_json"),
+                    ]),
                 )
-                .selectFrom("course_data")
-                .selectAll("course_data")
-                .select((eb) => [
-                  eb.fn
-                    .coalesce(
-                      sql`(SELECT json_agg(row_to_json(mods.*)) FROM mods)`,
-                      sql`'[]'::json`,
-                    )
-                    .as("modules_json"),
-                  eb.fn
-                    .coalesce(
-                      sql`(SELECT json_agg(row_to_json(mod_mats.*)) FROM mod_mats)`,
-                      sql`'[]'::json`,
-                    )
-                    .as("materials_json"),
-                ])
                 .pipe(
                   Effect.head,
                   Effect.catchTags({
@@ -190,20 +198,22 @@ export class AuthenticatedRouteService extends Effect.Service<AuthenticatedRoute
           },
         ) {
           return yield* withAuthContext(sessionId, (db) =>
-            db
-              .selectFrom("app_public.materials")
-              .select((eb) => [
-                "id",
-                "title",
-                "original_filename",
-                "mime_type",
-                eb.cast("file_size", "integer").as("file_size"),
-                "is_global",
-                "notation_tracks",
-              ])
-              .orderBy("created_at", "desc")
-              .limit(values.limit)
-              .offset(values.offset),
+            db.execute(
+              db
+                .selectFrom("app_public.materials")
+                .select((eb) => [
+                  "id",
+                  "title",
+                  "original_filename",
+                  "mime_type",
+                  eb.cast("file_size", "integer").as("file_size"),
+                  "is_global",
+                  "notation_tracks",
+                ])
+                .orderBy("created_at", "desc")
+                .limit(values.limit)
+                .offset(values.offset),
+            ),
           );
         }),
 
@@ -225,7 +235,7 @@ export class AuthenticatedRouteService extends Effect.Service<AuthenticatedRoute
             if (studentId) {
               q = q.where("sm.student_id", "=", studentId);
             }
-            return q;
+            return db.execute(q);
           });
         }),
 
@@ -241,18 +251,20 @@ export class AuthenticatedRouteService extends Effect.Service<AuthenticatedRoute
             values.assignedTrackIndex,
           );
           yield* withAuthContext(values.sessionId, (db) =>
-            db
-              .insertInto("app_public.student_materials")
-              .values({
-                student_id: values.studentId,
-                material_id: values.materialId,
-                assigned_track_index: assignedTrackIndex,
-              })
-              .onConflict((oc) =>
-                oc.columns(["student_id", "material_id"]).doUpdateSet({
+            db.execute(
+              db
+                .insertInto("app_public.student_materials")
+                .values({
+                  student_id: values.studentId,
+                  material_id: values.materialId,
                   assigned_track_index: assignedTrackIndex,
-                }),
-              ),
+                })
+                .onConflict((oc) =>
+                  oc.columns(["student_id", "material_id"]).doUpdateSet({
+                    assigned_track_index: assignedTrackIndex,
+                  }),
+                ),
+            ),
           );
         }),
 
@@ -262,10 +274,12 @@ export class AuthenticatedRouteService extends Effect.Service<AuthenticatedRoute
           materialId: string,
         ) {
           yield* withAuthContext(sessionId, (db) =>
-            db
-              .deleteFrom("app_public.student_materials")
-              .where("student_id", "=", studentId)
-              .where("material_id", "=", materialId),
+            db.execute(
+              db
+                .deleteFrom("app_public.student_materials")
+                .where("student_id", "=", studentId)
+                .where("material_id", "=", materialId),
+            ),
           );
         }),
 
@@ -287,7 +301,7 @@ export class AuthenticatedRouteService extends Effect.Service<AuthenticatedRoute
               if (studentId) {
                 query = query.where("student_id", "=", studentId);
               }
-              return yield* query;
+              return yield* db.execute(query);
             }),
           );
         }),
@@ -303,21 +317,24 @@ export class AuthenticatedRouteService extends Effect.Service<AuthenticatedRoute
             values.sessionId,
             Effect.fnUntraced(function* (db) {
               return yield* db
-                .insertInto("app_public.practice_logs")
-                .values({
-                  student_id: values.studentId,
-                  material_id: values.materialId,
-                  rating: values.rating ?? null,
-                  duration_minutes: values.durationMinutes ?? null,
-                })
-                .returning([
-                  "id",
-                  "student_id",
-                  "material_id",
-                  "rating",
-                  "duration_minutes",
-                  "logged_at",
-                ])
+                .execute(
+                  db
+                    .insertInto("app_public.practice_logs")
+                    .values({
+                      student_id: values.studentId,
+                      material_id: values.materialId,
+                      rating: values.rating ?? null,
+                      duration_minutes: values.durationMinutes ?? null,
+                    })
+                    .returning([
+                      "id",
+                      "student_id",
+                      "material_id",
+                      "rating",
+                      "duration_minutes",
+                      "logged_at",
+                    ]),
+                )
                 .pipe(
                   Effect.head,
                   Effect.catchTags({
@@ -339,28 +356,34 @@ export class AuthenticatedRouteService extends Effect.Service<AuthenticatedRoute
             sessionId,
             Effect.fnUntraced(function* (db) {
               const existing = yield* db
-                .selectFrom("app_public.practice_logs")
-                .selectAll()
-                .where("student_id", "=", studentId)
-                .where("material_id", "=", materialId)
-                .where("rating", "is", null)
-                .orderBy("logged_at", "desc")
-                .limit(1)
+                .execute(
+                  db
+                    .selectFrom("app_public.practice_logs")
+                    .selectAll()
+                    .where("student_id", "=", studentId)
+                    .where("material_id", "=", materialId)
+                    .where("rating", "is", null)
+                    .orderBy("logged_at", "desc")
+                    .limit(1),
+                )
                 .pipe(Effect.head);
 
               if (existing) {
                 return yield* db
-                  .updateTable("app_public.practice_logs")
-                  .set({ rating })
-                  .where("id", "=", existing.id)
-                  .returning([
-                    "id",
-                    "student_id",
-                    "material_id",
-                    "rating",
-                    "duration_minutes",
-                    "logged_at",
-                  ])
+                  .execute(
+                    db
+                      .updateTable("app_public.practice_logs")
+                      .set({ rating })
+                      .where("id", "=", existing.id)
+                      .returning([
+                        "id",
+                        "student_id",
+                        "material_id",
+                        "rating",
+                        "duration_minutes",
+                        "logged_at",
+                      ]),
+                  )
                   .pipe(
                     Effect.head,
                     Effect.catchTags({
@@ -371,20 +394,23 @@ export class AuthenticatedRouteService extends Effect.Service<AuthenticatedRoute
               }
 
               return yield* db
-                .insertInto("app_public.practice_logs")
-                .values({
-                  student_id: studentId,
-                  material_id: materialId,
-                  rating,
-                })
-                .returning([
-                  "id",
-                  "student_id",
-                  "material_id",
-                  "rating",
-                  "duration_minutes",
-                  "logged_at",
-                ])
+                .execute(
+                  db
+                    .insertInto("app_public.practice_logs")
+                    .values({
+                      student_id: studentId,
+                      material_id: materialId,
+                      rating,
+                    })
+                    .returning([
+                      "id",
+                      "student_id",
+                      "material_id",
+                      "rating",
+                      "duration_minutes",
+                      "logged_at",
+                    ]),
+                )
                 .pipe(
                   Effect.head,
                   Effect.catchTags({
@@ -407,26 +433,29 @@ export class AuthenticatedRouteService extends Effect.Service<AuthenticatedRoute
             Effect.fnUntraced(function* (db) {
               yield* assertAssignedMaterial(db, values.materialId);
               return yield* db
-                .insertInto("app_public.assignment_progress")
-                .values((eb) => ({
-                  student_id: values.studentId,
-                  material_id: values.materialId,
-                  listened_seconds: values.seconds,
-                  last_played_at: eb.fn("now", []),
-                  updated_at: eb.fn("now", []),
-                }))
-                .onConflict((oc) =>
-                  oc.columns(["student_id", "material_id"]).doUpdateSet((eb) => ({
-                    listened_seconds: eb(
-                      eb.ref("app_public.assignment_progress.listened_seconds"),
-                      "+",
-                      values.seconds,
-                    ),
-                    last_played_at: eb.fn("now", []),
-                    updated_at: eb.fn("now", []),
-                  })),
+                .execute(
+                  db
+                    .insertInto("app_public.assignment_progress")
+                    .values((eb) => ({
+                      student_id: values.studentId,
+                      material_id: values.materialId,
+                      listened_seconds: values.seconds,
+                      last_played_at: eb.fn("now", []),
+                      updated_at: eb.fn("now", []),
+                    }))
+                    .onConflict((oc) =>
+                      oc.columns(["student_id", "material_id"]).doUpdateSet((eb) => ({
+                        listened_seconds: eb(
+                          eb.ref("app_public.assignment_progress.listened_seconds"),
+                          "+",
+                          values.seconds,
+                        ),
+                        last_played_at: eb.fn("now", []),
+                        updated_at: eb.fn("now", []),
+                      })),
+                    )
+                    .returning(["material_id", "listened_seconds", "updated_at"]),
                 )
-                .returning(["material_id", "listened_seconds", "updated_at"])
                 .pipe(
                   Effect.head,
                   Effect.catchTags({
@@ -448,14 +477,17 @@ export class AuthenticatedRouteService extends Effect.Service<AuthenticatedRoute
             values.sessionId,
             Effect.fnUntraced(function* (db) {
               const row = yield* db
-                .selectFrom("app_public.student_materials as sm")
-                .leftJoin(
-                  "app_public.assignment_progress as ap",
-                  "ap.material_id",
-                  "sm.material_id",
+                .execute(
+                  db
+                    .selectFrom("app_public.student_materials as sm")
+                    .leftJoin(
+                      "app_public.assignment_progress as ap",
+                      "ap.material_id",
+                      "sm.material_id",
+                    )
+                    .select(["sm.material_id", "ap.listened_seconds"])
+                    .where("sm.material_id", "=", values.materialId),
                 )
-                .select(["sm.material_id", "ap.listened_seconds"])
-                .where("sm.material_id", "=", values.materialId)
                 .pipe(
                   Effect.head,
                   Effect.catchTags({
@@ -464,14 +496,17 @@ export class AuthenticatedRouteService extends Effect.Service<AuthenticatedRoute
                 );
 
               return yield* db
-                .insertInto("app_public.assignment_reviews")
-                .values({
-                  student_id: values.studentId,
-                  material_id: values.materialId,
-                  stars: values.stars,
-                  listened_seconds: row.listened_seconds ?? 0,
-                })
-                .returning(["id", "material_id", "stars", "listened_seconds", "created_at"])
+                .execute(
+                  db
+                    .insertInto("app_public.assignment_reviews")
+                    .values({
+                      student_id: values.studentId,
+                      material_id: values.materialId,
+                      stars: values.stars,
+                      listened_seconds: row.listened_seconds ?? 0,
+                    })
+                    .returning(["id", "material_id", "stars", "listened_seconds", "created_at"]),
+                )
                 .pipe(
                   Effect.head,
                   Effect.catchTags({
@@ -489,9 +524,12 @@ export class AuthenticatedRouteService extends Effect.Service<AuthenticatedRoute
         ) {
           return yield* withAuthContext(sessionId, (db) =>
             db
-              .selectFrom("app_public.assignment_notes")
-              .selectAll()
-              .where("material_id", "=", materialId)
+              .execute(
+                db
+                  .selectFrom("app_public.assignment_notes")
+                  .selectAll()
+                  .where("material_id", "=", materialId),
+              )
               .pipe(Effect.head, Effect.option, Effect.map(Option.getOrNull)),
           );
         }),
@@ -506,19 +544,29 @@ export class AuthenticatedRouteService extends Effect.Service<AuthenticatedRoute
             values.sessionId,
             Effect.fnUntraced(function* (db) {
               return yield* db
-                .insertInto("app_public.assignment_notes")
-                .values({
-                  student_id: values.studentId,
-                  material_id: values.materialId,
-                  body: values.body,
-                })
-                .onConflict((oc) =>
-                  oc.columns(["student_id", "material_id"]).doUpdateSet({
-                    body: values.body,
-                    updated_at: new Date(),
-                  }),
+                .execute(
+                  db
+                    .insertInto("app_public.assignment_notes")
+                    .values({
+                      student_id: values.studentId,
+                      material_id: values.materialId,
+                      body: values.body,
+                    })
+                    .onConflict((oc) =>
+                      oc.columns(["student_id", "material_id"]).doUpdateSet({
+                        body: values.body,
+                        updated_at: new Date(),
+                      }),
+                    )
+                    .returning([
+                      "id",
+                      "student_id",
+                      "material_id",
+                      "body",
+                      "created_at",
+                      "updated_at",
+                    ]),
                 )
-                .returning(["id", "student_id", "material_id", "body", "created_at", "updated_at"])
                 .pipe(
                   Effect.head,
                   Effect.catchTags({
@@ -561,7 +609,7 @@ export class AuthenticatedRouteService extends Effect.Service<AuthenticatedRoute
                   eb.or([eb("sender_id", "=", studentId), eb("recipient_id", "=", studentId)]),
                 );
               }
-              return yield* query;
+              return yield* db.execute(query);
             }),
           );
         }),
@@ -576,10 +624,13 @@ export class AuthenticatedRouteService extends Effect.Service<AuthenticatedRoute
           if (!recipientId) {
             const admin = yield* withAuthContext(values.sessionId, (db) =>
               db
-                .selectFrom("app_public.users")
-                .select("id")
-                .where((eb) => eb.or([eb("role", "=", "admin"), eb("role", "=", "teacher")]))
-                .limit(1)
+                .execute(
+                  db
+                    .selectFrom("app_public.users")
+                    .select("id")
+                    .where((eb) => eb.or([eb("role", "=", "admin"), eb("role", "=", "teacher")]))
+                    .limit(1),
+                )
                 .pipe(
                   Effect.head,
                   Effect.catchTags({
@@ -591,14 +642,16 @@ export class AuthenticatedRouteService extends Effect.Service<AuthenticatedRoute
           }
           return yield* withAuthContext(values.sessionId, (db) =>
             Effect.head(
-              db
-                .insertInto("app_public.messages")
-                .values({
-                  sender_id: values.senderId,
-                  recipient_id: recipientId,
-                  body: values.body,
-                })
-                .returning(["id", "sender_id", "recipient_id", "body", "is_read", "created_at"]),
+              db.execute(
+                db
+                  .insertInto("app_public.messages")
+                  .values({
+                    sender_id: values.senderId,
+                    recipient_id: recipientId,
+                    body: values.body,
+                  })
+                  .returning(["id", "sender_id", "recipient_id", "body", "is_read", "created_at"]),
+              ),
             ).pipe(
               Effect.catchTags({
                 NoSuchElementException: () => HttpError.make(500, "Failed to send message"),
@@ -612,10 +665,12 @@ export class AuthenticatedRouteService extends Effect.Service<AuthenticatedRoute
           messageId: string,
         ) {
           yield* withAuthContext(sessionId, (db) =>
-            db
-              .updateTable("app_public.messages")
-              .set({ is_read: true })
-              .where("id", "=", messageId),
+            db.execute(
+              db
+                .updateTable("app_public.messages")
+                .set({ is_read: true })
+                .where("id", "=", messageId),
+            ),
           );
         }),
 
@@ -665,7 +720,7 @@ export class AuthenticatedRouteService extends Effect.Service<AuthenticatedRoute
               if (studentId) {
                 query = query.where("student_id", "=", studentId);
               }
-              return yield* query;
+              return yield* db.execute(query);
             }),
           );
         }),
@@ -675,23 +730,26 @@ export class AuthenticatedRouteService extends Effect.Service<AuthenticatedRoute
             sessionId,
             Effect.fnUntraced(function* (db) {
               return yield* db
-                .selectFrom("app_public.lessons")
-                .select([
-                  "id",
-                  "student_id",
-                  "gcal_event_id",
-                  "scheduled_at",
-                  "duration_minutes",
-                  "location_type",
-                  "status",
-                  "cancellation_reason",
-                  "cancelled_at",
-                  "completed_at",
-                  "cancellation_fee_cents",
-                  "remainder_due_cents",
-                  "created_at",
-                ])
-                .where("id", "=", lessonId)
+                .execute(
+                  db
+                    .selectFrom("app_public.lessons")
+                    .select([
+                      "id",
+                      "student_id",
+                      "gcal_event_id",
+                      "scheduled_at",
+                      "duration_minutes",
+                      "location_type",
+                      "status",
+                      "cancellation_reason",
+                      "cancelled_at",
+                      "completed_at",
+                      "cancellation_fee_cents",
+                      "remainder_due_cents",
+                      "created_at",
+                    ])
+                    .where("id", "=", lessonId),
+                )
                 .pipe(
                   Effect.head,
                   Effect.catchTags({
@@ -704,10 +762,12 @@ export class AuthenticatedRouteService extends Effect.Service<AuthenticatedRoute
 
         requestDeleteAccount: Effect.fn("requestDeleteAccount")(function* (sessionId: string) {
           yield* withAuthContext(sessionId, (db) =>
-            db.selectNoFrom((eb) =>
-              eb
-                .fn<unknown>("app_public.request_account_deletion", [])
-                .as("request_account_deletion"),
+            db.execute(
+              db.selectNoFrom((eb) =>
+                eb
+                  .fn<unknown>("app_public.request_account_deletion", [])
+                  .as("request_account_deletion"),
+              ),
             ),
           );
         }),
@@ -718,10 +778,12 @@ export class AuthenticatedRouteService extends Effect.Service<AuthenticatedRoute
         ) {
           const result = yield* withAuthContext(sessionId, (db) =>
             db
-              .selectNoFrom((eb) =>
-                eb
-                  .fn<boolean>("app_public.confirm_account_deletion", [eb.val(token)])
-                  .as("confirm_account_deletion"),
+              .execute(
+                db.selectNoFrom((eb) =>
+                  eb
+                    .fn<boolean>("app_public.confirm_account_deletion", [eb.val(token)])
+                    .as("confirm_account_deletion"),
+                ),
               )
               .pipe(Effect.head),
           );
@@ -733,20 +795,23 @@ export class AuthenticatedRouteService extends Effect.Service<AuthenticatedRoute
             sessionId,
             Effect.fnUntraced(function* (db) {
               return yield* db
-                .selectFrom("app_public.lesson_notes")
-                .select([
-                  "id",
-                  "lesson_id",
-                  "topics_covered",
-                  "homework",
-                  "progress_observations",
-                  "notes",
-                  "material_ids",
-                  "draft",
-                  "created_at",
-                  "updated_at",
-                ])
-                .where("lesson_id", "=", lessonId)
+                .execute(
+                  db
+                    .selectFrom("app_public.lesson_notes")
+                    .select([
+                      "id",
+                      "lesson_id",
+                      "topics_covered",
+                      "homework",
+                      "progress_observations",
+                      "notes",
+                      "material_ids",
+                      "draft",
+                      "created_at",
+                      "updated_at",
+                    ])
+                    .where("lesson_id", "=", lessonId),
+                )
                 .pipe(
                   Effect.head,
                   Effect.catchTags({
@@ -787,17 +852,19 @@ export class AuthenticatedRouteService extends Effect.Service<AuthenticatedRoute
             if (studentId) {
               q = q.where("l.student_id", "=", studentId);
             }
-            return q;
+            return db.execute(q);
           });
         }),
 
         myEmails: Effect.fn("myEmails")(function* (sessionId: string) {
           return yield* withAuthContext(sessionId, (db) =>
-            db
-              .selectFrom("app_public.user_emails")
-              .select(["id", "email", "is_verified", "is_primary", "created_at"])
-              .orderBy("is_primary", "desc")
-              .orderBy("created_at", "asc"),
+            db.execute(
+              db
+                .selectFrom("app_public.user_emails")
+                .select(["id", "email", "is_verified", "is_primary", "created_at"])
+                .orderBy("is_primary", "desc")
+                .orderBy("created_at", "asc"),
+            ),
           );
         }),
 
@@ -806,9 +873,12 @@ export class AuthenticatedRouteService extends Effect.Service<AuthenticatedRoute
             sessionId,
             Effect.fnUntraced(function* (db) {
               return yield* db
-                .insertInto("app_public.user_emails")
-                .values({ email })
-                .returning(["id", "email", "is_verified", "is_primary", "created_at"])
+                .execute(
+                  db
+                    .insertInto("app_public.user_emails")
+                    .values({ email })
+                    .returning(["id", "email", "is_verified", "is_primary", "created_at"]),
+                )
                 .pipe(
                   Effect.head,
                   Effect.catchTags({
@@ -824,9 +894,12 @@ export class AuthenticatedRouteService extends Effect.Service<AuthenticatedRoute
             sessionId,
             Effect.fnUntraced(function* (db) {
               const email = yield* db
-                .selectFrom("app_public.user_emails")
-                .select(["id", "is_primary"])
-                .where("id", "=", emailId)
+                .execute(
+                  db
+                    .selectFrom("app_public.user_emails")
+                    .select(["id", "is_primary"])
+                    .where("id", "=", emailId),
+                )
                 .pipe(
                   Effect.head,
                   Effect.catchTags({
@@ -836,7 +909,7 @@ export class AuthenticatedRouteService extends Effect.Service<AuthenticatedRoute
               if (email.is_primary) {
                 return yield* new HttpError(400, "Cannot delete primary email");
               }
-              yield* db.deleteFrom("app_public.user_emails").where("id", "=", emailId);
+              yield* db.execute(db.deleteFrom("app_public.user_emails").where("id", "=", emailId));
             }),
           );
         }),
@@ -849,24 +922,29 @@ export class AuthenticatedRouteService extends Effect.Service<AuthenticatedRoute
             sessionId,
             Effect.fnUntraced(function* (db) {
               yield* db
-                .selectFrom("app_public.user_emails")
-                .select(["id"])
-                .where("id", "=", emailId)
+                .execute(
+                  db.selectFrom("app_public.user_emails").select(["id"]).where("id", "=", emailId),
+                )
                 .pipe(
                   Effect.head,
                   Effect.catchTags({
                     NoSuchElementException: () => new HttpError(404, "Email not found"),
                   }),
                 );
-              yield* db.selectNoFrom((eb) =>
-                eb
-                  .fn<unknown>("app_public.make_email_primary", [eb.val(emailId)])
-                  .as("make_email_primary"),
+              yield* db.execute(
+                db.selectNoFrom((eb) =>
+                  eb
+                    .fn<unknown>("app_public.make_email_primary", [eb.val(emailId)])
+                    .as("make_email_primary"),
+                ),
               );
               const updated = yield* db
-                .selectFrom("app_public.user_emails")
-                .select(["id", "email", "is_verified", "is_primary", "created_at"])
-                .where("id", "=", emailId)
+                .execute(
+                  db
+                    .selectFrom("app_public.user_emails")
+                    .select(["id", "email", "is_verified", "is_primary", "created_at"])
+                    .where("id", "=", emailId),
+                )
                 .pipe(
                   Effect.head,
                   Effect.catchTags({
@@ -886,9 +964,12 @@ export class AuthenticatedRouteService extends Effect.Service<AuthenticatedRoute
             sessionId,
             Effect.fnUntraced(function* (db) {
               const email = yield* db
-                .selectFrom("app_public.user_emails")
-                .select(["id", "is_verified"])
-                .where("id", "=", emailId)
+                .execute(
+                  db
+                    .selectFrom("app_public.user_emails")
+                    .select(["id", "is_verified"])
+                    .where("id", "=", emailId),
+                )
                 .pipe(
                   Effect.head,
                   Effect.catchTags({
@@ -898,10 +979,12 @@ export class AuthenticatedRouteService extends Effect.Service<AuthenticatedRoute
               if (email.is_verified) {
                 return yield* new HttpError(400, "Email is already verified");
               }
-              yield* db.selectNoFrom((eb) =>
-                eb
-                  .fn<unknown>("app_public.resend_email_verification_code", [eb.val(emailId)])
-                  .as("resend_email_verification_code"),
+              yield* db.execute(
+                db.selectNoFrom((eb) =>
+                  eb
+                    .fn<unknown>("app_public.resend_email_verification_code", [eb.val(emailId)])
+                    .as("resend_email_verification_code"),
+                ),
               );
             }),
           );
@@ -925,14 +1008,16 @@ export class AuthenticatedRouteService extends Effect.Service<AuthenticatedRoute
           const row = yield* withAuthContext(
             sessionId,
             Effect.fnUntraced(function* (db) {
-              yield* db
-                .insertInto("app_public.testimonials")
-                .values({ body })
-                .onConflict((oc) =>
-                  oc.column("user_id").doUpdateSet({
-                    body,
-                  }),
-                );
+              yield* db.execute(
+                db
+                  .insertInto("app_public.testimonials")
+                  .values({ body })
+                  .onConflict((oc) =>
+                    oc.column("user_id").doUpdateSet({
+                      body,
+                    }),
+                  ),
+              );
               return yield* testimonialSelect(db, userId).pipe(
                 Effect.head,
                 Effect.catchTags({
@@ -953,9 +1038,12 @@ export class AuthenticatedRouteService extends Effect.Service<AuthenticatedRoute
             sessionId,
             Effect.fnUntraced(function* (db) {
               return yield* db
-                .deleteFrom("app_public.testimonials")
-                .where("user_id", "=", userId)
-                .returning(["id"])
+                .execute(
+                  db
+                    .deleteFrom("app_public.testimonials")
+                    .where("user_id", "=", userId)
+                    .returning(["id"]),
+                )
                 .pipe(
                   Effect.head,
                   Effect.catchTags({
@@ -974,15 +1062,18 @@ export class AuthenticatedRouteService extends Effect.Service<AuthenticatedRoute
         }) {
           const row = yield* withAuthContext(values.sessionId, (db) =>
             db
-              .selectFrom("app_public.lessons as l")
-              .innerJoin("app_public.student_rates as sr", (join) =>
-                join
-                  .onRef("sr.student_id", "=", "l.student_id")
-                  .onRef("sr.location_type", "=", "l.location_type"),
+              .execute(
+                db
+                  .selectFrom("app_public.lessons as l")
+                  .innerJoin("app_public.student_rates as sr", (join) =>
+                    join
+                      .onRef("sr.student_id", "=", "l.student_id")
+                      .onRef("sr.location_type", "=", "l.location_type"),
+                  )
+                  .select(["l.scheduled_at", "l.status", "sr.rate_cents", "sr.billing_model"])
+                  .where("l.id", "=", values.lessonId)
+                  .where("l.student_id", "=", values.studentId),
               )
-              .select(["l.scheduled_at", "l.status", "sr.rate_cents", "sr.billing_model"])
-              .where("l.id", "=", values.lessonId)
-              .where("l.student_id", "=", values.studentId)
               .pipe(
                 Effect.head,
                 Effect.catchTags({
@@ -999,10 +1090,13 @@ export class AuthenticatedRouteService extends Effect.Service<AuthenticatedRoute
           }
           const deposit = yield* withAuthContext(values.sessionId, (db) =>
             db
-              .selectFrom("app_public.lesson_deposits")
-              .select("amount_cents")
-              .where("lesson_id", "=", values.lessonId)
-              .where("status", "=", "held")
+              .execute(
+                db
+                  .selectFrom("app_public.lesson_deposits")
+                  .select("amount_cents")
+                  .where("lesson_id", "=", values.lessonId)
+                  .where("status", "=", "held"),
+              )
               .pipe(Effect.head, Effect.option),
           );
           return yield* LessonPolicyService.evaluate({
@@ -1026,23 +1120,26 @@ export class AuthenticatedRouteService extends Effect.Service<AuthenticatedRoute
             values.sessionId,
             Effect.fnUntraced(function* (db) {
               const row = yield* db
-                .selectFrom("app_public.lessons as l")
-                .innerJoin("app_public.student_rates as sr", (join) =>
-                  join
-                    .onRef("sr.student_id", "=", "l.student_id")
-                    .onRef("sr.location_type", "=", "l.location_type"),
+                .execute(
+                  db
+                    .selectFrom("app_public.lessons as l")
+                    .innerJoin("app_public.student_rates as sr", (join) =>
+                      join
+                        .onRef("sr.student_id", "=", "l.student_id")
+                        .onRef("sr.location_type", "=", "l.location_type"),
+                    )
+                    .select([
+                      "l.id",
+                      "l.scheduled_at",
+                      "l.status",
+                      "l.gcal_event_id",
+                      "sr.rate_cents",
+                      "sr.billing_model",
+                    ])
+                    .where("l.id", "=", values.lessonId)
+                    .where("l.student_id", "=", values.studentId)
+                    .forUpdate(),
                 )
-                .select([
-                  "l.id",
-                  "l.scheduled_at",
-                  "l.status",
-                  "l.gcal_event_id",
-                  "sr.rate_cents",
-                  "sr.billing_model",
-                ])
-                .where("l.id", "=", values.lessonId)
-                .where("l.student_id", "=", values.studentId)
-                .forUpdate()
                 .pipe(
                   Effect.head,
                   Effect.catchTags({
@@ -1056,11 +1153,14 @@ export class AuthenticatedRouteService extends Effect.Service<AuthenticatedRoute
                 return yield* new HttpError(409, "Only future lessons can be cancelled");
               }
               const deposit = yield* db
-                .selectFrom("app_public.lesson_deposits")
-                .select(["id", "amount_cents"])
-                .where("lesson_id", "=", row.id)
-                .where("status", "=", "held")
-                .forUpdate()
+                .execute(
+                  db
+                    .selectFrom("app_public.lesson_deposits")
+                    .select(["id", "amount_cents"])
+                    .where("lesson_id", "=", row.id)
+                    .where("status", "=", "held")
+                    .forUpdate(),
+                )
                 .pipe(Effect.head, Effect.option);
               const heldDeposit = Option.getOrNull(deposit);
               const policy = yield* LessonPolicyService.evaluate({
@@ -1072,34 +1172,41 @@ export class AuthenticatedRouteService extends Effect.Service<AuthenticatedRoute
                 now,
               });
               if (heldDeposit && policy.deposit_outcome !== "none") {
-                yield* db
-                  .updateTable("app_public.lesson_deposits")
-                  .set({ status: policy.deposit_outcome })
-                  .where("id", "=", heldDeposit.id);
+                yield* db.execute(
+                  db
+                    .updateTable("app_public.lesson_deposits")
+                    .set({ status: policy.deposit_outcome })
+                    .where("id", "=", heldDeposit.id),
+                );
                 if (row.billing_model === "single_booking") {
-                  yield* db.selectNoFrom((eb) =>
-                    eb
-                      .fn<unknown>("app_public.settle_single_booking_cancellation", [
-                        eb.val(row.id),
-                        eb.val(heldDeposit.amount_cents),
-                        eb.val(policy.deposit_outcome === "captured"),
-                      ])
-                      .as("settled"),
+                  yield* db.execute(
+                    db.selectNoFrom((eb) =>
+                      eb
+                        .fn<unknown>("app_public.settle_single_booking_cancellation", [
+                          eb.val(row.id),
+                          eb.val(heldDeposit.amount_cents),
+                          eb.val(policy.deposit_outcome === "captured"),
+                        ])
+                        .as("settled"),
+                    ),
                   );
                 }
               }
               const lesson = yield* db
-                .updateTable("app_public.lessons")
-                .set({
-                  status: "cancelled",
-                  cancellation_reason: values.reason ?? "student",
-                  cancelled_at: now,
-                  cancellation_fee_cents:
-                    policy.fee_outcome === "recorded" ? policy.amount_cents : 0,
-                  remainder_due_cents: 0,
-                })
-                .where("id", "=", row.id)
-                .returning(lessonColumns)
+                .execute(
+                  db
+                    .updateTable("app_public.lessons")
+                    .set({
+                      status: "cancelled",
+                      cancellation_reason: values.reason ?? "student",
+                      cancelled_at: now,
+                      cancellation_fee_cents:
+                        policy.fee_outcome === "recorded" ? policy.amount_cents : 0,
+                      remainder_due_cents: 0,
+                    })
+                    .where("id", "=", row.id)
+                    .returning(lessonColumns),
+                )
                 .pipe(Effect.head);
               return { lesson, gcalEventId: row.gcal_event_id };
             }),
@@ -1122,10 +1229,13 @@ export class AuthenticatedRouteService extends Effect.Service<AuthenticatedRoute
           }
           const existing = yield* withAuthContext(values.sessionId, (db) =>
             db
-              .selectFrom("app_public.lessons")
-              .select(["scheduled_at", "duration_minutes", "gcal_event_id", "status"])
-              .where("id", "=", values.lessonId)
-              .where("student_id", "=", values.studentId)
+              .execute(
+                db
+                  .selectFrom("app_public.lessons")
+                  .select(["scheduled_at", "duration_minutes", "gcal_event_id", "status"])
+                  .where("id", "=", values.lessonId)
+                  .where("student_id", "=", values.studentId),
+              )
               .pipe(
                 Effect.head,
                 Effect.catchTags({
@@ -1163,16 +1273,25 @@ export class AuthenticatedRouteService extends Effect.Service<AuthenticatedRoute
             values.sessionId,
             Effect.fnUntraced(function* (db) {
               const row = yield* db
-                .selectFrom("app_public.lessons as l")
-                .innerJoin("app_public.student_rates as sr", (join) =>
-                  join
-                    .onRef("sr.student_id", "=", "l.student_id")
-                    .onRef("sr.location_type", "=", "l.location_type"),
+                .execute(
+                  db
+                    .selectFrom("app_public.lessons as l")
+                    .innerJoin("app_public.student_rates as sr", (join) =>
+                      join
+                        .onRef("sr.student_id", "=", "l.student_id")
+                        .onRef("sr.location_type", "=", "l.location_type"),
+                    )
+                    .select([
+                      "l.id",
+                      "l.scheduled_at",
+                      "l.status",
+                      "sr.rate_cents",
+                      "sr.billing_model",
+                    ])
+                    .where("l.id", "=", values.lessonId)
+                    .where("l.student_id", "=", values.studentId)
+                    .forUpdate(),
                 )
-                .select(["l.id", "l.scheduled_at", "l.status", "sr.rate_cents", "sr.billing_model"])
-                .where("l.id", "=", values.lessonId)
-                .where("l.student_id", "=", values.studentId)
-                .forUpdate()
                 .pipe(Effect.head);
               if (
                 row.status !== "scheduled" ||
@@ -1182,11 +1301,14 @@ export class AuthenticatedRouteService extends Effect.Service<AuthenticatedRoute
               }
               if (row.billing_model === "single_booking") {
                 const deposit = yield* db
-                  .selectFrom("app_public.lesson_deposits")
-                  .select(["id", "amount_cents"])
-                  .where("lesson_id", "=", row.id)
-                  .where("status", "=", "held")
-                  .forUpdate()
+                  .execute(
+                    db
+                      .selectFrom("app_public.lesson_deposits")
+                      .select(["id", "amount_cents"])
+                      .where("lesson_id", "=", row.id)
+                      .where("status", "=", "held")
+                      .forUpdate(),
+                  )
                   .pipe(Effect.head, Effect.option);
                 const heldDeposit = Option.getOrNull(deposit);
                 const policy = yield* LessonPolicyService.evaluate({
@@ -1198,26 +1320,33 @@ export class AuthenticatedRouteService extends Effect.Service<AuthenticatedRoute
                   now,
                 });
                 if (heldDeposit && policy.deposit_outcome !== "none") {
-                  yield* db
-                    .updateTable("app_public.lesson_deposits")
-                    .set({ status: policy.deposit_outcome })
-                    .where("id", "=", heldDeposit.id);
+                  yield* db.execute(
+                    db
+                      .updateTable("app_public.lesson_deposits")
+                      .set({ status: policy.deposit_outcome })
+                      .where("id", "=", heldDeposit.id),
+                  );
                 }
-                yield* db.insertInto("app_public.lesson_deposits").values({
-                  lesson_id: row.id,
-                  amount_cents: calculateDepositAmount(row.rate_cents),
-                  status: "held",
-                });
+                yield* db.execute(
+                  db.insertInto("app_public.lesson_deposits").values({
+                    lesson_id: row.id,
+                    amount_cents: calculateDepositAmount(row.rate_cents),
+                    status: "held",
+                  }),
+                );
               }
               return yield* db
-                .updateTable("app_public.lessons")
-                .set({
-                  scheduled_at: values.scheduledAt,
-                  cancellation_fee_cents: 0,
-                  remainder_due_cents: 0,
-                })
-                .where("id", "=", row.id)
-                .returning(lessonColumns)
+                .execute(
+                  db
+                    .updateTable("app_public.lessons")
+                    .set({
+                      scheduled_at: values.scheduledAt,
+                      cancellation_fee_cents: 0,
+                      remainder_due_cents: 0,
+                    })
+                    .where("id", "=", row.id)
+                    .returning(lessonColumns),
+                )
                 .pipe(Effect.head);
             }),
           );
@@ -1251,35 +1380,38 @@ export class AuthenticatedRouteService extends Effect.Service<AuthenticatedRoute
             values.sessionId,
             Effect.fnUntraced(function* (db) {
               const preflight = yield* db
-                .with("ol", (qb) =>
-                  qb
-                    .selectFrom("app_public.lessons")
-                    .select((eb) => eb.fn.countAll<number>().as("overlap_count"))
-                    .where("status", "=", "scheduled")
-                    .where("scheduled_at", "<", slotEnd)
-                    .where(
-                      sql`scheduled_at + (duration_minutes || ' minutes')::interval`,
-                      ">",
-                      values.scheduledAt,
-                    ),
+                .execute(
+                  db
+                    .with("ol", (qb) =>
+                      qb
+                        .selectFrom("app_public.lessons")
+                        .select((eb) => eb.fn.countAll<number>().as("overlap_count"))
+                        .where("status", "=", "scheduled")
+                        .where("scheduled_at", "<", slotEnd)
+                        .where(
+                          sql`scheduled_at + (duration_minutes || ' minutes')::interval`,
+                          ">",
+                          values.scheduledAt,
+                        ),
+                    )
+                    .with("rate", (qb) =>
+                      qb
+                        .selectFrom("app_public.student_rates")
+                        .select(["rate_cents", "lesson_duration_minutes", "billing_model"])
+                        .where("student_id", "=", values.userId)
+                        .where("location_type", "=", values.locationType),
+                    )
+                    .selectFrom("ol")
+                    .select((eb) => [
+                      "ol.overlap_count",
+                      eb.selectFrom("rate").select("rate_cents").as("rate_cents"),
+                      eb
+                        .selectFrom("rate")
+                        .select("lesson_duration_minutes")
+                        .as("lesson_duration_minutes"),
+                      eb.selectFrom("rate").select("billing_model").as("billing_model"),
+                    ]),
                 )
-                .with("rate", (qb) =>
-                  qb
-                    .selectFrom("app_public.student_rates")
-                    .select(["rate_cents", "lesson_duration_minutes", "billing_model"])
-                    .where("student_id", "=", values.userId)
-                    .where("location_type", "=", values.locationType),
-                )
-                .selectFrom("ol")
-                .select((eb) => [
-                  "ol.overlap_count",
-                  eb.selectFrom("rate").select("rate_cents").as("rate_cents"),
-                  eb
-                    .selectFrom("rate")
-                    .select("lesson_duration_minutes")
-                    .as("lesson_duration_minutes"),
-                  eb.selectFrom("rate").select("billing_model").as("billing_model"),
-                ])
                 .pipe(Effect.head);
 
               if (preflight.overlap_count > 0) {
@@ -1304,29 +1436,32 @@ export class AuthenticatedRouteService extends Effect.Service<AuthenticatedRoute
               };
 
               const lesson = yield* db
-                .insertInto("app_public.lessons")
-                .values({
-                  student_id: values.userId,
-                  scheduled_at: values.scheduledAt,
-                  duration_minutes: values.durationMinutes,
-                  location_type: values.locationType,
-                  status: "scheduled",
-                })
-                .returning([
-                  "id",
-                  "student_id",
-                  "gcal_event_id",
-                  "scheduled_at",
-                  "duration_minutes",
-                  "location_type",
-                  "status",
-                  "cancellation_reason",
-                  "cancelled_at",
-                  "completed_at",
-                  "cancellation_fee_cents",
-                  "remainder_due_cents",
-                  "created_at",
-                ])
+                .execute(
+                  db
+                    .insertInto("app_public.lessons")
+                    .values({
+                      student_id: values.userId,
+                      scheduled_at: values.scheduledAt,
+                      duration_minutes: values.durationMinutes,
+                      location_type: values.locationType,
+                      status: "scheduled",
+                    })
+                    .returning([
+                      "id",
+                      "student_id",
+                      "gcal_event_id",
+                      "scheduled_at",
+                      "duration_minutes",
+                      "location_type",
+                      "status",
+                      "cancellation_reason",
+                      "cancelled_at",
+                      "completed_at",
+                      "cancellation_fee_cents",
+                      "remainder_due_cents",
+                      "created_at",
+                    ]),
+                )
                 .pipe(
                   Effect.head,
                   Effect.catchTags({
@@ -1335,18 +1470,22 @@ export class AuthenticatedRouteService extends Effect.Service<AuthenticatedRoute
                 );
 
               if (rate.billing_model === "single_booking") {
-                yield* db.insertInto("app_public.lesson_deposits").values({
-                  lesson_id: lesson.id,
-                  amount_cents: calculateDepositAmount(rate.rate_cents),
-                  status: "held",
-                });
-                yield* db.selectNoFrom((eb) =>
-                  eb
-                    .fn<unknown>("app_public.create_single_booking_obligation", [
-                      eb.val(lesson.id),
-                      eb.val(rate.rate_cents),
-                    ])
-                    .as("bill_id"),
+                yield* db.execute(
+                  db.insertInto("app_public.lesson_deposits").values({
+                    lesson_id: lesson.id,
+                    amount_cents: calculateDepositAmount(rate.rate_cents),
+                    status: "held",
+                  }),
+                );
+                yield* db.execute(
+                  db.selectNoFrom((eb) =>
+                    eb
+                      .fn<unknown>("app_public.create_single_booking_obligation", [
+                        eb.val(lesson.id),
+                        eb.val(rate.rate_cents),
+                      ])
+                      .as("bill_id"),
+                  ),
                 );
               }
 
@@ -1358,9 +1497,12 @@ export class AuthenticatedRouteService extends Effect.Service<AuthenticatedRoute
           if (connected) {
             const student = yield* withAuthContext(values.sessionId, (db) =>
               db
-                .selectFrom("app_public.users")
-                .select(["name", "username"])
-                .where("id", "=", values.userId)
+                .execute(
+                  db
+                    .selectFrom("app_public.users")
+                    .select(["name", "username"])
+                    .where("id", "=", values.userId),
+                )
                 .pipe(
                   Effect.head,
                   Effect.catchTags({
@@ -1377,10 +1519,12 @@ export class AuthenticatedRouteService extends Effect.Service<AuthenticatedRoute
             });
             if (eventId) {
               yield* withAuthContext(values.sessionId, (db) =>
-                db
-                  .updateTable("app_public.lessons")
-                  .set({ gcal_event_id: eventId })
-                  .where("id", "=", lesson.id),
+                db.execute(
+                  db
+                    .updateTable("app_public.lessons")
+                    .set({ gcal_event_id: eventId })
+                    .where("id", "=", lesson.id),
+                ),
               );
             }
           }
@@ -1395,16 +1539,19 @@ export class AuthenticatedRouteService extends Effect.Service<AuthenticatedRoute
         ) {
           const familyMembership = yield* withAuthContext(sessionId, (db) =>
             db
-              .selectFrom("app_public.family_memberships as fm_parent")
-              .innerJoin(
-                "app_public.family_memberships as fm_student",
-                "fm_student.family_id",
-                "fm_parent.family_id",
+              .execute(
+                db
+                  .selectFrom("app_public.family_memberships as fm_parent")
+                  .innerJoin(
+                    "app_public.family_memberships as fm_student",
+                    "fm_student.family_id",
+                    "fm_parent.family_id",
+                  )
+                  .select("fm_student.user_id")
+                  .where("fm_parent.user_id", "=", userId)
+                  .where("fm_student.user_id", "=", studentId)
+                  .where("fm_student.user_id", "<>", userId),
               )
-              .select("fm_student.user_id")
-              .where("fm_parent.user_id", "=", userId)
-              .where("fm_student.user_id", "=", studentId)
-              .where("fm_student.user_id", "<>", userId)
               .pipe(Effect.head, Effect.option),
           );
 
@@ -1417,11 +1564,13 @@ export class AuthenticatedRouteService extends Effect.Service<AuthenticatedRoute
 
         createChild: Effect.fnUntraced(function* (sessionId: string, userId: string, name: string) {
           const memberships = yield* withAuthContext(sessionId, (db) =>
-            db
-              .selectFrom("app_public.family_memberships")
-              .select("family_id")
-              .where("user_id", "=", userId)
-              .limit(2),
+            db.execute(
+              db
+                .selectFrom("app_public.family_memberships")
+                .select("family_id")
+                .where("user_id", "=", userId)
+                .limit(2),
+            ),
           );
 
           if (memberships.length === 0) {
@@ -1447,8 +1596,13 @@ export class AuthenticatedRouteService extends Effect.Service<AuthenticatedRoute
 
           const child = yield* withAuthContext(sessionId, (db) =>
             db
-              .selectFrom(sql<ChildRow>`app_public.create_child(${familyId}, ${name})`.as("child"))
-              .selectAll()
+              .execute(
+                db
+                  .selectFrom(
+                    sql<ChildRow>`app_public.create_child(${familyId}, ${name})`.as("child"),
+                  )
+                  .selectAll(),
+              )
               .pipe(Effect.head),
           );
 
@@ -1470,17 +1624,20 @@ export class AuthenticatedRouteService extends Effect.Service<AuthenticatedRoute
             sessionId,
             Effect.fnUntraced(function* (db) {
               const membership = yield* db
-                .selectFrom("app_public.family_memberships as fm")
-                .innerJoin("app_public.families as f", "f.id", "fm.family_id")
-                .select([
-                  "f.id",
-                  "f.slug",
-                  "f.name",
-                  "f.description",
-                  "fm.is_owner",
-                  "fm.is_billing_contact",
-                ])
-                .where("fm.user_id", "=", userId)
+                .execute(
+                  db
+                    .selectFrom("app_public.family_memberships as fm")
+                    .innerJoin("app_public.families as f", "f.id", "fm.family_id")
+                    .select([
+                      "f.id",
+                      "f.slug",
+                      "f.name",
+                      "f.description",
+                      "fm.is_owner",
+                      "fm.is_billing_contact",
+                    ])
+                    .where("fm.user_id", "=", userId),
+                )
                 .pipe(
                   Effect.head,
                   Effect.catchTags({
@@ -1488,28 +1645,32 @@ export class AuthenticatedRouteService extends Effect.Service<AuthenticatedRoute
                   }),
                 );
 
-              const members = yield* db
-                .selectFrom("app_public.family_memberships as fm")
-                .innerJoin("app_public.users as u", "u.id", "fm.user_id")
-                .select([
-                  "u.id",
-                  "u.username",
-                  "u.name",
-                  "u.role",
-                  "u.is_verified",
-                  "fm.is_owner",
-                  "fm.is_billing_contact",
-                ])
-                .where("fm.family_id", "=", membership.id);
+              const members = yield* db.execute(
+                db
+                  .selectFrom("app_public.family_memberships as fm")
+                  .innerJoin("app_public.users as u", "u.id", "fm.user_id")
+                  .select([
+                    "u.id",
+                    "u.username",
+                    "u.name",
+                    "u.role",
+                    "u.is_verified",
+                    "fm.is_owner",
+                    "fm.is_billing_contact",
+                  ])
+                  .where("fm.family_id", "=", membership.id),
+              );
 
               return { membership, members };
             }),
           );
 
-          const invitations = yield* rootDb
-            .selectFrom("app_public.family_invitations")
-            .select(["id", "email", "invited_role", "code", "expires_at"])
-            .where("family_id", "=", result.membership.id);
+          const invitations = yield* rootDb.execute(
+            rootDb
+              .selectFrom("app_public.family_invitations")
+              .select(["id", "email", "invited_role", "code", "expires_at"])
+              .where("family_id", "=", result.membership.id),
+          );
 
           return {
             id: result.membership.id,
@@ -1542,10 +1703,13 @@ export class AuthenticatedRouteService extends Effect.Service<AuthenticatedRoute
         ) {
           const membership = yield* withAuthContext(sessionId, (db) =>
             db
-              .selectFrom("app_public.family_memberships as fm")
-              .select("fm.family_id")
-              .where("fm.user_id", "=", userId)
-              .where("fm.is_owner", "=", true)
+              .execute(
+                db
+                  .selectFrom("app_public.family_memberships as fm")
+                  .select("fm.family_id")
+                  .where("fm.user_id", "=", userId)
+                  .where("fm.is_owner", "=", true),
+              )
               .pipe(
                 Effect.head,
                 Effect.catchTags({
@@ -1556,13 +1720,15 @@ export class AuthenticatedRouteService extends Effect.Service<AuthenticatedRoute
           );
 
           yield* withAuthContext(sessionId, (db) =>
-            db.selectNoFrom((eb) =>
-              eb
-                .fn<unknown>("app_public.remove_from_family", [
-                  eb.val(membership.family_id),
-                  eb.val(targetUserId),
-                ])
-                .as("remove_from_family"),
+            db.execute(
+              db.selectNoFrom((eb) =>
+                eb
+                  .fn<unknown>("app_public.remove_from_family", [
+                    eb.val(membership.family_id),
+                    eb.val(targetUserId),
+                  ])
+                  .as("remove_from_family"),
+              ),
             ),
           ).pipe(catchPgErrors);
         }),
@@ -1574,10 +1740,13 @@ export class AuthenticatedRouteService extends Effect.Service<AuthenticatedRoute
         ) {
           const membership = yield* withAuthContext(sessionId, (db) =>
             db
-              .selectFrom("app_public.family_memberships as fm")
-              .select("fm.family_id")
-              .where("fm.user_id", "=", userId)
-              .where("fm.is_owner", "=", true)
+              .execute(
+                db
+                  .selectFrom("app_public.family_memberships as fm")
+                  .select("fm.family_id")
+                  .where("fm.user_id", "=", userId)
+                  .where("fm.is_owner", "=", true),
+              )
               .pipe(
                 Effect.head,
                 Effect.catchTags({
@@ -1588,15 +1757,17 @@ export class AuthenticatedRouteService extends Effect.Service<AuthenticatedRoute
           );
 
           yield* withAuthContext(sessionId, (db) =>
-            db.selectNoFrom((eb) =>
-              eb
-                .fn<unknown>("app_public.invite_to_family", [
-                  eb.val(membership.family_id),
-                  eb.val(null),
-                  eb.val(email),
-                  eb.val("parent"),
-                ])
-                .as("invite_to_family"),
+            db.execute(
+              db.selectNoFrom((eb) =>
+                eb
+                  .fn<unknown>("app_public.invite_to_family", [
+                    eb.val(membership.family_id),
+                    eb.val(null),
+                    eb.val(email),
+                    eb.val("parent"),
+                  ])
+                  .as("invite_to_family"),
+              ),
             ),
           ).pipe(catchPgErrors);
         }),
@@ -1610,14 +1781,16 @@ export class AuthenticatedRouteService extends Effect.Service<AuthenticatedRoute
           const rootDb = yield* PgRootDB;
 
           yield* rootDb
-            .selectNoFrom((eb) =>
-              eb
-                .fn<void>("app_private.set_child_email", [
-                  eb.val(parentId),
-                  eb.val(childId),
-                  eb.val(email),
-                ])
-                .as("set_child_email"),
+            .execute(
+              rootDb.selectNoFrom((eb) =>
+                eb
+                  .fn<void>("app_private.set_child_email", [
+                    eb.val(parentId),
+                    eb.val(childId),
+                    eb.val(email),
+                  ])
+                  .as("set_child_email"),
+              ),
             )
             .pipe(catchPgErrors);
 
@@ -1632,13 +1805,15 @@ export class AuthenticatedRouteService extends Effect.Service<AuthenticatedRoute
           const rootDb = yield* PgRootDB;
 
           const rows = yield* rootDb
-            .selectNoFrom((eb) =>
-              eb
-                .fn<string>("app_private.request_child_password_set", [
-                  eb.val(parentId),
-                  eb.val(childId),
-                ])
-                .as("token"),
+            .execute(
+              rootDb.selectNoFrom((eb) =>
+                eb
+                  .fn<string>("app_private.request_child_password_set", [
+                    eb.val(parentId),
+                    eb.val(childId),
+                  ])
+                  .as("token"),
+              ),
             )
             .pipe(catchPgErrors);
 
@@ -1654,14 +1829,16 @@ export class AuthenticatedRouteService extends Effect.Service<AuthenticatedRoute
           const rootDb = yield* PgRootDB;
 
           yield* rootDb
-            .selectNoFrom((eb) =>
-              eb
-                .fn<void>("app_private.set_child_password", [
-                  eb.val(childId),
-                  eb.val(token),
-                  eb.val(password),
-                ])
-                .as("set_child_password"),
+            .execute(
+              rootDb.selectNoFrom((eb) =>
+                eb
+                  .fn<void>("app_private.set_child_password", [
+                    eb.val(childId),
+                    eb.val(token),
+                    eb.val(password),
+                  ])
+                  .as("set_child_password"),
+              ),
             )
             .pipe(catchPgErrors);
 

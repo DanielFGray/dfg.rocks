@@ -112,20 +112,23 @@ type LiveSessionRecord = {
 const loadLiveSessionByCookieIdEffect = Effect.fnUntraced(function* (cookieId: string) {
   const rootDb = yield* PgRootDB;
   return yield* rootDb
-    .selectFrom("app_private.sessions as s")
-    .innerJoin("app_public.users as u", "u.id", "s.user_id")
-    .select([
-      "s.id as session_id",
-      "s.cookie_id",
-      "s.user_id",
-      "s.expires_at",
-      "s.active_student_id",
-      "u.username",
-      "u.name",
-      "u.role",
-    ])
-    .select(sql<string>`encode(${sql.ref("s.secret_hash")}, 'hex')`.as("secret_hash_hex"))
-    .where("s.cookie_id", "=", cookieId)
+    .execute(
+      rootDb
+        .selectFrom("app_private.sessions as s")
+        .innerJoin("app_public.users as u", "u.id", "s.user_id")
+        .select([
+          "s.id as session_id",
+          "s.cookie_id",
+          "s.user_id",
+          "s.expires_at",
+          "s.active_student_id",
+          "u.username",
+          "u.name",
+          "u.role",
+        ])
+        .select(sql<string>`encode(${sql.ref("s.secret_hash")}, 'hex')`.as("secret_hash_hex"))
+        .where("s.cookie_id", "=", cookieId),
+    )
     .pipe(
       Effect.head,
       Effect.option,
@@ -140,9 +143,7 @@ export class SessionService extends Effect.Service<SessionService>()("SessionSer
     return {
       createSession: Effect.fnUntraced(function* (userId: string) {
         const user = yield* db
-          .selectFrom("app_public.users")
-          .select(["id"])
-          .where("id", "=", userId)
+          .execute(db.selectFrom("app_public.users").select(["id"]).where("id", "=", userId))
           .pipe(Effect.head, Effect.option);
 
         if (Option.isNone(user)) {
@@ -151,12 +152,14 @@ export class SessionService extends Effect.Service<SessionService>()("SessionSer
 
         const { cookieId, secret, secretHash, expiresAt } = buildToken();
 
-        yield* db.insertInto("app_private.sessions").values({
-          user_id: userId,
-          cookie_id: cookieId,
-          secret_hash: secretHash,
-          expires_at: expiresAt,
-        });
+        yield* db.execute(
+          db.insertInto("app_private.sessions").values({
+            user_id: userId,
+            cookie_id: cookieId,
+            secret_hash: secretHash,
+            expires_at: expiresAt,
+          }),
+        );
 
         return { token: `${cookieId}.${secret}`, expiresAt };
       }),
@@ -164,14 +167,17 @@ export class SessionService extends Effect.Service<SessionService>()("SessionSer
         const { cookieId, secret, secretHash, expiresAt } = buildToken();
 
         const row = yield* db
-          .updateTable("app_private.sessions")
-          .set({
-            cookie_id: cookieId,
-            secret_hash: secretHash,
-            expires_at: expiresAt,
-          })
-          .where("id", "=", sessionId)
-          .returning(["id"])
+          .execute(
+            db
+              .updateTable("app_private.sessions")
+              .set({
+                cookie_id: cookieId,
+                secret_hash: secretHash,
+                expires_at: expiresAt,
+              })
+              .where("id", "=", sessionId)
+              .returning(["id"]),
+          )
           .pipe(Effect.head, Effect.option);
 
         if (Option.isNone(row)) {
@@ -201,7 +207,9 @@ export class SessionService extends Effect.Service<SessionService>()("SessionSer
         }
 
         if (liveSession.expires_at <= new Date()) {
-          yield* db.deleteFrom("app_private.sessions").where("id", "=", liveSession.session_id);
+          yield* db.execute(
+            db.deleteFrom("app_private.sessions").where("id", "=", liveSession.session_id),
+          );
           return null;
         }
 
@@ -225,18 +233,20 @@ export class SessionService extends Effect.Service<SessionService>()("SessionSer
         sessionId: string,
         studentId: string | null,
       ) {
-        yield* db
-          .updateTable("app_private.sessions")
-          .set({ active_student_id: studentId })
-          .where("id", "=", sessionId);
+        yield* db.execute(
+          db
+            .updateTable("app_private.sessions")
+            .set({ active_student_id: studentId })
+            .where("id", "=", sessionId),
+        );
       }),
 
       deleteSession: Effect.fnUntraced(function* (cookieId: string) {
-        yield* db.deleteFrom("app_private.sessions").where("cookie_id", "=", cookieId);
+        yield* db.execute(db.deleteFrom("app_private.sessions").where("cookie_id", "=", cookieId));
       }),
 
       deleteAllUserSessions: Effect.fnUntraced(function* (userId: string) {
-        yield* db.deleteFrom("app_private.sessions").where("user_id", "=", userId);
+        yield* db.execute(db.deleteFrom("app_private.sessions").where("user_id", "=", userId));
       }),
     };
   }),

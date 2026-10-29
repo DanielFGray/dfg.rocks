@@ -25,24 +25,26 @@ export class PublicRouteService extends Effect.Service<PublicRouteService>()("Pu
 
     return {
       homePageData: Effect.fn("homePageData")(function* () {
-        const rows = yield* db
-          .selectFrom("app_public.testimonials as t")
-          .innerJoin("app_public.users as u", "u.id", "t.user_id")
-          .select([
-            "t.id",
-            "t.user_id",
-            "t.body",
-            "t.is_approved",
-            "t.created_at",
-            "t.updated_at",
-            "u.username",
-            "u.name",
-            "u.role",
-          ])
-          .where("u.role", "!=", "admin")
-          .where("t.is_approved", "=", true)
-          .orderBy("t.updated_at", "desc")
-          .limit(6);
+        const rows = yield* db.execute(
+          db
+            .selectFrom("app_public.testimonials as t")
+            .innerJoin("app_public.users as u", "u.id", "t.user_id")
+            .select([
+              "t.id",
+              "t.user_id",
+              "t.body",
+              "t.is_approved",
+              "t.created_at",
+              "t.updated_at",
+              "u.username",
+              "u.name",
+              "u.role",
+            ])
+            .where("u.role", "!=", "admin")
+            .where("t.is_approved", "=", true)
+            .orderBy("t.updated_at", "desc")
+            .limit(6),
+        );
 
         return {
           testimonials: rows.map(serializeTestimonial),
@@ -68,39 +70,43 @@ export class PublicRouteService extends Effect.Service<PublicRouteService>()("Pu
         // One transaction: the submission and its notification email exist together or not at all.
         yield* db.withTransaction(
           Effect.gen(function* () {
-            yield* db.insertInto("app_public.contact_submissions").values({
-              name: values.name,
-              email: values.email,
-              phone: values.phone ?? null,
-              instrument: values.instrument,
-              format: values.format,
-              message: values.message ?? "",
-              ip_address: geo?.ip ?? null,
-              location_country: geo?.country || null,
-              location_region: geo?.region || null,
-              location_city: geo?.city || null,
-            });
-            yield* db.selectNoFrom((eb) =>
-              eb
-                .fn<unknown>("graphile_worker.add_job", [
-                  eb.val("send_email"),
-                  sql`${JSON.stringify({
-                    options: {
-                      to: env.ADMIN_EMAIL,
-                      subject: `New contact: ${values.name} (${values.instrument})`,
-                    },
-                    template: "contact_submission.mjml",
-                    variables: {
-                      name: values.name,
-                      email: values.email,
-                      phone: values.phone ?? "",
-                      instrument: values.instrument,
-                      format: values.format,
-                      message: values.message ?? "",
-                    },
-                  })}::json`,
-                ])
-                .as("add_job"),
+            yield* db.execute(
+              db.insertInto("app_public.contact_submissions").values({
+                name: values.name,
+                email: values.email,
+                phone: values.phone ?? null,
+                instrument: values.instrument,
+                format: values.format,
+                message: values.message ?? "",
+                ip_address: geo?.ip ?? null,
+                location_country: geo?.country || null,
+                location_region: geo?.region || null,
+                location_city: geo?.city || null,
+              }),
+            );
+            yield* db.execute(
+              db.selectNoFrom((eb) =>
+                eb
+                  .fn<unknown>("graphile_worker.add_job", [
+                    eb.val("send_email"),
+                    sql`${JSON.stringify({
+                      options: {
+                        to: env.ADMIN_EMAIL,
+                        subject: `New contact: ${values.name} (${values.instrument})`,
+                      },
+                      template: "contact_submission.mjml",
+                      variables: {
+                        name: values.name,
+                        email: values.email,
+                        phone: values.phone ?? "",
+                        instrument: values.instrument,
+                        format: values.format,
+                        message: values.message ?? "",
+                      },
+                    })}::json`,
+                  ])
+                  .as("add_job"),
+              ),
             );
           }),
         );
@@ -113,16 +119,19 @@ export class PublicRouteService extends Effect.Service<PublicRouteService>()("Pu
         tokens: unknown;
       }) {
         return yield* db
-          .selectFrom(
-            sql<UserRow>`app_private.link_or_register_user(
+          .execute(
+            db
+              .selectFrom(
+                sql<UserRow>`app_private.link_or_register_user(
             null,
             ${values.service},
             ${values.identifier},
             ${JSON.stringify(values.profile)}::json,
             ${JSON.stringify(values.tokens)}::json
           )`.as("u"),
+              )
+              .selectAll(),
           )
-          .selectAll()
           .pipe(
             catchPgErrors,
             Effect.head,
@@ -134,9 +143,12 @@ export class PublicRouteService extends Effect.Service<PublicRouteService>()("Pu
 
       verifyEmail: Effect.fn("verifyEmail")(function* (token: string) {
         const secret = yield* db
-          .selectFrom("app_private.user_email_secrets")
-          .select("user_email_id")
-          .where("verification_token", "=", token)
+          .execute(
+            db
+              .selectFrom("app_private.user_email_secrets")
+              .select("user_email_id")
+              .where("verification_token", "=", token),
+          )
           .pipe(
             Effect.head,
             Effect.catchTags({
@@ -145,19 +157,21 @@ export class PublicRouteService extends Effect.Service<PublicRouteService>()("Pu
             }),
           );
         yield* db
-          .selectNoFrom((eb) =>
-            eb
-              .fn<unknown>("app_public.verify_email", [
-                sql`${secret.user_email_id}::uuid`,
-                eb.val(token),
-              ])
-              .as("verify_email"),
+          .execute(
+            db.selectNoFrom((eb) =>
+              eb
+                .fn<unknown>("app_public.verify_email", [
+                  sql`${secret.user_email_id}::uuid`,
+                  eb.val(token),
+                ])
+                .as("verify_email"),
+            ),
           )
           .pipe(catchPgErrors);
       }),
 
       invitation: Effect.fn("invitation")(function* (invitationId: string, code: string) {
-        const invitation = yield* invitationById(invitationId).pipe(
+        const invitation = yield* db.execute(invitationById(invitationId)).pipe(
           Effect.head,
           Effect.catchTags({
             NoSuchElementException: () => new HttpError(404, "Invitation not found"),
@@ -171,9 +185,12 @@ export class PublicRouteService extends Effect.Service<PublicRouteService>()("Pu
         }
 
         const family = yield* db
-          .selectFrom("app_public.families")
-          .select(["id", "slug", "name", "description", "created_at"])
-          .where("id", "=", invitation.family_id)
+          .execute(
+            db
+              .selectFrom("app_public.families")
+              .select(["id", "slug", "name", "description", "created_at"])
+              .where("id", "=", invitation.family_id),
+          )
           .pipe(
             Effect.head,
             Effect.catchTags({
@@ -200,8 +217,8 @@ export class PublicRouteService extends Effect.Service<PublicRouteService>()("Pu
       }) {
         return yield* db.withTransaction(
           Effect.gen(function* () {
-            const invitation = yield* invitationById(values.invitationId)
-              .forUpdate()
+            const invitation = yield* db
+              .execute(invitationById(values.invitationId).forUpdate())
               .pipe(
                 Effect.head,
                 Effect.catchTags({
@@ -215,8 +232,10 @@ export class PublicRouteService extends Effect.Service<PublicRouteService>()("Pu
               return yield* new HttpError(400, "This invitation has expired");
             }
             let user: UserRow = yield* db
-              .selectFrom(
-                sql<UserRow>`app_private.really_create_user(
+              .execute(
+                db
+                  .selectFrom(
+                    sql<UserRow>`app_private.really_create_user(
                 ${values.username}::citext,
                 ${values.name},
                 null,
@@ -224,8 +243,9 @@ export class PublicRouteService extends Effect.Service<PublicRouteService>()("Pu
                 ${invitation.email || values.email || null},
                 ${values.password}
               )`.as("u"),
+                  )
+                  .selectAll(),
               )
-              .selectAll()
               .pipe(
                 catchPgErrors,
                 Effect.head,
@@ -235,17 +255,23 @@ export class PublicRouteService extends Effect.Service<PublicRouteService>()("Pu
               );
             const invitedRole = invitation.invited_role;
             if (invitedRole === "parent" || invitedRole === "student") {
-              yield* db
-                .updateTable("app_public.users")
-                .set({ role: invitedRole })
-                .where("id", "=", user.id);
+              yield* db.execute(
+                db
+                  .updateTable("app_public.users")
+                  .set({ role: invitedRole })
+                  .where("id", "=", user.id),
+              );
               user = { ...user, role: invitedRole };
             }
-            yield* db
-              .insertInto("app_public.family_memberships")
-              .values({ family_id: invitation.family_id, user_id: user.id })
-              .onConflict((oc) => oc.doNothing());
-            yield* db.deleteFrom("app_public.family_invitations").where("id", "=", invitation.id);
+            yield* db.execute(
+              db
+                .insertInto("app_public.family_memberships")
+                .values({ family_id: invitation.family_id, user_id: user.id })
+                .onConflict((oc) => oc.doNothing()),
+            );
+            yield* db.execute(
+              db.deleteFrom("app_public.family_invitations").where("id", "=", invitation.id),
+            );
             return yield* UserService.sessionFromUser(user);
           }),
         );

@@ -4,10 +4,7 @@ import { Effect, Option } from "effect";
 import { sql } from "kysely";
 import type { LessonStatus, LocationType } from "../../shared/schemas.js";
 import { HttpError } from "../pgErrors.js";
-import {
-  extractNotationTracksFromBytes,
-  resolveAssignedTrackIndex,
-} from "./notationService.js";
+import { extractNotationTracksFromBytes, resolveAssignedTrackIndex } from "./notationService.js";
 import { SessionService } from "./sessionService.js";
 import { StorageService } from "./storageService.js";
 import { PgRootDB } from "../db.js";
@@ -19,13 +16,15 @@ export class TestingService extends Effect.Service<TestingService>()("TestingSer
 
     const queries = {
       userIdByUsername: (username: string) =>
-        db.selectFrom("app_public.users").select("id").where("username", "=", username),
+        db.execute(db.selectFrom("app_public.users").select("id").where("username", "=", username)),
 
       createFamily: (values: { slug: string; name: string }) =>
-        db.insertInto("app_public.families").values(values).returning(["id", "slug", "name"]),
+        db.execute(
+          db.insertInto("app_public.families").values(values).returning(["id", "slug", "name"]),
+        ),
 
       familyIdBySlug: (slug: string) =>
-        db.selectFrom("app_public.families").select("id").where("slug", "=", slug),
+        db.execute(db.selectFrom("app_public.families").select("id").where("slug", "=", slug)),
 
       addFamilyMembership: (values: {
         family_id: string;
@@ -33,10 +32,12 @@ export class TestingService extends Effect.Service<TestingService>()("TestingSer
         is_owner?: boolean;
         is_billing_contact?: boolean;
       }) =>
-        db
-          .insertInto("app_public.family_memberships")
-          .values(values)
-          .onConflict((oc) => oc.doNothing()),
+        db.execute(
+          db
+            .insertInto("app_public.family_memberships")
+            .values(values)
+            .onConflict((oc) => oc.doNothing()),
+        ),
     } as const;
 
     return {
@@ -63,19 +64,28 @@ export class TestingService extends Effect.Service<TestingService>()("TestingSer
 
         if (!userId) {
           const existingByEmail = yield* db
-            .selectFrom("app_public.user_emails")
-            .innerJoin("app_public.users", "app_public.users.id", "app_public.user_emails.user_id")
-            .select("app_public.users.id")
-            .where("app_public.user_emails.email", "=", email)
-            .where("app_public.user_emails.is_verified", "=", true)
+            .execute(
+              db
+                .selectFrom("app_public.user_emails")
+                .innerJoin(
+                  "app_public.users",
+                  "app_public.users.id",
+                  "app_public.user_emails.user_id",
+                )
+                .select("app_public.users.id")
+                .where("app_public.user_emails.email", "=", email)
+                .where("app_public.user_emails.is_verified", "=", true),
+            )
             .pipe(Effect.head, Effect.option);
 
           if (Option.isSome(existingByEmail)) {
             userId = existingByEmail.value.id;
           } else {
             const created = yield* db
-              .selectFrom(
-                sql<{ id: string }>`
+              .execute(
+                db
+                  .selectFrom(
+                    sql<{ id: string }>`
                 app_private.really_create_user(
                   ${username}::citext,
                   ${name},
@@ -85,21 +95,26 @@ export class TestingService extends Effect.Service<TestingService>()("TestingSer
                   ${password}
                 )
               `.as("u"),
+                  )
+                  .select("id"),
               )
-              .select("id")
               .pipe(Effect.head);
             userId = created.id;
           }
         }
 
         if (role !== "student") {
-          yield* db.updateTable("app_public.users").set({ role }).where("id", "=", userId);
+          yield* db.execute(
+            db.updateTable("app_public.users").set({ role }).where("id", "=", userId),
+          );
         }
 
-        yield* db
-          .updateTable("app_private.user_secrets")
-          .set({ password_hash: sql`crypt(${password}, gen_salt('bf'))` })
-          .where("user_id", "=", userId);
+        yield* db.execute(
+          db
+            .updateTable("app_private.user_secrets")
+            .set({ password_hash: sql`crypt(${password}, gen_salt('bf'))` })
+            .where("user_id", "=", userId),
+        );
 
         const session = yield* SessionService.createSession(userId);
 
@@ -123,56 +138,61 @@ export class TestingService extends Effect.Service<TestingService>()("TestingSer
         nextPromptAt: Date | null;
       }) {
         const user = yield* queries.userIdByUsername(values.username).pipe(Effect.head);
-        yield* db
-          .updateTable("app_private.user_secrets")
-          .set({
-            testimonial_prompt_enabled: values.promptEnabled,
-            testimonial_next_prompt_at: values.nextPromptAt,
-          })
-          .where("user_id", "=", user.id);
+        yield* db.execute(
+          db
+            .updateTable("app_private.user_secrets")
+            .set({
+              testimonial_prompt_enabled: values.promptEnabled,
+              testimonial_next_prompt_at: values.nextPromptAt,
+            })
+            .where("user_id", "=", user.id),
+        );
       }),
 
       clear: Effect.fnUntraced(function* () {
-        const testUsers = yield* db
-          .selectFrom("app_public.users")
-          .select("id")
-          .where("username", "like", "test_%");
+        const testUsers = yield* db.execute(
+          db.selectFrom("app_public.users").select("id").where("username", "like", "test_%"),
+        );
         const testUserIds = testUsers.map((u) => u.id);
 
-        yield* db.deleteFrom("app_public.families").where("slug", "like", "test-%");
+        yield* db.execute(db.deleteFrom("app_public.families").where("slug", "like", "test-%"));
 
-        const testMaterialFiles = yield* db
-          .selectFrom("app_public.materials")
-          .select(["id", "storage_backend", "storage_key"])
-          .where((eb) => {
-            const conditions = [
-              eb("storage_key", "like", "test/%"),
-              eb("storage_key", "like", "/test/%"),
-              eb("storage_key", "like", "/tmp/test-%"),
-              eb("title", "like", "Test:%"),
-              eb("original_filename", "in", [
-                "Scale-Patterns.pdf",
-                "Moonlight-Sonata.pdf",
-                "Fresh-Upload.pdf",
-              ]),
-              eb("title", "in", ["Scale Patterns", "Moonlight Sonata", "Fresh Upload"]),
-            ];
-            if (testUserIds.length > 0) {
-              conditions.push(eb("uploaded_by", "in", testUserIds));
-            }
-            return eb.or(conditions);
-          });
+        const testMaterialFiles = yield* db.execute(
+          db
+            .selectFrom("app_public.materials")
+            .select(["id", "storage_backend", "storage_key"])
+            .where((eb) => {
+              const conditions = [
+                eb("storage_key", "like", "test/%"),
+                eb("storage_key", "like", "/test/%"),
+                eb("storage_key", "like", "/tmp/test-%"),
+                eb("title", "like", "Test:%"),
+                eb("original_filename", "in", [
+                  "Scale-Patterns.pdf",
+                  "Moonlight-Sonata.pdf",
+                  "Fresh-Upload.pdf",
+                ]),
+                eb("title", "in", ["Scale Patterns", "Moonlight Sonata", "Fresh Upload"]),
+              ];
+              if (testUserIds.length > 0) {
+                conditions.push(eb("uploaded_by", "in", testUserIds));
+              }
+              return eb.or(conditions);
+            }),
+        );
 
         if (testMaterialFiles.length > 0) {
-          yield* db.deleteFrom("app_public.materials").where(
-            "id",
-            "in",
-            testMaterialFiles.map((m) => m.id),
+          yield* db.execute(
+            db.deleteFrom("app_public.materials").where(
+              "id",
+              "in",
+              testMaterialFiles.map((m) => m.id),
+            ),
           );
         }
 
-        yield* db.deleteFrom("app_public.users").where("username", "like", "test_%");
-        yield* db.deleteFrom("app_public.courses").where("title", "like", "Test:%");
+        yield* db.execute(db.deleteFrom("app_public.users").where("username", "like", "test_%"));
+        yield* db.execute(db.deleteFrom("app_public.courses").where("title", "like", "Test:%"));
 
         yield* Effect.forEach(
           testMaterialFiles.filter((material) => material.storage_backend === "local"),
@@ -194,23 +214,28 @@ export class TestingService extends Effect.Service<TestingService>()("TestingSer
         }>,
       ) {
         const course = yield* db
-          .insertInto("app_public.courses")
-          .values({
-            title: body.title,
-            instrument: body.instrument,
-            description: body.description ?? "",
-          })
-          .returning(["id", "title", "instrument", "description"])
+          .execute(
+            db
+              .insertInto("app_public.courses")
+              .values({
+                title: body.title,
+                instrument: body.instrument,
+                description: body.description ?? "",
+              })
+              .returning(["id", "title", "instrument", "description"]),
+          )
           .pipe(Effect.head);
 
         const mods = body.modules ?? [];
         if (mods.length > 0) {
-          yield* db.insertInto("app_public.modules").values(
-            mods.map((mod, index) => ({
-              course_id: course.id,
-              title: mod.title,
-              sort_order: mod.sort_order ?? index + 1,
-            })),
+          yield* db.execute(
+            db.insertInto("app_public.modules").values(
+              mods.map((mod, index) => ({
+                course_id: course.id,
+                title: mod.title,
+                sort_order: mod.sort_order ?? index + 1,
+              })),
+            ),
           );
         }
 
@@ -247,20 +272,23 @@ export class TestingService extends Effect.Service<TestingService>()("TestingSer
           : null;
 
         const material = yield* db
-          .insertInto("app_public.materials")
-          .values({
-            title: body.title,
-            original_filename: originalFilename,
-            storage_backend: location.storageBackend,
-            storage_key: location.storageKey,
-            content_hash: null,
-            mime_type: body.mime_type ?? "application/pdf",
-            file_size: body.file_size ?? bytes.byteLength,
-            is_global: body.is_global ?? false,
-            notation_tracks:
-              notationTracks === null ? null : sql`${JSON.stringify(notationTracks)}::jsonb`,
-          })
-          .returning(["id"])
+          .execute(
+            db
+              .insertInto("app_public.materials")
+              .values({
+                title: body.title,
+                original_filename: originalFilename,
+                storage_backend: location.storageBackend,
+                storage_key: location.storageKey,
+                content_hash: null,
+                mime_type: body.mime_type ?? "application/pdf",
+                file_size: body.file_size ?? bytes.byteLength,
+                is_global: body.is_global ?? false,
+                notation_tracks:
+                  notationTracks === null ? null : sql`${JSON.stringify(notationTracks)}::jsonb`,
+              })
+              .returning(["id"]),
+          )
           .pipe(Effect.head);
 
         return material.id;
@@ -273,9 +301,12 @@ export class TestingService extends Effect.Service<TestingService>()("TestingSer
       }) {
         const student = yield* queries.userIdByUsername(values.username).pipe(Effect.head);
         const material = yield* db
-          .selectFrom("app_public.materials")
-          .select("id")
-          .where("title", "=", values.materialTitle)
+          .execute(
+            db
+              .selectFrom("app_public.materials")
+              .select("id")
+              .where("title", "=", values.materialTitle),
+          )
           .pipe(Effect.head);
         const assignedTrackIndex = yield* resolveAssignedTrackIndex(
           null,
@@ -283,36 +314,43 @@ export class TestingService extends Effect.Service<TestingService>()("TestingSer
           values.assignedTrackIndex ? Number(values.assignedTrackIndex) : undefined,
         );
 
-        yield* db
-          .insertInto("app_public.student_materials")
-          .values({
-            student_id: student.id,
-            material_id: material.id,
-            assigned_track_index: assignedTrackIndex,
-          })
-          .onConflict((oc) =>
-            oc.columns(["student_id", "material_id"]).doUpdateSet({
+        yield* db.execute(
+          db
+            .insertInto("app_public.student_materials")
+            .values({
+              student_id: student.id,
+              material_id: material.id,
               assigned_track_index: assignedTrackIndex,
-            }),
-          );
+            })
+            .onConflict((oc) =>
+              oc.columns(["student_id", "material_id"]).doUpdateSet({
+                assigned_track_index: assignedTrackIndex,
+              }),
+            ),
+        );
         return material.id;
       }),
 
       enroll: Effect.fnUntraced(function* (values: { username: string; courseTitle: string }) {
         const student = yield* queries.userIdByUsername(values.username).pipe(Effect.head);
         const course = yield* db
-          .selectFrom("app_public.courses")
-          .select("id")
-          .where("title", "=", values.courseTitle)
+          .execute(
+            db
+              .selectFrom("app_public.courses")
+              .select("id")
+              .where("title", "=", values.courseTitle),
+          )
           .pipe(Effect.head);
 
-        yield* db
-          .insertInto("app_public.enrollments")
-          .values({
-            student_id: student.id,
-            course_id: course.id,
-          })
-          .onConflict((oc) => oc.doNothing());
+        yield* db.execute(
+          db
+            .insertInto("app_public.enrollments")
+            .values({
+              student_id: student.id,
+              course_id: course.id,
+            })
+            .onConflict((oc) => oc.doNothing()),
+        );
         return course.id;
       }),
 
@@ -379,11 +417,14 @@ export class TestingService extends Effect.Service<TestingService>()("TestingSer
           familyId = family.id;
 
           const admin = yield* db
-            .selectFrom("app_public.users")
-            .select("id")
-            .where((eb) => eb.or([eb("username", "=", "test_admin"), eb("role", "=", "admin")]))
-            .orderBy(sql`case when username = 'test_admin' then 0 else 1 end`)
-            .limit(1)
+            .execute(
+              db
+                .selectFrom("app_public.users")
+                .select("id")
+                .where((eb) => eb.or([eb("username", "=", "test_admin"), eb("role", "=", "admin")]))
+                .orderBy(sql`case when username = 'test_admin' then 0 else 1 end`)
+                .limit(1),
+            )
             .pipe(
               Effect.head,
               Effect.catchTags({
@@ -401,15 +442,18 @@ export class TestingService extends Effect.Service<TestingService>()("TestingSer
 
         const code = crypto.randomBytes(7).toString("hex");
         const invitation = yield* db
-          .insertInto("app_public.family_invitations")
-          .values({
-            family_id: familyId,
-            email: values.email,
-            code,
-            invited_role: values.invitedRole ?? "parent",
-            ...(values.expiresAt ? { expires_at: values.expiresAt } : {}),
-          })
-          .returning(["id"])
+          .execute(
+            db
+              .insertInto("app_public.family_invitations")
+              .values({
+                family_id: familyId,
+                email: values.email,
+                code,
+                invited_role: values.invitedRole ?? "parent",
+                ...(values.expiresAt ? { expires_at: values.expiresAt } : {}),
+              })
+              .returning(["id"]),
+          )
           .pipe(Effect.head);
 
         return { invitationId: invitation.id, code };
@@ -418,13 +462,15 @@ export class TestingService extends Effect.Service<TestingService>()("TestingSer
       seedDeleteAccount: Effect.fnUntraced(function* (username: string) {
         const user = yield* queries.userIdByUsername(username).pipe(Effect.head);
         const token = crypto.randomBytes(7).toString("hex");
-        yield* db
-          .updateTable("app_private.user_secrets")
-          .set({
-            delete_account_token: token,
-            delete_account_token_generated: new Date(),
-          })
-          .where("user_id", "=", user.id);
+        yield* db.execute(
+          db
+            .updateTable("app_private.user_secrets")
+            .set({
+              delete_account_token: token,
+              delete_account_token_generated: new Date(),
+            })
+            .where("user_id", "=", user.id),
+        );
         return token;
       }),
 
@@ -436,25 +482,31 @@ export class TestingService extends Effect.Service<TestingService>()("TestingSer
         status: LessonStatus;
       }) {
         const student = yield* queries.userIdByUsername(values.username).pipe(Effect.head);
-        yield* db
-          .insertInto("app_public.student_rates")
-          .values({
+        yield* db.execute(
+          db
+            .insertInto("app_public.student_rates")
+            .values({
+              student_id: student.id,
+              rate_cents: values.durationMinutes === 30 ? 5000 : 10000,
+              lesson_duration_minutes: values.durationMinutes === 30 ? 30 : 60,
+              location_type: values.locationType,
+              billing_model: "single_booking",
+            })
+            .onConflict((conflict) =>
+              conflict.columns(["student_id", "location_type"]).doNothing(),
+            ),
+        );
+        yield* db.execute(
+          db.insertInto("app_public.lessons").values({
             student_id: student.id,
-            rate_cents: values.durationMinutes === 30 ? 5000 : 10000,
-            lesson_duration_minutes: values.durationMinutes === 30 ? 30 : 60,
+            scheduled_at: new Date(
+              values.scheduledAt ?? new Date(Date.now() + 86400000).toISOString(),
+            ),
+            duration_minutes: values.durationMinutes,
             location_type: values.locationType,
-            billing_model: "single_booking",
-          })
-          .onConflict((conflict) => conflict.columns(["student_id", "location_type"]).doNothing());
-        yield* db.insertInto("app_public.lessons").values({
-          student_id: student.id,
-          scheduled_at: new Date(
-            values.scheduledAt ?? new Date(Date.now() + 86400000).toISOString(),
-          ),
-          duration_minutes: values.durationMinutes,
-          location_type: values.locationType,
-          status: values.status,
-        });
+            status: values.status,
+          }),
+        );
       }),
     };
   }),

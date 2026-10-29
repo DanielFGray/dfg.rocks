@@ -81,14 +81,16 @@ Backend uses Effect HttpApi for routing/handlers, Kysely for type-safe SQL, and 
 
 **DB connections** (`server/db.ts`):
 
-- `authDb` + `withAuthContext(sessionId, fn)` — authenticated queries (RLS enforced via `set_config`)
-- `rootDb` — auth functions (`app_private.*`), admin DML, cross-user lookups (bypasses RLS)
+- `withAuthContext(sessionId, fn)` — authenticated queries on `PgAuthDB` (RLS enforced via `set_config`)
+- `PgRootDB` — auth functions (`app_private.*`), admin DML, cross-user lookups (bypasses RLS)
+
+Both are a `Database`: a Kysely instance that only builds queries. Run a query with `db.execute(builder)`, which returns an Effect of its rows inside the current Effect transaction. Kysely's own `.execute()` throws, so no query runs outside the transaction.
 
 ```typescript
 // Authenticated handler with RLS:
 .get("/courses", ({ auth }) =>
   withAuthContext(auth.session.id, (db) =>
-    db.selectFrom("app_public.courses").select([...]).execute()
+    db.execute(db.selectFrom("app_public.courses").select([...]))
   )
 )
 ```
@@ -124,21 +126,9 @@ RLS policies derive user context from `current_setting('my.session_id')` joined 
 - **Only `app_private` schema operations** (session creation, auth functions, background workers) use `rootDb` directly.
 - Even admin CRUD on `app_public` tables goes through `withAuthContext` — RLS confirms admin role via `current_user_role()`.
 - **`withAuthContext` callback signature**: `<A, E, R>(sessionId, (db) => Effect<A, E, R>)` — the `<R>` generic allows callbacks with environment requirements (e.g., `fileService.ts` which nests `withAuthContext` calls).
-- **Seroval fix**: `JSON.parse(JSON.stringify(...))` + `as` type assertion required on `createServerFn` return values that pass through `withAuthContext` (the `@effect/sql-kysely` Proxy wrapping confuses Seroval serialization).
+- **Server function payloads**: `createServerFn` return values go through `toServerFunctionPayload` (a JSON round trip) in `app/lib/serverFunctionPayload.ts`.
 
 ## Known Issues
-
-### `this.compile is not a function` (upstream `@effect/sql-kysely`)
-
-The `@effect/sql-kysely` Proxy layer in v0.47.0 has a binding bug where `makeSqlCommit(client).bind(target)` occasionally binds to a full `Kysely<DB>` instance instead of a `QueryBuilder`. This causes a `TypeError: this.compile is not a function` error that crashes an Effect fiber mid-query.
-
-**Impact**: Intermittent, non-fatal. A crashed fiber may leave a database connection in a degraded state (uncommitted transaction), causing subsequent operations on that connection to hang. This manifests as:
-
-- 30s Playwright timeouts (default action timeout)
-- "Login request did not fire" errors (login API hangs)
-- `DeprecationWarning` from `@effect/sql-pg` (unrelated, also benign)
-
-**Can't fix in our code** — waiting for upstream fix in `@effect/sql-kysely`.
 
 ### `DeprecationWarning: Calling client.query()` (upstream `@effect/sql-pg`)
 
@@ -173,7 +163,7 @@ Benign warning, no functionality impact.
 | `app/routes/api.$.ts`                      | Catch-all route mounting the Effect web handler       |
 | `app/config.ts`                            | Site metadata (name, city, testimonials, etc.)        |
 | `server/app.ts`                            | Effect HttpApi app composition                        |
-| `server/db.ts`                             | rootDb, authDb, withAuthContext                       |
+| `server/db.ts`                             | Database, PgRootDB, PgAuthDB, withAuthContext         |
 | `server/routes/public.ts`                  | Public endpoints (health, contact, OAuth)             |
 | `server/routes/auth.ts`                    | Auth endpoints (login, logout, me, password)          |
 | `server/routes/authenticated.ts`           | Authed endpoints (courses, messages, lessons)         |

@@ -26,22 +26,19 @@ import { StorageService } from "./services/storageService.js";
 import { TestimonialReminderService } from "./services/testimonialReminderService.js";
 import { UserService } from "./services/userService.js";
 
-// Expose the root PgClient alongside its Kysely wrapper so scoped services such
-// as RealtimeService share the same pool instead of acquiring another one.
-const rootDatabaseLayer = PgRootDB.Kysely.pipe(Layer.provideMerge(PgRootDB.Conn));
-
 const infrastructureLayer = Layer.mergeAll(
   NodeHttpPlatform.layer,
   NodeFileSystem.layer,
   NodePath.layer,
   Etag.layer,
   FetchHttpClient.layer,
-  rootDatabaseLayer,
+  PgRootDB.Live,
   PgAuthDB.Live,
 );
 
 // Outside production, E2E browsers share one address, so a real limiter would throttle the suite.
-const rateLimitLayer = env.NODE_ENV === "production" ? RateLimitService.Live : RateLimitService.Test;
+const rateLimitLayer =
+  env.NODE_ENV === "production" ? RateLimitService.Live : RateLimitService.Test;
 
 const lessonServicesLayer = Layer.mergeAll(
   AdminRouteService.Default,

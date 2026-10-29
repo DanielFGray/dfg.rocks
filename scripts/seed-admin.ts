@@ -30,9 +30,7 @@ async function seedAdmin() {
   const rootDb = await getRootDb();
   const existing = await serverRuntime.runPromise(
     rootDb
-      .selectFrom("app_public.users")
-      .select("id")
-      .where("username", "=", username)
+      .execute(rootDb.selectFrom("app_public.users").select("id").where("username", "=", username))
       .pipe(Effect.head, Effect.option),
   );
 
@@ -43,8 +41,10 @@ async function seedAdmin() {
 
   const user = await serverRuntime.runPromise(
     rootDb
-      .selectFrom(
-        sql<{ id: string }>`
+      .execute(
+        rootDb
+          .selectFrom(
+            sql<{ id: string }>`
           app_private.create_user(
             ${username}::citext,
             ${email}::citext,
@@ -52,19 +52,22 @@ async function seedAdmin() {
             'admin'::app_public.user_role
           )
         `.as("u"),
+          )
+          .select("id"),
       )
-      .select("id")
       .pipe(Effect.head),
   );
 
   await serverRuntime.runPromise(
-    rootDb.selectNoFrom((eb) =>
-      eb
-        .fn<void>("app_private.set_password", [
-          sql`${user.id}::uuid`,
-          eb.val(Redacted.value(password)),
-        ])
-        .as("set_password"),
+    rootDb.execute(
+      rootDb.selectNoFrom((eb) =>
+        eb
+          .fn<void>("app_private.set_password", [
+            sql`${user.id}::uuid`,
+            eb.val(Redacted.value(password)),
+          ])
+          .as("set_password"),
+      ),
     ),
   );
 

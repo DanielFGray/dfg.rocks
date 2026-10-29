@@ -66,10 +66,12 @@ export class RealtimeService extends Effect.Service<RealtimeService>()("Realtime
         return staffCache.ids;
       }
 
-      const rows = yield* db
-        .selectFrom("app_public.users")
-        .select("id")
-        .where((eb) => eb.or([eb("role", "=", "admin"), eb("role", "=", "teacher")]));
+      const rows = yield* db.execute(
+        db
+          .selectFrom("app_public.users")
+          .select("id")
+          .where((eb) => eb.or([eb("role", "=", "admin"), eb("role", "=", "teacher")])),
+      );
 
       const ids = rows.map((row) => row.id);
       staffCache = { ids, expiresAt: now + 30_000 };
@@ -84,15 +86,17 @@ export class RealtimeService extends Effect.Service<RealtimeService>()("Realtime
       const familyIds =
         userIds.length === 0
           ? []
-          : (yield* db
-              .selectFrom("app_public.family_memberships as fm_source")
-              .innerJoin(
-                "app_public.family_memberships as fm_related",
-                "fm_related.family_id",
-                "fm_source.family_id",
-              )
-              .select("fm_related.user_id")
-              .where("fm_source.user_id", "in", userIds)).map((row) => row.user_id);
+          : (yield* db.execute(
+              db
+                .selectFrom("app_public.family_memberships as fm_source")
+                .innerJoin(
+                  "app_public.family_memberships as fm_related",
+                  "fm_related.family_id",
+                  "fm_source.family_id",
+                )
+                .select("fm_related.user_id")
+                .where("fm_source.user_id", "in", userIds),
+            )).map((row) => row.user_id);
 
       const staffIds = options.includeStaff ? yield* getStaffIds() : [];
       return dedupe([...userIds, ...familyIds, ...staffIds]);
@@ -102,10 +106,12 @@ export class RealtimeService extends Effect.Service<RealtimeService>()("Realtime
       expandUserIds([studentId], { includeStaff: true });
 
     const usersForCourse = Effect.fnUntraced(function* (courseId: string) {
-      const rows = yield* db
-        .selectFrom("app_public.enrollments")
-        .select("student_id")
-        .where("course_id", "=", courseId);
+      const rows = yield* db.execute(
+        db
+          .selectFrom("app_public.enrollments")
+          .select("student_id")
+          .where("course_id", "=", courseId),
+      );
 
       return yield* expandUserIds(
         rows.map((row) => row.student_id),
@@ -114,12 +120,14 @@ export class RealtimeService extends Effect.Service<RealtimeService>()("Realtime
     });
 
     const usersForModule = Effect.fnUntraced(function* (moduleId: string) {
-      const rows = yield* db
-        .selectFrom("app_public.module_materials as mm")
-        .innerJoin("app_public.modules as m", "m.id", "mm.module_id")
-        .innerJoin("app_public.enrollments as e", "e.course_id", "m.course_id")
-        .select("e.student_id")
-        .where("mm.module_id", "=", moduleId);
+      const rows = yield* db.execute(
+        db
+          .selectFrom("app_public.module_materials as mm")
+          .innerJoin("app_public.modules as m", "m.id", "mm.module_id")
+          .innerJoin("app_public.enrollments as e", "e.course_id", "m.course_id")
+          .select("e.student_id")
+          .where("mm.module_id", "=", moduleId),
+      );
 
       return yield* expandUserIds(
         rows.map((row) => row.student_id),
@@ -128,18 +136,20 @@ export class RealtimeService extends Effect.Service<RealtimeService>()("Realtime
     });
 
     const usersForMaterial = Effect.fnUntraced(function* (materialId: string) {
-      const rows = yield* db
-        .selectFrom("app_public.student_materials")
-        .select("student_id")
-        .where("material_id", "=", materialId)
-        .union(
-          db
-            .selectFrom("app_public.module_materials as mm")
-            .innerJoin("app_public.modules as m", "m.id", "mm.module_id")
-            .innerJoin("app_public.enrollments as e", "e.course_id", "m.course_id")
-            .select("e.student_id")
-            .where("mm.material_id", "=", materialId),
-        );
+      const rows = yield* db.execute(
+        db
+          .selectFrom("app_public.student_materials")
+          .select("student_id")
+          .where("material_id", "=", materialId)
+          .union(
+            db
+              .selectFrom("app_public.module_materials as mm")
+              .innerJoin("app_public.modules as m", "m.id", "mm.module_id")
+              .innerJoin("app_public.enrollments as e", "e.course_id", "m.course_id")
+              .select("e.student_id")
+              .where("mm.material_id", "=", materialId),
+          ),
+      );
 
       return yield* expandUserIds(
         rows.map((row) => row.student_id),
@@ -149,9 +159,9 @@ export class RealtimeService extends Effect.Service<RealtimeService>()("Realtime
 
     const usersForLesson = Effect.fnUntraced(function* (lessonId: string) {
       return yield* yield* db
-        .selectFrom("app_public.lessons")
-        .select("student_id")
-        .where("id", "=", lessonId)
+        .execute(
+          db.selectFrom("app_public.lessons").select("student_id").where("id", "=", lessonId),
+        )
         .pipe(
           Effect.head,
           Effect.option,

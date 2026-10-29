@@ -1,8 +1,6 @@
-import type { EffectKysely } from "@effect/sql-kysely/Kysely";
 import { Effect, Option } from "effect";
 import { sql } from "kysely";
-import type { DB } from "../../generated/db.js";
-import { withAuthContext } from "../db.js";
+import { type Database, withAuthContext } from "../db.js";
 import { catchPgErrors, HttpError } from "../pgErrors.js";
 import { allocatePayment } from "./billingCalculation.js";
 
@@ -146,8 +144,6 @@ export class ValidationError extends HttpError {
   }
 }
 
-type AuthDB = EffectKysely<DB>;
-
 export class BillingLedgerService extends Effect.Service<BillingLedgerService>()(
   "BillingLedgerService",
   {
@@ -167,73 +163,82 @@ export class BillingLedgerService extends Effect.Service<BillingLedgerService>()
 
           const bill = yield* withAuthContext(
             sessionId,
-            Effect.fnUntraced(function* (db: AuthDB) {
+            Effect.fnUntraced(function* (db: Database) {
               const billNumber = yield* db
-                .selectFrom(
+                .execute(
                   db
-                    .selectNoFrom((eb) =>
-                      sql<number>`app_public.next_bill_number(${eb.val(input.familyId)})`.as("n"),
+                    .selectFrom(
+                      db
+                        .selectNoFrom((eb) =>
+                          sql<number>`app_public.next_bill_number(${eb.val(input.familyId)})`.as(
+                            "n",
+                          ),
+                        )
+                        .as("t"),
                     )
-                    .as("t"),
+                    .select(sql<number>`t.n`.as("n")),
                 )
-                .select(sql<number>`t.n`.as("n"))
                 .pipe(
                   Effect.head,
                   Effect.map((r) => r.n),
                 );
 
               const b = yield* db
-                .insertInto("app_public.bills")
-                .values({
-                  family_id: input.familyId,
-                  bill_number: billNumber,
-                  billing_period_start: input.billingPeriodStart,
-                  billing_period_end: input.billingPeriodEnd,
-                  due_date: input.dueDate ?? null,
-                  subtotal_cents: subtotalCents,
-                  discount_cents: discountCents,
-                  tax_cents: taxCents,
-                  total_cents: totalCents,
-                  notes: input.notes ?? null,
-                })
-                .returning([
-                  "id",
-                  "family_id",
-                  "bill_number",
-                  "status",
-                  "billing_period_start",
-                  "billing_period_end",
-                  "due_date",
-                  "subtotal_cents",
-                  "discount_cents",
-                  "tax_cents",
-                  "total_cents",
-                  "discount_details",
-                  "tax_details",
-                  "notes",
-                  "created_at",
-                  "updated_at",
-                  "issued_at",
-                  "paid_at",
-                  "cancelled_at",
-                  "voided_at",
-                ])
+                .execute(
+                  db
+                    .insertInto("app_public.bills")
+                    .values({
+                      family_id: input.familyId,
+                      bill_number: billNumber,
+                      billing_period_start: input.billingPeriodStart,
+                      billing_period_end: input.billingPeriodEnd,
+                      due_date: input.dueDate ?? null,
+                      subtotal_cents: subtotalCents,
+                      discount_cents: discountCents,
+                      tax_cents: taxCents,
+                      total_cents: totalCents,
+                      notes: input.notes ?? null,
+                    })
+                    .returning([
+                      "id",
+                      "family_id",
+                      "bill_number",
+                      "status",
+                      "billing_period_start",
+                      "billing_period_end",
+                      "due_date",
+                      "subtotal_cents",
+                      "discount_cents",
+                      "tax_cents",
+                      "total_cents",
+                      "discount_details",
+                      "tax_details",
+                      "notes",
+                      "created_at",
+                      "updated_at",
+                      "issued_at",
+                      "paid_at",
+                      "cancelled_at",
+                      "voided_at",
+                    ]),
+                )
                 .pipe(Effect.head, catchPgErrors);
 
               if (input.lineItems.length > 0) {
                 yield* db
-                  .insertInto("app_public.bill_line_items")
-                  .values(
-                    input.lineItems.map((li) => ({
-                      bill_id: b.id,
-                      student_id: li.studentId,
-                      line_type: li.lineType,
-                      description: li.description,
-                      quantity: li.quantity,
-                      unit_price_cents: li.unitPriceCents,
-                      amount_cents: li.amountCents,
-                      lesson_id: li.lessonId ?? null,
-                    })),
+                  .execute(
+                    db.insertInto("app_public.bill_line_items").values(
+                      input.lineItems.map((li) => ({
+                        bill_id: b.id,
+                        student_id: li.studentId,
+                        line_type: li.lineType,
+                        description: li.description,
+                        quantity: li.quantity,
+                        unit_price_cents: li.unitPriceCents,
+                        amount_cents: li.amountCents,
+                        lesson_id: li.lessonId ?? null,
+                      })),
+                    ),
                   )
                   .pipe(catchPgErrors);
               }
@@ -248,13 +253,16 @@ export class BillingLedgerService extends Effect.Service<BillingLedgerService>()
         issueBill: Effect.fn("issueBill")(function* (sessionId: string, billId: string) {
           const result = yield* withAuthContext(
             sessionId,
-            Effect.fnUntraced(function* (db: AuthDB) {
+            Effect.fnUntraced(function* (db: Database) {
               const issued = yield* db
-                .updateTable("app_public.bills")
-                .set({ status: "issued", issued_at: new Date() })
-                .where("id", "=", billId)
-                .where("status", "=", "draft")
-                .returningAll()
+                .execute(
+                  db
+                    .updateTable("app_public.bills")
+                    .set({ status: "issued", issued_at: new Date() })
+                    .where("id", "=", billId)
+                    .where("status", "=", "draft")
+                    .returningAll(),
+                )
                 .pipe(Effect.head, Effect.option);
 
               if (Option.isSome(issued)) {
@@ -262,13 +270,16 @@ export class BillingLedgerService extends Effect.Service<BillingLedgerService>()
               }
 
               const existing = yield* db
-                .selectFrom("app_public.bills")
-                .select((eb) => [
-                  "status",
-                  eb.fn("app_public.current_user_id").as("current_user_id"),
-                  eb.fn("app_public.current_user_role").as("current_user_role"),
-                ])
-                .where("id", "=", billId)
+                .execute(
+                  db
+                    .selectFrom("app_public.bills")
+                    .select((eb) => [
+                      "status",
+                      eb.fn("app_public.current_user_id").as("current_user_id"),
+                      eb.fn("app_public.current_user_role").as("current_user_role"),
+                    ])
+                    .where("id", "=", billId),
+                )
                 .pipe(Effect.head, Effect.option);
               if (Option.isNone(existing)) {
                 return yield* new BillNotFoundError();
@@ -283,51 +294,57 @@ export class BillingLedgerService extends Effect.Service<BillingLedgerService>()
         }),
 
         getBill: Effect.fn("getBill")(function* (sessionId: string, billId: string) {
-          const bill = yield* withAuthContext(sessionId, (db: AuthDB) =>
+          const bill = yield* withAuthContext(sessionId, (db: Database) =>
             db
-              .selectFrom("app_public.bills")
-              .selectAll()
-              .where("id", "=", billId)
+              .execute(db.selectFrom("app_public.bills").selectAll().where("id", "=", billId))
               .pipe(Effect.head, Effect.option),
           );
           if (Option.isNone(bill)) {
             return null;
           }
 
-          const lineItems = yield* withAuthContext(sessionId, (db: AuthDB) =>
-            db
-              .selectFrom("app_public.bill_line_items")
-              .selectAll()
-              .where("bill_id", "=", billId)
-              .orderBy("created_at"),
+          const lineItems = yield* withAuthContext(sessionId, (db: Database) =>
+            db.execute(
+              db
+                .selectFrom("app_public.bill_line_items")
+                .selectAll()
+                .where("bill_id", "=", billId)
+                .orderBy("created_at"),
+            ),
           );
 
-          const adjustments = yield* withAuthContext(sessionId, (db: AuthDB) =>
-            db
-              .selectFrom("app_public.bill_adjustments")
-              .selectAll()
-              .where("bill_id", "=", billId)
-              .orderBy("created_at"),
+          const adjustments = yield* withAuthContext(sessionId, (db: Database) =>
+            db.execute(
+              db
+                .selectFrom("app_public.bill_adjustments")
+                .selectAll()
+                .where("bill_id", "=", billId)
+                .orderBy("created_at"),
+            ),
           );
 
-          const creditApplications = yield* withAuthContext(sessionId, (db: AuthDB) =>
-            db
-              .selectFrom("app_public.family_credit_applications")
-              .selectAll()
-              .where("bill_id", "=", billId)
-              .orderBy("created_at"),
+          const creditApplications = yield* withAuthContext(sessionId, (db: Database) =>
+            db.execute(
+              db
+                .selectFrom("app_public.family_credit_applications")
+                .selectAll()
+                .where("bill_id", "=", billId)
+                .orderBy("created_at"),
+            ),
           );
 
           return { ...bill.value, lineItems, adjustments, creditApplications };
         }),
 
         billLineItems: Effect.fn("billLineItems")(function* (sessionId: string, billId: string) {
-          const items = yield* withAuthContext(sessionId, (db: AuthDB) =>
-            db
-              .selectFrom("app_public.bill_line_items")
-              .selectAll()
-              .where("bill_id", "=", billId)
-              .orderBy("created_at"),
+          const items = yield* withAuthContext(sessionId, (db: Database) =>
+            db.execute(
+              db
+                .selectFrom("app_public.bill_line_items")
+                .selectAll()
+                .where("bill_id", "=", billId)
+                .orderBy("created_at"),
+            ),
           );
           return items;
         }),
@@ -336,12 +353,14 @@ export class BillingLedgerService extends Effect.Service<BillingLedgerService>()
           sessionId: string,
           familyId: string,
         ) {
-          const bills = yield* withAuthContext(sessionId, (db: AuthDB) =>
-            db
-              .selectFrom("app_public.bills")
-              .selectAll()
-              .where("family_id", "=", familyId)
-              .orderBy("created_at", "desc"),
+          const bills = yield* withAuthContext(sessionId, (db: Database) =>
+            db.execute(
+              db
+                .selectFrom("app_public.bills")
+                .selectAll()
+                .where("family_id", "=", familyId)
+                .orderBy("created_at", "desc"),
+            ),
           );
           return bills;
         }),
@@ -349,11 +368,14 @@ export class BillingLedgerService extends Effect.Service<BillingLedgerService>()
         voidBill: Effect.fn("voidBill")(function* (sessionId: string, input: VoidBillInput) {
           const result = yield* withAuthContext(
             sessionId,
-            Effect.fnUntraced(function* (db: AuthDB) {
+            Effect.fnUntraced(function* (db: Database) {
               const bill = yield* db
-                .selectFrom("app_public.bills")
-                .select(["id", "status", "family_id"])
-                .where("id", "=", input.billId)
+                .execute(
+                  db
+                    .selectFrom("app_public.bills")
+                    .select(["id", "status", "family_id"])
+                    .where("id", "=", input.billId),
+                )
                 .pipe(Effect.head, Effect.option);
               if (Option.isNone(bill)) {
                 return yield* new BillNotFoundError();
@@ -369,14 +391,17 @@ export class BillingLedgerService extends Effect.Service<BillingLedgerService>()
               }
 
               return yield* db
-                .updateTable("app_public.bills")
-                .set({
-                  status: "void",
-                  voided_at: new Date(),
-                  notes: sql<string>`case when notes is null or notes = '' then ${input.reason} else notes || E'\\nVoid reason: ' || ${input.reason} end`,
-                })
-                .where("id", "=", input.billId)
-                .returningAll()
+                .execute(
+                  db
+                    .updateTable("app_public.bills")
+                    .set({
+                      status: "void",
+                      voided_at: new Date(),
+                      notes: sql<string>`case when notes is null or notes = '' then ${input.reason} else notes || E'\\nVoid reason: ' || ${input.reason} end`,
+                    })
+                    .where("id", "=", input.billId)
+                    .returningAll(),
+                )
                 .pipe(Effect.head, catchPgErrors);
             }),
           );
@@ -386,13 +411,16 @@ export class BillingLedgerService extends Effect.Service<BillingLedgerService>()
         cancelBill: Effect.fn("cancelBill")(function* (sessionId: string, billId: string) {
           const result = yield* withAuthContext(
             sessionId,
-            Effect.fnUntraced(function* (db: AuthDB) {
+            Effect.fnUntraced(function* (db: Database) {
               const cancelled = yield* db
-                .updateTable("app_public.bills")
-                .set({ status: "cancelled", cancelled_at: new Date() })
-                .where("id", "=", billId)
-                .where("status", "=", "draft")
-                .returningAll()
+                .execute(
+                  db
+                    .updateTable("app_public.bills")
+                    .set({ status: "cancelled", cancelled_at: new Date() })
+                    .where("id", "=", billId)
+                    .where("status", "=", "draft")
+                    .returningAll(),
+                )
                 .pipe(Effect.head, Effect.option);
 
               if (Option.isSome(cancelled)) {
@@ -400,9 +428,9 @@ export class BillingLedgerService extends Effect.Service<BillingLedgerService>()
               }
 
               const existing = yield* db
-                .selectFrom("app_public.bills")
-                .select("status")
-                .where("id", "=", billId)
+                .execute(
+                  db.selectFrom("app_public.bills").select("status").where("id", "=", billId),
+                )
                 .pipe(Effect.head, Effect.option);
               if (Option.isNone(existing)) {
                 return yield* new BillNotFoundError();
@@ -442,28 +470,30 @@ export class BillingLedgerService extends Effect.Service<BillingLedgerService>()
 
           const payment = yield* withAuthContext(
             sessionId,
-            Effect.fnUntraced(function* (db: AuthDB) {
-              const bills = yield* db
-                .selectFrom("app_public.bills as b")
-                .select([
-                  "b.id",
-                  "b.total_cents",
-                  "b.due_date",
-                  "b.status",
-                  sql<number>`coalesce((select sum(amount_cents) from app_public.bill_adjustments where bill_id = b.id), 0)`.as(
-                    "adjustments",
-                  ),
-                  sql<number>`coalesce((select sum(amount_cents) from app_public.family_credit_applications where bill_id = b.id), 0)`.as(
-                    "credits",
-                  ),
-                  sql<number>`coalesce((select sum(amount_cents) from app_public.payment_allocations where bill_id = b.id), 0)`.as(
-                    "payments",
-                  ),
-                ])
-                .where("b.family_id", "=", input.familyId)
-                .where("b.status", "in", ["issued", "paid"])
-                .orderBy("b.due_date", "asc")
-                .orderBy("b.created_at", "asc");
+            Effect.fnUntraced(function* (db: Database) {
+              const bills = yield* db.execute(
+                db
+                  .selectFrom("app_public.bills as b")
+                  .select([
+                    "b.id",
+                    "b.total_cents",
+                    "b.due_date",
+                    "b.status",
+                    sql<number>`coalesce((select sum(amount_cents) from app_public.bill_adjustments where bill_id = b.id), 0)`.as(
+                      "adjustments",
+                    ),
+                    sql<number>`coalesce((select sum(amount_cents) from app_public.family_credit_applications where bill_id = b.id), 0)`.as(
+                      "credits",
+                    ),
+                    sql<number>`coalesce((select sum(amount_cents) from app_public.payment_allocations where bill_id = b.id), 0)`.as(
+                      "payments",
+                    ),
+                  ])
+                  .where("b.family_id", "=", input.familyId)
+                  .where("b.status", "in", ["issued", "paid"])
+                  .orderBy("b.due_date", "asc")
+                  .orderBy("b.created_at", "asc"),
+              );
 
               const allocations = allocatePayment({
                 paymentAmountCents: input.amountCents,
@@ -488,22 +518,25 @@ export class BillingLedgerService extends Effect.Service<BillingLedgerService>()
               }
               for (const a of allocations) {
                 const bill = yield* db
-                  .selectFrom("app_public.bills as b")
-                  .select([
-                    "b.family_id",
-                    "b.status",
-                    "b.total_cents",
-                    sql<number>`coalesce((select sum(amount_cents) from app_public.bill_adjustments where bill_id = b.id), 0)`.as(
-                      "adjustments",
-                    ),
-                    sql<number>`coalesce((select sum(amount_cents) from app_public.family_credit_applications where bill_id = b.id), 0)`.as(
-                      "credits",
-                    ),
-                    sql<number>`coalesce((select sum(amount_cents) from app_public.payment_allocations where bill_id = b.id), 0)`.as(
-                      "payments",
-                    ),
-                  ])
-                  .where("id", "=", a.billId)
+                  .execute(
+                    db
+                      .selectFrom("app_public.bills as b")
+                      .select([
+                        "b.family_id",
+                        "b.status",
+                        "b.total_cents",
+                        sql<number>`coalesce((select sum(amount_cents) from app_public.bill_adjustments where bill_id = b.id), 0)`.as(
+                          "adjustments",
+                        ),
+                        sql<number>`coalesce((select sum(amount_cents) from app_public.family_credit_applications where bill_id = b.id), 0)`.as(
+                          "credits",
+                        ),
+                        sql<number>`coalesce((select sum(amount_cents) from app_public.payment_allocations where bill_id = b.id), 0)`.as(
+                          "payments",
+                        ),
+                      ])
+                      .where("id", "=", a.billId),
+                  )
                   .pipe(Effect.head, Effect.option);
                 if (Option.isNone(bill)) {
                   return yield* new BillNotFoundError();
@@ -531,44 +564,51 @@ export class BillingLedgerService extends Effect.Service<BillingLedgerService>()
               }
 
               const paymentNumber = yield* db
-                .selectFrom(
+                .execute(
                   db
-                    .selectNoFrom((eb) =>
-                      sql<number>`app_public.next_payment_number(${eb.val(input.familyId)})`.as(
-                        "n",
-                      ),
+                    .selectFrom(
+                      db
+                        .selectNoFrom((eb) =>
+                          sql<number>`app_public.next_payment_number(${eb.val(input.familyId)})`.as(
+                            "n",
+                          ),
+                        )
+                        .as("t"),
                     )
-                    .as("t"),
+                    .select(sql<number>`t.n`.as("n")),
                 )
-                .select(sql<number>`t.n`.as("n"))
                 .pipe(
                   Effect.head,
                   Effect.map((r) => r.n),
                 );
 
               const p = yield* db
-                .insertInto("app_public.payments")
-                .values({
-                  family_id: input.familyId,
-                  payment_number: paymentNumber,
-                  amount_cents: input.amountCents,
-                  method: input.method,
-                  reference: input.reference ?? null,
-                  received_at: input.receivedAt ?? new Date(),
-                  notes: input.notes ?? null,
-                })
-                .returningAll()
+                .execute(
+                  db
+                    .insertInto("app_public.payments")
+                    .values({
+                      family_id: input.familyId,
+                      payment_number: paymentNumber,
+                      amount_cents: input.amountCents,
+                      method: input.method,
+                      reference: input.reference ?? null,
+                      received_at: input.receivedAt ?? new Date(),
+                      notes: input.notes ?? null,
+                    })
+                    .returningAll(),
+                )
                 .pipe(Effect.head, catchPgErrors);
 
               if (allocations.length > 0) {
                 yield* db
-                  .insertInto("app_public.payment_allocations")
-                  .values(
-                    allocations.map((a) => ({
-                      payment_id: p.id,
-                      bill_id: a.billId,
-                      amount_cents: a.amountCents,
-                    })),
+                  .execute(
+                    db.insertInto("app_public.payment_allocations").values(
+                      allocations.map((a) => ({
+                        payment_id: p.id,
+                        bill_id: a.billId,
+                        amount_cents: a.amountCents,
+                      })),
+                    ),
                   )
                   .pipe(catchPgErrors);
               }
@@ -580,37 +620,41 @@ export class BillingLedgerService extends Effect.Service<BillingLedgerService>()
               const excessCents = input.amountCents - allocatedCents;
               if (excessCents > 0) {
                 yield* db
-                  .insertInto("app_public.family_credits")
-                  .values({
-                    family_id: input.familyId,
-                    student_id: null,
-                    amount_cents: excessCents,
-                    reason: `Excess payment credit from payment ${p.payment_number}`,
-                    created_by: sql<string>`app_public.current_user_id()`,
-                    source_payment_id: p.id,
-                    expires_at: null,
-                    consumed_at: null,
-                  })
+                  .execute(
+                    db.insertInto("app_public.family_credits").values({
+                      family_id: input.familyId,
+                      student_id: null,
+                      amount_cents: excessCents,
+                      reason: `Excess payment credit from payment ${p.payment_number}`,
+                      created_by: sql<string>`app_public.current_user_id()`,
+                      source_payment_id: p.id,
+                      expires_at: null,
+                      consumed_at: null,
+                    }),
+                  )
                   .pipe(catchPgErrors);
               }
 
               for (const billId of requestedByBill.keys()) {
                 const balance = yield* db
-                  .selectFrom("app_public.bills as b")
-                  .select([
-                    "b.total_cents",
-                    "b.status",
-                    sql<number>`coalesce((select sum(amount_cents) from app_public.bill_adjustments where bill_id = b.id), 0)`.as(
-                      "adjustments",
-                    ),
-                    sql<number>`coalesce((select sum(amount_cents) from app_public.family_credit_applications where bill_id = b.id), 0)`.as(
-                      "credits",
-                    ),
-                    sql<number>`coalesce((select sum(amount_cents) from app_public.payment_allocations where bill_id = b.id), 0)`.as(
-                      "payments",
-                    ),
-                  ])
-                  .where("b.id", "=", billId)
+                  .execute(
+                    db
+                      .selectFrom("app_public.bills as b")
+                      .select([
+                        "b.total_cents",
+                        "b.status",
+                        sql<number>`coalesce((select sum(amount_cents) from app_public.bill_adjustments where bill_id = b.id), 0)`.as(
+                          "adjustments",
+                        ),
+                        sql<number>`coalesce((select sum(amount_cents) from app_public.family_credit_applications where bill_id = b.id), 0)`.as(
+                          "credits",
+                        ),
+                        sql<number>`coalesce((select sum(amount_cents) from app_public.payment_allocations where bill_id = b.id), 0)`.as(
+                          "payments",
+                        ),
+                      ])
+                      .where("b.id", "=", billId),
+                  )
                   .pipe(Effect.head);
                 const outstanding =
                   balance.total_cents +
@@ -619,10 +663,13 @@ export class BillingLedgerService extends Effect.Service<BillingLedgerService>()
                   Number(balance.payments);
                 if (outstanding <= 0 && balance.status === "issued") {
                   yield* db
-                    .updateTable("app_public.bills")
-                    .set({ status: "paid", paid_at: new Date() })
-                    .where("id", "=", billId)
-                    .returning("id")
+                    .execute(
+                      db
+                        .updateTable("app_public.bills")
+                        .set({ status: "paid", paid_at: new Date() })
+                        .where("id", "=", billId)
+                        .returning("id"),
+                    )
                     .pipe(Effect.head);
                 }
               }
@@ -638,12 +685,14 @@ export class BillingLedgerService extends Effect.Service<BillingLedgerService>()
           sessionId: string,
           familyId: string,
         ) {
-          const payments = yield* withAuthContext(sessionId, (db: AuthDB) =>
-            db
-              .selectFrom("app_public.payments")
-              .selectAll()
-              .where("family_id", "=", familyId)
-              .orderBy("received_at", "desc"),
+          const payments = yield* withAuthContext(sessionId, (db: Database) =>
+            db.execute(
+              db
+                .selectFrom("app_public.payments")
+                .selectAll()
+                .where("family_id", "=", familyId)
+                .orderBy("received_at", "desc"),
+            ),
           );
           return payments;
         }),
@@ -654,29 +703,32 @@ export class BillingLedgerService extends Effect.Service<BillingLedgerService>()
         ) {
           const app = yield* withAuthContext(
             sessionId,
-            Effect.fnUntraced(function* (db: AuthDB) {
+            Effect.fnUntraced(function* (db: Database) {
               if (!Number.isInteger(input.amountCents) || input.amountCents <= 0) {
                 return yield* new ValidationError(
                   "Credit application must be a positive number of cents",
                 );
               }
               const bill = yield* db
-                .selectFrom("app_public.bills")
-                .select([
-                  "family_id",
-                  "status",
-                  "total_cents",
-                  sql<number>`coalesce((select sum(amount_cents) from app_public.bill_adjustments where bill_id = app_public.bills.id), 0)`.as(
-                    "adjustments",
-                  ),
-                  sql<number>`coalesce((select sum(amount_cents) from app_public.family_credit_applications where bill_id = app_public.bills.id), 0)`.as(
-                    "credits",
-                  ),
-                  sql<number>`coalesce((select sum(amount_cents) from app_public.payment_allocations where bill_id = app_public.bills.id), 0)`.as(
-                    "payments",
-                  ),
-                ])
-                .where("id", "=", input.billId)
+                .execute(
+                  db
+                    .selectFrom("app_public.bills")
+                    .select([
+                      "family_id",
+                      "status",
+                      "total_cents",
+                      sql<number>`coalesce((select sum(amount_cents) from app_public.bill_adjustments where bill_id = app_public.bills.id), 0)`.as(
+                        "adjustments",
+                      ),
+                      sql<number>`coalesce((select sum(amount_cents) from app_public.family_credit_applications where bill_id = app_public.bills.id), 0)`.as(
+                        "credits",
+                      ),
+                      sql<number>`coalesce((select sum(amount_cents) from app_public.payment_allocations where bill_id = app_public.bills.id), 0)`.as(
+                        "payments",
+                      ),
+                    ])
+                    .where("id", "=", input.billId),
+                )
                 .pipe(Effect.head, Effect.option);
               if (Option.isNone(bill)) {
                 return yield* new BillNotFoundError();
@@ -686,10 +738,13 @@ export class BillingLedgerService extends Effect.Service<BillingLedgerService>()
               }
 
               const credit = yield* db
-                .selectFrom("app_public.family_credits")
-                .selectAll()
-                .where("id", "=", input.creditId)
-                .forUpdate()
+                .execute(
+                  db
+                    .selectFrom("app_public.family_credits")
+                    .selectAll()
+                    .where("id", "=", input.creditId)
+                    .forUpdate(),
+                )
                 .pipe(Effect.head, Effect.option);
               if (Option.isNone(credit)) {
                 return yield* new CreditNotFoundError();
@@ -702,9 +757,12 @@ export class BillingLedgerService extends Effect.Service<BillingLedgerService>()
               }
 
               const alreadyApplied = yield* db
-                .selectFrom("app_public.family_credit_applications")
-                .select(sql<number>`COALESCE(SUM(amount_cents), 0)`.as("total_applied"))
-                .where("credit_id", "=", input.creditId)
+                .execute(
+                  db
+                    .selectFrom("app_public.family_credit_applications")
+                    .select(sql<number>`COALESCE(SUM(amount_cents), 0)`.as("total_applied"))
+                    .where("credit_id", "=", input.creditId),
+                )
                 .pipe(
                   Effect.head,
                   Effect.map((r) => Number(r.total_applied)),
@@ -730,20 +788,26 @@ export class BillingLedgerService extends Effect.Service<BillingLedgerService>()
               }
 
               const application = yield* db
-                .insertInto("app_public.family_credit_applications")
-                .values({
-                  credit_id: input.creditId,
-                  bill_id: input.billId,
-                  amount_cents: input.amountCents,
-                })
-                .returningAll()
+                .execute(
+                  db
+                    .insertInto("app_public.family_credit_applications")
+                    .values({
+                      credit_id: input.creditId,
+                      bill_id: input.billId,
+                      amount_cents: input.amountCents,
+                    })
+                    .returningAll(),
+                )
                 .pipe(Effect.head, catchPgErrors);
               if (outstanding - input.amountCents <= 0 && bill.value.status === "issued") {
                 yield* db
-                  .updateTable("app_public.bills")
-                  .set({ status: "paid", paid_at: new Date() })
-                  .where("id", "=", input.billId)
-                  .returning("id")
+                  .execute(
+                    db
+                      .updateTable("app_public.bills")
+                      .set({ status: "paid", paid_at: new Date() })
+                      .where("id", "=", input.billId)
+                      .returning("id"),
+                  )
                   .pipe(Effect.head);
               }
               return application;
@@ -765,11 +829,14 @@ export class BillingLedgerService extends Effect.Service<BillingLedgerService>()
           }
           const adj = yield* withAuthContext(
             sessionId,
-            Effect.fnUntraced(function* (db: AuthDB) {
+            Effect.fnUntraced(function* (db: Database) {
               const bill = yield* db
-                .selectFrom("app_public.bills")
-                .select(["id", "status"])
-                .where("id", "=", input.billId)
+                .execute(
+                  db
+                    .selectFrom("app_public.bills")
+                    .select(["id", "status"])
+                    .where("id", "=", input.billId),
+                )
                 .pipe(Effect.head, Effect.option);
               if (Option.isNone(bill)) {
                 return yield* new BillNotFoundError();
@@ -784,26 +851,32 @@ export class BillingLedgerService extends Effect.Service<BillingLedgerService>()
               }
 
               const userId = yield* db
-                .selectFrom(
+                .execute(
                   db
-                    .selectNoFrom(() => sql<string>`app_public.current_user_id()`.as("uid"))
-                    .as("t"),
+                    .selectFrom(
+                      db
+                        .selectNoFrom(() => sql<string>`app_public.current_user_id()`.as("uid"))
+                        .as("t"),
+                    )
+                    .select(sql<string>`t.uid`.as("user_id")),
                 )
-                .select(sql<string>`t.uid`.as("user_id"))
                 .pipe(
                   Effect.head,
                   Effect.map((r) => r.user_id),
                 );
 
               return yield* db
-                .insertInto("app_public.bill_adjustments")
-                .values({
-                  bill_id: input.billId,
-                  amount_cents: input.amountCents,
-                  reason: input.reason,
-                  created_by: userId,
-                })
-                .returningAll()
+                .execute(
+                  db
+                    .insertInto("app_public.bill_adjustments")
+                    .values({
+                      bill_id: input.billId,
+                      amount_cents: input.amountCents,
+                      reason: input.reason,
+                      created_by: userId,
+                    })
+                    .returningAll(),
+                )
                 .pipe(Effect.head, catchPgErrors);
             }),
           );
@@ -823,21 +896,27 @@ export class BillingLedgerService extends Effect.Service<BillingLedgerService>()
           }
           const refund = yield* withAuthContext(
             sessionId,
-            Effect.fnUntraced(function* (db: AuthDB) {
+            Effect.fnUntraced(function* (db: Database) {
               const payment = yield* db
-                .selectFrom("app_public.payments")
-                .selectAll()
-                .where("id", "=", input.paymentId)
+                .execute(
+                  db
+                    .selectFrom("app_public.payments")
+                    .selectAll()
+                    .where("id", "=", input.paymentId),
+                )
                 .pipe(Effect.head, Effect.option);
               if (Option.isNone(payment)) {
                 return yield* new PaymentNotFoundError();
               }
 
               const totalRefunded = yield* db
-                .selectFrom("app_public.refunds")
-                .select(sql<number>`COALESCE(SUM(amount_cents), 0)`.as("total_refunded"))
-                .where("payment_id", "=", input.paymentId)
-                .where("reversed_at", "is", null)
+                .execute(
+                  db
+                    .selectFrom("app_public.refunds")
+                    .select(sql<number>`COALESCE(SUM(amount_cents), 0)`.as("total_refunded"))
+                    .where("payment_id", "=", input.paymentId)
+                    .where("reversed_at", "is", null),
+                )
                 .pipe(
                   Effect.head,
                   Effect.map((r) => Number(r.total_refunded)),
@@ -849,28 +928,34 @@ export class BillingLedgerService extends Effect.Service<BillingLedgerService>()
               }
 
               const userId = yield* db
-                .selectFrom(
+                .execute(
                   db
-                    .selectNoFrom(() => sql<string>`app_public.current_user_id()`.as("uid"))
-                    .as("t"),
+                    .selectFrom(
+                      db
+                        .selectNoFrom(() => sql<string>`app_public.current_user_id()`.as("uid"))
+                        .as("t"),
+                    )
+                    .select(sql<string>`t.uid`.as("user_id")),
                 )
-                .select(sql<string>`t.uid`.as("user_id"))
                 .pipe(
                   Effect.head,
                   Effect.map((r) => r.user_id),
                 );
 
               return yield* db
-                .insertInto("app_public.refunds")
-                .values({
-                  payment_id: input.paymentId,
-                  amount_cents: input.amountCents,
-                  reason: input.reason,
-                  created_by: userId,
-                  refunded_at: new Date(),
-                  notes: input.notes ?? null,
-                })
-                .returningAll()
+                .execute(
+                  db
+                    .insertInto("app_public.refunds")
+                    .values({
+                      payment_id: input.paymentId,
+                      amount_cents: input.amountCents,
+                      reason: input.reason,
+                      created_by: userId,
+                      refunded_at: new Date(),
+                      notes: input.notes ?? null,
+                    })
+                    .returningAll(),
+                )
                 .pipe(Effect.head, catchPgErrors);
             }),
           );
@@ -882,12 +967,14 @@ export class BillingLedgerService extends Effect.Service<BillingLedgerService>()
           sessionId: string,
           familyId: string,
         ) {
-          const credits = yield* withAuthContext(sessionId, (db: AuthDB) =>
-            db
-              .selectFrom("app_public.family_credits")
-              .selectAll()
-              .where("family_id", "=", familyId)
-              .orderBy("created_at", "desc"),
+          const credits = yield* withAuthContext(sessionId, (db: Database) =>
+            db.execute(
+              db
+                .selectFrom("app_public.family_credits")
+                .selectAll()
+                .where("family_id", "=", familyId)
+                .orderBy("created_at", "desc"),
+            ),
           );
           return credits;
         }),
@@ -905,30 +992,36 @@ export class BillingLedgerService extends Effect.Service<BillingLedgerService>()
 
           const credit = yield* withAuthContext(
             sessionId,
-            Effect.fnUntraced(function* (db: AuthDB) {
+            Effect.fnUntraced(function* (db: Database) {
               const userId = yield* db
-                .selectFrom(
+                .execute(
                   db
-                    .selectNoFrom(() => sql<string>`app_public.current_user_id()`.as("uid"))
-                    .as("t"),
+                    .selectFrom(
+                      db
+                        .selectNoFrom(() => sql<string>`app_public.current_user_id()`.as("uid"))
+                        .as("t"),
+                    )
+                    .select(sql<string>`t.uid`.as("user_id")),
                 )
-                .select(sql<string>`t.uid`.as("user_id"))
                 .pipe(
                   Effect.head,
                   Effect.map((r) => r.user_id),
                 );
 
               return yield* db
-                .insertInto("app_public.family_credits")
-                .values({
-                  family_id: input.familyId,
-                  student_id: input.studentId ?? null,
-                  amount_cents: input.amountCents,
-                  reason: input.reason,
-                  created_by: userId,
-                  expires_at: input.expiresAt ?? null,
-                })
-                .returningAll()
+                .execute(
+                  db
+                    .insertInto("app_public.family_credits")
+                    .values({
+                      family_id: input.familyId,
+                      student_id: input.studentId ?? null,
+                      amount_cents: input.amountCents,
+                      reason: input.reason,
+                      created_by: userId,
+                      expires_at: input.expiresAt ?? null,
+                    })
+                    .returningAll(),
+                )
                 .pipe(Effect.head, catchPgErrors);
             }),
           );
@@ -940,55 +1033,67 @@ export class BillingLedgerService extends Effect.Service<BillingLedgerService>()
           sessionId: string,
           familyId: string,
         ) {
-          const bills = yield* withAuthContext(sessionId, (db: AuthDB) =>
-            db
-              .selectFrom("app_public.bills")
-              .select(["id", "status", "total_cents", "due_date"])
-              .where("family_id", "=", familyId),
+          const bills = yield* withAuthContext(sessionId, (db: Database) =>
+            db.execute(
+              db
+                .selectFrom("app_public.bills")
+                .select(["id", "status", "total_cents", "due_date"])
+                .where("family_id", "=", familyId),
+            ),
           );
 
           const billIds = bills.map((b) => b.id);
           const adjustments = billIds.length
-            ? yield* withAuthContext(sessionId, (db: AuthDB) =>
-                db
-                  .selectFrom("app_public.bill_adjustments")
-                  .select(["bill_id", "amount_cents"])
-                  .where("bill_id", "in", billIds),
+            ? yield* withAuthContext(sessionId, (db: Database) =>
+                db.execute(
+                  db
+                    .selectFrom("app_public.bill_adjustments")
+                    .select(["bill_id", "amount_cents"])
+                    .where("bill_id", "in", billIds),
+                ),
               )
             : [];
           const creditApplications = billIds.length
-            ? yield* withAuthContext(sessionId, (db: AuthDB) =>
-                db
-                  .selectFrom("app_public.family_credit_applications")
-                  .select(["bill_id", "amount_cents"])
-                  .where("bill_id", "in", billIds),
+            ? yield* withAuthContext(sessionId, (db: Database) =>
+                db.execute(
+                  db
+                    .selectFrom("app_public.family_credit_applications")
+                    .select(["bill_id", "amount_cents"])
+                    .where("bill_id", "in", billIds),
+                ),
               )
             : [];
 
-          const payments = yield* withAuthContext(sessionId, (db: AuthDB) =>
-            db
-              .selectFrom("app_public.payments")
-              .select(["id", "amount_cents"])
-              .where("family_id", "=", familyId),
+          const payments = yield* withAuthContext(sessionId, (db: Database) =>
+            db.execute(
+              db
+                .selectFrom("app_public.payments")
+                .select(["id", "amount_cents"])
+                .where("family_id", "=", familyId),
+            ),
           );
 
           const paymentIds = payments.map((p) => p.id);
 
           const allocations = paymentIds.length
-            ? yield* withAuthContext(sessionId, (db: AuthDB) =>
-                db
-                  .selectFrom("app_public.payment_allocations")
-                  .select(["payment_id", "bill_id", "amount_cents"])
-                  .where("payment_id", "in", paymentIds),
+            ? yield* withAuthContext(sessionId, (db: Database) =>
+                db.execute(
+                  db
+                    .selectFrom("app_public.payment_allocations")
+                    .select(["payment_id", "bill_id", "amount_cents"])
+                    .where("payment_id", "in", paymentIds),
+                ),
               )
             : [];
           const refunds = paymentIds.length
-            ? yield* withAuthContext(sessionId, (db: AuthDB) =>
-                db
-                  .selectFrom("app_public.refunds")
-                  .select(["payment_id", "amount_cents"])
-                  .where("payment_id", "in", paymentIds)
-                  .where("reversed_at", "is", null),
+            ? yield* withAuthContext(sessionId, (db: Database) =>
+                db.execute(
+                  db
+                    .selectFrom("app_public.refunds")
+                    .select(["payment_id", "amount_cents"])
+                    .where("payment_id", "in", paymentIds)
+                    .where("reversed_at", "is", null),
+                ),
               )
             : [];
           const refundedByPayment = new Map<string, number>();
@@ -1079,14 +1184,16 @@ export class BillingLedgerService extends Effect.Service<BillingLedgerService>()
               0,
             );
 
-          const credits = yield* withAuthContext(sessionId, (db: AuthDB) =>
-            db
-              .selectFrom("app_public.family_credits as c")
-              .leftJoin("app_public.family_credit_applications as ca", "ca.credit_id", "c.id")
-              .select(["c.id", "c.amount_cents", "c.expires_at", "c.source_payment_id"])
-              .select(sql<number>`coalesce(sum(ca.amount_cents), 0)`.as("applied_cents"))
-              .where("c.family_id", "=", familyId)
-              .groupBy(["c.id", "c.amount_cents", "c.expires_at"]),
+          const credits = yield* withAuthContext(sessionId, (db: Database) =>
+            db.execute(
+              db
+                .selectFrom("app_public.family_credits as c")
+                .leftJoin("app_public.family_credit_applications as ca", "ca.credit_id", "c.id")
+                .select(["c.id", "c.amount_cents", "c.expires_at", "c.source_payment_id"])
+                .select(sql<number>`coalesce(sum(ca.amount_cents), 0)`.as("applied_cents"))
+                .where("c.family_id", "=", familyId)
+                .groupBy(["c.id", "c.amount_cents", "c.expires_at"]),
+            ),
           );
           const unexpiredCredits = credits.reduce(
             (sum, c) =>
@@ -1139,32 +1246,38 @@ export class BillingLedgerService extends Effect.Service<BillingLedgerService>()
 
           const discount = yield* withAuthContext(
             sessionId,
-            Effect.fnUntraced(function* (db: AuthDB) {
+            Effect.fnUntraced(function* (db: Database) {
               const userId = yield* db
-                .selectFrom(
+                .execute(
                   db
-                    .selectNoFrom(() => sql<string>`app_public.current_user_id()`.as("uid"))
-                    .as("t"),
+                    .selectFrom(
+                      db
+                        .selectNoFrom(() => sql<string>`app_public.current_user_id()`.as("uid"))
+                        .as("t"),
+                    )
+                    .select(sql<string>`t.uid`.as("user_id")),
                 )
-                .select(sql<string>`t.uid`.as("user_id"))
                 .pipe(
                   Effect.head,
                   Effect.map((r) => r.user_id),
                 );
 
               return yield* db
-                .insertInto("app_public.family_discounts")
-                .values({
-                  family_id: input.familyId,
-                  label: input.label,
-                  discount_type: input.discountType,
-                  discount_value: input.discountValue,
-                  applies_to: input.appliesTo,
-                  effective_from: input.effectiveFrom,
-                  effective_until: input.effectiveUntil ?? null,
-                  created_by: userId,
-                })
-                .returningAll()
+                .execute(
+                  db
+                    .insertInto("app_public.family_discounts")
+                    .values({
+                      family_id: input.familyId,
+                      label: input.label,
+                      discount_type: input.discountType,
+                      discount_value: input.discountValue,
+                      applies_to: input.appliesTo,
+                      effective_from: input.effectiveFrom,
+                      effective_until: input.effectiveUntil ?? null,
+                      created_by: userId,
+                    })
+                    .returningAll(),
+                )
                 .pipe(Effect.head, catchPgErrors);
             }),
           );
@@ -1202,12 +1315,15 @@ export class BillingLedgerService extends Effect.Service<BillingLedgerService>()
 
           const discount = yield* withAuthContext(
             sessionId,
-            Effect.fnUntraced(function* (db: AuthDB) {
+            Effect.fnUntraced(function* (db: Database) {
               return yield* db
-                .updateTable("app_public.family_discounts")
-                .set(updates)
-                .where("id", "=", discountId)
-                .returningAll()
+                .execute(
+                  db
+                    .updateTable("app_public.family_discounts")
+                    .set(updates)
+                    .where("id", "=", discountId)
+                    .returningAll(),
+                )
                 .pipe(Effect.head, catchPgErrors);
             }),
           );
@@ -1218,12 +1334,14 @@ export class BillingLedgerService extends Effect.Service<BillingLedgerService>()
           sessionId: string,
           familyId: string,
         ) {
-          const discounts = yield* withAuthContext(sessionId, (db: AuthDB) =>
-            db
-              .selectFrom("app_public.family_discounts")
-              .selectAll()
-              .where("family_id", "=", familyId)
-              .orderBy("effective_from", "desc"),
+          const discounts = yield* withAuthContext(sessionId, (db: Database) =>
+            db.execute(
+              db
+                .selectFrom("app_public.family_discounts")
+                .selectAll()
+                .where("family_id", "=", familyId)
+                .orderBy("effective_from", "desc"),
+            ),
           );
           return discounts;
         }),
@@ -1243,31 +1361,37 @@ export class BillingLedgerService extends Effect.Service<BillingLedgerService>()
 
           const rate = yield* withAuthContext(
             sessionId,
-            Effect.fnUntraced(function* (db: AuthDB) {
+            Effect.fnUntraced(function* (db: Database) {
               const userId = yield* db
-                .selectFrom(
+                .execute(
                   db
-                    .selectNoFrom(() => sql<string>`app_public.current_user_id()`.as("uid"))
-                    .as("t"),
+                    .selectFrom(
+                      db
+                        .selectNoFrom(() => sql<string>`app_public.current_user_id()`.as("uid"))
+                        .as("t"),
+                    )
+                    .select(sql<string>`t.uid`.as("user_id")),
                 )
-                .select(sql<string>`t.uid`.as("user_id"))
                 .pipe(
                   Effect.head,
                   Effect.map((r) => r.user_id),
                 );
 
               return yield* db
-                .insertInto("app_public.tax_rates")
-                .values({
-                  label: input.label,
-                  jurisdiction: input.jurisdiction,
-                  rate_percent: input.ratePercent,
-                  applies_to: input.appliesTo,
-                  effective_from: input.effectiveFrom,
-                  effective_until: input.effectiveUntil ?? null,
-                  created_by: userId,
-                })
-                .returningAll()
+                .execute(
+                  db
+                    .insertInto("app_public.tax_rates")
+                    .values({
+                      label: input.label,
+                      jurisdiction: input.jurisdiction,
+                      rate_percent: input.ratePercent,
+                      applies_to: input.appliesTo,
+                      effective_from: input.effectiveFrom,
+                      effective_until: input.effectiveUntil ?? null,
+                      created_by: userId,
+                    })
+                    .returningAll(),
+                )
                 .pipe(Effect.head, catchPgErrors);
             }),
           );
@@ -1299,12 +1423,15 @@ export class BillingLedgerService extends Effect.Service<BillingLedgerService>()
 
           const rate = yield* withAuthContext(
             sessionId,
-            Effect.fnUntraced(function* (db: AuthDB) {
+            Effect.fnUntraced(function* (db: Database) {
               return yield* db
-                .updateTable("app_public.tax_rates")
-                .set(updates)
-                .where("id", "=", taxRateId)
-                .returningAll()
+                .execute(
+                  db
+                    .updateTable("app_public.tax_rates")
+                    .set(updates)
+                    .where("id", "=", taxRateId)
+                    .returningAll(),
+                )
                 .pipe(Effect.head, catchPgErrors);
             }),
           );
@@ -1312,8 +1439,10 @@ export class BillingLedgerService extends Effect.Service<BillingLedgerService>()
         }),
 
         listTaxRates: Effect.fn("listTaxRates")(function* (sessionId: string) {
-          const rates = yield* withAuthContext(sessionId, (db: AuthDB) =>
-            db.selectFrom("app_public.tax_rates").selectAll().orderBy("effective_from", "desc"),
+          const rates = yield* withAuthContext(sessionId, (db: Database) =>
+            db.execute(
+              db.selectFrom("app_public.tax_rates").selectAll().orderBy("effective_from", "desc"),
+            ),
           );
           return rates;
         }),
@@ -1324,30 +1453,36 @@ export class BillingLedgerService extends Effect.Service<BillingLedgerService>()
         ) {
           const exemption = yield* withAuthContext(
             sessionId,
-            Effect.fnUntraced(function* (db: AuthDB) {
+            Effect.fnUntraced(function* (db: Database) {
               const userId = yield* db
-                .selectFrom(
+                .execute(
                   db
-                    .selectNoFrom(() => sql<string>`app_public.current_user_id()`.as("uid"))
-                    .as("t"),
+                    .selectFrom(
+                      db
+                        .selectNoFrom(() => sql<string>`app_public.current_user_id()`.as("uid"))
+                        .as("t"),
+                    )
+                    .select(sql<string>`t.uid`.as("user_id")),
                 )
-                .select(sql<string>`t.uid`.as("user_id"))
                 .pipe(
                   Effect.head,
                   Effect.map((r) => r.user_id),
                 );
 
               return yield* db
-                .insertInto("app_public.family_tax_exemptions")
-                .values({
-                  family_id: input.familyId,
-                  tax_rate_id: input.taxRateId,
-                  exemption_reason: input.exemptionReason,
-                  effective_from: input.effectiveFrom,
-                  effective_until: input.effectiveUntil ?? null,
-                  created_by: userId,
-                })
-                .returningAll()
+                .execute(
+                  db
+                    .insertInto("app_public.family_tax_exemptions")
+                    .values({
+                      family_id: input.familyId,
+                      tax_rate_id: input.taxRateId,
+                      exemption_reason: input.exemptionReason,
+                      effective_from: input.effectiveFrom,
+                      effective_until: input.effectiveUntil ?? null,
+                      created_by: userId,
+                    })
+                    .returningAll(),
+                )
                 .pipe(Effect.head, catchPgErrors);
             }),
           );
@@ -1358,12 +1493,14 @@ export class BillingLedgerService extends Effect.Service<BillingLedgerService>()
           sessionId: string,
           familyId: string,
         ) {
-          const exemptions = yield* withAuthContext(sessionId, (db: AuthDB) =>
-            db
-              .selectFrom("app_public.family_tax_exemptions")
-              .selectAll()
-              .where("family_id", "=", familyId)
-              .orderBy("effective_from", "desc"),
+          const exemptions = yield* withAuthContext(sessionId, (db: Database) =>
+            db.execute(
+              db
+                .selectFrom("app_public.family_tax_exemptions")
+                .selectAll()
+                .where("family_id", "=", familyId)
+                .orderBy("effective_from", "desc"),
+            ),
           );
           return exemptions;
         }),
@@ -1371,37 +1508,37 @@ export class BillingLedgerService extends Effect.Service<BillingLedgerService>()
         listAllFamiliesWithBilling: Effect.fn("listAllFamiliesWithBilling")(function* (
           sessionId: string,
         ) {
-          const families = yield* withAuthContext(sessionId, (db: AuthDB) =>
-            db.selectFrom("app_public.families").select(["id", "name"]).orderBy("name"),
+          const families = yield* withAuthContext(sessionId, (db: Database) =>
+            db.execute(db.selectFrom("app_public.families").select(["id", "name"]).orderBy("name")),
           );
 
           const [allBills, allPayments, allCredits] = yield* Effect.all([
-            withAuthContext(sessionId, (db: AuthDB) =>
-              db.selectFrom("app_public.bills").selectAll(),
+            withAuthContext(sessionId, (db: Database) =>
+              db.execute(db.selectFrom("app_public.bills").selectAll()),
             ),
-            withAuthContext(sessionId, (db: AuthDB) =>
-              db.selectFrom("app_public.payments").selectAll(),
+            withAuthContext(sessionId, (db: Database) =>
+              db.execute(db.selectFrom("app_public.payments").selectAll()),
             ),
-            withAuthContext(sessionId, (db: AuthDB) =>
-              db.selectFrom("app_public.family_credits").selectAll(),
+            withAuthContext(sessionId, (db: Database) =>
+              db.execute(db.selectFrom("app_public.family_credits").selectAll()),
             ),
           ]);
 
-          const payMap = new Map<string, typeof allPayments>();
+          const payMap = new Map<string, Array<(typeof allPayments)[number]>>();
           for (const p of allPayments) {
             const arr = payMap.get(p.family_id);
             if (arr) arr.push(p);
             else payMap.set(p.family_id, [p]);
           }
 
-          const billMap = new Map<string, typeof allBills>();
+          const billMap = new Map<string, Array<(typeof allBills)[number]>>();
           for (const b of allBills) {
             const arr = billMap.get(b.family_id);
             if (arr) arr.push(b);
             else billMap.set(b.family_id, [b]);
           }
 
-          const creditMap = new Map<string, typeof allCredits>();
+          const creditMap = new Map<string, Array<(typeof allCredits)[number]>>();
           for (const c of allCredits) {
             const arr = creditMap.get(c.family_id);
             if (arr) arr.push(c);
@@ -1411,11 +1548,13 @@ export class BillingLedgerService extends Effect.Service<BillingLedgerService>()
           const allPaymentIds = allPayments.map((p) => p.id);
           let allocSumByPayment: Map<string, number> | undefined;
           if (allPaymentIds.length > 0) {
-            const allocRows = yield* withAuthContext(sessionId, (db: AuthDB) =>
-              db
-                .selectFrom("app_public.payment_allocations")
-                .select(["payment_id", "amount_cents"])
-                .where("payment_id", "in", allPaymentIds),
+            const allocRows = yield* withAuthContext(sessionId, (db: Database) =>
+              db.execute(
+                db
+                  .selectFrom("app_public.payment_allocations")
+                  .select(["payment_id", "amount_cents"])
+                  .where("payment_id", "in", allPaymentIds),
+              ),
             );
             allocSumByPayment = new Map();
             for (const a of allocRows) {
@@ -1428,11 +1567,13 @@ export class BillingLedgerService extends Effect.Service<BillingLedgerService>()
 
           const unpaidAllocByBill = new Map<string, number>();
           if (allPaymentIds.length > 0) {
-            const billPaidRows = yield* withAuthContext(sessionId, (db: AuthDB) =>
-              db
-                .selectFrom("app_public.payment_allocations")
-                .select(["bill_id", "amount_cents"])
-                .where("payment_id", "in", allPaymentIds),
+            const billPaidRows = yield* withAuthContext(sessionId, (db: Database) =>
+              db.execute(
+                db
+                  .selectFrom("app_public.payment_allocations")
+                  .select(["bill_id", "amount_cents"])
+                  .where("payment_id", "in", allPaymentIds),
+              ),
             );
             for (const a of billPaidRows) {
               unpaidAllocByBill.set(
@@ -1510,34 +1651,42 @@ export class BillingLedgerService extends Effect.Service<BillingLedgerService>()
           sessionId: string,
           familyId: string,
         ) {
-          const family = yield* withAuthContext(sessionId, (db: AuthDB) =>
-            db
-              .selectFrom("app_public.families")
-              .select(["id", "name"])
-              .where("id", "=", familyId),
+          const family = yield* withAuthContext(sessionId, (db: Database) =>
+            db.execute(
+              db
+                .selectFrom("app_public.families")
+                .select(["id", "name"])
+                .where("id", "=", familyId),
+            ),
           ).pipe(Effect.head);
 
           const [bills, payments, credits] = yield* Effect.all([
-            withAuthContext(sessionId, (db: AuthDB) =>
-              db
-                .selectFrom("app_public.bills")
-                .selectAll()
-                .where("family_id", "=", familyId)
-                .orderBy("created_at", "desc"),
+            withAuthContext(sessionId, (db: Database) =>
+              db.execute(
+                db
+                  .selectFrom("app_public.bills")
+                  .selectAll()
+                  .where("family_id", "=", familyId)
+                  .orderBy("created_at", "desc"),
+              ),
             ),
-            withAuthContext(sessionId, (db: AuthDB) =>
-              db
-                .selectFrom("app_public.payments")
-                .selectAll()
-                .where("family_id", "=", familyId)
-                .orderBy("received_at", "desc"),
+            withAuthContext(sessionId, (db: Database) =>
+              db.execute(
+                db
+                  .selectFrom("app_public.payments")
+                  .selectAll()
+                  .where("family_id", "=", familyId)
+                  .orderBy("received_at", "desc"),
+              ),
             ),
-            withAuthContext(sessionId, (db: AuthDB) =>
-              db
-                .selectFrom("app_public.family_credits")
-                .selectAll()
-                .where("family_id", "=", familyId)
-                .orderBy("created_at", "desc"),
+            withAuthContext(sessionId, (db: Database) =>
+              db.execute(
+                db
+                  .selectFrom("app_public.family_credits")
+                  .selectAll()
+                  .where("family_id", "=", familyId)
+                  .orderBy("created_at", "desc"),
+              ),
             ),
           ]);
 
@@ -1547,11 +1696,14 @@ export class BillingLedgerService extends Effect.Service<BillingLedgerService>()
           const paymentIds = payments.map((p) => p.id);
           let totalAllocatedCents = 0;
           if (paymentIds.length > 0) {
-            const allocResult = yield* withAuthContext(sessionId, (db: AuthDB) =>
+            const allocResult = yield* withAuthContext(sessionId, (db: Database) =>
               db
-                .selectFrom("app_public.payment_allocations")
-                .select(sql<number>`COALESCE(SUM(amount_cents), 0)`.as("total"))
-                .where("payment_id", "in", paymentIds)
+                .execute(
+                  db
+                    .selectFrom("app_public.payment_allocations")
+                    .select(sql<number>`COALESCE(SUM(amount_cents), 0)`.as("total"))
+                    .where("payment_id", "in", paymentIds),
+                )
                 .pipe(Effect.head),
             );
             totalAllocatedCents = Number(allocResult.total);
@@ -1567,11 +1719,14 @@ export class BillingLedgerService extends Effect.Service<BillingLedgerService>()
 
           let refundTotal = 0;
           if (paymentIds.length > 0) {
-            const refundResult = yield* withAuthContext(sessionId, (db: AuthDB) =>
+            const refundResult = yield* withAuthContext(sessionId, (db: Database) =>
               db
-                .selectFrom("app_public.refunds")
-                .select(sql<number>`COALESCE(SUM(amount_cents), 0)`.as("total"))
-                .where("payment_id", "in", paymentIds)
+                .execute(
+                  db
+                    .selectFrom("app_public.refunds")
+                    .select(sql<number>`COALESCE(SUM(amount_cents), 0)`.as("total"))
+                    .where("payment_id", "in", paymentIds),
+                )
                 .pipe(Effect.head),
             );
             refundTotal = Number(refundResult.total);

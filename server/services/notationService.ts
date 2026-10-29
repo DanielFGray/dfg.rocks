@@ -67,15 +67,21 @@ export const resolveAssignedTrackIndex = Effect.fnUntraced(function* (
   const material = yield* sessionId
     ? withAuthContext(sessionId, (db) =>
         db
-          .selectFrom("app_public.materials")
-          .select(["id", "notation_tracks"])
-          .where("id", "=", materialId)
+          .execute(
+            db
+              .selectFrom("app_public.materials")
+              .select(["id", "notation_tracks"])
+              .where("id", "=", materialId),
+          )
           .pipe(Effect.head, Effect.option),
       )
     : rootDb
-        .selectFrom("app_public.materials")
-        .select(["id", "notation_tracks"])
-        .where("id", "=", materialId)
+        .execute(
+          rootDb
+            .selectFrom("app_public.materials")
+            .select(["id", "notation_tracks"])
+            .where("id", "=", materialId),
+        )
         .pipe(Effect.head, Effect.option);
   if (Option.isNone(material)) {
     return yield* new HttpError(404, "Material not found");

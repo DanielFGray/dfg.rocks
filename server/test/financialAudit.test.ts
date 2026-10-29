@@ -67,16 +67,29 @@ describe("Financial audit", () => {
     };
 
     adminId = await createUser("audit_admin", "Audit Admin", "audit-admin@test.com", "admin");
-    const studentUserId = await createUser("audit_student", "Audit Student", "audit-student@test.com", "student");
+    const studentUserId = await createUser(
+      "audit_student",
+      "Audit Student",
+      "audit-student@test.com",
+      "student",
+    );
 
-    const fam = await insertRow("families", { slug: "audit-family", name: "Audit Family" });
+    const fam = await insertRow("families", {
+      slug: "audit-family",
+      name: "Audit Family",
+    });
     familyId = fam.id;
     studentId = studentUserId;
 
-    await insertRow("family_memberships", { family_id: familyId, user_id: studentId });
+    await insertRow("family_memberships", {
+      family_id: familyId,
+      user_id: studentId,
+    });
 
     const createSession = async (userId: string) => {
-      const r = await query(`insert into app_private.sessions (user_id) values ($1) returning id`, [userId]);
+      const r = await query(`insert into app_private.sessions (user_id) values ($1) returning id`, [
+        userId,
+      ]);
       return r.rows[0].id;
     };
 
@@ -87,7 +100,6 @@ describe("Financial audit", () => {
       [studentUserId],
     );
     studentSessionId = sSession.rows[0].id;
-
   }, 120_000);
 
   afterAll(async () => {
@@ -105,11 +117,29 @@ describe("Financial audit", () => {
         const svc = yield* BillingLedgerService;
         const db = yield* PgRootDB;
         const bill = yield* svc.createBill(adminSessionId, {
-          familyId, billingPeriodStart: "2026-07-01", billingPeriodEnd: "2026-07-31",
-          lineItems: [{ studentId, lineType: "lesson", description: "Test audit insert", quantity: 1, unitPriceCents: 5000, amountCents: 5000 }],
+          familyId,
+          billingPeriodStart: "2026-07-01",
+          billingPeriodEnd: "2026-07-31",
+          lineItems: [
+            {
+              studentId,
+              lineType: "lesson",
+              description: "Test audit insert",
+              quantity: 1,
+              unitPriceCents: 5000,
+              amountCents: 5000,
+            },
+          ],
         });
-        const audit = yield* db.selectFrom("app_public.financial_audit_events").selectAll()
-          .where("record_id", "=", bill.id).where("table_name", "=", "bills").pipe(Effect.head);
+        const audit = yield* db
+          .execute(
+            db
+              .selectFrom("app_public.financial_audit_events")
+              .selectAll()
+              .where("record_id", "=", bill.id)
+              .where("table_name", "=", "bills"),
+          )
+          .pipe(Effect.head);
         expect(audit.action).toBe("insert");
         expect(audit.actor_id).toBe(adminId);
         expect(audit.old_values).toBeNull();
@@ -122,12 +152,31 @@ describe("Financial audit", () => {
         const svc = yield* BillingLedgerService;
         const db = yield* PgRootDB;
         const bill = yield* svc.createBill(adminSessionId, {
-          familyId, billingPeriodStart: "2026-08-01", billingPeriodEnd: "2026-08-31",
-          lineItems: [{ studentId, lineType: "lesson", description: "Test audit update", quantity: 1, unitPriceCents: 5000, amountCents: 5000 }],
+          familyId,
+          billingPeriodStart: "2026-08-01",
+          billingPeriodEnd: "2026-08-31",
+          lineItems: [
+            {
+              studentId,
+              lineType: "lesson",
+              description: "Test audit update",
+              quantity: 1,
+              unitPriceCents: 5000,
+              amountCents: 5000,
+            },
+          ],
         });
         yield* svc.issueBill(adminSessionId, bill.id);
-        const audit = yield* db.selectFrom("app_public.financial_audit_events").selectAll()
-          .where("record_id", "=", bill.id).where("table_name", "=", "bills").where("action", "=", "update").pipe(Effect.head);
+        const audit = yield* db
+          .execute(
+            db
+              .selectFrom("app_public.financial_audit_events")
+              .selectAll()
+              .where("record_id", "=", bill.id)
+              .where("table_name", "=", "bills")
+              .where("action", "=", "update"),
+          )
+          .pipe(Effect.head);
         expect(audit.actor_id).toBe(adminId);
         expect((audit.old_values as any).status).toBe("draft");
         expect((audit.new_values as any).status).toBe("issued");
@@ -139,16 +188,37 @@ describe("Financial audit", () => {
         const svc = yield* BillingLedgerService;
         const db = yield* PgRootDB;
         const bill = yield* svc.createBill(adminSessionId, {
-          familyId, billingPeriodStart: "2026-09-01", billingPeriodEnd: "2026-09-30",
-          lineItems: [{ studentId, lineType: "lesson", description: "Test audit payment", quantity: 1, unitPriceCents: 10000, amountCents: 10000 }],
+          familyId,
+          billingPeriodStart: "2026-09-01",
+          billingPeriodEnd: "2026-09-30",
+          lineItems: [
+            {
+              studentId,
+              lineType: "lesson",
+              description: "Test audit payment",
+              quantity: 1,
+              unitPriceCents: 10000,
+              amountCents: 10000,
+            },
+          ],
         });
         yield* svc.issueBill(adminSessionId, bill.id);
         const payment = yield* svc.recordPayment(adminSessionId, {
-          familyId, amountCents: 10000, method: "check", reference: "AUDIT-001",
+          familyId,
+          amountCents: 10000,
+          method: "check",
+          reference: "AUDIT-001",
           allocations: [{ billId: bill.id, amountCents: 10000 }],
         });
-        const audit = yield* db.selectFrom("app_public.financial_audit_events").selectAll()
-          .where("record_id", "=", payment.id).where("table_name", "=", "payments").pipe(Effect.head);
+        const audit = yield* db
+          .execute(
+            db
+              .selectFrom("app_public.financial_audit_events")
+              .selectAll()
+              .where("record_id", "=", payment.id)
+              .where("table_name", "=", "payments"),
+          )
+          .pipe(Effect.head);
         expect(audit.action).toBe("insert");
         expect(audit.actor_id).toBe(adminId);
       }),
@@ -160,28 +230,20 @@ describe("Financial audit", () => {
   // ===================================================================
 
   it("prevents updating audit rows", async () => {
-    const auditRow = await query(
-      `select id from app_public.financial_audit_events limit 1`,
-    );
+    const auditRow = await query(`select id from app_public.financial_audit_events limit 1`);
 
     await expect(
-      query(
-        `update app_public.financial_audit_events set action = 'delete' where id = $1`,
-        [auditRow.rows[0].id],
-      ),
+      query(`update app_public.financial_audit_events set action = 'delete' where id = $1`, [
+        auditRow.rows[0].id,
+      ]),
     ).rejects.toThrow(/append-only|immutable/i);
   });
 
   it("prevents deleting audit rows", async () => {
-    const auditRow = await query(
-      `select id from app_public.financial_audit_events limit 1`,
-    );
+    const auditRow = await query(`select id from app_public.financial_audit_events limit 1`);
 
     await expect(
-      query(
-        `delete from app_public.financial_audit_events where id = $1`,
-        [auditRow.rows[0].id],
-      ),
+      query(`delete from app_public.financial_audit_events where id = $1`, [auditRow.rows[0].id]),
     ).rejects.toThrow(/append-only|immutable/i);
   });
 
@@ -210,16 +272,10 @@ describe("Financial audit", () => {
   // ===================================================================
 
   it("bill numbers are consumed even after a failed transaction", async () => {
-    const n1 = await query(
-      `select app_public.next_bill_number($1::uuid) as n`,
-      [familyId],
-    );
+    const n1 = await query(`select app_public.next_bill_number($1::uuid) as n`, [familyId]);
     const firstNumber = n1.rows[0].n;
 
-    const n2 = await query(
-      `select app_public.next_bill_number($1::uuid) as n`,
-      [familyId],
-    );
+    const n2 = await query(`select app_public.next_bill_number($1::uuid) as n`, [familyId]);
     const secondNumber = n2.rows[0].n;
     expect(secondNumber).toBe(firstNumber + 1);
 
@@ -227,10 +283,9 @@ describe("Financial audit", () => {
     const client = await pool.connect();
     try {
       await client.query("begin");
-      const n3 = await client.query(
-        `select app_public.next_bill_number($1::uuid) as n`,
-        [familyId],
-      );
+      const n3 = await client.query(`select app_public.next_bill_number($1::uuid) as n`, [
+        familyId,
+      ]);
       const thirdNumber = n3.rows[0].n;
       expect(thirdNumber).toBe(secondNumber + 1);
 
@@ -240,28 +295,21 @@ describe("Financial audit", () => {
     }
 
     // After rollback, a new call should NOT reuse the rolled-back number
-    const n4 = await query(
-      `select app_public.next_bill_number($1::uuid) as n`,
-      [familyId],
-    );
+    const n4 = await query(`select app_public.next_bill_number($1::uuid) as n`, [familyId]);
     expect(n4.rows[0].n).toBe(secondNumber + 2);
     // The gap (secondNumber + 1 was consumed and lost) is expected
   });
 
   it("payment numbers are consumed even after a failed transaction", async () => {
-    const n1 = await query(
-      `select app_public.next_payment_number($1::uuid) as n`,
-      [familyId],
-    );
+    const n1 = await query(`select app_public.next_payment_number($1::uuid) as n`, [familyId]);
     const firstNumber = n1.rows[0].n;
 
     const client = await pool.connect();
     try {
       await client.query("begin");
-      const n2 = await client.query(
-        `select app_public.next_payment_number($1::uuid) as n`,
-        [familyId],
-      );
+      const n2 = await client.query(`select app_public.next_payment_number($1::uuid) as n`, [
+        familyId,
+      ]);
       expect(n2.rows[0].n).toBe(firstNumber + 1);
 
       await client.query("rollback");
@@ -269,10 +317,7 @@ describe("Financial audit", () => {
       client.release();
     }
 
-    const n3 = await query(
-      `select app_public.next_payment_number($1::uuid) as n`,
-      [familyId],
-    );
+    const n3 = await query(`select app_public.next_payment_number($1::uuid) as n`, [familyId]);
     expect(n3.rows[0].n).toBe(firstNumber + 2);
   });
 
@@ -280,24 +325,43 @@ describe("Financial audit", () => {
   // Full createBill-with-rollback: number consumed, no bill persisted
   // ===================================================================
 
-  it.layer(financialAuditServiceLayer)("createBill consumes a number before aborting", (effectIt) => {
-    effectIt.effect("bill number is consumed when createBill aborts", () =>
-      Effect.gen(function* () {
-        const svc = yield* BillingLedgerService;
-        const db = yield* PgRootDB;
-        const nextNumber = () => db.selectNoFrom((eb) =>
-          sql<number>`app_public.next_bill_number(${eb.val(familyId)}::uuid)`.as("n")
-        ).pipe(Effect.head);
-        const before = yield* nextNumber();
-        const result = yield* Effect.exit(svc.createBill(adminSessionId, {
-          familyId: "00000000-0000-0000-0000-000000000000",
-          billingPeriodStart: "2026-10-01",
-          billingPeriodEnd: "2026-10-31",
-          lineItems: [{ studentId, lineType: "lesson", description: "Should fail", quantity: 1, unitPriceCents: 5000, amountCents: 5000 }],
-        }));
-        expect(result._tag).toBe("Failure");
-        expect((yield* nextNumber()).n).toBeGreaterThan(before.n);
-      }),
-    );
-  });
+  it.layer(financialAuditServiceLayer)(
+    "createBill consumes a number before aborting",
+    (effectIt) => {
+      effectIt.effect("bill number is consumed when createBill aborts", () =>
+        Effect.gen(function* () {
+          const svc = yield* BillingLedgerService;
+          const db = yield* PgRootDB;
+          const nextNumber = () =>
+            db
+              .execute(
+                db.selectNoFrom((eb) =>
+                  sql<number>`app_public.next_bill_number(${eb.val(familyId)}::uuid)`.as("n"),
+                ),
+              )
+              .pipe(Effect.head);
+          const before = yield* nextNumber();
+          const result = yield* Effect.exit(
+            svc.createBill(adminSessionId, {
+              familyId: "00000000-0000-0000-0000-000000000000",
+              billingPeriodStart: "2026-10-01",
+              billingPeriodEnd: "2026-10-31",
+              lineItems: [
+                {
+                  studentId,
+                  lineType: "lesson",
+                  description: "Should fail",
+                  quantity: 1,
+                  unitPriceCents: 5000,
+                  amountCents: 5000,
+                },
+              ],
+            }),
+          );
+          expect(result._tag).toBe("Failure");
+          expect((yield* nextNumber()).n).toBeGreaterThan(before.n);
+        }),
+      );
+    },
+  );
 });

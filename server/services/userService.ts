@@ -15,34 +15,38 @@ export class UserService extends Effect.Service<UserService>()("UserService", {
     const db = yield* PgRootDB;
 
     const primaryEmailForUser = (userId: string) =>
-      db
-        .selectFrom("app_public.user_emails")
-        .select("email")
-        .where("user_id", "=", userId)
-        .orderBy("is_primary", "desc")
-        .orderBy("is_verified", "desc")
-        .orderBy("id", "desc");
+      db.execute(
+        db
+          .selectFrom("app_public.user_emails")
+          .select("email")
+          .where("user_id", "=", userId)
+          .orderBy("is_primary", "desc")
+          .orderBy("is_verified", "desc")
+          .orderBy("id", "desc"),
+      );
 
     return {
       primaryEmailForUser: Effect.fn("primaryEmailForUser")(primaryEmailForUser, Effect.head),
 
       profileById: Effect.fn("profileById")(function* (userId: string) {
-        return yield* db
-          .selectFrom("app_public.users")
-          .select(["id", "username", "name", "role", "is_verified"])
-          .select((eb) =>
-            eb
-              .selectFrom("app_public.user_emails")
-              .select("email")
-              .whereRef("app_public.user_emails.user_id", "=", "app_public.users.id")
-              .orderBy("is_primary", "desc")
-              .orderBy("is_verified", "desc")
-              .orderBy("id", "desc")
-              .limit(1)
-              .as("email"),
-          )
-          .where("id", "=", userId)
-          .limit(1);
+        return yield* db.execute(
+          db
+            .selectFrom("app_public.users")
+            .select(["id", "username", "name", "role", "is_verified"])
+            .select((eb) =>
+              eb
+                .selectFrom("app_public.user_emails")
+                .select("email")
+                .whereRef("app_public.user_emails.user_id", "=", "app_public.users.id")
+                .orderBy("is_primary", "desc")
+                .orderBy("is_verified", "desc")
+                .orderBy("id", "desc")
+                .limit(1)
+                .as("email"),
+            )
+            .where("id", "=", userId)
+            .limit(1),
+        );
       }, Effect.head),
 
       sessionFromUser: Effect.fn("sessionFromUser")(function* (user: UserRow) {

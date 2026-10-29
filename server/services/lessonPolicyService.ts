@@ -24,8 +24,7 @@ type CancellationPolicyInput = {
 export function calculateLessonCancellationPolicy(
   input: CancellationPolicyInput,
 ): LessonCancellationPolicy {
-  const hoursUntilLesson =
-    (input.scheduledAt.getTime() - input.now.getTime()) / (60 * 60 * 1000);
+  const hoursUntilLesson = (input.scheduledAt.getTime() - input.now.getTime()) / (60 * 60 * 1000);
   const isLate = hoursUntilLesson < input.settings.cancellation_window_hours;
 
   let depositOutcome: DepositPolicyOutcome = "none";
@@ -37,9 +36,7 @@ export function calculateLessonCancellationPolicy(
     amountCents = input.heldDepositCents;
   } else if (input.billingModel === "monthly_prepaid" && isLate) {
     feeOutcome = "recorded";
-    amountCents = Math.round(
-      (input.rateCents * input.settings.late_cancel_charge_percent) / 100,
-    );
+    amountCents = Math.round((input.rateCents * input.settings.late_cancel_charge_percent) / 100);
   }
 
   return {
@@ -64,10 +61,12 @@ export class LessonPolicyService extends Effect.Service<LessonPolicyService>()(
       const rootDb = yield* PgRootDB;
 
       const getSettings = Effect.fn("getCancellationPolicySettings")(function* () {
-        const rows = yield* rootDb
-          .selectFrom("app_private.admin_settings")
-          .select(["key", "value"])
-          .where("key", "in", ["cancellation_window_hours", "late_cancel_charge_percent"]);
+        const rows = yield* rootDb.execute(
+          rootDb
+            .selectFrom("app_private.admin_settings")
+            .select(["key", "value"])
+            .where("key", "in", ["cancellation_window_hours", "late_cancel_charge_percent"]),
+        );
         const settings = new Map(rows.map((row) => [row.key, row.value]));
         return {
           cancellation_window_hours: numberSetting(
@@ -103,26 +102,30 @@ export class LessonPolicyService extends Effect.Service<LessonPolicyService>()(
               values.scheduledAt,
             );
           if (values.lessonId) query = query.where("id", "!=", values.lessonId);
-          const result = yield* query.pipe(Effect.head);
+          const result = yield* rootDb.execute(query).pipe(Effect.head);
           return result.overlap_count > 0;
         }),
 
         saveSettings: Effect.fn("saveCancellationPolicySettings")(function* (
           settings: CancellationPolicySettings,
         ) {
-          yield* rootDb
-            .insertInto("app_private.admin_settings")
-            .values([
-              {
-                key: "cancellation_window_hours",
-                value: JSON.stringify(settings.cancellation_window_hours),
-              },
-              {
-                key: "late_cancel_charge_percent",
-                value: JSON.stringify(settings.late_cancel_charge_percent),
-              },
-            ])
-            .onConflict((oc) => oc.column("key").doUpdateSet((eb) => ({ value: eb.ref("excluded.value") })));
+          yield* rootDb.execute(
+            rootDb
+              .insertInto("app_private.admin_settings")
+              .values([
+                {
+                  key: "cancellation_window_hours",
+                  value: JSON.stringify(settings.cancellation_window_hours),
+                },
+                {
+                  key: "late_cancel_charge_percent",
+                  value: JSON.stringify(settings.late_cancel_charge_percent),
+                },
+              ])
+              .onConflict((oc) =>
+                oc.column("key").doUpdateSet((eb) => ({ value: eb.ref("excluded.value") })),
+              ),
+          );
           return settings;
         }),
 

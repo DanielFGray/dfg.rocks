@@ -11,10 +11,12 @@ export class AuthRouteService extends Effect.Service<AuthRouteService>()("AuthRo
 
     return {
       generateMagicLink: Effect.fn("generateMagicLink")(function* (email: string) {
-        yield* db.selectNoFrom((eb) =>
-          eb
-            .fn<unknown>("app_private.generate_magic_link", [sql`${email}::citext`])
-            .as("generate_magic_link"),
+        yield* db.execute(
+          db.selectNoFrom((eb) =>
+            eb
+              .fn<unknown>("app_private.generate_magic_link", [sql`${email}::citext`])
+              .as("generate_magic_link"),
+          ),
         );
       }),
 
@@ -22,25 +24,35 @@ export class AuthRouteService extends Effect.Service<AuthRouteService>()("AuthRo
         return yield* db.withTransaction(
           Effect.gen(function* () {
             const user = yield* db
-              .selectFrom(sql<UserRow>`app_private.verify_magic_link(${token})`.as("u"))
-              .selectAll()
+              .execute(
+                db
+                  .selectFrom(sql<UserRow>`app_private.verify_magic_link(${token})`.as("u"))
+                  .selectAll(),
+              )
               .pipe(
                 Effect.head,
                 Effect.catchTags({
                   NoSuchElementException: () => new HttpError(400, "Invalid or expired magic link"),
                 }),
               );
-            yield* db
-              .updateTable("app_public.user_emails")
-              .set({ is_verified: true })
-              .where("user_id", "=", user.id)
-              .where("is_verified", "=", false);
-            yield* db
-              .updateTable("app_public.users")
-              .set({ is_verified: true })
-              .where("id", "=", user.id)
-              .where("is_verified", "=", false);
-            return yield* UserService.sessionFromUser({ ...user, is_verified: true });
+            yield* db.execute(
+              db
+                .updateTable("app_public.user_emails")
+                .set({ is_verified: true })
+                .where("user_id", "=", user.id)
+                .where("is_verified", "=", false),
+            );
+            yield* db.execute(
+              db
+                .updateTable("app_public.users")
+                .set({ is_verified: true })
+                .where("id", "=", user.id)
+                .where("is_verified", "=", false),
+            );
+            return yield* UserService.sessionFromUser({
+              ...user,
+              is_verified: true,
+            });
           }),
         );
       }),
@@ -52,24 +64,29 @@ export class AuthRouteService extends Effect.Service<AuthRouteService>()("AuthRo
       ) {
         const profile = yield* withAuthContext(sessionId, (authDb) =>
           authDb
-            .selectFrom("app_public.users")
-            .select(["id", "username", "name", "role", "is_verified"])
-            .select((eb) =>
-              eb
-                .selectFrom("app_public.user_emails")
-                .select("email")
-                .whereRef("app_public.user_emails.user_id", "=", "app_public.users.id")
-                .orderBy("is_primary", "desc")
-                .orderBy("is_verified", "desc")
-                .orderBy("id", "desc")
-                .limit(1)
-                .as("email"),
+            .execute(
+              authDb
+                .selectFrom("app_public.users")
+                .select(["id", "username", "name", "role", "is_verified"])
+                .select((eb) =>
+                  eb
+                    .selectFrom("app_public.user_emails")
+                    .select("email")
+                    .whereRef("app_public.user_emails.user_id", "=", "app_public.users.id")
+                    .orderBy("is_primary", "desc")
+                    .orderBy("is_verified", "desc")
+                    .orderBy("id", "desc")
+                    .limit(1)
+                    .as("email"),
+                )
+                .where("id", "=", userId)
+                .limit(1),
             )
-            .where("id", "=", userId)
-            .limit(1)
             .pipe(
               Effect.head,
-              Effect.catchTags({ NoSuchElementException: () => Effect.succeed(null) }),
+              Effect.catchTags({
+                NoSuchElementException: () => Effect.succeed(null),
+              }),
             ),
         );
 
@@ -90,27 +107,30 @@ export class AuthRouteService extends Effect.Service<AuthRouteService>()("AuthRo
           isParent && profile
             ? yield* withAuthContext(sessionId, (authDb) =>
                 authDb
-                  .selectFrom("app_public.family_memberships as fm_parent")
-                  .innerJoin(
-                    "app_public.family_memberships as fm_student",
-                    "fm_student.family_id",
-                    "fm_parent.family_id",
+                  .execute(
+                    authDb
+                      .selectFrom("app_public.family_memberships as fm_parent")
+                      .innerJoin(
+                        "app_public.family_memberships as fm_student",
+                        "fm_student.family_id",
+                        "fm_parent.family_id",
+                      )
+                      .innerJoin("app_public.users as u", "u.id", "fm_student.user_id")
+                      .select(["u.id", "u.username", "u.name", "u.role", "u.is_verified"])
+                      .select((eb) =>
+                        eb
+                          .selectFrom("app_public.user_emails")
+                          .select("email")
+                          .whereRef("app_public.user_emails.user_id", "=", "u.id")
+                          .orderBy("is_primary", "desc")
+                          .orderBy("id", "desc")
+                          .limit(1)
+                          .as("email"),
+                      )
+                      .where("fm_parent.user_id", "=", userId)
+                      .where("fm_student.user_id", "<>", userId)
+                      .where("u.role", "=", "student" as const),
                   )
-                  .innerJoin("app_public.users as u", "u.id", "fm_student.user_id")
-                  .select(["u.id", "u.username", "u.name", "u.role", "u.is_verified"])
-                  .select((eb) =>
-                    eb
-                      .selectFrom("app_public.user_emails")
-                      .select("email")
-                      .whereRef("app_public.user_emails.user_id", "=", "u.id")
-                      .orderBy("is_primary", "desc")
-                      .orderBy("id", "desc")
-                      .limit(1)
-                      .as("email"),
-                  )
-                  .where("fm_parent.user_id", "=", userId)
-                  .where("fm_student.user_id", "<>", userId)
-                  .where("u.role", "=", "student" as const)
                   .pipe(Effect.orDie),
               )
             : [];
@@ -119,9 +139,12 @@ export class AuthRouteService extends Effect.Service<AuthRouteService>()("AuthRo
           knownActiveStudentId !== undefined
             ? knownActiveStudentId
             : yield* db
-                .selectFrom("app_private.sessions")
-                .select("active_student_id")
-                .where("id", "=", sessionId)
+                .execute(
+                  db
+                    .selectFrom("app_private.sessions")
+                    .select("active_student_id")
+                    .where("id", "=", sessionId),
+                )
                 .pipe(
                   Effect.head,
                   Effect.option,
@@ -134,9 +157,12 @@ export class AuthRouteService extends Effect.Service<AuthRouteService>()("AuthRo
           activeStudentId && isParent
             ? yield* withAuthContext(sessionId, (authDb) =>
                 authDb
-                  .selectFrom("app_public.users")
-                  .select(["id", "username", "name"])
-                  .where("id", "=", activeStudentId)
+                  .execute(
+                    authDb
+                      .selectFrom("app_public.users")
+                      .select(["id", "username", "name"])
+                      .where("id", "=", activeStudentId),
+                  )
                   .pipe(Effect.head, Effect.option),
               )
             : null;
@@ -170,21 +196,26 @@ export class AuthRouteService extends Effect.Service<AuthRouteService>()("AuthRo
       ) {
         const email = yield* withAuthContext(sessionId, (authDb) =>
           authDb
-            .selectFrom("app_public.user_emails")
-            .select("id")
-            .where("user_id", "=", userId)
-            .where("is_verified", "=", false)
+            .execute(
+              authDb
+                .selectFrom("app_public.user_emails")
+                .select("id")
+                .where("user_id", "=", userId)
+                .where("is_verified", "=", false),
+            )
             .pipe(Effect.head, Effect.option),
         );
 
         if (email._tag === "Some") {
-          yield* db.selectNoFrom((eb) =>
-            eb
-              .fn<unknown>("graphile_worker.add_job", [
-                eb.val("user_emails__send_verification"),
-                sql`${JSON.stringify({ id: email.value.id })}::json`,
-              ])
-              .as("add_job"),
+          yield* db.execute(
+            db.selectNoFrom((eb) =>
+              eb
+                .fn<unknown>("graphile_worker.add_job", [
+                  eb.val("user_emails__send_verification"),
+                  sql`${JSON.stringify({ id: email.value.id })}::json`,
+                ])
+                .as("add_job"),
+            ),
           );
         }
       }),

@@ -10,7 +10,7 @@
         "@effect/platform": "^0.96.3",
         "@effect/platform-browser": "^0.76.0",
         "@effect/platform-node": "^0.107.0",
-        "@effect/sql-kysely": "^0.47.0",
+        "@effect/sql": "0.51.1",
         "@effect/sql-pg": "^0.52.1",
         "@internationalized/date": "^3.12.2",
         "@playwright/test": "^1.61.1",
@@ -31,6 +31,7 @@
         "graphile-worker": "^0.16.6",
         "html-to-text": "^9.0.5",
         "jose": "^6.2.3",
+        "kysely": "0.28.16",
         "lodash": "^4.18.1",
         "mjml": "^5.4.0",
         "nodemailer": "^8.0.11",
@@ -65,9 +66,6 @@
         "vite": "^8.1.5",
       },
     },
-  },
-  "patchedDependencies": {
-    "@effect/sql-kysely@0.47.0": "patches/@effect%2Fsql-kysely@0.47.0.patch",
   },
   "packages": {
     "@babel/code-frame": ["@babel/code-frame@7.27.1", "", { "dependencies": { "@babel/helper-validator-identifier": "^7.27.1", "js-tokens": "^4.0.0", "picocolors": "^1.1.1" } }, "sha512-cjQ7ZlQ0Mv3b47hABuTevyTuYN4i+loJKGeV9flcCgIK37cCXRh+L1bd3iBHlynerhQ7BhCkn2BPbQUL+rGqFg=="],
@@ -127,8 +125,6 @@
     "@effect/rpc": ["@effect/rpc@0.75.1", "", { "dependencies": { "msgpackr": "^1.11.10" }, "peerDependencies": { "@effect/platform": "^0.96.1", "effect": "^3.21.2" } }, "sha512-8yxF8+mMGGEbF8BUCp34HjdJj7CvTpGeZxBcpsDF6v7zPiGbJL1UDLzA8ZqYjmcngBHhPecbmeONTk/LiLAaEg=="],
 
     "@effect/sql": ["@effect/sql@0.51.1", "", { "dependencies": { "uuid": "^11.0.3" }, "peerDependencies": { "@effect/experimental": "^0.60.0", "@effect/platform": "^0.96.1", "effect": "^3.21.2" } }, "sha512-iPDAefrJcI0HcTk9keP9Gq8Pg08K1HmpnmZZt85AqyTcvorhoNsXDFiKBbPldfV2CortwVkacX8KjO9GPpSYCA=="],
-
-    "@effect/sql-kysely": ["@effect/sql-kysely@0.47.0", "", { "peerDependencies": { "@effect/sql": "^0.51.0", "effect": "^3.21.0", "kysely": "^0.28.2" } }, "sha512-Q3GlLSphlyIwLWbIC/0/dG2cPri/FkgcQlKJxVgj4YL+a176hVtcElDlG7dlIFSWRcwb8mMdtlTDR53ZkcOuyA=="],
 
     "@effect/sql-pg": ["@effect/sql-pg@0.52.1", "", { "dependencies": { "pg": "^8.16.3", "pg-connection-string": "2.9.1", "pg-cursor": "^2.15.3", "pg-pool": "^3.10.1", "pg-types": "^4.1.0" }, "peerDependencies": { "@effect/experimental": "^0.60.0", "@effect/platform": "^0.96.0", "@effect/sql": "^0.51.0", "effect": "^3.21.0" } }, "sha512-Lp0Zjas77WQ/AfWZ/FzzCOkyGCpx+wB2FXNHStzM4GrHEvwUYQoYQxMxdz5r7K+EUiZOPlxy/SBLVVReVIovjw=="],
 

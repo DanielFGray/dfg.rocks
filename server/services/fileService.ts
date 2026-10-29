@@ -62,19 +62,22 @@ const findMaterialByContentHashEffect = Effect.fnUntraced(function* (
 ) {
   return yield* withAuthContext(sessionId, (db) =>
     db
-      .selectFrom("app_public.materials")
-      .select((eb) => [
-        "id",
-        "title",
-        "original_filename",
-        "mime_type",
-        eb.cast<number>("file_size", "integer").as("file_size"),
-        "is_global",
-        "notation_tracks",
-        "storage_backend",
-        "storage_key",
-      ])
-      .where("content_hash", "=", contentHash)
+      .execute(
+        db
+          .selectFrom("app_public.materials")
+          .select((eb) => [
+            "id",
+            "title",
+            "original_filename",
+            "mime_type",
+            eb.cast<number>("file_size", "integer").as("file_size"),
+            "is_global",
+            "notation_tracks",
+            "storage_backend",
+            "storage_key",
+          ])
+          .where("content_hash", "=", contentHash),
+      )
       .pipe(Effect.head, Effect.option, Effect.map(Option.getOrUndefined)),
   );
 });
@@ -150,29 +153,32 @@ export class FileService extends Effect.Service<FileService>()("FileService", {
         // Handle concurrent uploads with the same content hash (unique constraint race)
         return yield* withAuthContext(sessionId, (db) =>
           db
-            .insertInto("app_public.materials")
-            .values({
-              title,
-              original_filename: file.name,
-              storage_backend: location.storageBackend,
-              storage_key: location.storageKey,
-              content_hash: contentHash,
-              mime_type: mimeType,
-              file_size: bytes.byteLength,
-              is_global: isGlobal,
-              notation_tracks:
-                notationTracks === null ? null : sql`${JSON.stringify(notationTracks)}::jsonb`,
-              uploaded_by: uploadedBy,
-            })
-            .returning((eb) => [
-              "id",
-              "title",
-              "original_filename",
-              "mime_type",
-              eb.cast<number>("file_size", "integer").as("file_size"),
-              "is_global",
-              "notation_tracks",
-            ])
+            .execute(
+              db
+                .insertInto("app_public.materials")
+                .values({
+                  title,
+                  original_filename: file.name,
+                  storage_backend: location.storageBackend,
+                  storage_key: location.storageKey,
+                  content_hash: contentHash,
+                  mime_type: mimeType,
+                  file_size: bytes.byteLength,
+                  is_global: isGlobal,
+                  notation_tracks:
+                    notationTracks === null ? null : sql`${JSON.stringify(notationTracks)}::jsonb`,
+                  uploaded_by: uploadedBy,
+                })
+                .returning((eb) => [
+                  "id",
+                  "title",
+                  "original_filename",
+                  "mime_type",
+                  eb.cast<number>("file_size", "integer").as("file_size"),
+                  "is_global",
+                  "notation_tracks",
+                ]),
+            )
             .pipe(
               Effect.catchAll(
                 Effect.fnUntraced(function* (error: unknown) {
@@ -209,18 +215,21 @@ export class FileService extends Effect.Service<FileService>()("FileService", {
       ) {
         const material = yield* withAuthContext(sessionId, (db) =>
           db
-            .selectFrom("app_public.materials")
-            .select([
-              "id",
-              "title",
-              "original_filename",
-              "storage_backend",
-              "storage_key",
-              "mime_type",
-              "is_global",
-              "uploaded_by",
-            ])
-            .where("id", "=", materialId)
+            .execute(
+              db
+                .selectFrom("app_public.materials")
+                .select([
+                  "id",
+                  "title",
+                  "original_filename",
+                  "storage_backend",
+                  "storage_key",
+                  "mime_type",
+                  "is_global",
+                  "uploaded_by",
+                ])
+                .where("id", "=", materialId),
+            )
             .pipe(
               Effect.head,
               Effect.catchTags({
@@ -230,9 +239,9 @@ export class FileService extends Effect.Service<FileService>()("FileService", {
         );
         const user = yield* withAuthContext(sessionId, (db) =>
           db
-            .selectFrom("app_public.users")
-            .select(["id", "role"])
-            .where("id", "=", userId)
+            .execute(
+              db.selectFrom("app_public.users").select(["id", "role"]).where("id", "=", userId),
+            )
             .pipe(
               Effect.head,
               Effect.catchTags({
@@ -244,23 +253,27 @@ export class FileService extends Effect.Service<FileService>()("FileService", {
           let hasAccess = material.is_global;
           if (!hasAccess) {
             const assignedRows = yield* withAuthContext(sessionId, (db) =>
-              db
-                .selectFrom("app_public.student_materials")
-                .select(["material_id"])
-                .where("student_id", "=", userId)
-                .where("material_id", "=", materialId),
+              db.execute(
+                db
+                  .selectFrom("app_public.student_materials")
+                  .select(["material_id"])
+                  .where("student_id", "=", userId)
+                  .where("material_id", "=", materialId),
+              ),
             );
             if (assignedRows[0]) hasAccess = true;
           }
           if (!hasAccess) {
             const enrolledRows = yield* withAuthContext(sessionId, (db) =>
-              db
-                .selectFrom("app_public.module_materials as mm")
-                .innerJoin("app_public.modules as mod", "mod.id", "mm.module_id")
-                .innerJoin("app_public.enrollments as e", "e.course_id", "mod.course_id")
-                .where("mm.material_id", "=", materialId)
-                .where("e.student_id", "=", userId)
-                .select(["mm.material_id"]),
+              db.execute(
+                db
+                  .selectFrom("app_public.module_materials as mm")
+                  .innerJoin("app_public.modules as mod", "mod.id", "mm.module_id")
+                  .innerJoin("app_public.enrollments as e", "e.course_id", "mod.course_id")
+                  .where("mm.material_id", "=", materialId)
+                  .where("e.student_id", "=", userId)
+                  .select(["mm.material_id"]),
+              ),
             );
             if (enrolledRows[0]) hasAccess = true;
           }

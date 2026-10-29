@@ -125,24 +125,28 @@ export class GoogleCalendarService extends Effect.Service<GoogleCalendarService>
 
       const getSettingEffect = Effect.fnUntraced(function* (key: string) {
         const row = yield* rootDb
-          .selectFrom("app_private.admin_settings")
-          .select("value")
-          .where("key", "=", key)
+          .execute(
+            rootDb.selectFrom("app_private.admin_settings").select("value").where("key", "=", key),
+          )
           .pipe(Effect.head, Effect.option);
         return Option.getOrNull(row)?.value ?? null;
       });
 
       const setSettingEffect = Effect.fnUntraced(function* (key: string, value: unknown) {
         const rootDb = yield* PgRootDB;
-        yield* rootDb
-          .insertInto("app_private.admin_settings")
-          .values({ key, value: JSON.stringify(value) })
-          .onConflict((oc) => oc.column("key").doUpdateSet({ value: JSON.stringify(value) }));
+        yield* rootDb.execute(
+          rootDb
+            .insertInto("app_private.admin_settings")
+            .values({ key, value: JSON.stringify(value) })
+            .onConflict((oc) => oc.column("key").doUpdateSet({ value: JSON.stringify(value) })),
+        );
       });
 
       const deleteSettingEffect = Effect.fnUntraced(function* (key: string) {
         const rootDb = yield* PgRootDB;
-        yield* rootDb.deleteFrom("app_private.admin_settings").where("key", "=", key);
+        yield* rootDb.execute(
+          rootDb.deleteFrom("app_private.admin_settings").where("key", "=", key),
+        );
       });
 
       // === Token management ===
@@ -203,7 +207,10 @@ export class GoogleCalendarService extends Effect.Service<GoogleCalendarService>
 
       const gcalFetchEffect = Effect.fnUntraced(function* (
         path: string,
-        options: { method?: "GET" | "POST" | "PATCH" | "DELETE"; body?: unknown } = {},
+        options: {
+          method?: "GET" | "POST" | "PATCH" | "DELETE";
+          body?: unknown;
+        } = {},
       ) {
         const token = yield* getAccessTokenEffect();
         const url = `${GCAL_BASE}${path}`;
@@ -513,7 +520,10 @@ export class GoogleCalendarService extends Effect.Service<GoogleCalendarService>
               );
               const nextToken = decoded.nextSyncToken ?? "";
               yield* setSettingEffect("gcal_sync_token", nextToken);
-              return { events: decoded.items ?? [], nextSyncToken: nextToken } as const;
+              return {
+                events: decoded.items ?? [],
+                nextSyncToken: nextToken,
+              } as const;
             }
             // Incremental sync — must bypass gcalFetchEffect to inspect 410 before throwing
             const token = yield* getAccessTokenEffect();
@@ -548,7 +558,10 @@ export class GoogleCalendarService extends Effect.Service<GoogleCalendarService>
             );
             const nextToken = decoded.nextSyncToken ?? "";
             yield* setSettingEffect("gcal_sync_token", nextToken);
-            return { events: decoded.items ?? [], nextSyncToken: nextToken } as const;
+            return {
+              events: decoded.items ?? [],
+              nextSyncToken: nextToken,
+            } as const;
           }
         }),
 

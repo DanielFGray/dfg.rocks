@@ -1,12 +1,8 @@
 import { Effect, Option } from "effect";
-import type { EffectKysely } from "@effect/sql-kysely/Kysely";
-import type { DB } from "../../generated/db.js";
-import { withAuthContext } from "../db.js";
+import { type Database, withAuthContext } from "../db.js";
 import { HttpError } from "../pgErrors.js";
 import { PdfService } from "./pdfService.js";
 import { BillingLedgerService } from "./billingLedgerService.js";
-
-type AuthDB = EffectKysely<DB>;
 
 export class FamilyBillingService extends Effect.Service<FamilyBillingService>()(
   "FamilyBillingService",
@@ -17,21 +13,30 @@ export class FamilyBillingService extends Effect.Service<FamilyBillingService>()
       const ledger = yield* BillingLedgerService;
 
       function getFamilyId(sessionId: string, userId: string) {
-        return withAuthContext(sessionId, (db: AuthDB) =>
+        return withAuthContext(sessionId, (db: Database) =>
           db
-            .selectFrom("app_public.family_memberships")
-            .select("family_id")
-            .where("user_id", "=", userId)
-            .pipe(Effect.head, Effect.map((r) => r.family_id)),
+            .execute(
+              db
+                .selectFrom("app_public.family_memberships")
+                .select("family_id")
+                .where("user_id", "=", userId),
+            )
+            .pipe(
+              Effect.head,
+              Effect.map((r) => r.family_id),
+            ),
         );
       }
 
       function getFamily(sessionId: string, familyId: string) {
-        return withAuthContext(sessionId, (db: AuthDB) =>
+        return withAuthContext(sessionId, (db: Database) =>
           db
-            .selectFrom("app_public.families")
-            .select(["id", "name"])
-            .where("id", "=", familyId)
+            .execute(
+              db
+                .selectFrom("app_public.families")
+                .select(["id", "name"])
+                .where("id", "=", familyId),
+            )
             .pipe(Effect.head),
         );
       }
@@ -42,28 +47,34 @@ export class FamilyBillingService extends Effect.Service<FamilyBillingService>()
 
           const family = yield* getFamily(sessionId, familyId);
 
-          const bills = yield* withAuthContext(sessionId, (db: AuthDB) =>
-            db
-              .selectFrom("app_public.bills")
-              .selectAll()
-              .where("family_id", "=", familyId)
-              .orderBy("created_at", "desc"),
+          const bills = yield* withAuthContext(sessionId, (db: Database) =>
+            db.execute(
+              db
+                .selectFrom("app_public.bills")
+                .selectAll()
+                .where("family_id", "=", familyId)
+                .orderBy("created_at", "desc"),
+            ),
           );
 
-          const payments = yield* withAuthContext(sessionId, (db: AuthDB) =>
-            db
-              .selectFrom("app_public.payments")
-              .selectAll()
-              .where("family_id", "=", familyId)
-              .orderBy("received_at", "desc"),
+          const payments = yield* withAuthContext(sessionId, (db: Database) =>
+            db.execute(
+              db
+                .selectFrom("app_public.payments")
+                .selectAll()
+                .where("family_id", "=", familyId)
+                .orderBy("received_at", "desc"),
+            ),
           );
 
-          const credits = yield* withAuthContext(sessionId, (db: AuthDB) =>
-            db
-              .selectFrom("app_public.family_credits")
-              .selectAll()
-              .where("family_id", "=", familyId)
-              .orderBy("created_at", "desc"),
+          const credits = yield* withAuthContext(sessionId, (db: Database) =>
+            db.execute(
+              db
+                .selectFrom("app_public.family_credits")
+                .selectAll()
+                .where("family_id", "=", familyId)
+                .orderBy("created_at", "desc"),
+            ),
           );
 
           const ledgerBalance = yield* ledger.getFamilyBalance(sessionId, familyId);
@@ -73,16 +84,11 @@ export class FamilyBillingService extends Effect.Service<FamilyBillingService>()
 
           const now = new Date();
           const overdueBills = bills.filter(
-            (b) =>
-              (b.status === "issued") &&
-              b.due_date &&
-              new Date(b.due_date) < now,
+            (b) => b.status === "issued" && b.due_date && new Date(b.due_date) < now,
           );
           const overdueCents = ledgerBalance.overdueCents;
 
-          const openBills = bills.filter(
-            (b) => b.status === "issued" || b.status === "draft",
-          );
+          const openBills = bills.filter((b) => b.status === "issued" || b.status === "draft");
           const overdueBillsList = overdueBills;
 
           const recentPayments = payments.slice(0, 10);
@@ -96,7 +102,10 @@ export class FamilyBillingService extends Effect.Service<FamilyBillingService>()
               available_credit_cents: ledgerBalance.creditBalanceCents,
               overdue_cents: overdueCents,
               gross_outstanding_cents: grossOutstandingCents,
-              net_due_cents: Math.max(0, ledgerBalance.outstandingCents - ledgerBalance.creditBalanceCents),
+              net_due_cents: Math.max(
+                0,
+                ledgerBalance.outstandingCents - ledgerBalance.creditBalanceCents,
+              ),
             },
             open_bills: openBills,
             overdue_bills: overdueBillsList,
@@ -107,12 +116,14 @@ export class FamilyBillingService extends Effect.Service<FamilyBillingService>()
 
         bills: Effect.fn("bills")(function* (sessionId: string, userId: string) {
           const familyId = yield* getFamilyId(sessionId, userId);
-          return yield* withAuthContext(sessionId, (db: AuthDB) =>
-            db
-              .selectFrom("app_public.bills")
-              .selectAll()
-              .where("family_id", "=", familyId)
-              .orderBy("created_at", "desc"),
+          return yield* withAuthContext(sessionId, (db: Database) =>
+            db.execute(
+              db
+                .selectFrom("app_public.bills")
+                .selectAll()
+                .where("family_id", "=", familyId)
+                .orderBy("created_at", "desc"),
+            ),
           );
         }),
 
@@ -121,11 +132,9 @@ export class FamilyBillingService extends Effect.Service<FamilyBillingService>()
           userId: string,
           billId: string,
         ) {
-          const bill = yield* withAuthContext(sessionId, (db: AuthDB) =>
+          const bill = yield* withAuthContext(sessionId, (db: Database) =>
             db
-              .selectFrom("app_public.bills")
-              .selectAll()
-              .where("id", "=", billId)
+              .execute(db.selectFrom("app_public.bills").selectAll().where("id", "=", billId))
               .pipe(Effect.head, Effect.option),
           );
           if (Option.isNone(bill)) {
@@ -137,28 +146,34 @@ export class FamilyBillingService extends Effect.Service<FamilyBillingService>()
             return yield* new HttpError(403, "Forbidden");
           }
 
-          const lineItems = yield* withAuthContext(sessionId, (db: AuthDB) =>
-            db
-              .selectFrom("app_public.bill_line_items")
-              .selectAll()
-              .where("bill_id", "=", billId)
-              .orderBy("created_at"),
+          const lineItems = yield* withAuthContext(sessionId, (db: Database) =>
+            db.execute(
+              db
+                .selectFrom("app_public.bill_line_items")
+                .selectAll()
+                .where("bill_id", "=", billId)
+                .orderBy("created_at"),
+            ),
           );
 
-          const adjustments = yield* withAuthContext(sessionId, (db: AuthDB) =>
-            db
-              .selectFrom("app_public.bill_adjustments")
-              .selectAll()
-              .where("bill_id", "=", billId)
-              .orderBy("created_at"),
+          const adjustments = yield* withAuthContext(sessionId, (db: Database) =>
+            db.execute(
+              db
+                .selectFrom("app_public.bill_adjustments")
+                .selectAll()
+                .where("bill_id", "=", billId)
+                .orderBy("created_at"),
+            ),
           );
 
-          const creditApplications = yield* withAuthContext(sessionId, (db: AuthDB) =>
-            db
-              .selectFrom("app_public.family_credit_applications")
-              .selectAll()
-              .where("bill_id", "=", billId)
-              .orderBy("created_at"),
+          const creditApplications = yield* withAuthContext(sessionId, (db: Database) =>
+            db.execute(
+              db
+                .selectFrom("app_public.family_credit_applications")
+                .selectAll()
+                .where("bill_id", "=", billId)
+                .orderBy("created_at"),
+            ),
           );
 
           return { ...bill.value, lineItems, adjustments, creditApplications };
@@ -166,12 +181,14 @@ export class FamilyBillingService extends Effect.Service<FamilyBillingService>()
 
         payments: Effect.fn("payments")(function* (sessionId: string, userId: string) {
           const familyId = yield* getFamilyId(sessionId, userId);
-          return yield* withAuthContext(sessionId, (db: AuthDB) =>
-            db
-              .selectFrom("app_public.payments")
-              .selectAll()
-              .where("family_id", "=", familyId)
-              .orderBy("received_at", "desc"),
+          return yield* withAuthContext(sessionId, (db: Database) =>
+            db.execute(
+              db
+                .selectFrom("app_public.payments")
+                .selectAll()
+                .where("family_id", "=", familyId)
+                .orderBy("received_at", "desc"),
+            ),
           );
         }),
 
@@ -180,11 +197,9 @@ export class FamilyBillingService extends Effect.Service<FamilyBillingService>()
           userId: string,
           paymentId: string,
         ) {
-          const payment = yield* withAuthContext(sessionId, (db: AuthDB) =>
+          const payment = yield* withAuthContext(sessionId, (db: Database) =>
             db
-              .selectFrom("app_public.payments")
-              .selectAll()
-              .where("id", "=", paymentId)
+              .execute(db.selectFrom("app_public.payments").selectAll().where("id", "=", paymentId))
               .pipe(Effect.head, Effect.option),
           );
           if (Option.isNone(payment)) {
@@ -196,20 +211,22 @@ export class FamilyBillingService extends Effect.Service<FamilyBillingService>()
             return yield* new HttpError(403, "Forbidden");
           }
 
-          const allocations = yield* withAuthContext(sessionId, (db: AuthDB) =>
-            db
-              .selectFrom("app_public.payment_allocations as pa")
-              .innerJoin("app_public.bills as b", "b.id", "pa.bill_id")
-              .select([
-                "pa.id",
-                "pa.payment_id",
-                "pa.bill_id",
-                "b.bill_number",
-                "pa.amount_cents",
-                "pa.created_at",
-              ])
-              .where("pa.payment_id", "=", paymentId)
-              .orderBy("pa.created_at"),
+          const allocations = yield* withAuthContext(sessionId, (db: Database) =>
+            db.execute(
+              db
+                .selectFrom("app_public.payment_allocations as pa")
+                .innerJoin("app_public.bills as b", "b.id", "pa.bill_id")
+                .select([
+                  "pa.id",
+                  "pa.payment_id",
+                  "pa.bill_id",
+                  "b.bill_number",
+                  "pa.amount_cents",
+                  "pa.created_at",
+                ])
+                .where("pa.payment_id", "=", paymentId)
+                .orderBy("pa.created_at"),
+            ),
           );
 
           return {
@@ -220,12 +237,14 @@ export class FamilyBillingService extends Effect.Service<FamilyBillingService>()
 
         credits: Effect.fn("credits")(function* (sessionId: string, userId: string) {
           const familyId = yield* getFamilyId(sessionId, userId);
-          return yield* withAuthContext(sessionId, (db: AuthDB) =>
-            db
-              .selectFrom("app_public.family_credits")
-              .selectAll()
-              .where("family_id", "=", familyId)
-              .orderBy("created_at", "desc"),
+          return yield* withAuthContext(sessionId, (db: Database) =>
+            db.execute(
+              db
+                .selectFrom("app_public.family_credits")
+                .selectAll()
+                .where("family_id", "=", familyId)
+                .orderBy("created_at", "desc"),
+            ),
           );
         }),
 
@@ -234,11 +253,9 @@ export class FamilyBillingService extends Effect.Service<FamilyBillingService>()
           userId: string,
           billId: string,
         ) {
-          const bill = yield* withAuthContext(sessionId, (db: AuthDB) =>
+          const bill = yield* withAuthContext(sessionId, (db: Database) =>
             db
-              .selectFrom("app_public.bills")
-              .selectAll()
-              .where("id", "=", billId)
+              .execute(db.selectFrom("app_public.bills").selectAll().where("id", "=", billId))
               .pipe(Effect.head, Effect.option),
           );
           if (Option.isNone(bill)) {
@@ -252,12 +269,14 @@ export class FamilyBillingService extends Effect.Service<FamilyBillingService>()
 
           const family = yield* getFamily(sessionId, familyId);
 
-          const lineItems = yield* withAuthContext(sessionId, (db: AuthDB) =>
-            db
-              .selectFrom("app_public.bill_line_items")
-              .selectAll()
-              .where("bill_id", "=", billId)
-              .orderBy("created_at"),
+          const lineItems = yield* withAuthContext(sessionId, (db: Database) =>
+            db.execute(
+              db
+                .selectFrom("app_public.bill_line_items")
+                .selectAll()
+                .where("bill_id", "=", billId)
+                .orderBy("created_at"),
+            ),
           );
 
           const buffer = yield* pdf.generateBillPdf({
@@ -295,11 +314,9 @@ export class FamilyBillingService extends Effect.Service<FamilyBillingService>()
           userId: string,
           paymentId: string,
         ) {
-          const payment = yield* withAuthContext(sessionId, (db: AuthDB) =>
+          const payment = yield* withAuthContext(sessionId, (db: Database) =>
             db
-              .selectFrom("app_public.payments")
-              .selectAll()
-              .where("id", "=", paymentId)
+              .execute(db.selectFrom("app_public.payments").selectAll().where("id", "=", paymentId))
               .pipe(Effect.head, Effect.option),
           );
           if (Option.isNone(payment)) {
@@ -313,15 +330,14 @@ export class FamilyBillingService extends Effect.Service<FamilyBillingService>()
 
           const family = yield* getFamily(sessionId, familyId);
 
-          const allocations = yield* withAuthContext(sessionId, (db: AuthDB) =>
-            db
-              .selectFrom("app_public.payment_allocations as pa")
-              .innerJoin("app_public.bills as b", "b.id", "pa.bill_id")
-              .select([
-                "b.bill_number",
-                "pa.amount_cents",
-              ])
-              .where("pa.payment_id", "=", paymentId),
+          const allocations = yield* withAuthContext(sessionId, (db: Database) =>
+            db.execute(
+              db
+                .selectFrom("app_public.payment_allocations as pa")
+                .innerJoin("app_public.bills as b", "b.id", "pa.bill_id")
+                .select(["b.bill_number", "pa.amount_cents"])
+                .where("pa.payment_id", "=", paymentId),
+            ),
           );
 
           const buffer = yield* pdf.generateReceiptPdf({
@@ -341,15 +357,10 @@ export class FamilyBillingService extends Effect.Service<FamilyBillingService>()
         }),
 
         // Admin: get any family's bill PDF
-        adminBillPdf: Effect.fn("adminBillPdf")(function* (
-          sessionId: string,
-          billId: string,
-        ) {
-          const bill = yield* withAuthContext(sessionId, (db: AuthDB) =>
+        adminBillPdf: Effect.fn("adminBillPdf")(function* (sessionId: string, billId: string) {
+          const bill = yield* withAuthContext(sessionId, (db: Database) =>
             db
-              .selectFrom("app_public.bills")
-              .selectAll()
-              .where("id", "=", billId)
+              .execute(db.selectFrom("app_public.bills").selectAll().where("id", "=", billId))
               .pipe(Effect.head, Effect.option),
           );
           if (Option.isNone(bill)) {
@@ -358,12 +369,14 @@ export class FamilyBillingService extends Effect.Service<FamilyBillingService>()
 
           const family = yield* getFamily(sessionId, bill.value.family_id);
 
-          const lineItems = yield* withAuthContext(sessionId, (db: AuthDB) =>
-            db
-              .selectFrom("app_public.bill_line_items")
-              .selectAll()
-              .where("bill_id", "=", billId)
-              .orderBy("created_at"),
+          const lineItems = yield* withAuthContext(sessionId, (db: Database) =>
+            db.execute(
+              db
+                .selectFrom("app_public.bill_line_items")
+                .selectAll()
+                .where("bill_id", "=", billId)
+                .orderBy("created_at"),
+            ),
           );
 
           const buffer = yield* pdf.generateBillPdf({
@@ -401,11 +414,9 @@ export class FamilyBillingService extends Effect.Service<FamilyBillingService>()
           sessionId: string,
           paymentId: string,
         ) {
-          const payment = yield* withAuthContext(sessionId, (db: AuthDB) =>
+          const payment = yield* withAuthContext(sessionId, (db: Database) =>
             db
-              .selectFrom("app_public.payments")
-              .selectAll()
-              .where("id", "=", paymentId)
+              .execute(db.selectFrom("app_public.payments").selectAll().where("id", "=", paymentId))
               .pipe(Effect.head, Effect.option),
           );
           if (Option.isNone(payment)) {
@@ -414,15 +425,14 @@ export class FamilyBillingService extends Effect.Service<FamilyBillingService>()
 
           const family = yield* getFamily(sessionId, payment.value.family_id);
 
-          const allocations = yield* withAuthContext(sessionId, (db: AuthDB) =>
-            db
-              .selectFrom("app_public.payment_allocations as pa")
-              .innerJoin("app_public.bills as b", "b.id", "pa.bill_id")
-              .select([
-                "b.bill_number",
-                "pa.amount_cents",
-              ])
-              .where("pa.payment_id", "=", paymentId),
+          const allocations = yield* withAuthContext(sessionId, (db: Database) =>
+            db.execute(
+              db
+                .selectFrom("app_public.payment_allocations as pa")
+                .innerJoin("app_public.bills as b", "b.id", "pa.bill_id")
+                .select(["b.bill_number", "pa.amount_cents"])
+                .where("pa.payment_id", "=", paymentId),
+            ),
           );
 
           const buffer = yield* pdf.generateReceiptPdf({

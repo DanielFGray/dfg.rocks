@@ -1,4 +1,3 @@
-import type { EffectKysely } from "@effect/sql-kysely/Kysely";
 import { Effect, Option } from "effect";
 import type { ColumnType, Generated } from "kysely";
 import type { DB } from "../../generated/db.js";
@@ -7,7 +6,7 @@ import type {
   PaymentGenerationStatus,
   RecurringSchedule,
 } from "../../shared/schemas.js";
-import { withAuthContext } from "../db.js";
+import { type Database, withAuthContext } from "../db.js";
 import { HttpError } from "../pgErrors.js";
 
 type Timestamp = ColumnType<Date, Date | string, Date | string>;
@@ -35,10 +34,7 @@ interface MonthlyPaymentsTable {
   generated_at: Timestamp | null;
 }
 
-type RecurringDB = Omit<
-  DB,
-  "app_public.recurring_schedules" | "app_public.monthly_payments"
-> & {
+type RecurringDB = Omit<DB, "app_public.recurring_schedules" | "app_public.monthly_payments"> & {
   "app_public.recurring_schedules": RecurringSchedulesTable;
   "app_public.monthly_payments": MonthlyPaymentsTable;
 };
@@ -175,14 +171,16 @@ export class RecurringScheduleService extends Effect.Service<RecurringScheduleSe
         studentId: string,
       ) {
         return yield* withAuthContext(sessionId, (baseDb) => {
-          const db = baseDb as unknown as EffectKysely<RecurringDB>;
-          return db
-            .selectFrom("app_public.recurring_schedules as rs")
-            .innerJoin("app_public.student_rates as sr", "sr.id", "rs.student_rate_id")
-            .select(scheduleColumns)
-            .where("sr.student_id", "=", studentId)
-            .orderBy("rs.day_of_week")
-            .orderBy("rs.local_start_time");
+          const db = baseDb as unknown as Database<RecurringDB>;
+          return db.execute(
+            db
+              .selectFrom("app_public.recurring_schedules as rs")
+              .innerJoin("app_public.student_rates as sr", "sr.id", "rs.student_rate_id")
+              .select(scheduleColumns)
+              .where("sr.student_id", "=", studentId)
+              .orderBy("rs.day_of_week")
+              .orderBy("rs.local_start_time"),
+          );
         });
       }),
 
@@ -193,7 +191,10 @@ export class RecurringScheduleService extends Effect.Service<RecurringScheduleSe
         schedule: Omit<SaveRecurringScheduleInput, "id">;
       }) {
         const { sessionId, studentId } = values;
-        const input: SaveRecurringScheduleInput = { ...values.schedule, id: values.id };
+        const input: SaveRecurringScheduleInput = {
+          ...values.schedule,
+          id: values.id,
+        };
         const validationErrors = validateRecurringSchedule(input);
         if (validationErrors.length > 0) {
           return yield* new HttpError(400, validationErrors.join("; "));
@@ -201,12 +202,15 @@ export class RecurringScheduleService extends Effect.Service<RecurringScheduleSe
         return yield* withAuthContext(
           sessionId,
           Effect.fnUntraced(function* (baseDb) {
-            const db = baseDb as unknown as EffectKysely<RecurringDB>;
+            const db = baseDb as unknown as Database<RecurringDB>;
             const rate = yield* db
-              .selectFrom("app_public.student_rates")
-              .select(["id", "billing_model"])
-              .where("id", "=", input.studentRateId)
-              .where("student_id", "=", studentId)
+              .execute(
+                db
+                  .selectFrom("app_public.student_rates")
+                  .select(["id", "billing_model"])
+                  .where("id", "=", input.studentRateId)
+                  .where("student_id", "=", studentId),
+              )
               .pipe(Effect.head, Effect.option);
             const studentRate = Option.getOrNull(rate);
             if (!studentRate) {
@@ -231,32 +235,40 @@ export class RecurringScheduleService extends Effect.Service<RecurringScheduleSe
             let scheduleId = input.id;
             if (scheduleId) {
               const existing = yield* db
-                .selectFrom("app_public.recurring_schedules as rs")
-                .innerJoin("app_public.student_rates as sr", "sr.id", "rs.student_rate_id")
-                .select("rs.id")
-                .where("rs.id", "=", scheduleId)
-                .where("sr.student_id", "=", studentId)
+                .execute(
+                  db
+                    .selectFrom("app_public.recurring_schedules as rs")
+                    .innerJoin("app_public.student_rates as sr", "sr.id", "rs.student_rate_id")
+                    .select("rs.id")
+                    .where("rs.id", "=", scheduleId)
+                    .where("sr.student_id", "=", studentId),
+                )
                 .pipe(Effect.head, Effect.option);
               if (Option.isNone(existing)) {
                 return yield* new HttpError(404, "Recurring schedule not found");
               }
-              yield* db
-                .updateTable("app_public.recurring_schedules")
-                .set(values)
-                .where("id", "=", scheduleId);
+              yield* db.execute(
+                db
+                  .updateTable("app_public.recurring_schedules")
+                  .set(values)
+                  .where("id", "=", scheduleId),
+              );
             } else {
               const inserted = yield* db
-                .insertInto("app_public.recurring_schedules")
-                .values(values)
-                .returning("id")
+                .execute(
+                  db.insertInto("app_public.recurring_schedules").values(values).returning("id"),
+                )
                 .pipe(Effect.head);
               scheduleId = inserted.id;
             }
             return yield* db
-              .selectFrom("app_public.recurring_schedules as rs")
-              .innerJoin("app_public.student_rates as sr", "sr.id", "rs.student_rate_id")
-              .select(scheduleColumns)
-              .where("rs.id", "=", scheduleId)
+              .execute(
+                db
+                  .selectFrom("app_public.recurring_schedules as rs")
+                  .innerJoin("app_public.student_rates as sr", "sr.id", "rs.student_rate_id")
+                  .select(scheduleColumns)
+                  .where("rs.id", "=", scheduleId),
+              )
               .pipe(Effect.head);
           }),
         );
@@ -267,12 +279,14 @@ export class RecurringScheduleService extends Effect.Service<RecurringScheduleSe
         studentId: string,
       ) {
         return yield* withAuthContext(sessionId, (baseDb) => {
-          const db = baseDb as unknown as EffectKysely<RecurringDB>;
-          return db
-            .selectFrom("app_public.monthly_payments")
-            .select(paymentColumns)
-            .where("student_id", "=", studentId)
-            .orderBy("billing_month", "desc");
+          const db = baseDb as unknown as Database<RecurringDB>;
+          return db.execute(
+            db
+              .selectFrom("app_public.monthly_payments")
+              .select(paymentColumns)
+              .where("student_id", "=", studentId)
+              .orderBy("billing_month", "desc"),
+          );
         });
       }),
 
@@ -298,22 +312,28 @@ export class RecurringScheduleService extends Effect.Service<RecurringScheduleSe
         return yield* withAuthContext(
           sessionId,
           Effect.fnUntraced(function* (baseDb) {
-            const db = baseDb as unknown as EffectKysely<RecurringDB>;
+            const db = baseDb as unknown as Database<RecurringDB>;
             const nextMonth = new Date(`${input.billingMonth}T00:00:00.000Z`);
             nextMonth.setUTCMonth(nextMonth.getUTCMonth() + 1);
             const lastDay = new Date(nextMonth.getTime() - 86_400_000).toISOString().slice(0, 10);
             const eligible = yield* db
-              .selectFrom("app_public.recurring_schedules as rs")
-              .innerJoin("app_public.student_rates as sr", "sr.id", "rs.student_rate_id")
-              .select("rs.id")
-              .where("sr.student_id", "=", input.studentId)
-              .where("sr.billing_model", "=", "monthly_prepaid")
-              .where("rs.active", "=", true)
-              .where("rs.starts_on", "<=", lastDay)
-              .where((eb) =>
-                eb.or([eb("rs.ends_on", "is", null), eb("rs.ends_on", ">=", input.billingMonth)]),
+              .execute(
+                db
+                  .selectFrom("app_public.recurring_schedules as rs")
+                  .innerJoin("app_public.student_rates as sr", "sr.id", "rs.student_rate_id")
+                  .select("rs.id")
+                  .where("sr.student_id", "=", input.studentId)
+                  .where("sr.billing_model", "=", "monthly_prepaid")
+                  .where("rs.active", "=", true)
+                  .where("rs.starts_on", "<=", lastDay)
+                  .where((eb) =>
+                    eb.or([
+                      eb("rs.ends_on", "is", null),
+                      eb("rs.ends_on", ">=", input.billingMonth),
+                    ]),
+                  )
+                  .limit(1),
               )
-              .limit(1)
               .pipe(Effect.head, Effect.option);
             if (Option.isNone(eligible)) {
               return yield* new HttpError(
@@ -323,19 +343,22 @@ export class RecurringScheduleService extends Effect.Service<RecurringScheduleSe
             }
 
             const inserted = yield* db
-              .insertInto("app_public.monthly_payments")
-              .values({
-                student_id: input.studentId,
-                billing_month: input.billingMonth,
-                amount_cents: input.amountCents,
-                paid_at: input.paidAt,
-                notes: input.notes,
-                generation_status: "pending",
-                generation_error: null,
-                generated_at: null,
-              })
-              .onConflict((oc) => oc.columns(["student_id", "billing_month"]).doNothing())
-              .returning(paymentColumns)
+              .execute(
+                db
+                  .insertInto("app_public.monthly_payments")
+                  .values({
+                    student_id: input.studentId,
+                    billing_month: input.billingMonth,
+                    amount_cents: input.amountCents,
+                    paid_at: input.paidAt,
+                    notes: input.notes,
+                    generation_status: "pending",
+                    generation_error: null,
+                    generated_at: null,
+                  })
+                  .onConflict((oc) => oc.columns(["student_id", "billing_month"]).doNothing())
+                  .returning(paymentColumns),
+              )
               .pipe(Effect.head, Effect.option);
 
             let payment;
@@ -345,11 +368,14 @@ export class RecurringScheduleService extends Effect.Service<RecurringScheduleSe
               shouldEnqueue = true;
             } else {
               payment = yield* db
-                .selectFrom("app_public.monthly_payments")
-                .select(paymentColumns)
-                .where("student_id", "=", input.studentId)
-                .where("billing_month", "=", input.billingMonth)
-                .forUpdate()
+                .execute(
+                  db
+                    .selectFrom("app_public.monthly_payments")
+                    .select(paymentColumns)
+                    .where("student_id", "=", input.studentId)
+                    .where("billing_month", "=", input.billingMonth)
+                    .forUpdate(),
+                )
                 .pipe(Effect.head);
               if (
                 payment.amount_cents !== input.amountCents ||
@@ -363,22 +389,31 @@ export class RecurringScheduleService extends Effect.Service<RecurringScheduleSe
               }
               if (payment.generation_status === "failed") {
                 payment = yield* db
-                  .updateTable("app_public.monthly_payments")
-                  .set({ generation_status: "pending", generation_error: null, generated_at: null })
-                  .where("id", "=", payment.id)
-                  .returning(paymentColumns)
+                  .execute(
+                    db
+                      .updateTable("app_public.monthly_payments")
+                      .set({
+                        generation_status: "pending",
+                        generation_error: null,
+                        generated_at: null,
+                      })
+                      .where("id", "=", payment.id)
+                      .returning(paymentColumns),
+                  )
                   .pipe(Effect.head);
                 shouldEnqueue = true;
               }
             }
 
             if (shouldEnqueue) {
-              yield* db.selectNoFrom((eb) =>
-                eb
-                  .fn<unknown>("app_public.enqueue_prepaid_lesson_generation", [
-                    eb.val(payment.id),
-                  ])
-                  .as("add_job"),
+              yield* db.execute(
+                db.selectNoFrom((eb) =>
+                  eb
+                    .fn<unknown>("app_public.enqueue_prepaid_lesson_generation", [
+                      eb.val(payment.id),
+                    ])
+                    .as("add_job"),
+                ),
               );
             }
             return payment;
