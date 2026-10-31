@@ -888,7 +888,7 @@ export class AdminRouteService extends Context.Service<AdminRouteService>()("Adm
                   db
                     .selectFrom("app_public.bill_line_items as bli")
                     .innerJoin("app_public.bills as b", "b.id", "bli.bill_id")
-                    .select(["b.id as bill_id", "b.family_id", "b.status", "b.total_cents"])
+                    .select(["b.id as bill_id", "b.payer_id", "b.status", "b.total_cents"])
                     .where("bli.lesson_id", "=", existing.id),
                 )
                 .pipe(Effect.head, Effect.option);
@@ -910,9 +910,9 @@ export class AdminRouteService extends Context.Service<AdminRouteService>()("Adm
                 const credit = yield* db
                   .execute(
                     db
-                      .insertInto("app_public.family_credits")
+                      .insertInto("app_public.credits")
                       .values({
-                        family_id: obligation.value.family_id,
+                        payer_id: obligation.value.payer_id,
                         student_id: existing.student_id,
                         amount_cents: heldDeposit.amount_cents,
                         reason: `Captured deposit for single booking ${existing.id}`,
@@ -923,7 +923,7 @@ export class AdminRouteService extends Context.Service<AdminRouteService>()("Adm
                   )
                   .pipe(Effect.head);
                 yield* db.execute(
-                  db.insertInto("app_public.family_credit_applications").values({
+                  db.insertInto("app_public.credit_applications").values({
                     credit_id: credit.id,
                     bill_id: obligation.value.bill_id,
                     amount_cents: heldDeposit.amount_cents,

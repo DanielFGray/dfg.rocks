@@ -531,7 +531,7 @@ export type LineItemType = S.Schema.Type<typeof LineItemType>;
 
 export const Bill = S.Struct({
   id: S.String,
-  family_id: S.String,
+  payer_id: S.String,
   bill_number: S.Number,
   status: BillStatus,
   billing_period_start: S.String,
@@ -554,7 +554,7 @@ export type Bill = S.Schema.Type<typeof Bill>;
 
 export const Payment = S.Struct({
   id: S.String,
-  family_id: S.String,
+  payer_id: S.String,
   payment_number: S.Number,
   amount_cents: S.Number,
   method: PaymentMethod,
@@ -570,7 +570,7 @@ export type Payment = S.Schema.Type<typeof Payment>;
 // Family-facing billing views deliberately exclude internal notes and actor IDs.
 export const FamilyBill = S.Struct({
   id: S.String,
-  family_id: S.String,
+  payer_id: S.String,
   bill_number: S.Number,
   status: BillStatus,
   billing_period_start: S.String,
@@ -591,7 +591,7 @@ export type FamilyBill = S.Schema.Type<typeof FamilyBill>;
 
 export const FamilyPayment = S.Struct({
   id: S.String,
-  family_id: S.String,
+  payer_id: S.String,
   payment_number: S.Number,
   amount_cents: S.Number,
   method: PaymentMethod,
@@ -602,9 +602,9 @@ export const FamilyPayment = S.Struct({
 });
 export type FamilyPayment = S.Schema.Type<typeof FamilyPayment>;
 
-export const FamilyCredit = S.Struct({
+export const Credit = S.Struct({
   id: S.String,
-  family_id: S.String,
+  payer_id: S.String,
   student_id: S.NullOr(S.String),
   amount_cents: S.Number,
   reason: S.String,
@@ -613,11 +613,11 @@ export const FamilyCredit = S.Struct({
   created_at: S.String,
 });
 
-export type FamilyCredit = S.Schema.Type<typeof FamilyCredit>;
+export type Credit = S.Schema.Type<typeof Credit>;
 
-export const AdminFamilyCredit = S.Struct({
+export const AdminCredit = S.Struct({
   id: S.String,
-  family_id: S.String,
+  payer_id: S.String,
   student_id: S.NullOr(S.String),
   amount_cents: S.Number,
   reason: S.String,
@@ -626,11 +626,11 @@ export const AdminFamilyCredit = S.Struct({
   consumed_at: S.NullOr(S.String),
   created_at: S.String,
 });
-export type AdminFamilyCredit = S.Schema.Type<typeof AdminFamilyCredit>;
+export type AdminCredit = S.Schema.Type<typeof AdminCredit>;
 
 export const FamilyBillDetailResponse = S.Struct({
   id: S.String,
-  family_id: S.String,
+  payer_id: S.String,
   bill_number: S.Number,
   status: BillStatus,
   billing_period_start: S.String,
@@ -695,7 +695,7 @@ export type FamilyPaymentDetail = S.Schema.Type<typeof FamilyPaymentDetail>;
 
 export const BillDetailResponse = S.Struct({
   id: S.String,
-  family_id: S.String,
+  payer_id: S.String,
   bill_number: S.Number,
   status: BillStatus,
   billing_period_start: S.String,
@@ -749,7 +749,7 @@ export type BillDetailResponse = S.Schema.Type<typeof BillDetailResponse>;
 
 export const PaymentDetail = S.Struct({
   id: S.String,
-  family_id: S.String,
+  payer_id: S.String,
   payment_number: S.Number,
   amount_cents: S.Number,
   method: PaymentMethod,
@@ -782,21 +782,21 @@ export const FamilyBillingBalance = S.Struct({
 
 export type FamilyBillingBalance = S.Schema.Type<typeof FamilyBillingBalance>;
 
+// Covers every payer ledger that RLS shows the current user.
 export const FamilyBillingOverview = S.Struct({
-  family_id: S.String,
-  family_name: S.String,
   balance: FamilyBillingBalance,
   open_bills: S.Array(FamilyBill),
   overdue_bills: S.Array(FamilyBill),
   recent_payments: S.Array(FamilyPayment),
-  credits: S.Array(FamilyCredit),
+  credits: S.Array(Credit),
 });
 
 export type FamilyBillingOverview = S.Schema.Type<typeof FamilyBillingOverview>;
 
-export const FamilyBillingSummary = S.Struct({
-  family_id: S.String,
-  family_name: S.String,
+export const PayerBillingSummary = S.Struct({
+  payer_id: S.String,
+  payer_name: S.String,
+  students: S.Array(S.Struct({ id: S.String, name: S.String })),
   bill_count: S.Number,
   total_billed_cents: S.Number,
   total_paid_cents: S.Number,
@@ -805,30 +805,30 @@ export const FamilyBillingSummary = S.Struct({
   credit_balance_cents: S.Number,
 });
 
-export type FamilyBillingSummary = S.Schema.Type<typeof FamilyBillingSummary>;
+export type PayerBillingSummary = S.Schema.Type<typeof PayerBillingSummary>;
 
-export const FamilyBillingDetailBalance = S.Struct({
+export const PayerBillingBalance = S.Struct({
   outstanding_cents: S.Number,
   overdue_cents: S.Number,
   credit_balance_cents: S.Number,
 });
 
-export type FamilyBillingDetailBalance = S.Schema.Type<typeof FamilyBillingDetailBalance>;
+export type PayerBillingBalance = S.Schema.Type<typeof PayerBillingBalance>;
 
-export const FamilyBillingDetail = S.Struct({
-  family_id: S.String,
-  family_name: S.String,
-  balance: FamilyBillingDetailBalance,
+export const PayerBillingDetail = S.Struct({
+  payer_id: S.String,
+  payer_name: S.String,
+  balance: PayerBillingBalance,
   bills: S.Array(FamilyBill),
   payments: S.Array(FamilyPayment),
-  credits: S.Array(FamilyCredit),
+  credits: S.Array(Credit),
 });
 
-export type FamilyBillingDetail = S.Schema.Type<typeof FamilyBillingDetail>;
+export type PayerBillingDetail = S.Schema.Type<typeof PayerBillingDetail>;
 
-export const FamilyDiscount = S.Struct({
+export const Discount = S.Struct({
   id: S.String,
-  family_id: S.String,
+  payer_id: S.String,
   label: S.String,
   discount_type: S.Literals(["percentage", "fixed"]),
   discount_value: S.Number,
@@ -841,7 +841,7 @@ export const FamilyDiscount = S.Struct({
   updated_at: S.String,
 });
 
-export type FamilyDiscount = S.Schema.Type<typeof FamilyDiscount>;
+export type Discount = S.Schema.Type<typeof Discount>;
 
 export const TaxRate = S.Struct({
   id: S.String,
@@ -859,9 +859,9 @@ export const TaxRate = S.Struct({
 
 export type TaxRate = S.Schema.Type<typeof TaxRate>;
 
-export const FamilyTaxExemption = S.Struct({
+export const TaxExemption = S.Struct({
   id: S.String,
-  family_id: S.String,
+  payer_id: S.String,
   tax_rate_id: S.String,
   exemption_reason: S.String,
   effective_from: S.String,
@@ -870,7 +870,7 @@ export const FamilyTaxExemption = S.Struct({
   created_at: S.String,
 });
 
-export type FamilyTaxExemption = S.Schema.Type<typeof FamilyTaxExemption>;
+export type TaxExemption = S.Schema.Type<typeof TaxExemption>;
 
 export const Refund = S.Struct({
   id: S.String,

@@ -42,7 +42,7 @@ import { Route as AuthedBillingMonthlyRouteImport } from './routes/_authed/billi
 import { Route as AuthedAssignmentsMaterialIdRouteImport } from './routes/_authed/assignments.$materialId'
 import { Route as AuthedFamilyBillingIndexRouteImport } from './routes/_authed/family/billing.index'
 import { Route as AuthedFamilyBillingBillsRouteImport } from './routes/_authed/family/billing/bills'
-import { Route as AuthedBillingFamiliesFamilyIdRouteImport } from './routes/_authed/billing.families.$familyId'
+import { Route as AuthedBillingPayersPayerIdRouteImport } from './routes/_authed/billing.payers.$payerId'
 import { Route as AuthedBillingBillsBillIdRouteImport } from './routes/_authed/billing.bills.$billId'
 import { Route as AuthedFamilyBillingPaymentsPaymentIdRouteImport } from './routes/_authed/family/billing/payments.$paymentId'
 import { Route as AuthedFamilyBillingBillsBillIdRouteImport } from './routes/_authed/family/billing/bills.$billId'
@@ -215,10 +215,10 @@ const AuthedFamilyBillingBillsRoute =
     path: '/bills',
     getParentRoute: () => AuthedFamilyBillingRoute,
   } as any)
-const AuthedBillingFamiliesFamilyIdRoute =
-  AuthedBillingFamiliesFamilyIdRouteImport.update({
-    id: '/families/$familyId',
-    path: '/families/$familyId',
+const AuthedBillingPayersPayerIdRoute =
+  AuthedBillingPayersPayerIdRouteImport.update({
+    id: '/payers/$payerId',
+    path: '/payers/$payerId',
     getParentRoute: () => AuthedBillingRoute,
   } as any)
 const AuthedBillingBillsBillIdRoute =
@@ -278,7 +278,7 @@ export interface FileRoutesByFullPath {
   '/courses/': typeof AuthedCoursesIndexRoute
   '/students/': typeof AuthedStudentsIndexRoute
   '/billing/bills/$billId': typeof AuthedBillingBillsBillIdRoute
-  '/billing/families/$familyId': typeof AuthedBillingFamiliesFamilyIdRoute
+  '/billing/payers/$payerId': typeof AuthedBillingPayersPayerIdRoute
   '/family/billing/bills': typeof AuthedFamilyBillingBillsRouteWithChildren
   '/family/billing/': typeof AuthedFamilyBillingIndexRoute
   '/family/billing/bills/$billId': typeof AuthedFamilyBillingBillsBillIdRoute
@@ -314,7 +314,7 @@ export interface FileRoutesByTo {
   '/courses': typeof AuthedCoursesIndexRoute
   '/students': typeof AuthedStudentsIndexRoute
   '/billing/bills/$billId': typeof AuthedBillingBillsBillIdRoute
-  '/billing/families/$familyId': typeof AuthedBillingFamiliesFamilyIdRoute
+  '/billing/payers/$payerId': typeof AuthedBillingPayersPayerIdRoute
   '/family/billing/bills': typeof AuthedFamilyBillingBillsRouteWithChildren
   '/family/billing': typeof AuthedFamilyBillingIndexRoute
   '/family/billing/bills/$billId': typeof AuthedFamilyBillingBillsBillIdRoute
@@ -355,7 +355,7 @@ export interface FileRoutesById {
   '/_authed/courses/': typeof AuthedCoursesIndexRoute
   '/_authed/students/': typeof AuthedStudentsIndexRoute
   '/_authed/billing/bills/$billId': typeof AuthedBillingBillsBillIdRoute
-  '/_authed/billing/families/$familyId': typeof AuthedBillingFamiliesFamilyIdRoute
+  '/_authed/billing/payers/$payerId': typeof AuthedBillingPayersPayerIdRoute
   '/_authed/family/billing/bills': typeof AuthedFamilyBillingBillsRouteWithChildren
   '/_authed/family/billing/': typeof AuthedFamilyBillingIndexRoute
   '/_authed/family/billing/bills/$billId': typeof AuthedFamilyBillingBillsBillIdRoute
@@ -396,7 +396,7 @@ export interface FileRouteTypes {
     | '/courses/'
     | '/students/'
     | '/billing/bills/$billId'
-    | '/billing/families/$familyId'
+    | '/billing/payers/$payerId'
     | '/family/billing/bills'
     | '/family/billing/'
     | '/family/billing/bills/$billId'
@@ -432,7 +432,7 @@ export interface FileRouteTypes {
     | '/courses'
     | '/students'
     | '/billing/bills/$billId'
-    | '/billing/families/$familyId'
+    | '/billing/payers/$payerId'
     | '/family/billing/bills'
     | '/family/billing'
     | '/family/billing/bills/$billId'
@@ -472,7 +472,7 @@ export interface FileRouteTypes {
     | '/_authed/courses/'
     | '/_authed/students/'
     | '/_authed/billing/bills/$billId'
-    | '/_authed/billing/families/$familyId'
+    | '/_authed/billing/payers/$payerId'
     | '/_authed/family/billing/bills'
     | '/_authed/family/billing/'
     | '/_authed/family/billing/bills/$billId'
@@ -726,11 +726,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedFamilyBillingBillsRouteImport
       parentRoute: typeof AuthedFamilyBillingRoute
     }
-    '/_authed/billing/families/$familyId': {
-      id: '/_authed/billing/families/$familyId'
-      path: '/families/$familyId'
-      fullPath: '/billing/families/$familyId'
-      preLoaderRoute: typeof AuthedBillingFamiliesFamilyIdRouteImport
+    '/_authed/billing/payers/$payerId': {
+      id: '/_authed/billing/payers/$payerId'
+      path: '/payers/$payerId'
+      fullPath: '/billing/payers/$payerId'
+      preLoaderRoute: typeof AuthedBillingPayersPayerIdRouteImport
       parentRoute: typeof AuthedBillingRoute
     }
     '/_authed/billing/bills/$billId': {
@@ -781,14 +781,14 @@ interface AuthedBillingRouteChildren {
   AuthedBillingMonthlyRoute: typeof AuthedBillingMonthlyRoute
   AuthedBillingIndexRoute: typeof AuthedBillingIndexRoute
   AuthedBillingBillsBillIdRoute: typeof AuthedBillingBillsBillIdRoute
-  AuthedBillingFamiliesFamilyIdRoute: typeof AuthedBillingFamiliesFamilyIdRoute
+  AuthedBillingPayersPayerIdRoute: typeof AuthedBillingPayersPayerIdRoute
 }
 
 const AuthedBillingRouteChildren: AuthedBillingRouteChildren = {
   AuthedBillingMonthlyRoute: AuthedBillingMonthlyRoute,
   AuthedBillingIndexRoute: AuthedBillingIndexRoute,
   AuthedBillingBillsBillIdRoute: AuthedBillingBillsBillIdRoute,
-  AuthedBillingFamiliesFamilyIdRoute: AuthedBillingFamiliesFamilyIdRoute,
+  AuthedBillingPayersPayerIdRoute: AuthedBillingPayersPayerIdRoute,
 }
 
 const AuthedBillingRouteWithChildren = AuthedBillingRoute._addFileChildren(

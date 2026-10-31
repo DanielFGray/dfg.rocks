@@ -28,12 +28,11 @@ let adminSessionId: string;
 let teacherSessionId: string;
 let parentSessionId: string;
 let otherParentSessionId: string;
-let familyId: string;
+let studentSessionId: string;
 let otherFamilyId: string;
 let studentId: string;
 let adminId: string;
-let parentUserId: string;
-let otherParentUserId: string;
+let seededBillId: string;
 
 function requiredEnv(name: string): string {
   const value = process.env[name];
@@ -96,21 +95,19 @@ describe("PDF Service", () => {
     adminId = await makeUser("fb_admin", "FB Admin", "fbadmin@test.com", "admin");
     const teacherId = await makeUser("fb_teacher", "FB Teacher", "fbteacher@test.com", "teacher");
     const parentId = await makeUser("fb_parent", "FB Parent", "fbparent@test.com", "parent");
-    parentUserId = parentId;
     const otherParentId = await makeUser(
       "fb_other_parent",
       "FB Other Parent",
       "fbother@test.com",
       "parent",
     );
-    otherParentUserId = otherParentId;
     studentId = await makeUser("fb_student", "FB Student", "fbstudent@test.com", "student");
 
     const familyResult = await testDb.query(
       `insert into app_public.families (slug, name) values ($1, $2) returning id`,
       ["fb-test-family", "FB Test Family"],
     );
-    familyId = familyResult.rows[0].id;
+    const familyId = familyResult.rows[0].id;
 
     const otherFamilyResult = await testDb.query(
       `insert into app_public.families (slug, name) values ($1, $2) returning id`,
@@ -142,46 +139,47 @@ describe("PDF Service", () => {
     teacherSessionId = await createSession(teacherId);
     parentSessionId = await createSession(parentId);
     otherParentSessionId = await createSession(otherParentId);
+    studentSessionId = await createSession(studentId);
 
     // Seed a bill and payment for testing
     const billResult = await testDb.query(
-      `insert into app_public.bills (family_id, bill_number, billing_period_start, billing_period_end, due_date, subtotal_cents, discount_cents, tax_cents, total_cents, notes, status, created_at)
-       values ($1, app_public.next_bill_number($1::uuid), '2026-07-01', '2026-07-31', '2026-07-15', 20000, 2000, 1000, 19000, null::text, 'draft', now())
+      `insert into app_public.bills (payer_id, bill_number, billing_period_start, billing_period_end, due_date, subtotal_cents, discount_cents, tax_cents, total_cents, notes, status, created_at)
+       values ($1, app_public.next_bill_number(), '2026-07-01', '2026-07-31', '2026-07-15', 20000, 2000, 1000, 19000, null::text, 'draft', now())
        returning id`,
-      [familyId],
+      [parentId],
     );
-    const billId = billResult.rows[0].id;
+    seededBillId = billResult.rows[0].id;
 
     await testDb.query(
       `update app_public.bills set status = 'issued', issued_at = now() where id = $1`,
-      [billId],
+      [seededBillId],
     );
 
     await testDb.query(
       `insert into app_public.bill_line_items (bill_id, student_id, line_type, description, quantity, unit_price_cents, amount_cents)
        values ($1, $2, 'lesson', 'Weekly lessons x4', 4, 5000, 20000)`,
-      [billId, studentId],
+      [seededBillId, studentId],
     );
 
     const paymentResult = await testDb.query(
-      `insert into app_public.payments (family_id, payment_number, amount_cents, method, reference, received_at, notes)
+      `insert into app_public.payments (payer_id, payment_number, amount_cents, method, reference, received_at, notes)
        values ($1, 1, 10000, 'check', 'CK-1001', now(), null::text)
        returning id`,
-      [familyId],
+      [parentId],
     );
     const paymentId = paymentResult.rows[0].id;
 
     await testDb.query(
       `insert into app_public.payment_allocations (payment_id, bill_id, amount_cents)
        values ($1, $2, 10000)`,
-      [paymentId, billId],
+      [paymentId, seededBillId],
     );
 
     // Credit for testing
     await testDb.query(
-      `insert into app_public.family_credits (family_id, amount_cents, reason, created_by)
+      `insert into app_public.credits (payer_id, amount_cents, reason, created_by)
        values ($1, 5000, 'Referral bonus', $2)`,
-      [familyId, adminId],
+      [parentId, adminId],
     );
   }, 120_000);
 
@@ -195,7 +193,7 @@ describe("PDF Service", () => {
       Effect.gen(function* () {
         const pdf = yield* PdfService;
         const billBuffer = yield* pdf.generateBillPdf({
-          familyName: "Test Family",
+          payerName: "Test Payer",
           billNumber: 42,
           status: "issued",
           billingPeriodStart: "2026-07-01",
@@ -222,7 +220,7 @@ describe("PDF Service", () => {
         expect(extractPdfText(billBuffer)).toContain("$190.00");
 
         const receiptBuffer = yield* pdf.generateReceiptPdf({
-          familyName: "Test Family",
+          payerName: "Test Payer",
           paymentNumber: 1,
           amountCents: 10000,
           method: "check",
@@ -238,34 +236,35 @@ describe("PDF Service", () => {
     effectIt.effect("parent reads their own billing overview and lists", () =>
       Effect.gen(function* () {
         const svc = yield* FamilyBillingService;
-        const overview = yield* svc.overview(parentSessionId, parentUserId);
-        expect(overview.family_id).toBe(familyId);
-        expect(overview.family_name).toBe("FB Test Family");
+        const overview = yield* svc.overview(parentSessionId);
         expect(overview.balance.gross_outstanding_cents).toBeGreaterThanOrEqual(19000);
-        const bills = yield* svc.bills(parentSessionId, parentUserId);
+        const bills = yield* svc.bills(parentSessionId);
         expect(bills.length).toBeGreaterThanOrEqual(1);
-        const detail = yield* svc.billDetail(parentSessionId, parentUserId, bills[0].id);
+        const detail = yield* svc.billDetail(parentSessionId, bills[0].id);
         expect(detail.lineItems.length).toBeGreaterThanOrEqual(1);
-        expect((yield* svc.payments(parentSessionId, parentUserId)).length).toBeGreaterThanOrEqual(
-          1,
-        );
+        expect((yield* svc.payments(parentSessionId)).length).toBeGreaterThanOrEqual(1);
         expect(
-          (yield* svc.credits(parentSessionId, parentUserId)).some(
-            (c) => c.reason === "Referral bonus",
-          ),
+          (yield* svc.credits(parentSessionId)).some((c) => c.reason === "Referral bonus"),
         ).toBe(true);
+      }),
+    );
+
+    effectIt.effect("a family member who is not the payer sees the billing contact's bills", () =>
+      Effect.gen(function* () {
+        const svc = yield* FamilyBillingService;
+        const bills = yield* svc.bills(studentSessionId);
+        expect(bills.map((bill) => bill.id)).toContain(seededBillId);
       }),
     );
 
     effectIt.effect("parent can download their bill and payment receipt", () =>
       Effect.gen(function* () {
         const svc = yield* FamilyBillingService;
-        const bills = yield* svc.bills(parentSessionId, parentUserId);
-        const billPdf = yield* svc.billPdf(parentSessionId, parentUserId, bills[0].id);
+        const billPdf = yield* svc.billPdf(parentSessionId, seededBillId);
         expect(billPdf.slice(0, 4).toString()).toBe("%PDF");
-        expect(extractPdfText(billPdf)).toContain("FB Test Family");
-        const payments = yield* svc.payments(parentSessionId, parentUserId);
-        const receipt = yield* svc.paymentReceipt(parentSessionId, parentUserId, payments[0].id);
+        expect(extractPdfText(billPdf)).toContain("Payer: FB Parent");
+        const payments = yield* svc.payments(parentSessionId);
+        const receipt = yield* svc.paymentReceipt(parentSessionId, payments[0].id);
         expect(receipt.slice(0, 4).toString()).toBe("%PDF");
         expect(extractPdfText(receipt)).toContain("Receipt");
       }),
@@ -274,13 +273,12 @@ describe("PDF Service", () => {
     effectIt.effect("admin can download billing documents", () =>
       Effect.gen(function* () {
         const svc = yield* FamilyBillingService;
-        const bills = yield* svc.bills(parentSessionId, parentUserId);
-        const payments = yield* svc.payments(parentSessionId, parentUserId);
-        expect((yield* svc.adminBillPdf(adminSessionId, bills[0].id)).slice(0, 4).toString()).toBe(
+        const payments = yield* svc.payments(parentSessionId);
+        expect((yield* svc.billPdf(adminSessionId, seededBillId)).slice(0, 4).toString()).toBe(
           "%PDF",
         );
         expect(
-          (yield* svc.adminPaymentReceipt(adminSessionId, payments[0].id)).slice(0, 4).toString(),
+          (yield* svc.paymentReceipt(adminSessionId, payments[0].id)).slice(0, 4).toString(),
         ).toBe("%PDF");
       }),
     );
@@ -288,24 +286,29 @@ describe("PDF Service", () => {
     effectIt.effect("teacher and another family cannot access billing documents", () =>
       Effect.gen(function* () {
         const svc = yield* FamilyBillingService;
-        const bills = yield* svc.bills(parentSessionId, parentUserId);
-        const teacherResult = yield* Effect.exit(
-          svc.billPdf(teacherSessionId, teacherSessionId, bills[0].id),
+        const teacherError = yield* Effect.flip(svc.billPdf(teacherSessionId, seededBillId));
+        expect(teacherError.message).toBe("Bill not found");
+        expect(yield* svc.bills(otherParentSessionId)).toEqual([]);
+        const otherError = yield* Effect.flip(svc.billPdf(otherParentSessionId, seededBillId));
+        expect(otherError.message).toBe("Bill not found");
+        const otherDetailError = yield* Effect.flip(
+          svc.billDetail(otherParentSessionId, seededBillId),
         );
-        expect(teacherResult._tag).toBe("Failure");
-        const otherResult = yield* Effect.exit(
-          svc.billPdf(otherParentSessionId, otherParentUserId, bills[0].id),
+        expect(otherDetailError.message).toBe("Bill not found");
+        const missingError = yield* Effect.flip(
+          svc.billPdf(parentSessionId, "00000000-0000-0000-0000-000000000000"),
         );
-        expect(otherResult._tag).toBe("Failure");
-        const otherDetail = yield* Effect.exit(
-          svc.billDetail(otherParentSessionId, otherParentUserId, bills[0].id),
-        );
-        expect(otherDetail._tag).toBe("Failure");
-        const missingResult = yield* Effect.exit(
-          svc.billPdf(parentSessionId, parentUserId, "00000000-0000-0000-0000-000000000000"),
-        );
-        expect(missingResult._tag).toBe("Failure");
+        expect(missingError.message).toBe("Bill not found");
       }),
     );
+  });
+
+  it("a student cannot join a second family", async () => {
+    await expect(
+      testDb.query(
+        `insert into app_public.family_memberships (family_id, user_id) values ($1, $2)`,
+        [otherFamilyId, studentId],
+      ),
+    ).rejects.toMatchObject({ code: "DNIED" });
   });
 });

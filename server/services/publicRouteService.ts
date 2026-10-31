@@ -256,10 +256,11 @@ export class PublicRouteService extends Context.Service<PublicRouteService>()(
                 user = { ...user, role: invitedRole };
               }
               yield* db.execute(
-                db
-                  .insertInto("app_public.family_memberships")
-                  .values({ family_id: invitation.family_id, user_id: user.id })
-                  .onConflict((oc) => oc.doNothing()),
+                db.selectNoFrom(
+                  sql<void>`app_private.join_family(${invitation.family_id}::uuid, ${user.id}::uuid)`.as(
+                    "joined",
+                  ),
+                ),
               );
               yield* db.execute(
                 db.deleteFrom("app_public.family_invitations").where("id", "=", invitation.id),

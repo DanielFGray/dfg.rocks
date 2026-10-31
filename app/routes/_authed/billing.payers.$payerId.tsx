@@ -4,21 +4,21 @@ import { useQuery } from "@tanstack/react-query";
 import { api } from "../../lib/api.js";
 import { useAuth } from "../../lib/hooks/useAuth.js";
 import { Main } from "../../components/ui/Container.js";
-import { FamilyBillingDetailView } from "../../components/billing/FamilyBillingDetail.js";
+import { PayerBillingDetailView } from "../../components/billing/PayerBillingDetail.js";
 
-export const Route = createFileRoute("/_authed/billing/families/$familyId")({
-  head: () => ({ meta: [{ title: "Family Billing | DFG Portal" }] }),
-  component: FamilyBillingPage,
+export const Route = createFileRoute("/_authed/billing/payers/$payerId")({
+  head: () => ({ meta: [{ title: "Payer Billing | DFG Portal" }] }),
+  component: PayerBillingPage,
   pendingComponent: () => <Main className="text-muted dark:text-muted-dark">Loading...</Main>,
 });
 
-function FamilyBillingPage() {
-  const { familyId } = Route.useParams();
+function PayerBillingPage() {
+  const { payerId } = Route.useParams();
   const { isAdmin } = useAuth();
 
   const { data, isLoading, error, refetch } = useQuery({
-    queryKey: ["admin", "billing", "family", familyId],
-    queryFn: () => Effect.runPromise(api.admin.billingFamily({ params: { familyId } })),
+    queryKey: ["admin", "billing", "payer", payerId],
+    queryFn: () => Effect.runPromise(api.admin.billingPayer({ params: { payerId } })),
     enabled: isAdmin,
   });
 
@@ -36,13 +36,13 @@ function FamilyBillingPage() {
       </div>
 
       {isLoading ? (
-        <p className="text-sm text-muted dark:text-muted-dark">Loading family billing...</p>
+        <p className="text-sm text-muted dark:text-muted-dark">Loading payer billing...</p>
       ) : error ? (
         <p role="alert" className="text-sm text-red-600 dark:text-red-400">
-          Failed to load family billing data.
+          Failed to load payer billing data.
         </p>
       ) : data ? (
-        <FamilyBillingDetailView data={data} familyId={familyId} onRefresh={() => refetch()} />
+        <PayerBillingDetailView data={data} payerId={payerId} onRefresh={() => refetch()} />
       ) : null}
     </Main>
   );

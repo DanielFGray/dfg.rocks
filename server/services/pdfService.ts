@@ -14,7 +14,7 @@ export class PdfService extends Context.Service<PdfService>()("PdfService", {
     }
 
     function buildBillDoc(params: {
-      familyName: string;
+      payerName: string;
       billNumber: number;
       status: string;
       billingPeriodStart: string;
@@ -38,7 +38,7 @@ export class PdfService extends Context.Service<PdfService>()("PdfService", {
     }): PDFKit.PDFDocument {
       const doc = new PDFDocument({ margin: 50, size: "A4" });
 
-      const { familyName, billNumber, status, billingPeriodStart, billingPeriodEnd, dueDate } =
+      const { payerName, billNumber, status, billingPeriodStart, billingPeriodEnd, dueDate } =
         params;
 
       doc.fontSize(20).font("Helvetica-Bold").text("Bill", { align: "center" });
@@ -51,7 +51,7 @@ export class PdfService extends Context.Service<PdfService>()("PdfService", {
         .moveDown(0.5);
 
       doc.fontSize(10).fillColor("#000");
-      doc.text(`Family: ${familyName}`, 50, doc.y, { continued: false });
+      doc.text(`Payer: ${payerName}`, 50, doc.y, { continued: false });
       doc.text(`Status: ${status.charAt(0).toUpperCase() + status.slice(1)}`);
       doc.text(`Period: ${billingPeriodStart} \u2013 ${billingPeriodEnd}`);
       if (dueDate) doc.text(`Due date: ${dueDate}`);
@@ -132,7 +132,7 @@ export class PdfService extends Context.Service<PdfService>()("PdfService", {
     }
 
     function buildReceiptDoc(params: {
-      familyName: string;
+      payerName: string;
       paymentNumber: number;
       amountCents: number;
       method: string;
@@ -145,7 +145,7 @@ export class PdfService extends Context.Service<PdfService>()("PdfService", {
     }): PDFKit.PDFDocument {
       const doc = new PDFDocument({ margin: 50, size: "A4" });
 
-      const { familyName, paymentNumber, amountCents, method, reference, receivedAt, allocations } =
+      const { payerName, paymentNumber, amountCents, method, reference, receivedAt, allocations } =
         params;
 
       doc.fontSize(20).font("Helvetica-Bold").text("Payment Receipt", { align: "center" });
@@ -158,7 +158,7 @@ export class PdfService extends Context.Service<PdfService>()("PdfService", {
         .moveDown(0.5);
 
       doc.fontSize(10).fillColor("#000");
-      doc.text(`Family: ${familyName}`);
+      doc.text(`Payer: ${payerName}`);
       doc.text(`Amount: ${formatCentsShort(amountCents)}`);
       doc.text(`Method: ${method.replace(/_/g, " ")}`);
       if (reference) doc.text(`Reference: ${reference}`);

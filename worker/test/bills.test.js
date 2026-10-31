@@ -38,21 +38,24 @@ async function createUser(username, name) {
   return rows[0].id;
 }
 
-async function createFamily(slug, name, studentId, adminId) {
+/** A family with its own parent as billing contact, so each family's discounts stay its own. */
+async function createFamily(slug, name, studentId) {
   const { rows } = await q(
     "insert into app_public.families (slug, name) values ($1, $2) returning id",
     [slug, name],
   );
-  const fid = rows[0].id;
+  const familyId = rows[0].id;
+  const payerId = await createUser(`${slug.replaceAll("-", "_")}_parent`, `${name} Parent`);
+  await q("update app_public.users set role = 'parent' where id = $1::uuid", [payerId]);
   await q(
     "insert into app_public.family_memberships (family_id, user_id, is_owner, is_billing_contact) values ($1::uuid, $2::uuid, true, true)",
-    [fid, adminId],
+    [familyId, payerId],
   );
   await q(
     "insert into app_public.family_memberships (family_id, user_id) values ($1::uuid, $2::uuid)",
-    [fid, studentId],
+    [familyId, studentId],
   );
-  return fid;
+  return { familyId, payerId };
 }
 
 async function createRate(studentId, cents, minutes, locType) {
@@ -84,7 +87,7 @@ async function runBilling(billingMonth) {
 
 async function getStudentBill(studentId, billingMonth) {
   const { rows } = await q(
-    `select b.subtotal_cents, b.discount_cents, b.tax_cents, b.total_cents, b.due_date, b.status, b.id
+    `select b.subtotal_cents, b.discount_cents, b.tax_cents, b.total_cents, b.due_date, b.status, b.id, b.payer_id
        from app_public.monthly_billing_runs mbr
        join app_public.bills b on b.id = mbr.bill_id
       where mbr.student_id = $1::uuid
@@ -135,7 +138,7 @@ describe("bills__issue_monthly — SQL function", () => {
 
   test("1. partial month — starts_on clips to mid-month", async () => {
     const sid = await createUser("t_p1", "P1");
-    await createFamily("t-partial", "Partial", sid, adminId);
+    await createFamily("t-partial", "Partial", sid);
     const rid = await createRate(sid, 5000, 30, "online");
     await createSchedule({ rateId: rid, dayOfWeek: 3, time: "16:00", startsOn: "2026-07-15" });
 
@@ -153,12 +156,12 @@ describe("bills__issue_monthly — SQL function", () => {
 
   test("2. discount and tax snapshots on bill totals", async () => {
     const sid = await createUser("t_p2", "P2");
-    const fid = await createFamily("t-discount", "Discount", sid, adminId);
+    const { payerId } = await createFamily("t-discount", "Discount", sid);
 
     await q(
-      `insert into app_public.family_discounts (family_id, label, discount_type, discount_value, applies_to, effective_from, created_by)
+      `insert into app_public.discounts (payer_id, label, discount_type, discount_value, applies_to, effective_from, created_by)
        values ($1::uuid, '10pc', 'percentage', 10, 'all', '2026-07-01', $2::uuid)`,
-      [fid, adminId],
+      [payerId, adminId],
     );
     await q(
       `insert into app_public.tax_rates (label, jurisdiction, rate_percent, applies_to, effective_from, created_by)
@@ -198,7 +201,7 @@ describe("bills__issue_monthly — SQL function", () => {
 
   test("4. ends_on mid-month clips occurrences", async () => {
     const sid = await createUser("t_p4", "P4");
-    await createFamily("t-ends", "Ends", sid, adminId);
+    await createFamily("t-ends", "Ends", sid);
     const rid = await createRate(sid, 8000, 60, "online");
     await createSchedule({
       rateId: rid,
@@ -222,7 +225,7 @@ describe("bills__issue_monthly — SQL function", () => {
 
   test("5. five-week month (Aug 2026 — 5 Mondays)", async () => {
     const sid = await createUser("t_p5", "P5");
-    await createFamily("t-fiveweek", "FiveWeek", sid, adminId);
+    await createFamily("t-fiveweek", "FiveWeek", sid);
     const rid = await createRate(sid, 6000, 60, "online");
     await createSchedule({ rateId: rid, dayOfWeek: 1, time: "15:00", startsOn: "2026-08-01" });
 
@@ -257,7 +260,7 @@ describe("bills__issue_monthly — SQL function", () => {
 
   test("7. zero eligible occurrences creates no bill", async () => {
     const sid = await createUser("t_p7", "P7");
-    await createFamily("t-zero", "Zero", sid, adminId);
+    await createFamily("t-zero", "Zero", sid);
     const rid = await createRate(sid, 5000, 30, "online");
     // Schedule starts in August — billing July yields no overlap
     await createSchedule({ rateId: rid, dayOfWeek: 6, time: "12:00", startsOn: "2026-08-01" });
@@ -272,10 +275,10 @@ describe("bills__issue_monthly — SQL function", () => {
   test("8. multiple students in one family produce separate per-student bills", async () => {
     const s1 = await createUser("t_p8a", "P8A");
     const s2 = await createUser("t_p8b", "P8B");
-    const fid = await createFamily("t-perstudent", "PerStudent", s1, adminId);
+    const { familyId, payerId } = await createFamily("t-perstudent", "PerStudent", s1);
     await q(
       "insert into app_public.family_memberships (family_id, user_id) values ($1::uuid, $2::uuid)",
-      [fid, s2],
+      [familyId, s2],
     );
 
     const r1 = await createRate(s1, 7000, 30, "online");
@@ -303,8 +306,24 @@ describe("bills__issue_monthly — SQL function", () => {
     expect(items2).toHaveLength(1);
     expect(items2[0].amount_cents).toBe(45000); // 5 × $90
 
-    // Combined total
-    expect(bill1.total_cents + bill2.total_cents).toBeGreaterThan(0);
+    // Both children are billed to the family's billing contact.
+    expect(bill1.payer_id).toBe(payerId);
+    expect(bill2.payer_id).toBe(payerId);
+  });
+
+  test("14. a student with no family is billed to themself", async () => {
+    const sid = await createUser("t_p14", "P14");
+    const rid = await createRate(sid, 8000, 60, "online");
+    // February 2026 — no other test schedules a lesson in it.
+    await createSchedule({ rateId: rid, dayOfWeek: 4, time: "17:00", startsOn: "2026-02-01" });
+
+    const result = await runBilling("2026-02-01");
+    expect(result.errors).toBe(0);
+    expect(result.bills_created).toBe(1);
+
+    const bill = await getStudentBill(sid, "2026-02-01");
+    expect(bill.payer_id).toBe(sid);
+    expect(bill.subtotal_cents).toBe(32000); // 4 Thursdays × $80
   });
 
   test("9. worker target month — America/Chicago uses current month", () => {
@@ -361,7 +380,7 @@ describe("bills__issue_monthly — SQL function", () => {
 
   test("11. half-up rounding for tax (not truncation)", async () => {
     const sid = await createUser("t_p11", "P11");
-    await createFamily("t-rounding", "Rounding", sid, adminId);
+    await createFamily("t-rounding", "Rounding", sid);
 
     await q(
       `insert into app_public.tax_rates (label, jurisdiction, rate_percent, applies_to, effective_from, created_by)
@@ -391,12 +410,12 @@ describe("bills__issue_monthly — SQL function", () => {
 
   test("12. half-up rounding for percentage discount", async () => {
     const sid = await createUser("t_p12", "P12");
-    const fid = await createFamily("t-rounddisc", "RoundDisc", sid, adminId);
+    const { payerId } = await createFamily("t-rounddisc", "RoundDisc", sid);
 
     await q(
-      `insert into app_public.family_discounts (family_id, label, discount_type, discount_value, applies_to, effective_from, created_by)
+      `insert into app_public.discounts (payer_id, label, discount_type, discount_value, applies_to, effective_from, created_by)
        values ($1::uuid, '3pc', 'percentage', 3, 'all', '2026-01-01', $2::uuid)`,
-      [fid, adminId],
+      [payerId, adminId],
     );
 
     const rid = await createRate(sid, 10000, 60, "studio");
@@ -418,7 +437,7 @@ describe("bills__issue_monthly — SQL function", () => {
 
   test("13. rate history is selected per occurrence date", async () => {
     const sid = await createUser("t_p13", "P13");
-    await createFamily("t-rate-split", "RateSplit", sid, adminId);
+    await createFamily("t-rate-split", "RateSplit", sid);
     const rid = await createRate(sid, 5000, 60, "online");
     await q(
       `delete from app_public.student_rate_history where student_rate_id = $1::uuid`,

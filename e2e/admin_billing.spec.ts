@@ -17,28 +17,51 @@ test.describe("admin billing", () => {
   });
 
   test("teacher does not see billing nav", async ({ page, testing }) => {
-    await testing.login({ username: "teacher_no_billing", role: "teacher", name: "Teacher NoBilling", email: "teacher@test.local" });
+    await testing.login({
+      username: "teacher_no_billing",
+      role: "teacher",
+      name: "Teacher NoBilling",
+      email: "teacher@test.local",
+    });
     await loginViaUi(page, "teacher_no_billing", "testpassword123");
     await expect(page.getByTestId("nav-billing")).not.toBeVisible();
   });
 
-  test("billing page loads families for admin", async ({ page, testing }) => {
+  test("billing page lists each payer with the students they pay for", async ({
+    page,
+    testing,
+  }) => {
     await testing.login();
+    await testing.login({
+      username: "family_parent",
+      role: "parent",
+      name: "Family Parent",
+      email: "family-parent@test.local",
+    });
     await testing.login({
       username: "family_student",
       role: "student",
       name: "Family Student",
       email: "family@test.local",
     });
-    await testing.seedFamily({ name: "Billing Family", owner_username: "family_student" });
+    await testing.seedFamily({
+      name: "Billing Family",
+      slug: "billing-family",
+      owner_username: "family_parent",
+    });
+    await testing.seedFamilyMembership({
+      username: "family_student",
+      family_slug: "billing-family",
+    });
 
     await loginViaUi(page, "test_admin", "testpassword123");
     await page.getByTestId("nav-billing").click();
     await expect(page.getByTestId("nav-billing")).toBeVisible();
-    await expect(page.locator("table")).toContainText("Billing Family");
+    const payerRow = page.locator("table tr", { hasText: "Family Parent" });
+    await expect(payerRow).toContainText("Family Student");
   });
 
-  test("admin can navigate to family billing detail", async ({ page, testing }) => {
+  test("admin can navigate to payer billing detail", async ({ page, testing }) => {
     await testing.login();
     await testing.login({
       username: "nav_student",
@@ -46,13 +69,13 @@ test.describe("admin billing", () => {
       name: "Nav Student",
       email: "nav@test.local",
     });
-    await testing.seedFamily({ name: "Nav Family", owner_username: "nav_student" });
 
     await loginViaUi(page, "test_admin", "testpassword123");
     await page.getByTestId("nav-billing").click();
     await expect(page.getByTestId("nav-billing")).toBeVisible();
 
-    await page.locator("table a", { hasText: "Nav Family" }).click();
-    await expect(page.getByTestId("family-billing-detail")).toBeVisible();
+    // A student with no family pays for themself.
+    await page.locator("table a", { hasText: "Nav Student" }).click();
+    await expect(page.getByTestId("payer-billing-detail")).toBeVisible();
   });
 });

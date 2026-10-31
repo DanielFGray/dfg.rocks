@@ -30,9 +30,9 @@ import {
   type Bill as BillResponse,
   type BillDetailResponse as BillDetailResponseType,
   type CreditApplication as CreditApplicationResponse,
-  type AdminFamilyCredit as FamilyCreditResponse,
-  type FamilyDiscount as FamilyDiscountResponse,
-  type FamilyTaxExemption as FamilyTaxExemptionResponse,
+  type AdminCredit as CreditResponse,
+  type Discount as DiscountResponse,
+  type TaxExemption as TaxExemptionResponse,
   type Payment as PaymentResponse,
   type Refund as RefundResponse,
   type TaxRate as TaxRateResponse,
@@ -45,13 +45,13 @@ import type { Selectable } from "kysely";
 import type {
   AppPublicBills,
   AppPublicPayments,
-  AppPublicFamilyCredits,
+  AppPublicCredits,
   AppPublicBillLineItems,
   AppPublicBillAdjustments,
-  AppPublicFamilyCreditApplications,
-  AppPublicFamilyDiscounts,
+  AppPublicCreditApplications,
+  AppPublicDiscounts,
   AppPublicTaxRates,
-  AppPublicFamilyTaxExemptions,
+  AppPublicTaxExemptions,
   AppPublicRefunds,
 } from "../../generated/db.js";
 
@@ -136,7 +136,7 @@ function serializePaymentResponse(p: Selectable<AppPublicPayments>): PaymentResp
   };
 }
 
-function serializeCreditResponse(c: Selectable<AppPublicFamilyCredits>): FamilyCreditResponse {
+function serializeCreditResponse(c: Selectable<AppPublicCredits>): CreditResponse {
   return {
     ...c,
     expires_at: c.expires_at ? serializeBillingDate(c.expires_at) : null,
@@ -169,7 +169,7 @@ function serializeRefund(r: Selectable<AppPublicRefunds>): RefundResponse {
 }
 
 function serializeCreditApplication(
-  ca: Selectable<AppPublicFamilyCreditApplications>,
+  ca: Selectable<AppPublicCreditApplications>,
 ): CreditApplicationResponse {
   return {
     id: ca.id,
@@ -180,11 +180,11 @@ function serializeCreditApplication(
   };
 }
 
-function serializeFamilyDiscount(d: Selectable<AppPublicFamilyDiscounts>): FamilyDiscountResponse {
+function serializeDiscount(d: Selectable<AppPublicDiscounts>): DiscountResponse {
   return {
     ...d,
-    discount_type: d.discount_type as FamilyDiscountResponse["discount_type"],
-    applies_to: d.applies_to as FamilyDiscountResponse["applies_to"],
+    discount_type: d.discount_type as DiscountResponse["discount_type"],
+    applies_to: d.applies_to as DiscountResponse["applies_to"],
     effective_from: serializeBillingDateShort(d.effective_from),
     effective_until: d.effective_until ? serializeBillingDateShort(d.effective_until) : null,
     created_at: serializeBillingDate(d.created_at)!,
@@ -204,9 +204,7 @@ function serializeTaxRate(r: Selectable<AppPublicTaxRates>): TaxRateResponse {
   };
 }
 
-function serializeFamilyTaxExemption(
-  e: Selectable<AppPublicFamilyTaxExemptions>,
-): FamilyTaxExemptionResponse {
+function serializeTaxExemption(e: Selectable<AppPublicTaxExemptions>): TaxExemptionResponse {
   return {
     ...e,
     effective_from: serializeBillingDateShort(e.effective_from),
@@ -219,7 +217,7 @@ function mapBillDetail(
   detail: {
     lineItems: readonly Selectable<AppPublicBillLineItems>[];
     adjustments: readonly Selectable<AppPublicBillAdjustments>[];
-    creditApplications: readonly Selectable<AppPublicFamilyCreditApplications>[];
+    creditApplications: readonly Selectable<AppPublicCreditApplications>[];
   },
   bill: Selectable<AppPublicBills>,
 ): BillDetailResponseType {
@@ -234,7 +232,7 @@ function mapBillDetail(
       created_at: serializeBillingDate(adj.created_at)!,
     })),
     credit_applications: detail.creditApplications.map(
-      (ca: Selectable<AppPublicFamilyCreditApplications>) => ({
+      (ca: Selectable<AppPublicCreditApplications>) => ({
         ...ca,
         created_at: serializeBillingDate(ca.created_at)!,
       }),
@@ -1039,16 +1037,16 @@ export function makeAdminLayer() {
       // Admin Billing API
       // ==================================================================
       .handle(
-        "billingFamilies",
+        "billingPayers",
         Effect.fnUntraced(function* ({ request }) {
           const auth = yield* requireAdminSession(request);
           const summaries = yield* BillingLedgerService.use((billingLedgerService) =>
-            billingLedgerService.listAllFamiliesWithBilling(auth.session.id),
+            billingLedgerService.listPayers(auth.session.id),
           );
           const balances = yield* Effect.all(
             summaries.map((summary) =>
               BillingLedgerService.use((billingLedgerService) =>
-                billingLedgerService.getFamilyBalance(auth.session.id, summary.family_id),
+                billingLedgerService.getPayerBalance(auth.session.id, summary.payer_id),
               ),
             ),
           );
@@ -1062,11 +1060,11 @@ export function makeAdminLayer() {
         }, adaptAdminErrors),
       )
       .handle(
-        "billingFamily",
+        "billingPayer",
         Effect.fnUntraced(function* ({ request, params }) {
           const auth = yield* requireAdminSession(request);
           const detail = yield* BillingLedgerService.use((billingLedgerService) =>
-            billingLedgerService.getFamilyBillingDetail(auth.session.id, params.familyId),
+            billingLedgerService.getPayerBillingDetail(auth.session.id, params.payerId),
           );
           return {
             ...detail,
@@ -1077,31 +1075,31 @@ export function makeAdminLayer() {
         }, adaptAdminErrors),
       )
       .handle(
-        "billingFamilyBills",
+        "billingPayerBills",
         Effect.fnUntraced(function* ({ request, params }) {
           const auth = yield* requireAdminSession(request);
           const bills = yield* BillingLedgerService.use((billingLedgerService) =>
-            billingLedgerService.listFamilyBills(auth.session.id, params.familyId),
+            billingLedgerService.listPayerBills(auth.session.id, params.payerId),
           );
           return bills.map(serializeBillResponse);
         }, adaptAdminErrors),
       )
       .handle(
-        "billingFamilyPayments",
+        "billingPayerPayments",
         Effect.fnUntraced(function* ({ request, params }) {
           const auth = yield* requireAdminSession(request);
           const payments = yield* BillingLedgerService.use((billingLedgerService) =>
-            billingLedgerService.listFamilyPayments(auth.session.id, params.familyId),
+            billingLedgerService.listPayerPayments(auth.session.id, params.payerId),
           );
           return payments.map(serializePaymentResponse);
         }, adaptAdminErrors),
       )
       .handle(
-        "billingFamilyCredits",
+        "billingPayerCredits",
         Effect.fnUntraced(function* ({ request, params }) {
           const auth = yield* requireAdminSession(request);
           const credits = yield* BillingLedgerService.use((billingLedgerService) =>
-            billingLedgerService.listFamilyCredits(auth.session.id, params.familyId),
+            billingLedgerService.listPayerCredits(auth.session.id, params.payerId),
           );
           return credits.map(serializeCreditResponse);
         }, adaptAdminErrors),
@@ -1112,7 +1110,7 @@ export function makeAdminLayer() {
           const auth = yield* requireAdminSession(request);
           const bill = yield* BillingLedgerService.use((billingLedgerService) =>
             billingLedgerService.createBill(auth.session.id, {
-              familyId: payload.family_id,
+              payerId: payload.payer_id,
               billingPeriodStart: payload.billing_period_start,
               billingPeriodEnd: payload.billing_period_end,
               dueDate: payload.due_date,
@@ -1235,7 +1233,7 @@ export function makeAdminLayer() {
           const auth = yield* requireAdminSession(request);
           const result = yield* BillingLedgerService.use((billingLedgerService) =>
             billingLedgerService.recordPayment(auth.session.id, {
-              familyId: payload.family_id,
+              payerId: payload.payer_id,
               amountCents: payload.amount_cents,
               method: payload.method,
               reference: payload.reference,
@@ -1272,7 +1270,7 @@ export function makeAdminLayer() {
           const auth = yield* requireAdminSession(request);
           const result = yield* BillingLedgerService.use((billingLedgerService) =>
             billingLedgerService.issueCredit(auth.session.id, {
-              familyId: payload.family_id,
+              payerId: payload.payer_id,
               studentId: payload.student_id,
               amountCents: payload.amount_cents,
               reason: payload.reason,
@@ -1297,13 +1295,13 @@ export function makeAdminLayer() {
         }, adaptAdminErrors),
       )
       .handle(
-        "familyDiscounts",
+        "payerDiscounts",
         Effect.fnUntraced(function* ({ request, params }) {
           const auth = yield* requireAdminSession(request);
           const discounts = yield* BillingLedgerService.use((billingLedgerService) =>
-            billingLedgerService.listFamilyDiscounts(auth.session.id, params.familyId),
+            billingLedgerService.listPayerDiscounts(auth.session.id, params.payerId),
           );
-          return discounts.map(serializeFamilyDiscount);
+          return discounts.map(serializeDiscount);
         }, adaptAdminErrors),
       )
       .handle(
@@ -1312,7 +1310,7 @@ export function makeAdminLayer() {
           const auth = yield* requireAdminSession(request);
           const result = yield* BillingLedgerService.use((billingLedgerService) =>
             billingLedgerService.createDiscount(auth.session.id, {
-              familyId: payload.family_id,
+              payerId: payload.payer_id,
               label: payload.label,
               discountType: payload.discount_type,
               discountValue: payload.discount_value,
@@ -1321,7 +1319,7 @@ export function makeAdminLayer() {
               effectiveUntil: payload.effective_until,
             }),
           );
-          return serializeFamilyDiscount(result);
+          return serializeDiscount(result);
         }, adaptAdminErrors),
       )
       .handle(
@@ -1339,7 +1337,7 @@ export function makeAdminLayer() {
               isActive: payload.is_active,
             }),
           );
-          return serializeFamilyDiscount(result);
+          return serializeDiscount(result);
         }, adaptAdminErrors),
       )
       .handle(
@@ -1370,13 +1368,13 @@ export function makeAdminLayer() {
         }, adaptAdminErrors),
       )
       .handle(
-        "familyTaxExemptions",
+        "payerTaxExemptions",
         Effect.fnUntraced(function* ({ request, params }) {
           const auth = yield* requireAdminSession(request);
           const exemptions = yield* BillingLedgerService.use((billingLedgerService) =>
-            billingLedgerService.listFamilyTaxExemptions(auth.session.id, params.familyId),
+            billingLedgerService.listPayerTaxExemptions(auth.session.id, params.payerId),
           );
-          return exemptions.map(serializeFamilyTaxExemption);
+          return exemptions.map(serializeTaxExemption);
         }, adaptAdminErrors),
       )
       .handle(
@@ -1385,14 +1383,14 @@ export function makeAdminLayer() {
           const auth = yield* requireAdminSession(request);
           const result = yield* BillingLedgerService.use((billingLedgerService) =>
             billingLedgerService.createTaxExemption(auth.session.id, {
-              familyId: payload.family_id,
+              payerId: payload.payer_id,
               taxRateId: payload.tax_rate_id,
               exemptionReason: payload.exemption_reason,
               effectiveFrom: payload.effective_from,
               effectiveUntil: payload.effective_until,
             }),
           );
-          return serializeFamilyTaxExemption(result);
+          return serializeTaxExemption(result);
         }, adaptAdminErrors),
       ),
   );

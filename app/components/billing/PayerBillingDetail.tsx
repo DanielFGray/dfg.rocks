@@ -3,10 +3,9 @@ import { Effect } from "effect";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { api } from "../../lib/api.js";
 import type {
-  FamilyBillingDetail,
-  FamilyDiscount,
+  PayerBillingDetail,
+  Discount,
   TaxRate,
-  FamilyTaxExemption,
   BillDetailResponse,
 } from "../../../shared/schemas.js";
 import { Card } from "../ui/Card.js";
@@ -28,24 +27,24 @@ import {
   paymentMethodOptions,
 } from "./helpers.js";
 
-export function FamilyBillingDetailView({
+export function PayerBillingDetailView({
   data,
-  familyId,
+  payerId,
   onRefresh,
 }: {
-  data: FamilyBillingDetail;
-  familyId: string;
+  data: PayerBillingDetail;
+  payerId: string;
   onRefresh: () => void;
 }) {
   const [tab, setTab] = useState<string | number>("bills");
 
-  const { family_name, balance, bills, payments, credits } = data;
+  const { payer_name, balance, bills, payments, credits } = data;
 
   return (
-    <div data-testid="family-billing-detail">
+    <div data-testid="payer-billing-detail">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-primary dark:text-primary-dark">{family_name}</h1>
-        <p className="mt-1 text-sm text-muted dark:text-muted-dark">Family billing detail</p>
+        <h1 className="text-2xl font-bold text-primary dark:text-primary-dark">{payer_name}</h1>
+        <p className="mt-1 text-sm text-muted dark:text-muted-dark">Payer billing detail</p>
       </div>
 
       <div className="mb-6 grid gap-4 sm:grid-cols-3">
@@ -101,24 +100,19 @@ export function FamilyBillingDetailView({
         </TabList>
 
         <TabPanel id="bills" className="mt-6">
-          <BillsSection bills={bills} familyId={familyId} onRefresh={onRefresh} />
+          <BillsSection bills={bills} payerId={payerId} onRefresh={onRefresh} />
         </TabPanel>
         <TabPanel id="payments" className="mt-6">
-          <PaymentsSection payments={payments} familyId={familyId} onRefresh={onRefresh} />
+          <PaymentsSection payments={payments} payerId={payerId} onRefresh={onRefresh} />
         </TabPanel>
         <TabPanel id="credits" className="mt-6">
-          <CreditsSection
-            credits={credits}
-            familyId={familyId}
-            bills={bills}
-            onRefresh={onRefresh}
-          />
+          <CreditsSection credits={credits} payerId={payerId} bills={bills} onRefresh={onRefresh} />
         </TabPanel>
         <TabPanel id="discounts" className="mt-6">
-          <DiscountsSection familyId={familyId} />
+          <DiscountsSection payerId={payerId} />
         </TabPanel>
         <TabPanel id="tax" className="mt-6">
-          <TaxSection familyId={familyId} />
+          <TaxSection payerId={payerId} />
         </TabPanel>
       </Tabs>
     </div>
@@ -129,11 +123,11 @@ export function FamilyBillingDetailView({
 
 function BillsSection({
   bills,
-  familyId,
+  payerId,
   onRefresh,
 }: {
-  bills: FamilyBillingDetail["bills"];
-  familyId: string;
+  bills: PayerBillingDetail["bills"];
+  payerId: string;
   onRefresh: () => void;
 }) {
   const [createOpen, setCreateOpen] = useState(false);
@@ -155,7 +149,7 @@ function BillsSection({
 
       {bills.length === 0 ? (
         <EmptyState
-          message="No bills for this family."
+          message="No bills for this payer."
           action={{ label: "Create bill", onClick: () => setCreateOpen(true) }}
         />
       ) : (
@@ -209,7 +203,7 @@ function BillsSection({
       )}
 
       <CreateBillModal
-        familyId={familyId}
+        payerId={payerId}
         open={createOpen}
         onClose={() => setCreateOpen(false)}
         onSaved={onRefresh}
@@ -234,7 +228,7 @@ function BillActions({
   onRefresh,
   onView,
 }: {
-  bill: FamilyBillingDetail["bills"][number];
+  bill: PayerBillingDetail["bills"][number];
   onRefresh: () => void;
   onView: () => void;
 }) {
@@ -347,12 +341,12 @@ function VoidBillModal({
 /* ---- Create Bill modal ---- */
 
 function CreateBillModal({
-  familyId,
+  payerId,
   open,
   onClose,
   onSaved,
 }: {
-  familyId: string;
+  payerId: string;
   open: boolean;
   onClose: () => void;
   onSaved: () => void;
@@ -367,7 +361,7 @@ function CreateBillModal({
       Effect.runPromise(
         api.admin.createBill({
           payload: {
-            family_id: familyId,
+            payer_id: payerId,
             billing_period_start: periodStart,
             billing_period_end: periodEnd,
             due_date: dueDate || undefined,
@@ -455,11 +449,11 @@ function CreateBillModal({
 
 function PaymentsSection({
   payments,
-  familyId,
+  payerId,
   onRefresh,
 }: {
-  payments: FamilyBillingDetail["payments"];
-  familyId: string;
+  payments: PayerBillingDetail["payments"];
+  payerId: string;
   onRefresh: () => void;
 }) {
   const [recordOpen, setRecordOpen] = useState(false);
@@ -524,7 +518,7 @@ function PaymentsSection({
       )}
 
       <RecordPaymentModal
-        familyId={familyId}
+        payerId={payerId}
         open={recordOpen}
         onClose={() => setRecordOpen(false)}
         onSaved={onRefresh}
@@ -536,12 +530,12 @@ function PaymentsSection({
 /* ---- Record Payment modal ---- */
 
 function RecordPaymentModal({
-  familyId,
+  payerId,
   open,
   onClose,
   onSaved,
 }: {
-  familyId: string;
+  payerId: string;
   open: boolean;
   onClose: () => void;
   onSaved: () => void;
@@ -557,7 +551,7 @@ function RecordPaymentModal({
       Effect.runPromise(
         api.admin.recordPayment({
           payload: {
-            family_id: familyId,
+            payer_id: payerId,
             amount_cents: Math.round(Number(amount) * 100),
             method: method as any,
             reference: reference.trim() || undefined,
@@ -642,13 +636,13 @@ function RecordPaymentModal({
 
 function CreditsSection({
   credits,
-  familyId,
+  payerId,
   bills,
   onRefresh,
 }: {
-  credits: FamilyBillingDetail["credits"];
-  familyId: string;
-  bills: FamilyBillingDetail["bills"];
+  credits: PayerBillingDetail["credits"];
+  payerId: string;
+  bills: PayerBillingDetail["bills"];
   onRefresh: () => void;
 }) {
   const [issueOpen, setIssueOpen] = useState(false);
@@ -732,7 +726,7 @@ function CreditsSection({
       )}
 
       <IssueCreditModal
-        familyId={familyId}
+        payerId={payerId}
         open={issueOpen}
         onClose={() => setIssueOpen(false)}
         onSaved={onRefresh}
@@ -753,12 +747,12 @@ function CreditsSection({
 /* ---- Issue Credit modal ---- */
 
 function IssueCreditModal({
-  familyId,
+  payerId,
   open,
   onClose,
   onSaved,
 }: {
-  familyId: string;
+  payerId: string;
   open: boolean;
   onClose: () => void;
   onSaved: () => void;
@@ -772,7 +766,7 @@ function IssueCreditModal({
       Effect.runPromise(
         api.admin.createCredit({
           payload: {
-            family_id: familyId,
+            payer_id: payerId,
             amount_cents: Math.round(Number(amount) * 100),
             reason,
             expires_at: expiresAt || undefined,
@@ -850,8 +844,8 @@ function ApplyCreditModal({
   onClose,
   onSaved,
 }: {
-  bills: FamilyBillingDetail["bills"];
-  credits: FamilyBillingDetail["credits"];
+  bills: PayerBillingDetail["bills"];
+  credits: PayerBillingDetail["credits"];
   open: boolean;
   onClose: () => void;
   onSaved: () => void;
@@ -944,19 +938,19 @@ function ApplyCreditModal({
 
 /* ---- Discounts section ---- */
 
-function DiscountsSection({ familyId }: { familyId: string }) {
+function DiscountsSection({ payerId }: { payerId: string }) {
   const {
     data: discounts,
     isLoading,
     error,
     refetch,
   } = useQuery({
-    queryKey: ["admin", "billing", "discounts", familyId],
-    queryFn: () => Effect.runPromise(api.admin.familyDiscounts({ params: { familyId } })),
+    queryKey: ["admin", "billing", "discounts", payerId],
+    queryFn: () => Effect.runPromise(api.admin.payerDiscounts({ params: { payerId } })),
   });
   const [createOpen, setCreateOpen] = useState(false);
 
-  const items = (discounts ?? []) as FamilyDiscount[];
+  const items = discounts ?? [];
 
   return (
     <section>
@@ -964,7 +958,7 @@ function DiscountsSection({ familyId }: { familyId: string }) {
         <div>
           <h2 className="text-lg font-semibold text-primary dark:text-primary-dark">Discounts</h2>
           <p className="mt-1 text-sm text-muted dark:text-muted-dark">
-            Family-specific discount configurations.
+            Payer-specific discount configurations.
           </p>
         </div>
         <Button
@@ -991,13 +985,13 @@ function DiscountsSection({ familyId }: { familyId: string }) {
       ) : (
         <div className="flex flex-col gap-3">
           {items.map((d) => (
-            <DiscountCard key={d.id} discount={d} familyId={familyId} onRefresh={refetch} />
+            <DiscountCard key={d.id} discount={d} payerId={payerId} onRefresh={refetch} />
           ))}
         </div>
       )}
 
       <DiscountFormModal
-        familyId={familyId}
+        payerId={payerId}
         open={createOpen}
         onClose={() => setCreateOpen(false)}
         onSaved={() => refetch()}
@@ -1008,11 +1002,11 @@ function DiscountsSection({ familyId }: { familyId: string }) {
 
 function DiscountCard({
   discount,
-  familyId,
+  payerId,
   onRefresh,
 }: {
-  discount: FamilyDiscount;
-  familyId: string;
+  discount: Discount;
+  payerId: string;
   onRefresh: () => void;
 }) {
   const [editOpen, setEditOpen] = useState(false);
@@ -1071,7 +1065,7 @@ function DiscountCard({
       </div>
       {editOpen && (
         <DiscountFormModal
-          familyId={familyId}
+          payerId={payerId}
           discount={discount}
           open={editOpen}
           onClose={() => setEditOpen(false)}
@@ -1083,14 +1077,14 @@ function DiscountCard({
 }
 
 function DiscountFormModal({
-  familyId,
+  payerId,
   discount,
   open,
   onClose,
   onSaved,
 }: {
-  familyId: string;
-  discount?: FamilyDiscount;
+  payerId: string;
+  discount?: Discount;
   open: boolean;
   onClose: () => void;
   onSaved: () => void;
@@ -1127,7 +1121,7 @@ function DiscountFormModal({
       return Effect.runPromise(
         api.admin.createDiscount({
           // @ts-expect-error - spread type inference
-          payload: { ...payload, family_id: familyId },
+          payload: { ...payload, payer_id: payerId },
         }),
       );
     },
@@ -1231,15 +1225,15 @@ function DiscountFormModal({
 
 /* ---- Tax section ---- */
 
-function TaxSection({ familyId }: { familyId: string }) {
+function TaxSection({ payerId }: { payerId: string }) {
   const {
     data: exemptions,
     isLoading: exLoading,
     error: exError,
     refetch: refetchEx,
   } = useQuery({
-    queryKey: ["admin", "billing", "tax-exemptions", familyId],
-    queryFn: () => Effect.runPromise(api.admin.familyTaxExemptions({ params: { familyId } })),
+    queryKey: ["admin", "billing", "tax-exemptions", payerId],
+    queryFn: () => Effect.runPromise(api.admin.payerTaxExemptions({ params: { payerId } })),
   });
 
   const { data: taxRates } = useQuery({
@@ -1249,7 +1243,7 @@ function TaxSection({ familyId }: { familyId: string }) {
 
   const [createOpen, setCreateOpen] = useState(false);
 
-  const items = (exemptions ?? []) as FamilyTaxExemption[];
+  const items = exemptions ?? [];
   const rates = (taxRates ?? []) as TaxRate[];
 
   return (
@@ -1260,7 +1254,7 @@ function TaxSection({ familyId }: { familyId: string }) {
             Tax Exemptions
           </h2>
           <p className="mt-1 text-sm text-muted dark:text-muted-dark">
-            Tax rate exemptions for this family.
+            Tax rate exemptions for this payer.
           </p>
         </div>
         {rates.length > 0 && (
@@ -1286,7 +1280,7 @@ function TaxSection({ familyId }: { familyId: string }) {
           message={
             rates.length === 0
               ? "No tax rates configured. Create tax rates first."
-              : "No tax exemptions for this family."
+              : "No tax exemptions for this payer."
           }
           action={
             rates.length > 0
@@ -1334,7 +1328,7 @@ function TaxSection({ familyId }: { familyId: string }) {
       )}
 
       <TaxExemptionFormModal
-        familyId={familyId}
+        payerId={payerId}
         taxRates={rates}
         open={createOpen}
         onClose={() => setCreateOpen(false)}
@@ -1345,13 +1339,13 @@ function TaxSection({ familyId }: { familyId: string }) {
 }
 
 function TaxExemptionFormModal({
-  familyId,
+  payerId,
   taxRates,
   open,
   onClose,
   onSaved,
 }: {
-  familyId: string;
+  payerId: string;
   taxRates: TaxRate[];
   open: boolean;
   onClose: () => void;
@@ -1367,7 +1361,7 @@ function TaxExemptionFormModal({
       Effect.runPromise(
         api.admin.createTaxExemption({
           payload: {
-            family_id: familyId,
+            payer_id: payerId,
             tax_rate_id: taxRateId,
             exemption_reason: reason,
             effective_from: effectiveFrom,

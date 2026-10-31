@@ -50,13 +50,12 @@ function FamilyBillingOverviewPage() {
 
   if (!data) return null;
 
-  const { family_name, balance, open_bills, overdue_bills, recent_payments, credits } = data;
+  const { balance, open_bills, overdue_bills, recent_payments, credits } = data;
 
   return (
     <Main>
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-primary dark:text-primary-dark">Billing</h1>
-        <p className="mt-1 text-sm text-muted dark:text-muted-dark">{family_name}</p>
       </div>
 
       <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">

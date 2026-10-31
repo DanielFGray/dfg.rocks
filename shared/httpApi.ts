@@ -25,15 +25,15 @@ import {
   CreateChildResponse,
   CreditApplication,
   Family,
-  FamilyBillingDetail,
+  PayerBillingDetail,
   FamilyBillingOverview,
-  FamilyBillingSummary,
-  FamilyCredit,
-  AdminFamilyCredit,
-  FamilyDiscount,
+  PayerBillingSummary,
+  Credit,
+  AdminCredit,
+  Discount,
   FamilyInviteRole,
   FamilyInvitation,
-  FamilyTaxExemption,
+  TaxExemption,
   GcalStatus,
   Lesson,
   LessonCancellationPolicy,
@@ -980,7 +980,7 @@ const CreateBillLineItemPayload = S.Struct({
 });
 
 const CreateBillPayload = S.Struct({
-  family_id: S.String,
+  payer_id: S.String,
   billing_period_start: S.String,
   billing_period_end: S.String,
   due_date: S.optional(S.String),
@@ -1003,7 +1003,7 @@ const PaymentAllocationPayload = S.Struct({
 });
 
 const RecordPaymentPayload = S.Struct({
-  family_id: S.String,
+  payer_id: S.String,
   amount_cents: S.Number,
   method: PaymentMethod,
   reference: S.optional(S.String),
@@ -1013,7 +1013,7 @@ const RecordPaymentPayload = S.Struct({
 });
 
 const CreateCreditPayload = S.Struct({
-  family_id: S.String,
+  payer_id: S.String,
   student_id: S.optional(S.String),
   amount_cents: S.Number,
   reason: S.String.pipe(S.check(S.isMinLength(1))),
@@ -1032,7 +1032,7 @@ const RefundPaymentPayload = S.Struct({
 });
 
 const CreateDiscountPayload = S.Struct({
-  family_id: S.String,
+  payer_id: S.String,
   label: S.String,
   discount_type: S.Literals(["percentage", "fixed"]),
   discount_value: S.Number,
@@ -1061,7 +1061,7 @@ const CreateTaxRatePayload = S.Struct({
 });
 
 const CreateTaxExemptionPayload = S.Struct({
-  family_id: S.String,
+  payer_id: S.String,
   tax_rate_id: S.String,
   exemption_reason: S.String,
   effective_from: S.String,
@@ -1426,37 +1426,37 @@ export const adminClientGroup = HttpApiGroup.make("admin")
   )
   // Billing endpoints
   .add(
-    HttpApiEndpoint.get("billingFamilies", "/billing/families", {
+    HttpApiEndpoint.get("billingPayers", "/billing/payers", {
       error: adminClientErrors,
-      success: S.Array(FamilyBillingSummary),
+      success: S.Array(PayerBillingSummary),
     }),
   )
   .add(
-    HttpApiEndpoint.get("billingFamily", "/billing/families/:familyId", {
+    HttpApiEndpoint.get("billingPayer", "/billing/payers/:payerId", {
       error: adminClientErrors,
-      params: params("familyId"),
-      success: FamilyBillingDetail,
+      params: params("payerId"),
+      success: PayerBillingDetail,
     }),
   )
   .add(
-    HttpApiEndpoint.get("billingFamilyBills", "/billing/families/:familyId/bills", {
+    HttpApiEndpoint.get("billingPayerBills", "/billing/payers/:payerId/bills", {
       error: adminClientErrors,
-      params: params("familyId"),
+      params: params("payerId"),
       success: S.Array(Bill),
     }),
   )
   .add(
-    HttpApiEndpoint.get("billingFamilyPayments", "/billing/families/:familyId/payments", {
+    HttpApiEndpoint.get("billingPayerPayments", "/billing/payers/:payerId/payments", {
       error: adminClientErrors,
-      params: params("familyId"),
+      params: params("payerId"),
       success: S.Array(Payment),
     }),
   )
   .add(
-    HttpApiEndpoint.get("billingFamilyCredits", "/billing/families/:familyId/credits", {
+    HttpApiEndpoint.get("billingPayerCredits", "/billing/payers/:payerId/credits", {
       error: adminClientErrors,
-      params: params("familyId"),
-      success: S.Array(AdminFamilyCredit),
+      params: params("payerId"),
+      success: S.Array(AdminCredit),
     }),
   )
   .add(
@@ -1522,7 +1522,7 @@ export const adminClientGroup = HttpApiGroup.make("admin")
     HttpApiEndpoint.post("createCredit", "/billing/credits", {
       error: adminClientErrors,
       payload: CreateCreditPayload,
-      success: AdminFamilyCredit,
+      success: AdminCredit,
     }),
   )
   .add(
@@ -1533,17 +1533,17 @@ export const adminClientGroup = HttpApiGroup.make("admin")
     }),
   )
   .add(
-    HttpApiEndpoint.get("familyDiscounts", "/billing/families/:familyId/discounts", {
+    HttpApiEndpoint.get("payerDiscounts", "/billing/payers/:payerId/discounts", {
       error: adminClientErrors,
-      params: params("familyId"),
-      success: S.Array(FamilyDiscount),
+      params: params("payerId"),
+      success: S.Array(Discount),
     }),
   )
   .add(
     HttpApiEndpoint.post("createDiscount", "/billing/discounts", {
       error: adminClientErrors,
       payload: CreateDiscountPayload,
-      success: FamilyDiscount,
+      success: Discount,
     }),
   )
   .add(
@@ -1551,7 +1551,7 @@ export const adminClientGroup = HttpApiGroup.make("admin")
       error: adminClientErrors,
       params: params("id"),
       payload: UpdateDiscountPayload,
-      success: FamilyDiscount,
+      success: Discount,
     }),
   )
   .add(
@@ -1568,17 +1568,17 @@ export const adminClientGroup = HttpApiGroup.make("admin")
     }),
   )
   .add(
-    HttpApiEndpoint.get("familyTaxExemptions", "/billing/families/:familyId/tax-exemptions", {
+    HttpApiEndpoint.get("payerTaxExemptions", "/billing/payers/:payerId/tax-exemptions", {
       error: adminClientErrors,
-      params: params("familyId"),
-      success: S.Array(FamilyTaxExemption),
+      params: params("payerId"),
+      success: S.Array(TaxExemption),
     }),
   )
   .add(
     HttpApiEndpoint.post("createTaxExemption", "/billing/tax-exemptions", {
       error: adminClientErrors,
       payload: CreateTaxExemptionPayload,
-      success: FamilyTaxExemption,
+      success: TaxExemption,
     }),
   )
   .prefix("/api/admin");
@@ -1627,7 +1627,7 @@ export const familyBillingGroup = HttpApiGroup.make("familyBilling")
   .add(
     HttpApiEndpoint.get("credits", "/billing/credits", {
       error: familyBillingErrors,
-      success: S.Array(FamilyCredit),
+      success: S.Array(Credit),
     }),
   )
   .add(

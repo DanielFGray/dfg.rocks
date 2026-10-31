@@ -1034,20 +1034,7 @@ describe("DFG Portal API", () => {
         (yield* reqEffect("POST", path, { cookie: adminCookie, body: scheduleBody })).status,
       ).toBe(409);
 
-      const bookingFamily = yield* Effect.tryPromise(() =>
-        testDb.query(`insert into app_public.families (slug, name) values ($1, $2) returning id`, [
-          `single-booking-${studentId}`,
-          "Single Booking Family",
-        ]),
-      );
-      yield* Effect.tryPromise(() =>
-        testDb.query(
-          `insert into app_public.family_memberships (family_id, user_id, is_owner, is_billing_contact)
-           values ($1, $2, true, true)`,
-          [bookingFamily.rows[0].id, studentId],
-        ),
-      );
-
+      // The student has no family, so they pay for their own booking.
       const bookingResponse = yield* reqEffect("POST", "/api/my-lessons/book", {
         cookie: studentCookie,
         body: {
@@ -1060,7 +1047,7 @@ describe("DFG Portal API", () => {
       const booking = yield* resJson(bookingResponse);
       const obligation = yield* Effect.tryPromise(() =>
         testDb.query(
-          `select b.status, b.total_cents, bli.line_type, d.amount_cents, d.status as deposit_status
+          `select b.payer_id, b.status, b.total_cents, bli.line_type, d.amount_cents, d.status as deposit_status
              from app_public.bill_line_items bli
              join app_public.bills b on b.id = bli.bill_id
              join app_public.lesson_deposits d on d.lesson_id = bli.lesson_id
@@ -1070,6 +1057,7 @@ describe("DFG Portal API", () => {
       );
       expect(obligation.rows).toEqual([
         {
+          payer_id: studentId,
           status: "issued",
           total_cents: 12000,
           line_type: "single_booking",

@@ -43,15 +43,13 @@ export function BillDetailView({
               Bill #{bill.bill_number}
             </h1>
             <p className="mt-1 text-sm text-muted dark:text-muted-dark">
-              {bill.family_id ? (
-                <Link
-                  to="/billing/families/$familyId"
-                  params={{ familyId: bill.family_id }}
-                  className="text-accent hover:underline"
-                >
-                  View family billing
-                </Link>
-              ) : null}
+              <Link
+                to="/billing/payers/$payerId"
+                params={{ payerId: bill.payer_id }}
+                className="text-accent hover:underline"
+              >
+                View payer billing
+              </Link>
             </p>
           </div>
           <span className={billStatusBadge(bill.status)}>{statusLabel(bill.status)}</span>

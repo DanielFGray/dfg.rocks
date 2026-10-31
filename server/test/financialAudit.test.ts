@@ -15,7 +15,7 @@ let pool: pg.Pool;
 let visitorPool: pg.Pool;
 let adminSessionId: string;
 let studentSessionId: string;
-let familyId: string;
+let payerId: string;
 let studentId: string;
 let adminId: string;
 
@@ -33,17 +33,6 @@ function forceIpv4(urlString: string): string {
 
 async function query(text: string, params?: any[]) {
   return pool.query(text, params);
-}
-
-async function insertRow(table: string, values: Record<string, any>, returning = "id") {
-  const cols = Object.keys(values);
-  const vals = Object.values(values);
-  const placeholders = cols.map((_, i) => `$${i + 1}`);
-  const result = await query(
-    `insert into app_public.${table} (${cols.join(", ")}) values (${placeholders.join(", ")}) returning ${returning}`,
-    vals,
-  );
-  return result.rows[0];
 }
 
 describe("Financial audit", () => {
@@ -74,17 +63,9 @@ describe("Financial audit", () => {
       "student",
     );
 
-    const fam = await insertRow("families", {
-      slug: "audit-family",
-      name: "Audit Family",
-    });
-    familyId = fam.id;
+    // A student with no family pays for their own lessons.
     studentId = studentUserId;
-
-    await insertRow("family_memberships", {
-      family_id: familyId,
-      user_id: studentId,
-    });
+    payerId = studentUserId;
 
     const createSession = async (userId: string) => {
       const r = await query(`insert into app_private.sessions (user_id) values ($1) returning id`, [
@@ -117,7 +98,7 @@ describe("Financial audit", () => {
         const svc = yield* BillingLedgerService;
         const db = yield* PgRootDB;
         const bill = yield* svc.createBill(adminSessionId, {
-          familyId,
+          payerId,
           billingPeriodStart: "2026-07-01",
           billingPeriodEnd: "2026-07-31",
           lineItems: [
@@ -143,7 +124,7 @@ describe("Financial audit", () => {
         expect(audit.action).toBe("insert");
         expect(audit.actor_id).toBe(adminId);
         expect(audit.old_values).toBeNull();
-        expect((audit.new_values as any).family_id).toBe(familyId);
+        expect(audit.new_values).toMatchObject({ payer_id: payerId });
       }),
     );
 
@@ -152,7 +133,7 @@ describe("Financial audit", () => {
         const svc = yield* BillingLedgerService;
         const db = yield* PgRootDB;
         const bill = yield* svc.createBill(adminSessionId, {
-          familyId,
+          payerId,
           billingPeriodStart: "2026-08-01",
           billingPeriodEnd: "2026-08-31",
           lineItems: [
@@ -188,7 +169,7 @@ describe("Financial audit", () => {
         const svc = yield* BillingLedgerService;
         const db = yield* PgRootDB;
         const bill = yield* svc.createBill(adminSessionId, {
-          familyId,
+          payerId,
           billingPeriodStart: "2026-09-01",
           billingPeriodEnd: "2026-09-30",
           lineItems: [
@@ -204,7 +185,7 @@ describe("Financial audit", () => {
         });
         yield* svc.issueBill(adminSessionId, bill.id);
         const payment = yield* svc.recordPayment(adminSessionId, {
-          familyId,
+          payerId,
           amountCents: 10000,
           method: "check",
           reference: "AUDIT-001",
@@ -271,54 +252,44 @@ describe("Financial audit", () => {
   // Document number safety — never reused after rollback
   // ===================================================================
 
+  // Other test files draw from the same sequences in parallel, so these tests
+  // assert order, not exact increments.
   it("bill numbers are consumed even after a failed transaction", async () => {
-    const n1 = await query(`select app_public.next_bill_number($1::uuid) as n`, [familyId]);
-    const firstNumber = n1.rows[0].n;
+    const first = await query(`select app_public.next_bill_number() as n`);
 
-    const n2 = await query(`select app_public.next_bill_number($1::uuid) as n`, [familyId]);
-    const secondNumber = n2.rows[0].n;
-    expect(secondNumber).toBe(firstNumber + 1);
-
-    // Simulate a failed transaction: insert bill, then rollback
     const client = await pool.connect();
+    let rolledBack: number;
     try {
       await client.query("begin");
-      const n3 = await client.query(`select app_public.next_bill_number($1::uuid) as n`, [
-        familyId,
-      ]);
-      const thirdNumber = n3.rows[0].n;
-      expect(thirdNumber).toBe(secondNumber + 1);
-
+      const inTransaction = await client.query(`select app_public.next_bill_number() as n`);
+      rolledBack = inTransaction.rows[0].n;
+      expect(rolledBack).toBeGreaterThan(first.rows[0].n);
       await client.query("rollback");
     } finally {
       client.release();
     }
 
-    // After rollback, a new call should NOT reuse the rolled-back number
-    const n4 = await query(`select app_public.next_bill_number($1::uuid) as n`, [familyId]);
-    expect(n4.rows[0].n).toBe(secondNumber + 2);
-    // The gap (secondNumber + 1 was consumed and lost) is expected
+    const after = await query(`select app_public.next_bill_number() as n`);
+    expect(after.rows[0].n).toBeGreaterThan(rolledBack);
   });
 
   it("payment numbers are consumed even after a failed transaction", async () => {
-    const n1 = await query(`select app_public.next_payment_number($1::uuid) as n`, [familyId]);
-    const firstNumber = n1.rows[0].n;
+    const first = await query(`select app_public.next_payment_number() as n`);
 
     const client = await pool.connect();
+    let rolledBack: number;
     try {
       await client.query("begin");
-      const n2 = await client.query(`select app_public.next_payment_number($1::uuid) as n`, [
-        familyId,
-      ]);
-      expect(n2.rows[0].n).toBe(firstNumber + 1);
-
+      const inTransaction = await client.query(`select app_public.next_payment_number() as n`);
+      rolledBack = inTransaction.rows[0].n;
+      expect(rolledBack).toBeGreaterThan(first.rows[0].n);
       await client.query("rollback");
     } finally {
       client.release();
     }
 
-    const n3 = await query(`select app_public.next_payment_number($1::uuid) as n`, [familyId]);
-    expect(n3.rows[0].n).toBe(firstNumber + 2);
+    const after = await query(`select app_public.next_payment_number() as n`);
+    expect(after.rows[0].n).toBeGreaterThan(rolledBack);
   });
 
   // ===================================================================
@@ -334,16 +305,12 @@ describe("Financial audit", () => {
           const db = yield* PgRootDB;
           const nextNumber = () =>
             db
-              .execute(
-                db.selectNoFrom((eb) =>
-                  sql<number>`app_public.next_bill_number(${eb.val(familyId)}::uuid)`.as("n"),
-                ),
-              )
+              .execute(db.selectNoFrom(sql<number>`app_public.next_bill_number()`.as("n")))
               .pipe(Effect.head);
           const before = yield* nextNumber();
           const result = yield* Effect.exit(
             svc.createBill(adminSessionId, {
-              familyId: "00000000-0000-0000-0000-000000000000",
+              payerId: "00000000-0000-0000-0000-000000000000",
               billingPeriodStart: "2026-10-01",
               billingPeriodEnd: "2026-10-31",
               lineItems: [

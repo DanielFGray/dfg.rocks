@@ -8,7 +8,7 @@ import {
   FamilyPayment,
   type Bill,
   type Payment,
-  type FamilyCredit,
+  type Credit,
 } from "../../shared/schemas.js";
 import { adaptHttpApiErrors } from "../httpApiErrors.js";
 import { HttpError } from "../pgErrors.js";
@@ -18,10 +18,10 @@ import type { Selectable } from "kysely";
 import type {
   AppPublicBills,
   AppPublicPayments,
-  AppPublicFamilyCredits,
+  AppPublicCredits,
   AppPublicBillLineItems,
   AppPublicBillAdjustments,
-  AppPublicFamilyCreditApplications,
+  AppPublicCreditApplications,
   AppPublicPaymentAllocations,
 } from "../../generated/db.js";
 
@@ -65,7 +65,7 @@ function serializeDateShort(value: unknown): string {
 function serializeBill(bill: Selectable<AppPublicBills>): Bill {
   return {
     id: bill.id,
-    family_id: bill.family_id,
+    payer_id: bill.payer_id,
     bill_number: bill.bill_number,
     status: bill.status,
     billing_period_start: serializeDateShort(bill.billing_period_start),
@@ -93,7 +93,7 @@ function serializeFamilyBill(bill: Selectable<AppPublicBills>): FamilyBill {
 function serializePayment(p: Selectable<AppPublicPayments>): Payment {
   return {
     id: p.id,
-    family_id: p.family_id,
+    payer_id: p.payer_id,
     payment_number: p.payment_number,
     amount_cents: p.amount_cents,
     method: p.method,
@@ -110,10 +110,10 @@ function serializeFamilyPayment(p: Selectable<AppPublicPayments>): FamilyPayment
   return publicPayment;
 }
 
-function serializeCredit(c: Selectable<AppPublicFamilyCredits>): FamilyCredit {
+function serializeCredit(c: Selectable<AppPublicCredits>): Credit {
   return {
     id: c.id,
-    family_id: c.family_id,
+    payer_id: c.payer_id,
     student_id: c.student_id,
     amount_cents: c.amount_cents,
     reason: c.reason,
@@ -136,7 +136,7 @@ export function makeFamilyBillingLayer() {
             return yield* new HttpError(403, "Forbidden");
           }
           const raw = yield* FamilyBillingService.use((familyBillingService) =>
-            familyBillingService.overview(auth.session.id, auth.user.id),
+            familyBillingService.overview(auth.session.id),
           );
           return {
             ...raw,
@@ -155,7 +155,7 @@ export function makeFamilyBillingLayer() {
             return yield* new HttpError(403, "Forbidden");
           }
           const bills = yield* FamilyBillingService.use((familyBillingService) =>
-            familyBillingService.bills(auth.session.id, auth.user.id),
+            familyBillingService.bills(auth.session.id),
           );
           return bills.map(serializeFamilyBill);
         }, adaptFamilyBillingErrors),
@@ -168,7 +168,7 @@ export function makeFamilyBillingLayer() {
             return yield* new HttpError(403, "Forbidden");
           }
           const result = yield* FamilyBillingService.use((familyBillingService) =>
-            familyBillingService.billDetail(auth.session.id, auth.user.id, params.id),
+            familyBillingService.billDetail(auth.session.id, params.id),
           );
           result.lineItems = result.lineItems ?? [];
           result.adjustments = result.adjustments ?? [];
@@ -186,7 +186,7 @@ export function makeFamilyBillingLayer() {
               created_at: serializeDate(adj.created_at)!,
             })),
             credit_applications: result.creditApplications.map(
-              (ca: Selectable<AppPublicFamilyCreditApplications>) => ({
+              (ca: Selectable<AppPublicCreditApplications>) => ({
                 ...ca,
                 created_at: serializeDate(ca.created_at)!,
               }),
@@ -202,7 +202,7 @@ export function makeFamilyBillingLayer() {
             return yield* new HttpError(403, "Forbidden");
           }
           const payments = yield* FamilyBillingService.use((familyBillingService) =>
-            familyBillingService.payments(auth.session.id, auth.user.id),
+            familyBillingService.payments(auth.session.id),
           );
           return payments.map(serializeFamilyPayment);
         }, adaptFamilyBillingErrors),
@@ -215,7 +215,7 @@ export function makeFamilyBillingLayer() {
             return yield* new HttpError(403, "Forbidden");
           }
           const result = yield* FamilyBillingService.use((familyBillingService) =>
-            familyBillingService.paymentDetail(auth.session.id, auth.user.id, params.id),
+            familyBillingService.paymentDetail(auth.session.id, params.id),
           );
           return {
             ...serializeFamilyPayment(result),
@@ -236,7 +236,7 @@ export function makeFamilyBillingLayer() {
             return yield* new HttpError(403, "Forbidden");
           }
           const credits = yield* FamilyBillingService.use((familyBillingService) =>
-            familyBillingService.credits(auth.session.id, auth.user.id),
+            familyBillingService.credits(auth.session.id),
           );
           return credits.map(serializeCredit);
         }, adaptFamilyBillingErrors),
@@ -249,7 +249,7 @@ export function makeFamilyBillingLayer() {
             return yield* new HttpError(403, "Forbidden");
           }
           const buffer = yield* FamilyBillingService.use((familyBillingService) =>
-            familyBillingService.billPdf(auth.session.id, auth.user.id, params.id),
+            familyBillingService.billPdf(auth.session.id, params.id),
           );
           return HttpServerResponse.fromWeb(
             new Response(new Uint8Array(buffer), {
@@ -269,7 +269,7 @@ export function makeFamilyBillingLayer() {
             return yield* new HttpError(403, "Forbidden");
           }
           const buffer = yield* FamilyBillingService.use((familyBillingService) =>
-            familyBillingService.paymentReceipt(auth.session.id, auth.user.id, params.id),
+            familyBillingService.paymentReceipt(auth.session.id, params.id),
           );
           return HttpServerResponse.fromWeb(
             new Response(new Uint8Array(buffer), {

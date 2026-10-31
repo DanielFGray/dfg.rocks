@@ -16,7 +16,10 @@ let testDb: pg.Pool;
 let adminSessionId: string;
 let teacherSessionId: string;
 let parentSessionId: string;
-let familyId: string;
+let payerId: string;
+let creditPayerId: string;
+let allocationPayerId: string;
+let otherPayerId: string;
 let studentId: string;
 let adminId: string;
 
@@ -82,12 +85,32 @@ describe("Billing ledger foundation", () => {
       "student",
     );
 
-    // Create family
+    payerId = parentId;
+    // Payers with ledgers of their own, so balance assertions see only their rows.
+    creditPayerId = await makeUser(
+      "ledger_credit_payer",
+      "Ledger Credit Payer",
+      "ledger-credit-payer@test.com",
+      "parent",
+    );
+    allocationPayerId = await makeUser(
+      "ledger_allocation_payer",
+      "Ledger Allocation Payer",
+      "ledger-allocation-payer@test.com",
+      "parent",
+    );
+    otherPayerId = await makeUser(
+      "ledger_other_payer",
+      "Ledger Other Payer",
+      "ledger-other-payer@test.com",
+      "parent",
+    );
+
     const familyResult = await testDb.query(
       `insert into app_public.families (slug, name) values ($1, $2) returning id`,
       ["ledger-family", "Ledger Family"],
     );
-    familyId = familyResult.rows[0].id;
+    const familyId = familyResult.rows[0].id;
 
     await testDb.query(
       `insert into app_public.family_memberships (family_id, user_id, is_owner, is_billing_contact)
@@ -122,7 +145,7 @@ describe("Billing ledger foundation", () => {
       Effect.gen(function* () {
         const svc = yield* BillingLedgerService;
         const bill = yield* svc.createBill(adminSessionId, {
-          familyId,
+          payerId,
           billingPeriodStart: "2026-08-01",
           billingPeriodEnd: "2026-08-31",
           lineItems: [
@@ -138,7 +161,7 @@ describe("Billing ledger foundation", () => {
         });
 
         expect(bill.status).toBe("draft");
-        expect(bill.family_id).toBe(familyId);
+        expect(bill.payer_id).toBe(payerId);
         expect(bill.bill_number).toBeGreaterThan(0);
         expect(bill.subtotal_cents).toBe(18000);
         expect(bill.total_cents).toBe(18000);
@@ -158,7 +181,7 @@ describe("Billing ledger foundation", () => {
       Effect.gen(function* () {
         const svc = yield* BillingLedgerService;
         const bill = yield* svc.createBill(adminSessionId, {
-          familyId,
+          payerId,
           billingPeriodStart: "2026-09-01",
           billingPeriodEnd: "2026-09-30",
           lineItems: [
@@ -183,7 +206,7 @@ describe("Billing ledger foundation", () => {
       Effect.gen(function* () {
         const svc = yield* BillingLedgerService;
         const bill = yield* svc.createBill(adminSessionId, {
-          familyId,
+          payerId,
           billingPeriodStart: "2026-10-01",
           billingPeriodEnd: "2026-10-31",
           dueDate: "2026-10-15",
@@ -206,7 +229,7 @@ describe("Billing ledger foundation", () => {
       Effect.gen(function* () {
         const svc = yield* BillingLedgerService;
         const bill = yield* svc.createBill(adminSessionId, {
-          familyId,
+          payerId,
           billingPeriodStart: "2026-11-01",
           billingPeriodEnd: "2026-11-30",
           lineItems: [
@@ -222,7 +245,7 @@ describe("Billing ledger foundation", () => {
         });
         yield* svc.issueBill(adminSessionId, bill.id);
         const payment = yield* svc.recordPayment(adminSessionId, {
-          familyId,
+          payerId,
           amountCents: 18000,
           method: "check",
           reference: "1001",
@@ -233,29 +256,18 @@ describe("Billing ledger foundation", () => {
         expect(payment.amount_cents).toBe(18000);
         expect(payment.method).toBe("check");
         expect(payment.reference).toBe("1001");
-        const balance = yield* svc.getFamilyBalance(adminSessionId, familyId);
+        const balance = yield* svc.getPayerBalance(adminSessionId, payerId);
         expect(balance.creditBalanceCents).toBe(0);
         expect(balance.outstandingCents).toBeGreaterThanOrEqual(0);
       }),
     );
 
-    effectIt.effect("materializes payment excess as one family credit", () =>
+    effectIt.effect("materializes payment excess as one credit", () =>
       Effect.gen(function* () {
         const svc = yield* BillingLedgerService;
         const db = yield* PgRootDB;
-        const creditFamily = yield* db
-          .execute(
-            db
-              .insertInto("app_public.families")
-              .values({
-                slug: "payment-credit-family",
-                name: "Payment Credit Family",
-              })
-              .returning("id"),
-          )
-          .pipe(Effect.head);
         const bill = yield* svc.createBill(adminSessionId, {
-          familyId: creditFamily.id,
+          payerId: creditPayerId,
           billingPeriodStart: "2027-01-01",
           billingPeriodEnd: "2027-01-31",
           lineItems: [
@@ -271,7 +283,7 @@ describe("Billing ledger foundation", () => {
         });
         yield* svc.issueBill(adminSessionId, bill.id);
         const payment = yield* svc.recordPayment(adminSessionId, {
-          familyId: creditFamily.id,
+          payerId: creditPayerId,
           amountCents: 7000,
           method: "cash",
           allocations: [],
@@ -279,7 +291,7 @@ describe("Billing ledger foundation", () => {
         const credit = yield* db
           .execute(
             db
-              .selectFrom("app_public.family_credits")
+              .selectFrom("app_public.credits")
               .select(["amount_cents", "source_payment_id"])
               .where("source_payment_id", "=", payment.id),
           )
@@ -288,7 +300,7 @@ describe("Billing ledger foundation", () => {
           amount_cents: 2000,
           source_payment_id: payment.id,
         });
-        const balance = yield* svc.getFamilyBalance(adminSessionId, creditFamily.id);
+        const balance = yield* svc.getPayerBalance(adminSessionId, creditPayerId);
         expect(balance.creditBalanceCents).toBe(2000);
       }),
     );
@@ -297,19 +309,8 @@ describe("Billing ledger foundation", () => {
       Effect.gen(function* () {
         const svc = yield* BillingLedgerService;
         const db = yield* PgRootDB;
-        const family = yield* db
-          .execute(
-            db
-              .insertInto("app_public.families")
-              .values({
-                slug: "explicit-allocation-family",
-                name: "Explicit Allocation Family",
-              })
-              .returning("id"),
-          )
-          .pipe(Effect.head);
         const bill = yield* svc.createBill(adminSessionId, {
-          familyId: family.id,
+          payerId: allocationPayerId,
           billingPeriodStart: "2026-12-01",
           billingPeriodEnd: "2026-12-31",
           lineItems: [
@@ -325,7 +326,7 @@ describe("Billing ledger foundation", () => {
         });
         yield* svc.issueBill(adminSessionId, bill.id);
         const payment = yield* svc.recordPayment(adminSessionId, {
-          familyId: family.id,
+          payerId: allocationPayerId,
           amountCents: 18000,
           method: "cash",
           allocations: [{ billId: bill.id, amountCents: 5000 }],
@@ -340,20 +341,11 @@ describe("Billing ledger foundation", () => {
       }),
     );
 
-    effectIt.effect("prevents cross-family allocation", () =>
+    effectIt.effect("prevents cross-payer allocation", () =>
       Effect.gen(function* () {
         const svc = yield* BillingLedgerService;
-        const db = yield* PgRootDB;
-        const otherFamily = yield* db
-          .execute(
-            db
-              .insertInto("app_public.families")
-              .values({ slug: "other-family", name: "Other Family" })
-              .returning("id"),
-          )
-          .pipe(Effect.head);
         const bill = yield* svc.createBill(adminSessionId, {
-          familyId,
+          payerId,
           billingPeriodStart: "2026-12-01",
           billingPeriodEnd: "2026-12-31",
           lineItems: [
@@ -367,15 +359,16 @@ describe("Billing ledger foundation", () => {
             },
           ],
         });
-        const result = yield* Effect.exit(
+        yield* svc.issueBill(adminSessionId, bill.id);
+        const error = yield* Effect.flip(
           svc.recordPayment(adminSessionId, {
-            familyId: otherFamily.id,
+            payerId: otherPayerId,
             amountCents: 18000,
             method: "cash",
             allocations: [{ billId: bill.id, amountCents: 18000 }],
           }),
         );
-        expect(result._tag).toBe("Failure");
+        expect(error.message).toBe("Cannot allocate across different payers");
       }),
     );
 
@@ -384,7 +377,7 @@ describe("Billing ledger foundation", () => {
         const svc = yield* BillingLedgerService;
         const db = yield* PgRootDB;
         const bill = yield* svc.createBill(adminSessionId, {
-          familyId,
+          payerId,
           billingPeriodStart: "2026-12-01",
           billingPeriodEnd: "2026-12-31",
           lineItems: [
@@ -401,9 +394,9 @@ describe("Billing ledger foundation", () => {
         const credit = yield* db
           .execute(
             db
-              .insertInto("app_public.family_credits")
+              .insertInto("app_public.credits")
               .values({
-                family_id: familyId,
+                payer_id: payerId,
                 amount_cents: 5000,
                 reason: "Referral bonus",
                 created_by: adminId,
@@ -427,7 +420,7 @@ describe("Billing ledger foundation", () => {
         const svc = yield* BillingLedgerService;
         const db = yield* PgRootDB;
         const bill = yield* svc.createBill(adminSessionId, {
-          familyId,
+          payerId,
           billingPeriodStart: "2026-12-01",
           billingPeriodEnd: "2026-12-31",
           lineItems: [
@@ -444,9 +437,9 @@ describe("Billing ledger foundation", () => {
         const credit = yield* db
           .execute(
             db
-              .insertInto("app_public.family_credits")
+              .insertInto("app_public.credits")
               .values({
-                family_id: familyId,
+                payer_id: payerId,
                 amount_cents: 2000,
                 reason: "Small credit",
                 created_by: adminId,
@@ -469,7 +462,7 @@ describe("Billing ledger foundation", () => {
       Effect.gen(function* () {
         const svc = yield* BillingLedgerService;
         const bill = yield* svc.createBill(adminSessionId, {
-          familyId,
+          payerId,
           billingPeriodStart: "2026-12-01",
           billingPeriodEnd: "2026-12-31",
           lineItems: [
@@ -501,7 +494,7 @@ describe("Billing ledger foundation", () => {
       Effect.gen(function* () {
         const svc = yield* BillingLedgerService;
         const bill = yield* svc.createBill(adminSessionId, {
-          familyId,
+          payerId,
           billingPeriodStart: "2026-12-01",
           billingPeriodEnd: "2026-12-31",
           lineItems: [
@@ -530,7 +523,7 @@ describe("Billing ledger foundation", () => {
       Effect.gen(function* () {
         const svc = yield* BillingLedgerService;
         const bill = yield* svc.createBill(adminSessionId, {
-          familyId,
+          payerId,
           billingPeriodStart: "2026-12-01",
           billingPeriodEnd: "2026-12-31",
           lineItems: [
@@ -546,7 +539,7 @@ describe("Billing ledger foundation", () => {
         });
         yield* svc.issueBill(adminSessionId, bill.id);
         const payment = yield* svc.recordPayment(adminSessionId, {
-          familyId,
+          payerId,
           amountCents: 10000,
           method: "cash",
           allocations: [{ billId: bill.id, amountCents: 10000 }],
@@ -571,16 +564,16 @@ describe("Billing ledger foundation", () => {
       }),
     );
 
-    effectIt.effect("calculates family balance and enforces billing RLS", () =>
+    effectIt.effect("calculates payer balance and enforces billing RLS", () =>
       Effect.gen(function* () {
         const svc = yield* BillingLedgerService;
-        const balance = yield* svc.getFamilyBalance(parentSessionId, familyId);
+        const balance = yield* svc.getPayerBalance(parentSessionId, payerId);
         expect(balance.outstandingCents).toBeGreaterThanOrEqual(0);
         expect(balance.creditBalanceCents).toBeGreaterThanOrEqual(0);
-        expect(Array.isArray(yield* svc.listFamilyBills(teacherSessionId, familyId))).toBe(true);
+        expect(Array.isArray(yield* svc.listPayerBills(teacherSessionId, payerId))).toBe(true);
         const result = yield* Effect.result(
           svc.createBill(teacherSessionId, {
-            familyId,
+            payerId,
             billingPeriodStart: "2026-12-01",
             billingPeriodEnd: "2026-12-31",
             lineItems: [
@@ -604,7 +597,7 @@ describe("Billing ledger foundation", () => {
         const svc = yield* BillingLedgerService;
         const db = yield* PgRootDB;
         const bill = yield* svc.createBill(adminSessionId, {
-          familyId,
+          payerId,
           billingPeriodStart: "2026-12-01",
           billingPeriodEnd: "2026-12-31",
           lineItems: [
@@ -635,7 +628,7 @@ describe("Billing ledger foundation", () => {
       Effect.gen(function* () {
         const svc = yield* BillingLedgerService;
         const first = yield* svc.createBill(adminSessionId, {
-          familyId,
+          payerId,
           billingPeriodStart: "2026-07-01",
           billingPeriodEnd: "2026-07-31",
           lineItems: [
@@ -650,7 +643,7 @@ describe("Billing ledger foundation", () => {
           ],
         });
         const second = yield* svc.createBill(adminSessionId, {
-          familyId,
+          payerId,
           billingPeriodStart: "2026-08-01",
           billingPeriodEnd: "2026-08-31",
           lineItems: [

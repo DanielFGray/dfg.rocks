@@ -14,8 +14,8 @@ let testDb: pg.Pool;
 let adminCookie: string;
 let studentCookie: string;
 let teacherCookie: string;
-let familyId: string;
-let otherFamilyId: string;
+let payerId: string;
+let otherPayerId: string;
 let studentId: string;
 let adminUserId: string;
 let rt: ManagedRuntime.ManagedRuntime<any, any>;
@@ -110,29 +110,33 @@ describe("Admin Billing API", () => {
     studentId = studentResult.rows[0].id;
     await testDb.query(`update app_public.users set role = 'student' where id = $1`, [studentId]);
 
-    // Create family
+    const createUser = async (username: string, name: string, role: string) => {
+      const result = await testDb.query(
+        `select * from app_private.really_create_user($1::citext, $2, null, true, $3::citext, $4)`,
+        [username, name, `${username}@test.com`, `${username}123`],
+      );
+      await testDb.query(`update app_public.users set role = $1 where id = $2`, [
+        role,
+        result.rows[0].id,
+      ]);
+      return result.rows[0].id;
+    };
+
+    // The billing contact of the student's family pays for the student.
+    payerId = await createUser("billing_parent", "Billing Parent", "parent");
     const familyResult = await testDb.query(
       `insert into app_public.families (slug, name) values ($1, $2) returning id`,
       ["billing-test-family", "Billing Test Family"],
     );
-    familyId = familyResult.rows[0].id;
-
-    // A family the admin is not a member of, so only the admin select policy shows it
-    const otherFamilyResult = await testDb.query(
-      `insert into app_public.families (slug, name) values ($1, $2) returning id`,
-      ["billing-test-other-family", "Billing Test Other Family"],
-    );
-    otherFamilyId = otherFamilyResult.rows[0].id;
-
-    // Add members
     await testDb.query(
-      `insert into app_public.family_memberships (family_id, user_id, is_owner) values ($1, $2, true)`,
-      [familyId, adminUserId],
+      `insert into app_public.family_memberships (family_id, user_id, is_owner, is_billing_contact)
+       values ($1, $2, true, true), ($1, $3, false, false)`,
+      [familyResult.rows[0].id, payerId, studentId],
     );
-    await testDb.query(
-      `insert into app_public.family_memberships (family_id, user_id, is_owner) values ($1, $2, false)`,
-      [familyId, studentId],
-    );
+
+    // A student with no family pays for themself, and shares no family with
+    // anyone here, so only the admin select policy shows their ledger.
+    otherPayerId = await createUser("billing_other_student", "Billing Other Student", "student");
 
     const { handleApiRequest } = await import("../app.js");
 
@@ -192,33 +196,62 @@ describe("Admin Billing API", () => {
   }, 30_000);
 
   // ==================================================================
-  // Family A/R list/detail
+  // Payer A/R list/detail
   // ==================================================================
 
-  it("billing families list returns families with AR summaries", async () => {
-    const res = await req("GET", "/api/admin/billing/families", {
+  it("billing payers list returns payers with their students and AR summaries", async () => {
+    const res = await req("GET", "/api/admin/billing/payers", {
       cookie: adminCookie,
     });
     expect(res.status).toBe(200);
     const body = await resJson(res);
     expect(Array.isArray(body)).toBe(true);
-    const ourFamily = body.find((f: any) => f.family_id === familyId);
-    expect(ourFamily).toBeTruthy();
-    expect(typeof ourFamily.outstanding_cents).toBe("number");
-    expect(typeof ourFamily.credit_balance_cents).toBe("number");
-    expect(ourFamily.bill_count).toBeGreaterThanOrEqual(0);
+    const ourPayer = body.find((p: { payer_id: string }) => p.payer_id === payerId);
+    expect(ourPayer).toBeTruthy();
+    expect(ourPayer.payer_name).toBe("Billing Parent");
+    expect(ourPayer.students).toEqual([{ id: studentId, name: "Billing Student" }]);
+    expect(typeof ourPayer.outstanding_cents).toBe("number");
+    expect(typeof ourPayer.credit_balance_cents).toBe("number");
+    expect(ourPayer.bill_count).toBeGreaterThanOrEqual(0);
   });
 
-  it("admin sees families they are not a member of and a non-member does not", async () => {
-    const res = await req("GET", "/api/admin/billing/families", { cookie: adminCookie });
+  it("admin sees payers they share no family with and a non-member does not", async () => {
+    const billFor = async (billPayerId: string) => {
+      const res = await req("POST", "/api/admin/billing/bills", {
+        cookie: adminCookie,
+        body: {
+          payer_id: billPayerId,
+          billing_period_start: "2026-06-01",
+          billing_period_end: "2026-06-30",
+          line_items: [
+            {
+              student_id: studentId,
+              line_type: "lesson",
+              description: "Visibility check",
+              quantity: 1,
+              unit_price_cents: 1000,
+              amount_cents: 1000,
+            },
+          ],
+        },
+      });
+      expect(res.status).toBe(200);
+      return (await resJson(res)).id;
+    };
+    const familyBillId = await billFor(payerId);
+    const otherBillId = await billFor(otherPayerId);
+
+    const res = await req("GET", "/api/admin/billing/payers", { cookie: adminCookie });
     expect(res.status).toBe(200);
     const body = await resJson(res);
-    expect(body.some((f: any) => f.family_id === otherFamilyId)).toBe(true);
+    expect(body.some((p: { payer_id: string }) => p.payer_id === otherPayerId)).toBe(true);
 
-    const detailRes = await req("GET", `/api/admin/billing/families/${otherFamilyId}`, {
+    const detailRes = await req("GET", `/api/admin/billing/payers/${otherPayerId}`, {
       cookie: adminCookie,
     });
     expect(detailRes.status).toBe(200);
+    const detail = await resJson(detailRes);
+    expect(detail.bills.map((b: { id: string }) => b.id)).toContain(otherBillId);
 
     const session = await testDb.query(
       `insert into app_private.sessions (user_id) values ($1) returning id`,
@@ -233,27 +266,36 @@ describe("Admin Billing API", () => {
         `select set_config('role', $1, true), set_config('my.session_id', $2, true)`,
         [requiredEnv("DATABASE_VISITOR"), session.rows[0].id],
       );
-      const visible = await client.query(`select id from app_public.families`);
+      const visible = await client.query(`select id from app_public.bills`);
       const ids = visible.rows.map((r) => r.id);
-      expect(ids).toContain(familyId);
-      expect(ids).not.toContain(otherFamilyId);
+      expect(ids).toContain(familyBillId);
+      expect(ids).not.toContain(otherBillId);
     } finally {
       await client.query("rollback");
       await client.end();
     }
   });
 
-  it("billing family detail returns family balance and records", async () => {
-    const res = await req("GET", `/api/admin/billing/families/${familyId}`, {
+  it("billing payer detail returns payer balance and records", async () => {
+    const res = await req("GET", `/api/admin/billing/payers/${payerId}`, {
       cookie: adminCookie,
     });
     expect(res.status).toBe(200);
     const body = await resJson(res);
-    expect(body.family_id).toBe(familyId);
+    expect(body.payer_id).toBe(payerId);
+    expect(body.payer_name).toBe("Billing Parent");
     expect(typeof body.balance.outstanding_cents).toBe("number");
     expect(Array.isArray(body.bills)).toBe(true);
     expect(Array.isArray(body.payments)).toBe(true);
     expect(Array.isArray(body.credits)).toBe(true);
+
+    const missingRes = await req(
+      "GET",
+      "/api/admin/billing/payers/00000000-0000-0000-0000-000000000000",
+      { cookie: adminCookie },
+    );
+    expect(missingRes.status).toBe(404);
+    expect((await resJson(missingRes)).error).toBe("Payer not found");
   });
 
   // ==================================================================
@@ -264,7 +306,7 @@ describe("Admin Billing API", () => {
     const createRes = await req("POST", "/api/admin/billing/bills", {
       cookie: adminCookie,
       body: {
-        family_id: familyId,
+        payer_id: payerId,
         billing_period_start: "2026-07-01",
         billing_period_end: "2026-07-31",
         due_date: "2026-07-15",
@@ -283,7 +325,7 @@ describe("Admin Billing API", () => {
     expect(createRes.status).toBe(200);
     const bill = await resJson(createRes);
     expect(bill.status).toBe("draft");
-    expect(bill.family_id).toBe(familyId);
+    expect(bill.payer_id).toBe(payerId);
     expect(bill.total_cents).toBe(18000);
     expect(bill.due_date).toContain("2026-07-15");
 
@@ -310,7 +352,7 @@ describe("Admin Billing API", () => {
     const createRes = await req("POST", "/api/admin/billing/bills", {
       cookie: adminCookie,
       body: {
-        family_id: familyId,
+        payer_id: payerId,
         billing_period_start: "2026-08-01",
         billing_period_end: "2026-08-31",
         line_items: [
@@ -344,7 +386,7 @@ describe("Admin Billing API", () => {
     const createRes = await req("POST", "/api/admin/billing/bills", {
       cookie: adminCookie,
       body: {
-        family_id: familyId,
+        payer_id: payerId,
         billing_period_start: "2026-08-01",
         billing_period_end: "2026-08-31",
         line_items: [
@@ -375,7 +417,7 @@ describe("Admin Billing API", () => {
     const createRes = await req("POST", "/api/admin/billing/bills", {
       cookie: adminCookie,
       body: {
-        family_id: familyId,
+        payer_id: payerId,
         billing_period_start: "2026-08-01",
         billing_period_end: "2026-08-31",
         line_items: [
@@ -408,7 +450,7 @@ describe("Admin Billing API", () => {
     const createRes = await req("POST", "/api/admin/billing/bills", {
       cookie: adminCookie,
       body: {
-        family_id: familyId,
+        payer_id: payerId,
         billing_period_start: "2026-09-01",
         billing_period_end: "2026-09-30",
         line_items: [
@@ -429,7 +471,7 @@ describe("Admin Billing API", () => {
     const payRes = await req("POST", "/api/admin/billing/payments", {
       cookie: adminCookie,
       body: {
-        family_id: familyId,
+        payer_id: payerId,
         amount_cents: 18000,
         method: "check",
         reference: "CK-1001",
@@ -449,7 +491,7 @@ describe("Admin Billing API", () => {
     const createRes = await req("POST", "/api/admin/billing/bills", {
       cookie: adminCookie,
       body: {
-        family_id: familyId,
+        payer_id: payerId,
         billing_period_start: "2026-09-01",
         billing_period_end: "2026-09-30",
         line_items: [
@@ -469,7 +511,7 @@ describe("Admin Billing API", () => {
     const payRes = await req("POST", "/api/admin/billing/payments", {
       cookie: adminCookie,
       body: {
-        family_id: familyId,
+        payer_id: payerId,
         amount_cents: 18000,
         method: "cash",
         received_at: "2099-01-01T00:00:00.000Z",
@@ -489,7 +531,7 @@ describe("Admin Billing API", () => {
     const createRes = await req("POST", "/api/admin/billing/bills", {
       cookie: adminCookie,
       body: {
-        family_id: familyId,
+        payer_id: payerId,
         billing_period_start: "2026-10-01",
         billing_period_end: "2026-10-31",
         line_items: [
@@ -521,7 +563,7 @@ describe("Admin Billing API", () => {
     const createRes = await req("POST", "/api/admin/billing/bills", {
       cookie: adminCookie,
       body: {
-        family_id: familyId,
+        payer_id: payerId,
         billing_period_start: "2026-10-01",
         billing_period_end: "2026-10-31",
         line_items: [
@@ -550,11 +592,11 @@ describe("Admin Billing API", () => {
   // Credits
   // ==================================================================
 
-  it("issues a credit and lists family credits", async () => {
+  it("issues a credit and lists payer credits", async () => {
     const creditRes = await req("POST", "/api/admin/billing/credits", {
       cookie: adminCookie,
       body: {
-        family_id: familyId,
+        payer_id: payerId,
         amount_cents: 10000,
         reason: "Referral bonus",
         student_id: studentId,
@@ -565,7 +607,7 @@ describe("Admin Billing API", () => {
     expect(credit.amount_cents).toBe(10000);
     expect(credit.reason).toBe("Referral bonus");
 
-    const listRes = await req("GET", `/api/admin/billing/families/${familyId}/credits`, {
+    const listRes = await req("GET", `/api/admin/billing/payers/${payerId}/credits`, {
       cookie: adminCookie,
     });
     expect(listRes.status).toBe(200);
@@ -578,7 +620,7 @@ describe("Admin Billing API", () => {
     const createRes = await req("POST", "/api/admin/billing/bills", {
       cookie: adminCookie,
       body: {
-        family_id: familyId,
+        payer_id: payerId,
         billing_period_start: "2026-09-01",
         billing_period_end: "2026-09-30",
         due_date: "2026-09-15",
@@ -607,7 +649,7 @@ describe("Admin Billing API", () => {
     const creditRes = await req("POST", "/api/admin/billing/credits", {
       cookie: adminCookie,
       body: {
-        family_id: familyId,
+        payer_id: payerId,
         amount_cents: 20000,
         reason: "Loyalty bonus",
         student_id: studentId,
@@ -648,7 +690,7 @@ describe("Admin Billing API", () => {
     const creditRes = await req("POST", "/api/admin/billing/credits", {
       cookie: adminCookie,
       body: {
-        family_id: familyId,
+        payer_id: payerId,
         amount_cents: 5000,
         reason: "",
       },
@@ -664,7 +706,7 @@ describe("Admin Billing API", () => {
     const createRes = await req("POST", "/api/admin/billing/bills", {
       cookie: adminCookie,
       body: {
-        family_id: familyId,
+        payer_id: payerId,
         billing_period_start: "2026-11-01",
         billing_period_end: "2026-11-30",
         line_items: [
@@ -685,7 +727,7 @@ describe("Admin Billing API", () => {
     const payRes = await req("POST", "/api/admin/billing/payments", {
       cookie: adminCookie,
       body: {
-        family_id: familyId,
+        payer_id: payerId,
         amount_cents: 18000,
         method: "cash",
         received_at: "2026-07-05T12:00:00.000Z",
@@ -709,7 +751,7 @@ describe("Admin Billing API", () => {
     const createRes = await req("POST", "/api/admin/billing/bills", {
       cookie: adminCookie,
       body: {
-        family_id: familyId,
+        payer_id: payerId,
         billing_period_start: "2026-11-01",
         billing_period_end: "2026-11-30",
         line_items: [
@@ -730,7 +772,7 @@ describe("Admin Billing API", () => {
     const payRes = await req("POST", "/api/admin/billing/payments", {
       cookie: adminCookie,
       body: {
-        family_id: familyId,
+        payer_id: payerId,
         amount_cents: 1000,
         method: "cash",
         received_at: "2026-07-05T12:00:00.000Z",
@@ -751,11 +793,11 @@ describe("Admin Billing API", () => {
   // Discount and tax configuration
   // ==================================================================
 
-  it("creates and lists family discounts", async () => {
+  it("creates and lists payer discounts", async () => {
     const createRes = await req("POST", "/api/admin/billing/discounts", {
       cookie: adminCookie,
       body: {
-        family_id: familyId,
+        payer_id: payerId,
         label: "Early payment discount",
         discount_type: "percentage",
         discount_value: 10,
@@ -768,7 +810,7 @@ describe("Admin Billing API", () => {
     expect(discount.label).toBe("Early payment discount");
     expect(discount.discount_value).toBe(10);
 
-    const listRes = await req("GET", `/api/admin/billing/families/${familyId}/discounts`, {
+    const listRes = await req("GET", `/api/admin/billing/payers/${payerId}/discounts`, {
       cookie: adminCookie,
     });
     expect(listRes.status).toBe(200);
@@ -857,21 +899,21 @@ describe("Admin Billing API", () => {
   // ==================================================================
 
   it("teacher cannot access billing endpoints", async () => {
-    const res = await req("GET", "/api/admin/billing/families", {
+    const res = await req("GET", "/api/admin/billing/payers", {
       cookie: teacherCookie,
     });
     expect(res.status).toBe(403);
   });
 
   it("student cannot access billing endpoints", async () => {
-    const res = await req("GET", "/api/admin/billing/families", {
+    const res = await req("GET", "/api/admin/billing/payers", {
       cookie: studentCookie,
     });
     expect(res.status).toBe(403);
   });
 
   it("unauthenticated cannot access billing endpoints", async () => {
-    const res = await req("GET", "/api/admin/billing/families");
+    const res = await req("GET", "/api/admin/billing/payers");
     expect(res.status).toBe(401);
   });
 
@@ -883,7 +925,7 @@ describe("Admin Billing API", () => {
     const createRes = await req("POST", "/api/admin/billing/bills", {
       cookie: adminCookie,
       body: {
-        family_id: familyId,
+        payer_id: payerId,
         billing_period_start: "2026-12-01",
         billing_period_end: "2026-12-31",
         line_items: [
@@ -909,11 +951,11 @@ describe("Admin Billing API", () => {
   });
 
   // ==================================================================
-  // Family bills list
+  // Payer bills list
   // ==================================================================
 
-  it("lists bills for a family", async () => {
-    const res = await req("GET", `/api/admin/billing/families/${familyId}/bills`, {
+  it("lists bills for a payer", async () => {
+    const res = await req("GET", `/api/admin/billing/payers/${payerId}/bills`, {
       cookie: adminCookie,
     });
     expect(res.status).toBe(200);
@@ -923,11 +965,11 @@ describe("Admin Billing API", () => {
   });
 
   // ==================================================================
-  // Family payments list
+  // Payer payments list
   // ==================================================================
 
-  it("lists payments for a family", async () => {
-    const res = await req("GET", `/api/admin/billing/families/${familyId}/payments`, {
+  it("lists payments for a payer", async () => {
+    const res = await req("GET", `/api/admin/billing/payers/${payerId}/payments`, {
       cookie: adminCookie,
     });
     expect(res.status).toBe(200);
