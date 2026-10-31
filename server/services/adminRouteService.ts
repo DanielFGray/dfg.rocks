@@ -12,6 +12,7 @@ import type {
 import { PgRootDB, withAuthContext } from "../db.js";
 import { catchPgErrors, HttpError } from "../pgErrors.js";
 import { GoogleCalendarService } from "./googleCalendarService.js";
+import { settleSingleBookingCancellation, singleBookingObligation } from "./singleBookingBills.js";
 import { LessonPolicyService } from "./lessonPolicyService.js";
 import { resolveAssignedTrackIndex } from "./notationService.js";
 const lessonColumns = [
@@ -647,27 +648,33 @@ export class AdminRouteService extends Context.Service<AdminRouteService>()("Adm
         locationType: LocationType;
         gcalEventId: string | null;
       }) {
-        const lesson = yield* withAuthContext(values.sessionId, (db) =>
-          db
-            .execute(
-              db
-                .insertInto("app_public.lessons")
-                .values({
-                  student_id: values.studentId,
-                  scheduled_at: values.scheduledAt,
-                  duration_minutes: values.durationMinutes,
-                  location_type: values.locationType,
-                  gcal_event_id: values.gcalEventId,
-                })
-                .returning(lessonColumns),
-            )
-            .pipe(
-              Effect.head,
-              Effect.catchTags({
-                NoSuchElementError: () => new HttpError(500, "Failed to create lesson"),
-              }),
-            ),
-        );
+        const lesson = yield* withAuthContext(
+          values.sessionId,
+          Effect.fnUntraced(function* (db) {
+            const created = yield* db
+              .execute(
+                db
+                  .insertInto("app_public.lessons")
+                  .values({
+                    student_id: values.studentId,
+                    scheduled_at: values.scheduledAt,
+                    duration_minutes: values.durationMinutes,
+                    location_type: values.locationType,
+                    gcal_event_id: values.gcalEventId,
+                  })
+                  .returning(lessonColumns),
+              )
+              .pipe(
+                Effect.head,
+                Effect.catchTags({
+                  NoSuchElementError: () => new HttpError(500, "Failed to create lesson"),
+                }),
+              );
+            // A lesson the admin schedules is billed like a booked one, but holds no deposit.
+            yield* db.execute(singleBookingObligation(db, created.id));
+            return created;
+          }),
+        ).pipe(catchPgErrors);
         const connected = yield* GoogleCalendarService.use((googleCalendarService) =>
           googleCalendarService.isConnected(),
         );
@@ -747,21 +754,27 @@ export class AdminRouteService extends Context.Service<AdminRouteService>()("Adm
       }),
 
       deleteLesson: Effect.fn("deleteLesson")(function* (sessionId: string, id: string) {
-        const lesson = yield* withAuthContext(sessionId, (db) =>
-          db
-            .execute(
-              db
-                .deleteFrom("app_public.lessons")
-                .where("id", "=", id)
-                .returning(["id", "gcal_event_id"]),
-            )
-            .pipe(
-              Effect.head,
-              Effect.catchTags({
-                NoSuchElementError: () => new HttpError(404, "Lesson not found"),
-              }),
-            ),
-        );
+        const lesson = yield* withAuthContext(
+          sessionId,
+          Effect.fnUntraced(function* (db) {
+            // Deleting a lesson keeps its bill line (lesson_id becomes null), so
+            // cancel the open bill while the line still names the lesson.
+            yield* db.execute(settleSingleBookingCancellation(db, id));
+            return yield* db
+              .execute(
+                db
+                  .deleteFrom("app_public.lessons")
+                  .where("id", "=", id)
+                  .returning(["id", "gcal_event_id"]),
+              )
+              .pipe(
+                Effect.head,
+                Effect.catchTags({
+                  NoSuchElementError: () => new HttpError(404, "Lesson not found"),
+                }),
+              );
+          }),
+        ).pipe(catchPgErrors);
         if (lesson.gcal_event_id) {
           const googleCalendarService = yield* GoogleCalendarService;
           yield* googleCalendarService.deleteEvent(lesson.gcal_event_id).pipe(Effect.ignore);
@@ -802,6 +815,7 @@ export class AdminRouteService extends Context.Service<AdminRouteService>()("Adm
                 .where("lesson_id", "=", existing.id)
                 .where("status", "=", "held"),
             );
+            yield* db.execute(settleSingleBookingCancellation(db, existing.id));
             const lesson = yield* db
               .execute(
                 db

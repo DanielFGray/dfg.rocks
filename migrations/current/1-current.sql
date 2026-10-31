@@ -724,20 +724,22 @@ begin
 end;
 $$ language plpgsql volatile security definer set search_path to pg_catalog;
 
-create or replace function app_public.create_single_booking_obligation(p_lesson_id uuid, p_rate_cents integer)
+-- The bill for one single-booking lesson. The price is the student's rate for
+-- the lesson's location; a lesson under any other billing model, or with no
+-- rate, gets no bill here (monthly prepaid lessons are billed per month).
+drop function app_public.create_single_booking_obligation(uuid, integer);
+create function app_public.create_single_booking_obligation(p_lesson_id uuid)
 returns uuid as $$
 declare
   v_student_id uuid;
+  v_location app_public.location_type;
+  v_rate_cents integer;
   v_payer_id uuid;
   v_bill_id uuid;
   v_lesson_date date;
 begin
-  if p_rate_cents <= 0 then
-    raise exception 'Single-booking rate must be positive';
-  end if;
-
-  select student_id, (scheduled_at at time zone 'America/Chicago')::date
-    into v_student_id, v_lesson_date
+  select student_id, location_type, (scheduled_at at time zone 'America/Chicago')::date
+    into v_student_id, v_location, v_lesson_date
     from app_public.lessons
    where id = p_lesson_id
      for update;
@@ -746,10 +748,20 @@ begin
   end if;
 
   if not (
-    v_student_id = app_public.current_user_id()
+    app_public.current_user_role() = 'admin'
+    or v_student_id = app_public.current_user_id()
     or v_student_id in (select app_public.current_user_family_member_ids())
   ) then
     raise insufficient_privilege using message = 'Not authorized to create this booking obligation';
+  end if;
+
+  select sr.rate_cents into v_rate_cents
+    from app_public.student_rates sr
+   where sr.student_id = v_student_id
+     and sr.location_type = v_location
+     and sr.billing_model = 'single_booking';
+  if v_rate_cents is null then
+    return null;
   end if;
 
   select b.id
@@ -763,14 +775,13 @@ begin
   end if;
 
   v_payer_id := app_public.payer_id_for_student(v_student_id);
-
   insert into app_public.bills (
     payer_id, bill_number, status, billing_period_start,
     billing_period_end, due_date, subtotal_cents, discount_cents,
     tax_cents, total_cents
   ) values (
     v_payer_id, app_public.next_bill_number(), 'draft', v_lesson_date, v_lesson_date,
-    v_lesson_date, p_rate_cents, 0, 0, p_rate_cents
+    v_lesson_date, v_rate_cents, 0, 0, v_rate_cents
   ) returning id into v_bill_id;
 
   insert into app_public.bill_line_items (
@@ -778,7 +789,7 @@ begin
     unit_price_cents, amount_cents, lesson_id
   ) values (
     v_bill_id, v_student_id, 'single_booking', 'Single lesson booking',
-    1, p_rate_cents, p_rate_cents, p_lesson_id
+    1, v_rate_cents, v_rate_cents, p_lesson_id
   );
 
   update app_public.bills
@@ -789,8 +800,11 @@ begin
 end;
 $$ language plpgsql volatile security definer set search_path to pg_catalog;
 
-create or replace function app_public.settle_single_booking_cancellation(
-  p_lesson_id uuid, p_deposit_cents integer, p_deposit_captured boolean
+drop function app_public.settle_single_booking_cancellation(uuid, integer, boolean);
+-- Cancels a lesson's open single-booking bill; a captured deposit becomes a
+-- credit for the payer.
+create function app_public.settle_single_booking_cancellation(
+  p_lesson_id uuid, p_captured_deposit_cents integer default 0
 ) returns void as $$
 declare
   v_student_id uuid;
@@ -805,7 +819,8 @@ begin
     raise exception 'Lesson not found' using errcode = 'NTFND';
   end if;
   if not (
-    v_student_id = app_public.current_user_id()
+    app_public.current_user_role() = 'admin'
+    or v_student_id = app_public.current_user_id()
     or v_student_id in (select app_public.current_user_family_member_ids())
   ) then
     raise insufficient_privilege using message = 'Not authorized to settle this booking';
@@ -825,10 +840,10 @@ begin
          cancelled_at = case when status in ('draft', 'issued') then now() else cancelled_at end
    where id = v_bill_id;
 
-  if p_deposit_captured and p_deposit_cents > 0 then
+  if p_captured_deposit_cents > 0 then
     v_reason := 'Captured deposit for cancelled single booking ' || p_lesson_id::text;
     insert into app_public.credits (payer_id, student_id, amount_cents, reason, created_by)
-    select v_payer_id, v_student_id, p_deposit_cents, v_reason, app_public.current_user_id()
+    select v_payer_id, v_student_id, p_captured_deposit_cents, v_reason, app_public.current_user_id()
     where not exists (
       select 1 from app_public.credits
        where payer_id = v_payer_id and reason = v_reason

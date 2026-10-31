@@ -7,6 +7,7 @@ import { Module, Material, UserRole } from "../../shared/schemas.js";
 import { PgRootDB, withAuthContext, type Database } from "../db.js";
 import { catchPgErrors, HttpError } from "../pgErrors.js";
 import { GoogleCalendarService } from "./googleCalendarService.js";
+import { settleSingleBookingCancellation, singleBookingObligation } from "./singleBookingBills.js";
 import { calculateDepositAmount } from "./billingCalculation.js";
 import { LessonPolicyService } from "./lessonPolicyService.js";
 import { resolveAssignedTrackIndex } from "./notationService.js";
@@ -1185,14 +1186,10 @@ export class AuthenticatedRouteService extends Context.Service<AuthenticatedRout
                 );
                 if (row.billing_model === "single_booking") {
                   yield* db.execute(
-                    db.selectNoFrom((eb) =>
-                      eb
-                        .fn<unknown>("app_public.settle_single_booking_cancellation", [
-                          eb.val(row.id),
-                          eb.val(heldDeposit.amount_cents),
-                          eb.val(policy.deposit_outcome === "captured"),
-                        ])
-                        .as("settled"),
+                    settleSingleBookingCancellation(
+                      db,
+                      row.id,
+                      policy.deposit_outcome === "captured" ? heldDeposit.amount_cents : 0,
                     ),
                   );
                 }
@@ -1385,10 +1382,7 @@ export class AuthenticatedRouteService extends Context.Service<AuthenticatedRout
           scheduledAt: Date;
           durationMinutes: number;
           locationType:
-            | "in_person_teacher_travels"
-            | "in_person_student_travels"
-            | "studio"
-            | "online";
+            "in_person_teacher_travels" | "in_person_student_travels" | "studio" | "online";
         }) {
           const slotEnd = new Date(values.scheduledAt.getTime() + values.durationMinutes * 60000);
 
@@ -1493,16 +1487,7 @@ export class AuthenticatedRouteService extends Context.Service<AuthenticatedRout
                     status: "held",
                   }),
                 );
-                yield* db.execute(
-                  db.selectNoFrom((eb) =>
-                    eb
-                      .fn<unknown>("app_public.create_single_booking_obligation", [
-                        eb.val(lesson.id),
-                        eb.val(rate.rate_cents),
-                      ])
-                      .as("bill_id"),
-                  ),
-                );
+                yield* db.execute(singleBookingObligation(db, lesson.id));
               }
 
               return { lesson, rate };

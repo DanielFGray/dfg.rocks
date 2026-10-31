@@ -1069,6 +1069,87 @@ describe("DFG Portal API", () => {
   );
 
   it.effect(
+    "admin-scheduled single-booking lessons are billed, and cancel or delete cancels the bill",
+    Effect.fnUntraced(function* () {
+      const created = yield* Effect.tryPromise(() =>
+        testDb.query(
+          `select id from app_private.really_create_user($1::citext, $2, null, true, $3::citext, $4)`,
+          ["admin_booked", "Admin Booked", "admin_booked@test.com", "password123"],
+        ),
+      );
+      const bookedStudentId: string = created.rows[0].id;
+      for (const rate of [
+        { location_type: "studio", rate_cents: 9000, billing_model: "single_booking" },
+        { location_type: "online", rate_cents: 8000, billing_model: "monthly_prepaid" },
+      ]) {
+        const response = yield* reqEffect("POST", "/api/admin/student-rates", {
+          cookie: adminCookie,
+          body: { student_id: bookedStudentId, lesson_duration_minutes: 60, ...rate },
+        });
+        expect(response.status).toBe(200);
+      }
+
+      const schedule = Effect.fnUntraced(function* (scheduledAt: string, locationType: string) {
+        const response = yield* reqEffect("POST", "/api/admin/lessons", {
+          cookie: adminCookie,
+          body: {
+            student_id: bookedStudentId,
+            scheduled_at: scheduledAt,
+            duration_minutes: 60,
+            location_type: locationType,
+          },
+        });
+        expect(response.status).toBe(200);
+        const lesson: { id: string } = yield* resJson(response);
+        return lesson.id;
+      });
+      const billFor = (lessonId: string) =>
+        Effect.tryPromise(() =>
+          testDb.query(
+            `select b.payer_id, b.status, b.total_cents,
+                    (select count(*)::int from app_public.lesson_deposits d where d.lesson_id = $1) as deposits
+               from app_public.bill_line_items bli
+               join app_public.bills b on b.id = bli.bill_id
+              where bli.lesson_id = $1`,
+            [lessonId],
+          ),
+        ).pipe(Effect.map((result) => result.rows));
+
+      const cancelled = yield* schedule("2027-02-02T22:00:00.000Z", "studio");
+      const deleted = yield* schedule("2027-02-09T22:00:00.000Z", "studio");
+      const prepaid = yield* schedule("2027-02-16T22:00:00.000Z", "online");
+
+      expect(yield* billFor(cancelled)).toEqual([
+        { payer_id: bookedStudentId, status: "issued", total_cents: 9000, deposits: 0 },
+      ]);
+      expect(yield* billFor(prepaid)).toEqual([]);
+
+      const cancel = yield* reqEffect("POST", `/api/admin/lessons/${cancelled}/cancel`, {
+        cookie: adminCookie,
+        body: {},
+      });
+      expect(cancel.status).toBe(200);
+      expect((yield* billFor(cancelled))[0].status).toBe("cancelled");
+
+      const deletedBill = yield* Effect.tryPromise(() =>
+        testDb.query(`select bill_id from app_public.bill_line_items where lesson_id = $1`, [
+          deleted,
+        ]),
+      );
+      const remove = yield* reqEffect("DELETE", `/api/admin/lessons/${deleted}`, {
+        cookie: adminCookie,
+      });
+      expect(remove.status).toBe(200);
+      const afterDelete = yield* Effect.tryPromise(() =>
+        testDb.query(`select status from app_public.bills where id = $1`, [
+          deletedBill.rows[0].bill_id,
+        ]),
+      );
+      expect(afterDelete.rows).toEqual([{ status: "cancelled" }]);
+    }),
+  );
+
+  it.effect(
     "effective-student: parent acts as selected child for writes and reads",
     Effect.fnUntraced(function* () {
       const parentResult = yield* Effect.tryPromise(() =>
