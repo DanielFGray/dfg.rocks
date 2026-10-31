@@ -12,24 +12,44 @@ export const BooleanFromString = S.Literals(["true", "false"]).pipe(
   ),
 );
 
-export type JsonValue =
-  | string
-  | number
-  | boolean
-  | null
-  | ReadonlyArray<JsonValue>
-  | { readonly [x: string]: JsonValue };
+/** Attribute values the module editor's nodes and marks use (heading level, link href, material id). */
+const RichTextAttrs = S.Record(S.String, S.NullOr(S.Union([S.String, S.Number, S.Boolean])));
 
-export const JsonValue: S.Codec<JsonValue> = S.suspend(() =>
-  S.Union([
-    S.String,
-    S.Number,
-    S.Boolean,
-    S.Null,
-    S.Array(JsonValue),
-    S.Record(S.String, JsonValue),
-  ]),
-);
+export const RichTextMark = S.Struct({
+  type: S.String,
+  attrs: S.optional(RichTextAttrs),
+});
+
+export type RichTextMark = S.Schema.Type<typeof RichTextMark>;
+
+/**
+ * One node of a TipTap (ProseMirror) document, as `editor.getJSON()` produces it.
+ * Arrays are mutable because TipTap's `JSONContent`, which the editor accepts,
+ * declares them so.
+ */
+export interface RichTextNode {
+  readonly type: string;
+  readonly attrs?: S.Schema.Type<typeof RichTextAttrs> | undefined;
+  readonly content?: Array<RichTextNode> | undefined;
+  readonly marks?: Array<RichTextMark> | undefined;
+  readonly text?: string | undefined;
+}
+
+export const RichTextNode: S.Codec<RichTextNode> = S.Struct({
+  type: S.String,
+  attrs: S.optional(RichTextAttrs),
+  content: S.optional(S.mutable(S.Array(S.suspend(() => RichTextNode)))),
+  marks: S.optional(S.mutable(S.Array(RichTextMark))),
+  text: S.optional(S.String),
+});
+
+/** Module content: the root node of a module editor document. */
+export const RichTextDocument = S.Struct({
+  type: S.Literal("doc"),
+  content: S.optional(S.mutable(S.Array(RichTextNode))),
+});
+
+export type RichTextDocument = S.Schema.Type<typeof RichTextDocument>;
 
 export const UserRole = S.Union([
   S.Literal("admin"),
@@ -68,7 +88,7 @@ export const Module = S.Struct({
   id: S.String,
   course_id: S.String,
   title: S.String,
-  content: S.NullishOr(JsonValue),
+  content: S.NullishOr(RichTextDocument),
   sort_order: S.Number,
 });
 
@@ -113,7 +133,7 @@ export const ModuleWithMaterials = S.Struct({
   id: S.String,
   course_id: S.String,
   title: S.String,
-  content: S.NullishOr(JsonValue),
+  content: S.NullishOr(RichTextDocument),
   sort_order: S.Number,
   materials: S.Array(Material),
 });
@@ -423,21 +443,25 @@ export const TimeSlot = S.Struct({
 
 export type TimeSlot = S.Schema.Type<typeof TimeSlot>;
 
+const ClockTime = S.String.pipe(S.check(S.isPattern(/^([01]\d|2[0-3]):[0-5]\d$/)));
+
+/** Opening hours for one weekday, as 24-hour HH:MM times. */
 export const WorkingHoursDay = S.Struct({
-  start: S.String,
-  end: S.String,
-});
+  start: ClockTime,
+  end: ClockTime,
+}).pipe(S.check(S.makeFilter((day) => day.start < day.end)));
 
 export type WorkingHoursDay = S.Schema.Type<typeof WorkingHoursDay>;
 
+/** Hours per weekday, 0 = Sunday; null means closed. */
 export const WorkingHours = S.Struct({
-  0: S.NullishOr(WorkingHoursDay),
-  1: S.NullishOr(WorkingHoursDay),
-  2: S.NullishOr(WorkingHoursDay),
-  3: S.NullishOr(WorkingHoursDay),
-  4: S.NullishOr(WorkingHoursDay),
-  5: S.NullishOr(WorkingHoursDay),
-  6: S.NullishOr(WorkingHoursDay),
+  0: S.NullOr(WorkingHoursDay),
+  1: S.NullOr(WorkingHoursDay),
+  2: S.NullOr(WorkingHoursDay),
+  3: S.NullOr(WorkingHoursDay),
+  4: S.NullOr(WorkingHoursDay),
+  5: S.NullOr(WorkingHoursDay),
+  6: S.NullOr(WorkingHoursDay),
 });
 
 export type WorkingHours = S.Schema.Type<typeof WorkingHours>;

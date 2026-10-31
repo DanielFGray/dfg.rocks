@@ -9,10 +9,9 @@ import { TestimonialEditor } from "../../components/testimonials/TestimonialEdit
 import { serverRuntime } from "../../../server/runtime.js";
 import { AdminRouteService } from "../../../server/services/adminRouteService.js";
 import { AuthenticatedRouteService } from "../../../server/services/authenticatedRouteService.js";
+import { GoogleCalendarService } from "../../../server/services/googleCalendarService.js";
 import { TestimonialReminderService } from "../../../server/services/testimonialReminderService.js";
-import type { JsonValue } from "../../../shared/schemas.js";
 import { serializeUserEmail, serializeTestimonial } from "../../../shared/responseMappers.js";
-import { decodeWorkingHoursValue, defaultWorkingHours } from "../../../shared/workingHours.js";
 import { toServerFunctionPayload } from "../../lib/serverFunctionPayload.js";
 import { requireSession } from "../../lib/sessionGuards.server.js";
 
@@ -47,7 +46,9 @@ const getSettingsPageData = createServerFn({ method: "GET" }).handler(() =>
         [
           emailsEffect,
           AdminRouteService.use((adminRouteService) => adminRouteService.getGoogleCalendarStatus()),
-          AdminRouteService.use((adminRouteService) => adminRouteService.getWorkingHours()),
+          GoogleCalendarService.use((googleCalendarService) =>
+            googleCalendarService.getWorkingHours(),
+          ),
           TestimonialReminderService.use((testimonialReminderService) =>
             testimonialReminderService.getIntervalDays(),
           ),
@@ -64,10 +65,7 @@ const getSettingsPageData = createServerFn({ method: "GET" }).handler(() =>
           connected: gcalStatus.connected,
           calendar_id: typeof gcalStatus.calendar_id === "string" ? gcalStatus.calendar_id : null,
         },
-        workingHours: decodeWorkingHoursValue(
-          workingHours as JsonValue | undefined,
-          defaultWorkingHours,
-        ),
+        workingHours,
         testimonialReminderIntervalDays: intervalDays,
         adminTestimonials: adminTestimonials.map(serializeTestimonial),
       });

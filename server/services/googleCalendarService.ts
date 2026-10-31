@@ -14,7 +14,7 @@ import { PgRootDB } from "../db.js";
 import { env } from "../assertEnv.js";
 import { HttpError } from "../pgErrors.js";
 import { WorkingHours } from "../../shared/schemas.js";
-import { decodeWorkingHoursValue, defaultWorkingHours } from "../../shared/workingHours.js";
+import { defaultWorkingHours } from "../../shared/workingHours.js";
 
 // Types
 interface GcalEventTime {
@@ -139,6 +139,14 @@ export class GoogleCalendarService extends Context.Service<GoogleCalendarService
             .values({ key, value: JSON.stringify(value) })
             .onConflict((oc) => oc.column("key").doUpdateSet({ value: JSON.stringify(value) })),
         );
+      });
+
+      // The stored setting is decoded on every read, so a malformed value fails as a SchemaError.
+      const readWorkingHours = Effect.fnUntraced(function* () {
+        const stored = yield* getSettingEffect("working_hours");
+        return stored === null
+          ? defaultWorkingHours
+          : yield* S.decodeUnknownEffect(WorkingHours)(stored);
       });
 
       const deleteSettingEffect = Effect.fnUntraced(function* (key: string) {
@@ -457,8 +465,7 @@ export class GoogleCalendarService extends Context.Service<GoogleCalendarService
           days: number;
           duration: number;
         }) {
-          const wh = yield* getSettingEffect("working_hours");
-          const workingHours = decodeWorkingHoursValue(wh, defaultWorkingHours);
+          const workingHours = yield* readWorkingHours();
           const startDate = new Date(`${params.date}T00:00:00`);
           const endDate = new Date(startDate);
           endDate.setDate(endDate.getDate() + params.days);
@@ -472,10 +479,7 @@ export class GoogleCalendarService extends Context.Service<GoogleCalendarService
           );
         }),
 
-        getWorkingHours: Effect.fnUntraced(function* () {
-          const v = yield* getSettingEffect("working_hours");
-          return decodeWorkingHoursValue(v, defaultWorkingHours);
-        }),
+        getWorkingHours: readWorkingHours,
 
         setWorkingHours: Effect.fnUntraced(function* (hours: WorkingHours) {
           yield* setSettingEffect("working_hours", hours);

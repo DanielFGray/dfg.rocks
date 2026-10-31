@@ -3,13 +3,13 @@ import StarterKit from "@tiptap/starter-kit";
 import Link from "@tiptap/extension-link";
 import { MaterialEmbedNode } from "./MaterialEmbedNode.js";
 import { MaterialsContext } from "./MaterialsContext.js";
-import type { Material } from "../../../shared/schemas.js";
+import type { Material, RichTextDocument } from "../../../shared/schemas.js";
 
 export function ModuleContent({
   content,
   materials,
 }: {
-  content: unknown;
+  content: RichTextDocument | null | undefined;
   materials: readonly Material[];
 }) {
   const materialMap = new Map(materials.map((m) => [m.id, m]));

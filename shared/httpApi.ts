@@ -40,7 +40,7 @@ import {
   LessonNote,
   LessonStatus,
   LocationType,
-  JsonValue,
+  RichTextDocument,
   Material,
   Message,
   MonthlyPayment,
@@ -277,7 +277,7 @@ const CreateModulePayload = S.Struct({
 
 const UpdateModulePayload = S.Struct({
   title: S.optional(S.String),
-  content: S.optional(JsonValue),
+  content: S.optional(S.NullOr(RichTextDocument)),
   sort_order: S.optional(S.Number),
 });
 

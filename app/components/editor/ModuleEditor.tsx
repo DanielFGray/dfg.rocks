@@ -1,4 +1,6 @@
 import { useState } from "react";
+import * as Result from "effect/Result";
+import * as S from "effect/Schema";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Link from "@tiptap/extension-link";
@@ -6,16 +8,19 @@ import { MaterialEmbedNode } from "./MaterialEmbedNode.js";
 import { MaterialsContext } from "./MaterialsContext.js";
 import { EditorToolbar } from "./EditorToolbar.js";
 import { AttachMaterialModal } from "../courses/AttachMaterialModal.js";
-import type { Material } from "../../../shared/schemas.js";
-import { isTipTapNode } from "../../../shared/tiptap.js";
+import { RichTextDocument, type Material } from "../../../shared/schemas.js";
+import { extractMaterialIds } from "../../../shared/content.js";
+
+const decodeDocument = S.decodeUnknownResult(RichTextDocument);
 
 export function ModuleEditor({
   content,
   onChange,
   allMaterials,
 }: {
-  content: unknown;
-  onChange: (json: unknown) => void;
+  content: RichTextDocument | null;
+  /** Receives each edit, decoded as module content; a failure means the edit cannot be saved. */
+  onChange: (doc: Result.Result<RichTextDocument, S.SchemaError>) => void;
   allMaterials: Material[];
 }) {
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -33,24 +38,14 @@ export function ModuleEditor({
     extensions: [StarterKit, Link.configure({ openOnClick: false }), MaterialEmbedNode],
     content: content ?? undefined,
     onUpdate: ({ editor }) => {
-      onChange(editor.getJSON());
+      onChange(decodeDocument(editor.getJSON()));
     },
   });
 
   if (!editor) return null;
 
-  // Compute which materials are already embedded
-  const embeddedIds = new Set<string>();
-  editor.getJSON().content?.forEach(function walk(node: unknown) {
-    if (!isTipTapNode(node)) return;
-
-    if (node.type === "materialEmbed" && node.attrs && typeof node.attrs.materialId === "string") {
-      embeddedIds.add(node.attrs.materialId);
-    }
-    if (Array.isArray(node.content)) {
-      node.content.forEach(walk);
-    }
-  });
+  const current = decodeDocument(editor.getJSON());
+  const embeddedIds = new Set(Result.isSuccess(current) ? extractMaterialIds(current.success) : []);
   const availableMaterials = knownMaterials.filter((m) => !embeddedIds.has(m.id));
 
   const handleAttach = (materialId: string) => {

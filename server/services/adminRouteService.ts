@@ -2,8 +2,13 @@ import { Effect, Option, Context, Layer } from "effect";
 import * as S from "effect/Schema";
 import { sql } from "kysely";
 import { extractMaterialIds } from "../../shared/content.js";
-import { EnrolledCourse, AssignedMaterial } from "../../shared/schemas.js";
-import type { BillingModel, LessonStatus, LocationType } from "../../shared/schemas.js";
+import { EnrolledCourse, AssignedMaterial, Module } from "../../shared/schemas.js";
+import type {
+  BillingModel,
+  LessonStatus,
+  LocationType,
+  RichTextDocument,
+} from "../../shared/schemas.js";
 import { PgRootDB, withAuthContext } from "../db.js";
 import { catchPgErrors, HttpError } from "../pgErrors.js";
 import { GoogleCalendarService } from "./googleCalendarService.js";
@@ -298,6 +303,7 @@ export class AdminRouteService extends Context.Service<AdminRouteService>()("Adm
               Effect.catchTags({
                 NoSuchElementError: () => new HttpError(404, "Module not found"),
               }),
+              Effect.flatMap(S.decodeUnknownEffect(Module)),
             ),
         );
       }),
@@ -327,6 +333,7 @@ export class AdminRouteService extends Context.Service<AdminRouteService>()("Adm
               Effect.catchTags({
                 NoSuchElementError: () => new HttpError(500, "Failed to create module"),
               }),
+              Effect.flatMap(S.decodeUnknownEffect(Module)),
             ),
         );
       }),
@@ -337,7 +344,7 @@ export class AdminRouteService extends Context.Service<AdminRouteService>()("Adm
         updates: {
           title?: string;
           sort_order?: number;
-          content?: unknown;
+          content?: RichTextDocument | null;
         },
       ) {
         const moduleUpdates: Record<string, unknown> = {};
@@ -366,9 +373,11 @@ export class AdminRouteService extends Context.Service<AdminRouteService>()("Adm
                 Effect.catchTags({
                   NoSuchElementError: () => new HttpError(404, "Module not found"),
                 }),
+                Effect.flatMap(S.decodeUnknownEffect(Module)),
               );
             if (updates.content !== undefined) {
-              const materialIds = extractMaterialIds(updates.content);
+              const materialIds =
+                updates.content === null ? [] : extractMaterialIds(updates.content);
               if (materialIds.length > 0) {
                 yield* db.execute(
                   db
@@ -1179,40 +1188,6 @@ export class AdminRouteService extends Context.Service<AdminRouteService>()("Adm
               "gcal_calendar_id",
               "gcal_sync_token",
             ]),
-        );
-      }),
-
-      getWorkingHours: Effect.fn("getWorkingHours")(function* () {
-        return yield* rootDb
-          .execute(
-            rootDb
-              .selectFrom("app_private.admin_settings")
-              .select("value")
-              .where("key", "=", "working_hours"),
-          )
-          .pipe(
-            Effect.head,
-            Effect.option,
-            Effect.map(
-              Option.match({
-                onNone: () => null,
-                onSome: (setting) => setting?.value ?? null,
-              }),
-            ),
-          );
-      }),
-
-      saveWorkingHours: Effect.fn("saveWorkingHours")(function* (workingHours: unknown) {
-        yield* rootDb.execute(
-          rootDb
-            .insertInto("app_private.admin_settings")
-            .values({
-              key: "working_hours",
-              value: JSON.stringify(workingHours),
-            })
-            .onConflict((oc) =>
-              oc.column("key").doUpdateSet({ value: JSON.stringify(workingHours) }),
-            ),
         );
       }),
 

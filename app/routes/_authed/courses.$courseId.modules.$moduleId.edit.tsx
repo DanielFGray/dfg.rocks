@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Effect } from "effect";
+import * as Result from "effect/Result";
 import * as S from "effect/Schema";
 import { createFileRoute, Link, useNavigate, useRouter } from "@tanstack/react-router";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -11,9 +12,9 @@ import { serverRuntime } from "../../../server/runtime.js";
 import { AuthenticatedRouteService } from "../../../server/services/authenticatedRouteService.js";
 import type {
   CourseDetail,
-  JsonValue,
   Material,
   ModuleWithMaterials,
+  RichTextDocument,
 } from "../../../shared/schemas.js";
 import {
   serializeCourseDetail,
@@ -88,15 +89,17 @@ function ModuleEditPage() {
   }
 
   const [title, setTitle] = useState(mod.title);
-  const [content, setContent] = useState<JsonValue | null>(mod.content ?? null);
+  const [content, setContent] = useState<Result.Result<RichTextDocument | null, S.SchemaError>>(
+    Result.succeed(mod.content ?? null),
+  );
   const [dirty, setDirty] = useState(false);
 
   const saveMutation = useMutation({
-    mutationFn: () =>
+    mutationFn: (doc: RichTextDocument | null) =>
       Effect.runPromise(
         api.admin.updateModule({
           params: { id: moduleId },
-          payload: { title, content: content ?? null },
+          payload: { title, content: doc },
         }),
       ),
     onSuccess: () => {
@@ -106,8 +109,8 @@ function ModuleEditPage() {
     },
   });
 
-  const handleContentChange = (json: unknown) => {
-    setContent(json as JsonValue);
+  const handleContentChange = (doc: Result.Result<RichTextDocument, S.SchemaError>) => {
+    setContent(doc);
     setDirty(true);
   };
 
@@ -140,7 +143,7 @@ function ModuleEditPage() {
             Content
           </label>
           <ModuleEditor
-            content={content}
+            content={mod.content ?? null}
             onChange={handleContentChange}
             allMaterials={[...allMaterials]}
           />
@@ -152,12 +155,23 @@ function ModuleEditPage() {
           </Link>
           <Button
             variant="primary"
-            disabled={!dirty || saveMutation.isPending}
-            onClick={() => saveMutation.mutate()}
+            disabled={!dirty || saveMutation.isPending || Result.isFailure(content)}
+            onClick={() => {
+              if (Result.isSuccess(content)) saveMutation.mutate(content.success);
+            }}
           >
             {saveMutation.isPending ? "Saving..." : "Save"}
           </Button>
         </div>
+
+        {Result.isFailure(content) ? (
+          <div
+            role="alert"
+            className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-600 dark:text-red-400"
+          >
+            This content cannot be saved: {content.failure.message}
+          </div>
+        ) : null}
 
         {saveMutation.isError ? (
           <div

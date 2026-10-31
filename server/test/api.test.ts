@@ -661,6 +661,11 @@ describe("DFG Portal API", () => {
       });
       expect(updateMod.status).toBe(200);
       expect((yield* resJson(updateMod)).title).toBe("Week 1: Fundamentals");
+      const notADocument = yield* reqEffect("PATCH", `/api/admin/modules/${moduleId}`, {
+        body: { content: { type: "paragraph", content: "text" } },
+        cookie: adminCookie,
+      });
+      expect(notADocument.status).toBe(400);
 
       const globalMat = (yield* Effect.tryPromise(() =>
         testDb.query(
@@ -774,6 +779,29 @@ describe("DFG Portal API", () => {
       expect(students.status).toBe(200);
       const studentList = (yield* resJson(students)) as StudentSummary[];
       expect(studentList.some((student) => student.username === "student1")).toBe(true);
+    }),
+  );
+
+  it.effect(
+    "admin: working hours reject invalid times and read back what was saved",
+    Effect.fnUntraced(function* () {
+      const path = "/api/admin/working-hours";
+      const weekday = { start: "09:00", end: "17:00" };
+      const hours = { 0: null, 1: weekday, 2: weekday, 3: null, 4: weekday, 5: weekday, 6: null };
+      for (const day of [
+        { start: "17:00", end: "09:00" },
+        { start: "9am", end: "17:00" },
+      ]) {
+        const rejected = yield* reqEffect("POST", path, {
+          cookie: adminCookie,
+          body: { ...hours, 3: day },
+        });
+        expect(rejected.status).toBe(400);
+      }
+      expect((yield* reqEffect("POST", path, { cookie: adminCookie, body: hours })).status).toBe(
+        200,
+      );
+      expect(yield* resJson(yield* reqEffect("GET", path, { cookie: adminCookie }))).toEqual(hours);
     }),
   );
 

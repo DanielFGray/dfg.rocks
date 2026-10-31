@@ -38,10 +38,8 @@ import {
   type TaxRate as TaxRateResponse,
   type LocationType,
   type Material as MaterialResponse,
-  type Module as ModuleResponse,
 } from "../../shared/schemas.js";
 import { serializeLesson, serializeLessonNote } from "../../shared/responseMappers.js";
-import { decodeWorkingHoursValue, defaultWorkingHours } from "../../shared/workingHours.js";
 import { params, csrfCheck, type RawRequest } from "./raw.js";
 import type { Selectable } from "kysely";
 import type {
@@ -477,37 +475,21 @@ export function makeAdminLayer() {
         "createModule",
         Effect.fnUntraced(function* ({ request, params, payload }) {
           const auth = yield* requireAdminSession(request);
-          return (yield* AdminRouteService.use((adminRouteService) =>
+          return yield* AdminRouteService.use((adminRouteService) =>
             adminRouteService.createModule(auth.session.id, params.id, {
               title: payload.title,
               sort_order: payload.sort_order ?? 0,
             }),
-          )) as unknown as ModuleResponse;
+          );
         }, adaptAdminErrors),
       )
       .handle(
         "updateModule",
         Effect.fnUntraced(function* ({ request, params, payload }) {
           const auth = yield* requireAdminSession(request);
-          const updates: Record<string, unknown> = {};
-          const title = payload.title;
-          const sortOrder = payload.sort_order;
-          if (title !== undefined) {
-            updates.title = title;
-          }
-          if (payload.content !== undefined) {
-            updates.content = payload.content;
-          }
-          if (sortOrder !== undefined) {
-            updates.sort_order = sortOrder;
-          }
-          const mod = yield* AdminRouteService.use((adminRouteService) =>
-            adminRouteService.updateModule(auth.session.id, params.id, updates),
+          return yield* AdminRouteService.use((adminRouteService) =>
+            adminRouteService.updateModule(auth.session.id, params.id, payload),
           );
-          if (!mod) {
-            return yield* new HttpError(404, "Module not found");
-          }
-          return mod as unknown as ModuleResponse;
         }, adaptAdminErrors),
       )
       .handle(
@@ -970,11 +952,8 @@ export function makeAdminLayer() {
         "workingHours",
         Effect.fnUntraced(function* (context) {
           yield* requireAdminSession(context.request);
-          return decodeWorkingHoursValue(
-            yield* AdminRouteService.use((adminRouteService) =>
-              adminRouteService.getWorkingHours(),
-            ),
-            defaultWorkingHours,
+          return yield* GoogleCalendarService.use((googleCalendarService) =>
+            googleCalendarService.getWorkingHours(),
           );
         }, adaptAdminErrors),
       )
@@ -1000,8 +979,8 @@ export function makeAdminLayer() {
         "saveWorkingHours",
         Effect.fnUntraced(function* ({ request, payload }) {
           yield* requireAdminSession(request);
-          yield* AdminRouteService.use((adminRouteService) =>
-            adminRouteService.saveWorkingHours(payload),
+          yield* GoogleCalendarService.use((googleCalendarService) =>
+            googleCalendarService.setWorkingHours(payload),
           );
           return { success: true as const };
         }, adaptAdminErrors),
