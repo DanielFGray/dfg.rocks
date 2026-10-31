@@ -3,6 +3,7 @@ import { sql } from "kysely";
 import { type Database, withAuthContext } from "../db.js";
 import { catchPgErrors, HttpError } from "../pgErrors.js";
 import { allocatePayment } from "./billingCalculation.js";
+import { isFirstOfMonth } from "./recurringScheduleService.js";
 
 export interface CreateBillInput {
   payerId: string;
@@ -357,6 +358,55 @@ export class BillingLedgerService extends Context.Service<BillingLedgerService>(
           return bills;
         }),
 
+        // Single-booking bills for lessons in the month, newest lesson last. Cancelled
+        // and voided bills are left out: nobody owes them.
+        listLessonBills: Effect.fn("listLessonBills")(function* (
+          sessionId: string,
+          billingMonth: string,
+        ) {
+          if (!isFirstOfMonth(billingMonth)) {
+            return yield* new HttpError(400, "month must be the first day of a month (YYYY-MM-01)");
+          }
+          const rows = yield* withAuthContext(sessionId, (db: Database) =>
+            db.execute(
+              db
+                .selectFrom("app_public.bills as b")
+                .innerJoin("app_public.bill_line_items as bli", "bli.bill_id", "b.id")
+                .innerJoin("app_public.lessons as l", "l.id", "bli.lesson_id")
+                .innerJoin("app_public.users as s", "s.id", "l.student_id")
+                .innerJoin("app_public.users as p", "p.id", "b.payer_id")
+                .select([
+                  "b.id as bill_id",
+                  "b.bill_number",
+                  "b.status",
+                  "b.total_cents",
+                  "b.payer_id",
+                  sql<string>`coalesce(p.name, p.username::text)`.as("payer_name"),
+                  "l.id as lesson_id",
+                  "l.scheduled_at",
+                  "s.id as student_id",
+                  sql<string>`coalesce(s.name, s.username::text)`.as("student_name"),
+                  ...billBalanceColumns,
+                ])
+                .where("b.status", "in", ["issued", "paid"])
+                .where("b.billing_period_start", ">=", sql<Date>`${billingMonth}::date`)
+                .where(
+                  "b.billing_period_start",
+                  "<",
+                  sql<Date>`(${billingMonth}::date + interval '1 month')::date`,
+                )
+                .orderBy("l.scheduled_at", "asc"),
+            ),
+          );
+          return rows.map(({ adjustments, credits, payments, ...row }) => ({
+            ...row,
+            outstanding_cents: Math.max(
+              0,
+              row.total_cents + Number(adjustments) - Number(credits) - Number(payments),
+            ),
+          }));
+        }),
+
         voidBill: Effect.fn("voidBill")(function* (sessionId: string, input: VoidBillInput) {
           const result = yield* withAuthContext(
             sessionId,
@@ -471,15 +521,7 @@ export class BillingLedgerService extends Context.Service<BillingLedgerService>(
                     "b.total_cents",
                     "b.due_date",
                     "b.status",
-                    sql<number>`coalesce((select sum(amount_cents) from app_public.bill_adjustments where bill_id = b.id), 0)`.as(
-                      "adjustments",
-                    ),
-                    sql<number>`coalesce((select sum(amount_cents) from app_public.credit_applications where bill_id = b.id), 0)`.as(
-                      "credits",
-                    ),
-                    sql<number>`coalesce((select sum(amount_cents) from app_public.payment_allocations where bill_id = b.id), 0)`.as(
-                      "payments",
-                    ),
+                    ...billBalanceColumns,
                   ])
                   .where("b.payer_id", "=", input.payerId)
                   .where("b.status", "in", ["issued", "paid"])
@@ -498,20 +540,7 @@ export class BillingLedgerService extends Context.Service<BillingLedgerService>(
                   .execute(
                     db
                       .selectFrom("app_public.bills as b")
-                      .select([
-                        "b.payer_id",
-                        "b.status",
-                        "b.total_cents",
-                        sql<number>`coalesce((select sum(amount_cents) from app_public.bill_adjustments where bill_id = b.id), 0)`.as(
-                          "adjustments",
-                        ),
-                        sql<number>`coalesce((select sum(amount_cents) from app_public.credit_applications where bill_id = b.id), 0)`.as(
-                          "credits",
-                        ),
-                        sql<number>`coalesce((select sum(amount_cents) from app_public.payment_allocations where bill_id = b.id), 0)`.as(
-                          "payments",
-                        ),
-                      ])
+                      .select(["b.payer_id", "b.status", "b.total_cents", ...billBalanceColumns])
                       .where("id", "=", billId),
                   )
                   .pipe(Effect.head, Effect.option);
@@ -630,19 +659,7 @@ export class BillingLedgerService extends Context.Service<BillingLedgerService>(
                   .execute(
                     db
                       .selectFrom("app_public.bills as b")
-                      .select([
-                        "b.total_cents",
-                        "b.status",
-                        sql<number>`coalesce((select sum(amount_cents) from app_public.bill_adjustments where bill_id = b.id), 0)`.as(
-                          "adjustments",
-                        ),
-                        sql<number>`coalesce((select sum(amount_cents) from app_public.credit_applications where bill_id = b.id), 0)`.as(
-                          "credits",
-                        ),
-                        sql<number>`coalesce((select sum(amount_cents) from app_public.payment_allocations where bill_id = b.id), 0)`.as(
-                          "payments",
-                        ),
-                      ])
+                      .select(["b.total_cents", "b.status", ...billBalanceColumns])
                       .where("b.id", "=", billId),
                   )
                   .pipe(Effect.head);
@@ -1807,3 +1824,19 @@ export function getPayer(db: Database, payerId: string) {
       }),
     );
 }
+
+/**
+ * The sums that move a bill's balance, for a query that aliases bills as `b`.
+ * Outstanding = total_cents + adjustments - credits - payments.
+ */
+const billBalanceColumns = [
+  sql<number>`coalesce((select sum(amount_cents) from app_public.bill_adjustments where bill_id = b.id), 0)`.as(
+    "adjustments",
+  ),
+  sql<number>`coalesce((select sum(amount_cents) from app_public.credit_applications where bill_id = b.id), 0)`.as(
+    "credits",
+  ),
+  sql<number>`coalesce((select sum(amount_cents) from app_public.payment_allocations where bill_id = b.id), 0)`.as(
+    "payments",
+  ),
+];

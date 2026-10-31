@@ -1085,6 +1085,19 @@ export function makeAdminLayer() {
         }, adaptAdminErrors),
       )
       .handle(
+        "lessonBills",
+        Effect.fnUntraced(function* ({ request, query }) {
+          const auth = yield* requireAdminSession(request);
+          const bills = yield* BillingLedgerService.use((billingLedgerService) =>
+            billingLedgerService.listLessonBills(auth.session.id, query.month),
+          );
+          return bills.map((bill) => ({
+            ...bill,
+            scheduled_at: bill.scheduled_at.toISOString(),
+          }));
+        }, adaptAdminErrors),
+      )
+      .handle(
         "billingPayerPayments",
         Effect.fnUntraced(function* ({ request, params }) {
           const auth = yield* requireAdminSession(request);

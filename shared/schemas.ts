@@ -552,6 +552,23 @@ export const Bill = S.Struct({
 
 export type Bill = S.Schema.Type<typeof Bill>;
 
+/** A single-booking bill with the lesson it charges for and what is still owed on it. */
+export const LessonBill = S.Struct({
+  bill_id: S.String,
+  bill_number: S.Number,
+  status: BillStatus,
+  lesson_id: S.String,
+  scheduled_at: S.String,
+  student_id: S.String,
+  student_name: S.String,
+  payer_id: S.String,
+  payer_name: S.String,
+  total_cents: S.Number,
+  outstanding_cents: S.Number,
+});
+
+export type LessonBill = S.Schema.Type<typeof LessonBill>;
+
 export const Payment = S.Struct({
   id: S.String,
   payer_id: S.String,

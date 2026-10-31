@@ -968,3 +968,11 @@ begin
   return NEW;
 end;
 $$ language plpgsql volatile security definer set search_path to pg_catalog;
+
+-- The audit log is append-only and must outlive the users it names. A foreign
+-- key with "on delete set null" updates audit rows, which the append-only
+-- trigger refuses, so no user with financial history could be deleted.
+alter table app_public.financial_audit_events
+  drop constraint financial_audit_events_actor_id_fkey;
+comment on column app_public.financial_audit_events.actor_id is
+  'The user who made the change. Not a foreign key: the id stays after that user is deleted.';

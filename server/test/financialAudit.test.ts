@@ -248,6 +248,27 @@ describe("Financial audit", () => {
     }
   });
 
+  // The audit log is append-only, so deleting an actor must not touch their rows.
+  it("deleting a user keeps their audit rows unchanged", async () => {
+    const actor = await query(
+      `select id from app_private.really_create_user('audit_gone'::citext, 'Gone', null, true, 'audit-gone@test.com'::citext, 'audit_gone123')`,
+    );
+    const actorId: string = actor.rows[0].id;
+    const event = await query(
+      `insert into app_public.financial_audit_events (actor_id, action, table_name, record_id)
+       values ($1, 'insert', 'bills', gen_random_uuid()) returning id`,
+      [actorId],
+    );
+
+    await query(`delete from app_public.users where id = $1`, [actorId]);
+
+    const after = await query(
+      `select actor_id from app_public.financial_audit_events where id = $1`,
+      [event.rows[0].id],
+    );
+    expect(after.rows).toEqual([{ actor_id: actorId }]);
+  });
+
   // ===================================================================
   // Document number safety — never reused after rollback
   // ===================================================================

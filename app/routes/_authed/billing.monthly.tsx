@@ -9,10 +9,11 @@ import { Button } from "../../components/ui/Button.js";
 import { Input } from "../../components/ui/Input.js";
 import { EmptyState } from "../../components/ui/EmptyState.js";
 import { MonthlyPaymentModal } from "../../components/billing/MonthlyPaymentModal.js";
+import { LessonBillsSection } from "../../components/billing/LessonBillsSection.js";
 import { dateLabel, formatCents } from "../../components/billing/helpers.js";
 
 export const Route = createFileRoute("/_authed/billing/monthly")({
-  head: () => ({ meta: [{ title: "Monthly Payments | DFG Portal" }] }),
+  head: () => ({ meta: [{ title: "Payments | DFG Portal" }] }),
   component: MonthlyPaymentsPage,
 });
 
@@ -34,11 +35,9 @@ function MonthlyPaymentsPage() {
     <Main>
       <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-primary dark:text-primary-dark">
-            Monthly payments
-          </h1>
+          <h1 className="text-2xl font-bold text-primary dark:text-primary-dark">Payments</h1>
           <p className="mt-1 text-sm text-muted dark:text-muted-dark">
-            Students on a monthly prepaid weekly schedule, and whether they have paid.
+            Who has paid this month, for monthly schedules and for single lessons.
           </p>
         </div>
         <Input
@@ -52,6 +51,9 @@ function MonthlyPaymentsPage() {
         />
       </div>
 
+      <h2 className="mb-4 text-lg font-semibold text-primary dark:text-primary-dark">
+        Monthly prepaid
+      </h2>
       {status.isLoading ? (
         <p className="text-sm text-muted dark:text-muted-dark">Loading payments...</p>
       ) : status.error ? (
@@ -121,6 +123,8 @@ function MonthlyPaymentsPage() {
           </div>
         </>
       )}
+
+      <LessonBillsSection month={month} />
 
       {recording ? (
         <MonthlyPaymentModal

@@ -12,6 +12,7 @@ import {
   AssignmentProgress,
   AssignmentReview,
   Bill,
+  LessonBill,
   BillingModel,
   BillDetailResponse,
   FamilyBill,
@@ -411,7 +412,7 @@ export const RecordMonthlyPaymentPayload = S.Struct({
 
 export type RecordMonthlyPaymentPayload = S.Schema.Type<typeof RecordMonthlyPaymentPayload>;
 
-export const MonthlyPaymentStatusQuery = S.Struct({ month: S.String });
+export const BillingMonthQuery = S.Struct({ month: S.String });
 
 // Testing schemas
 export const TestingLoginQuery = S.Struct({
@@ -1287,7 +1288,7 @@ export const adminClientGroup = HttpApiGroup.make("admin")
   .add(
     HttpApiEndpoint.get("monthlyPaymentStatus", "/monthly-payments", {
       error: adminClientErrors,
-      query: MonthlyPaymentStatusQuery,
+      query: BillingMonthQuery,
       success: S.Array(MonthlyPaymentStatus),
     }),
   )
@@ -1443,6 +1444,13 @@ export const adminClientGroup = HttpApiGroup.make("admin")
       error: adminClientErrors,
       params: params("payerId"),
       success: S.Array(Bill),
+    }),
+  )
+  .add(
+    HttpApiEndpoint.get("lessonBills", "/billing/lesson-bills", {
+      error: adminClientErrors,
+      query: BillingMonthQuery,
+      success: S.Array(LessonBill),
     }),
   )
   .add(
