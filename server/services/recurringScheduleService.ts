@@ -289,6 +289,67 @@ export class RecurringScheduleService extends Context.Service<RecurringScheduleS
         });
       }),
 
+      listMonth: Effect.fn("listMonthlyPaymentStatus")(function* (
+        sessionId: string,
+        billingMonth: string,
+      ) {
+        if (!isFirstOfMonth(billingMonth)) {
+          return yield* new HttpError(400, "month must be the first day of a month (YYYY-MM-01)");
+        }
+        const rows = yield* withAuthContext(sessionId, (baseDb) => {
+          const db = baseDb as unknown as Database<RecurringDB>;
+          return db.execute(
+            db
+              .selectFrom("app_public.users as u")
+              .leftJoin("app_public.monthly_payments as mp", (join) =>
+                join.onRef("mp.student_id", "=", "u.id").on("mp.billing_month", "=", billingMonth),
+              )
+              .select([
+                "u.id as student_id",
+                "u.name",
+                "u.username",
+                "mp.id",
+                "mp.billing_month",
+                "mp.amount_cents",
+                "mp.paid_at",
+                "mp.notes",
+                "mp.generation_status",
+                "mp.generation_error",
+                "mp.generated_at",
+              ])
+              // A recorded payment keeps its student listed after the schedule ends.
+              .where((eb) =>
+                eb.or([
+                  eb("u.id", "in", monthlyPrepaidStudents(db, billingMonth)),
+                  eb("mp.id", "is not", null),
+                ]),
+              )
+              .orderBy("u.name")
+              .orderBy("u.username"),
+          );
+        });
+        return rows.map(({ student_id, name, username, ...mp }) => ({
+          student_id,
+          student_name: name ?? username,
+          payment:
+            mp.id === null ||
+            mp.billing_month === null ||
+            mp.amount_cents === null ||
+            mp.paid_at === null ||
+            mp.generation_status === null
+              ? null
+              : {
+                  ...mp,
+                  id: mp.id,
+                  student_id,
+                  billing_month: mp.billing_month,
+                  amount_cents: mp.amount_cents,
+                  paid_at: mp.paid_at,
+                  generation_status: mp.generation_status,
+                },
+        }));
+      }),
+
       recordPayment: Effect.fn("recordMonthlyPayment")(function* (
         values: {
           sessionId: string;
@@ -312,25 +373,10 @@ export class RecurringScheduleService extends Context.Service<RecurringScheduleS
           sessionId,
           Effect.fnUntraced(function* (baseDb) {
             const db = baseDb as unknown as Database<RecurringDB>;
-            const nextMonth = new Date(`${input.billingMonth}T00:00:00.000Z`);
-            nextMonth.setUTCMonth(nextMonth.getUTCMonth() + 1);
-            const lastDay = new Date(nextMonth.getTime() - 86_400_000).toISOString().slice(0, 10);
             const eligible = yield* db
               .execute(
-                db
-                  .selectFrom("app_public.recurring_schedules as rs")
-                  .innerJoin("app_public.student_rates as sr", "sr.id", "rs.student_rate_id")
-                  .select("rs.id")
+                monthlyPrepaidStudents(db, input.billingMonth)
                   .where("sr.student_id", "=", input.studentId)
-                  .where("sr.billing_model", "=", "monthly_prepaid")
-                  .where("rs.active", "=", true)
-                  .where("rs.starts_on", "<=", lastDay)
-                  .where((eb) =>
-                    eb.or([
-                      eb("rs.ends_on", "is", null),
-                      eb("rs.ends_on", ">=", input.billingMonth),
-                    ]),
-                  )
                   .limit(1),
               )
               .pipe(Effect.head, Effect.option);
@@ -423,4 +469,24 @@ export class RecurringScheduleService extends Context.Service<RecurringScheduleS
   },
 ) {
   static readonly layer = Layer.effect(this, this.make);
+}
+
+/**
+ * Students who owe a monthly prepaid payment for the billing month: those with an
+ * active monthly prepaid schedule that overlaps the month. Recording a payment
+ * and listing the month both use this rule, so the list never shows a student
+ * whose payment the API would refuse.
+ */
+function monthlyPrepaidStudents(db: Database<RecurringDB>, billingMonth: string) {
+  const nextMonth = new Date(`${billingMonth}T00:00:00.000Z`);
+  nextMonth.setUTCMonth(nextMonth.getUTCMonth() + 1);
+  const lastDay = new Date(nextMonth.getTime() - 86_400_000).toISOString().slice(0, 10);
+  return db
+    .selectFrom("app_public.recurring_schedules as rs")
+    .innerJoin("app_public.student_rates as sr", "sr.id", "rs.student_rate_id")
+    .select("sr.student_id")
+    .where("sr.billing_model", "=", "monthly_prepaid")
+    .where("rs.active", "=", true)
+    .where("rs.starts_on", "<=", lastDay)
+    .where((eb) => eb.or([eb("rs.ends_on", "is", null), eb("rs.ends_on", ">=", billingMonth)]));
 }

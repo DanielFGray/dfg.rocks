@@ -37,6 +37,7 @@ const navItems: Array<{
     nonAdminOnly: true,
   },
   { to: "/students", id: "nav-students", label: "Students", adminOnly: true },
+  { to: "/billing/monthly", id: "nav-payments", label: "Payments", adminOnly: true },
   { to: "/billing", id: "nav-billing", label: "Billing", adminOnly: true },
   {
     to: "/submissions",

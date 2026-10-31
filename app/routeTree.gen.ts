@@ -38,6 +38,7 @@ import { Route as AuthedAssignmentsIndexRouteImport } from './routes/_authed/ass
 import { Route as AuthedStudentsIdRouteImport } from './routes/_authed/students.$id'
 import { Route as AuthedFamilyBillingRouteImport } from './routes/_authed/family/billing'
 import { Route as AuthedCoursesIdRouteImport } from './routes/_authed/courses.$id'
+import { Route as AuthedBillingMonthlyRouteImport } from './routes/_authed/billing.monthly'
 import { Route as AuthedAssignmentsMaterialIdRouteImport } from './routes/_authed/assignments.$materialId'
 import { Route as AuthedFamilyBillingIndexRouteImport } from './routes/_authed/family/billing.index'
 import { Route as AuthedFamilyBillingBillsRouteImport } from './routes/_authed/family/billing/bills'
@@ -191,6 +192,11 @@ const AuthedCoursesIdRoute = AuthedCoursesIdRouteImport.update({
   path: '/courses/$id',
   getParentRoute: () => AuthedRoute,
 } as any)
+const AuthedBillingMonthlyRoute = AuthedBillingMonthlyRouteImport.update({
+  id: '/monthly',
+  path: '/monthly',
+  getParentRoute: () => AuthedBillingRoute,
+} as any)
 const AuthedAssignmentsMaterialIdRoute =
   AuthedAssignmentsMaterialIdRouteImport.update({
     id: '/$materialId',
@@ -263,6 +269,7 @@ export interface FileRoutesByFullPath {
   '/submissions': typeof AuthedSubmissionsRoute
   '/api/$': typeof ApiSplatRoute
   '/assignments/$materialId': typeof AuthedAssignmentsMaterialIdRoute
+  '/billing/monthly': typeof AuthedBillingMonthlyRoute
   '/courses/$id': typeof AuthedCoursesIdRoute
   '/family/billing': typeof AuthedFamilyBillingRouteWithChildren
   '/students/$id': typeof AuthedStudentsIdRoute
@@ -299,6 +306,7 @@ export interface FileRoutesByTo {
   '/submissions': typeof AuthedSubmissionsRoute
   '/api/$': typeof ApiSplatRoute
   '/assignments/$materialId': typeof AuthedAssignmentsMaterialIdRoute
+  '/billing/monthly': typeof AuthedBillingMonthlyRoute
   '/courses/$id': typeof AuthedCoursesIdRoute
   '/students/$id': typeof AuthedStudentsIdRoute
   '/assignments': typeof AuthedAssignmentsIndexRoute
@@ -338,6 +346,7 @@ export interface FileRoutesById {
   '/_authed/submissions': typeof AuthedSubmissionsRoute
   '/api/$': typeof ApiSplatRoute
   '/_authed/assignments/$materialId': typeof AuthedAssignmentsMaterialIdRoute
+  '/_authed/billing/monthly': typeof AuthedBillingMonthlyRoute
   '/_authed/courses/$id': typeof AuthedCoursesIdRoute
   '/_authed/family/billing': typeof AuthedFamilyBillingRouteWithChildren
   '/_authed/students/$id': typeof AuthedStudentsIdRoute
@@ -378,6 +387,7 @@ export interface FileRouteTypes {
     | '/submissions'
     | '/api/$'
     | '/assignments/$materialId'
+    | '/billing/monthly'
     | '/courses/$id'
     | '/family/billing'
     | '/students/$id'
@@ -414,6 +424,7 @@ export interface FileRouteTypes {
     | '/submissions'
     | '/api/$'
     | '/assignments/$materialId'
+    | '/billing/monthly'
     | '/courses/$id'
     | '/students/$id'
     | '/assignments'
@@ -452,6 +463,7 @@ export interface FileRouteTypes {
     | '/_authed/submissions'
     | '/api/$'
     | '/_authed/assignments/$materialId'
+    | '/_authed/billing/monthly'
     | '/_authed/courses/$id'
     | '/_authed/family/billing'
     | '/_authed/students/$id'
@@ -686,6 +698,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedCoursesIdRouteImport
       parentRoute: typeof AuthedRoute
     }
+    '/_authed/billing/monthly': {
+      id: '/_authed/billing/monthly'
+      path: '/monthly'
+      fullPath: '/billing/monthly'
+      preLoaderRoute: typeof AuthedBillingMonthlyRouteImport
+      parentRoute: typeof AuthedBillingRoute
+    }
     '/_authed/assignments/$materialId': {
       id: '/_authed/assignments/$materialId'
       path: '/$materialId'
@@ -759,12 +778,14 @@ const AuthedAssignmentsRouteWithChildren =
   AuthedAssignmentsRoute._addFileChildren(AuthedAssignmentsRouteChildren)
 
 interface AuthedBillingRouteChildren {
+  AuthedBillingMonthlyRoute: typeof AuthedBillingMonthlyRoute
   AuthedBillingIndexRoute: typeof AuthedBillingIndexRoute
   AuthedBillingBillsBillIdRoute: typeof AuthedBillingBillsBillIdRoute
   AuthedBillingFamiliesFamilyIdRoute: typeof AuthedBillingFamiliesFamilyIdRoute
 }
 
 const AuthedBillingRouteChildren: AuthedBillingRouteChildren = {
+  AuthedBillingMonthlyRoute: AuthedBillingMonthlyRoute,
   AuthedBillingIndexRoute: AuthedBillingIndexRoute,
   AuthedBillingBillsBillIdRoute: AuthedBillingBillsBillIdRoute,
   AuthedBillingFamiliesFamilyIdRoute: AuthedBillingFamiliesFamilyIdRoute,

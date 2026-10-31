@@ -44,6 +44,7 @@ import {
   Material,
   Message,
   MonthlyPayment,
+  MonthlyPaymentStatus,
   Module,
   Payment,
   PaymentMethod,
@@ -409,6 +410,8 @@ export const RecordMonthlyPaymentPayload = S.Struct({
 });
 
 export type RecordMonthlyPaymentPayload = S.Schema.Type<typeof RecordMonthlyPaymentPayload>;
+
+export const MonthlyPaymentStatusQuery = S.Struct({ month: S.String });
 
 // Testing schemas
 export const TestingLoginQuery = S.Struct({
@@ -1279,6 +1282,13 @@ export const adminClientGroup = HttpApiGroup.make("admin")
       error: adminClientErrors,
       params: params("studentId"),
       success: S.Array(MonthlyPayment),
+    }),
+  )
+  .add(
+    HttpApiEndpoint.get("monthlyPaymentStatus", "/monthly-payments", {
+      error: adminClientErrors,
+      query: MonthlyPaymentStatusQuery,
+      success: S.Array(MonthlyPaymentStatus),
     }),
   )
   .add(

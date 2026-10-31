@@ -372,6 +372,15 @@ export const MonthlyPayment = S.Struct({
 
 export type MonthlyPayment = S.Schema.Type<typeof MonthlyPayment>;
 
+/** A student who owes a monthly prepaid payment for a month, and the payment if one is recorded. */
+export const MonthlyPaymentStatus = S.Struct({
+  student_id: S.String,
+  student_name: S.String,
+  payment: S.NullOr(MonthlyPayment),
+});
+
+export type MonthlyPaymentStatus = S.Schema.Type<typeof MonthlyPaymentStatus>;
+
 export const LessonDeposit = S.Struct({
   id: S.String,
   lesson_id: S.String,

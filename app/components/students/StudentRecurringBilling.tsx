@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useState } from "react";
 import { Effect } from "effect";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import type {
@@ -17,6 +17,7 @@ import { Modal } from "../ui/Modal.js";
 import { Select } from "../ui/Select.js";
 import { Switch } from "../ui/Switch.js";
 import { Textarea } from "../ui/Textarea.js";
+import { MonthlyPaymentModal } from "../billing/MonthlyPaymentModal.js";
 
 const locationOptions = [
   { value: "studio", label: "Studio" },
@@ -354,7 +355,7 @@ export function StudentRecurringBilling({ studentId }: { studentId: string }) {
         onClose={() => setScheduleOpen(false)}
         onSaved={refreshSchedules}
       />
-      <PaymentModal
+      <MonthlyPaymentModal
         studentId={studentId}
         open={paymentOpen}
         onClose={() => setPaymentOpen(false)}
@@ -621,106 +622,6 @@ function ScheduleModal({
           </Button>
           <Button type="submit" disabled={save.isPending || !rateId || !startDate || !localTime}>
             {save.isPending ? "Saving..." : "Save schedule"}
-          </Button>
-        </div>
-      </form>
-    </Modal>
-  );
-}
-
-function PaymentModal({
-  studentId,
-  open,
-  onClose,
-  onSaved,
-}: {
-  studentId: string;
-  open: boolean;
-  onClose: () => void;
-  onSaved: () => void;
-}) {
-  const [billingMonth, setBillingMonth] = useState("");
-  const [amount, setAmount] = useState("");
-  const [paidAt, setPaidAt] = useState("");
-  const [notes, setNotes] = useState("");
-
-  useEffect(() => {
-    if (!open) return;
-    const now = new Date();
-    setBillingMonth(now.toISOString().slice(0, 7));
-    setPaidAt(now.toISOString().slice(0, 16));
-    setAmount("");
-    setNotes("");
-  }, [open]);
-
-  const save = useMutation({
-    mutationFn: () =>
-      Effect.runPromise(
-        api.admin.recordMonthlyPayment({
-          params: { studentId },
-          payload: {
-            billing_month: `${billingMonth}-01`,
-            amount_cents: Math.round(Number(amount) * 100),
-            paid_at: new Date(paidAt).toISOString(),
-            notes: notes.trim() || null,
-          },
-        }),
-      ),
-    onSuccess: () => {
-      onSaved();
-      onClose();
-    },
-  });
-
-  function submit(event: FormEvent) {
-    event.preventDefault();
-    save.mutate();
-  }
-
-  return (
-    <Modal open={open} onClose={onClose} title="Record monthly payment">
-      <form data-testid="monthly-payment-form" className="flex flex-col gap-4" onSubmit={submit}>
-        <Input
-          id="payment-month"
-          name="billing_month"
-          label="Billing month"
-          type="month"
-          required
-          value={billingMonth}
-          onChange={setBillingMonth}
-          data-testid="payment-billing-month"
-        />
-        <Input
-          id="payment-amount"
-          name="amount"
-          label="Amount (USD)"
-          type="number"
-          required
-          value={amount}
-          onChange={setAmount}
-          data-testid="payment-amount"
-        />
-        <Input
-          id="payment-paid-at"
-          name="paid_at"
-          label="Paid at"
-          type="datetime-local"
-          required
-          value={paidAt}
-          onChange={setPaidAt}
-          data-testid="payment-paid-at"
-        />
-        <Textarea id="payment-notes" name="notes" label="Notes" value={notes} onChange={setNotes} />
-        <ErrorMessage error={save.error} />
-        <div className="mt-2 flex justify-end gap-3">
-          <Button variant="ghost" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button
-            type="submit"
-            disabled={save.isPending || !billingMonth || !paidAt || !amount || Number(amount) <= 0}
-          >
-            {save.isPending ? "Recording..." : "Record payment"}
           </Button>
         </div>
       </form>

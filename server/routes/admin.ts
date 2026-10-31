@@ -869,6 +869,19 @@ export function makeAdminLayer() {
         }, adaptAdminErrors),
       )
       .handle(
+        "monthlyPaymentStatus",
+        Effect.fnUntraced(function* ({ request, query }) {
+          const auth = yield* requireAdminSession(request);
+          const rows = yield* RecurringScheduleService.use((recurringScheduleService) =>
+            recurringScheduleService.listMonth(auth.session.id, query.month),
+          );
+          return rows.map((row) => ({
+            ...row,
+            payment: row.payment === null ? null : serializeMonthlyPayment(row.payment),
+          }));
+        }, adaptAdminErrors),
+      )
+      .handle(
         "recordMonthlyPayment",
         Effect.fnUntraced(function* ({ request, params, payload }) {
           const auth = yield* requireAdminSession(request);

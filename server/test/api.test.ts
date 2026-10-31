@@ -13,6 +13,7 @@ import { Logger, consoleLogFactory } from "graphile-worker";
 import pg from "pg";
 import generatePrepaidPeriodTask from "../../worker/tasks/lessons__generate_prepaid_period.js";
 import { StorageService } from "../services/storageService.js";
+import type { MonthlyPaymentStatus } from "../../shared/schemas.js";
 
 let testDb: pg.Pool;
 let adminCookie: string;
@@ -835,6 +836,23 @@ describe("DFG Portal API", () => {
       expect(scheduleResponse.status).toBe(200);
       const schedule = yield* resJson(scheduleResponse);
 
+      const monthStatus = (month: string) =>
+        reqEffect("GET", `/api/admin/monthly-payments?month=${month}`, {
+          cookie: adminCookie,
+        }).pipe(
+          Effect.flatMap(resJson),
+          Effect.map((rows: MonthlyPaymentStatus[]) =>
+            rows.find((row) => row.student_id === studentId),
+          ),
+        );
+      expect((yield* monthStatus("2026-08-01"))?.payment).toBeNull();
+      expect(yield* monthStatus("2026-07-01")).toBeUndefined();
+      expect(
+        (yield* reqEffect("GET", "/api/admin/monthly-payments?month=2026-08-02", {
+          cookie: adminCookie,
+        })).status,
+      ).toBe(400);
+
       const paymentBody = {
         billing_month: "2026-08-01",
         amount_cents: 18000,
@@ -848,6 +866,7 @@ describe("DFG Portal API", () => {
       expect(firstResponse.status).toBe(200);
       const first = yield* resJson(firstResponse);
       expect(first.generation_status).toBe("pending");
+      expect((yield* monthStatus("2026-08-01"))?.payment?.id).toBe(first.id);
 
       const secondResponse = yield* reqEffect("POST", path, {
         cookie: adminCookie,
