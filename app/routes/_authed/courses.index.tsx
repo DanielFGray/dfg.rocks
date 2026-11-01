@@ -25,8 +25,12 @@ const getCoursesPageData = createServerFn({ method: "GET" }).handler(() =>
   serverRuntime.runPromise(
     Effect.gen(function* () {
       const session = yield* requireSession(getCookie("session"));
+      const effectiveStudentId =
+        session.user.role === "parent" && session.session.active_student_id
+          ? session.session.active_student_id
+          : undefined;
       const data = yield* AuthenticatedRouteService.use((authenticatedRouteService) =>
-        authenticatedRouteService.courses(session.session.id),
+        authenticatedRouteService.courses(session.session.id, effectiveStudentId),
       );
       return toServerFunctionPayload(data.map(serializeCourse)) satisfies CoursesPageData;
     }),

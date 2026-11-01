@@ -320,7 +320,7 @@ function StaffAssignmentsPage() {
         }),
       ),
     onSettled: () => {
-      void queryClient.invalidateQueries({ queryKey: ["assignments"] });
+      void queryClient.invalidateQueries({ queryKey: ["assignments"], exact: false });
       void queryClient.invalidateQueries({ queryKey: ["admin", "students"] });
       void router.invalidate();
     },
@@ -334,7 +334,7 @@ function StaffAssignmentsPage() {
         }),
       ),
     onSettled: () => {
-      void queryClient.invalidateQueries({ queryKey: ["assignments"] });
+      void queryClient.invalidateQueries({ queryKey: ["assignments"], exact: false });
       void queryClient.invalidateQueries({ queryKey: ["admin", "students"] });
       void router.invalidate();
     },

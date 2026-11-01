@@ -25,10 +25,30 @@ const getMessagesPageData = createServerFn({ method: "GET" }).handler(() =>
       const session = yield* requireSession(getCookie("session"));
       const authSvc = yield* AuthenticatedRouteService;
 
-      const messages = yield* authSvc.messages(session.session.id, {
-        limit: 50,
-        offset: 0,
-      });
+      const effectiveStudentId =
+        session.user.role === "parent" && session.session.active_student_id
+          ? session.session.active_student_id
+          : undefined;
+
+      const messages = yield* authSvc.messages(
+        session.session.id,
+        {
+          limit: 50,
+          offset: 0,
+        },
+        effectiveStudentId,
+      );
+
+      // Explicitly type the messages array to fix inference
+      const messagesArray = messages as Array<{
+        id: string;
+        sender_id: string;
+        recipient_id: string;
+        body: string;
+        is_read: boolean;
+        created_at: Date | string;
+      }>;
+      const serializedMessages: ReturnType<typeof serializeMessage>[] = messagesArray.map(serializeMessage);
 
       let students: ReturnType<typeof normalizeStudents> | null = null;
       if (session.user.role === "admin") {
@@ -37,7 +57,7 @@ const getMessagesPageData = createServerFn({ method: "GET" }).handler(() =>
       }
 
       return toServerFunctionPayload({
-        messages: messages.map(serializeMessage),
+        messages: serializedMessages,
         students,
       }) as {
         messages: ReturnType<typeof serializeMessage>[];

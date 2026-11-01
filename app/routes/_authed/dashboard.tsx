@@ -77,12 +77,39 @@ const getDashboardPageData = createServerFn({ method: "GET" }).handler(() =>
           ),
         });
 
+        // Explicitly type the arrays to fix inference
+        const messagesArray = data.messages as ReadonlyArray<{
+          id: string;
+          sender_id: string;
+          recipient_id: string;
+          body: string;
+          is_read: boolean;
+          created_at: Date | string;
+        }>;
+        const lessonsArray = data.todayLessons as ReadonlyArray<{
+          id: string;
+          student_id: string;
+          gcal_event_id: string | null;
+          scheduled_at: Date | string;
+          duration_minutes: number;
+          location_type: "in_person_student_travels" | "in_person_teacher_travels" | "online" | "studio";
+          status: "scheduled" | "completed" | "cancelled" | "no_show";
+          cancellation_reason: string | null;
+          cancelled_at: Date | string | null;
+          completed_at: Date | string | null;
+          cancellation_fee_cents: number;
+          remainder_due_cents: number;
+          created_at: Date | string;
+        }>;
+        const adminMessages: ReturnType<typeof serializeMessage>[] = messagesArray.map(serializeMessage);
+        const adminTodayLessons: ReturnType<typeof serializeLesson>[] = lessonsArray.map(serializeLesson);
+        const adminWeekLessons: ReturnType<typeof serializeLesson>[] = data.weekLessons.map(serializeLesson);
         return toServerFunctionPayload({
           kind: "admin" as const,
           students: normalizeStudents(data.students),
-          messages: data.messages.map(serializeMessage),
-          todayLessons: data.todayLessons.map(serializeLesson),
-          weekLessons: data.weekLessons.map(serializeLesson),
+          messages: adminMessages,
+          todayLessons: adminTodayLessons,
+          weekLessons: adminWeekLessons,
           courses: [...S.decodeUnknownSync(S.Array(SharedSchemas.Course))(data.courses)],
         });
       }
@@ -118,11 +145,48 @@ const getDashboardPageData = createServerFn({ method: "GET" }).handler(() =>
         ),
       ]);
 
+      // Explicitly type the arrays to fix inference
+      const messagesArray = data.messages as ReadonlyArray<{
+        id: string;
+        sender_id: string;
+        recipient_id: string;
+        body: string;
+        is_read: boolean;
+        created_at: Date | string;
+      }>;
+      const assignmentsArray = data.assignments as ReadonlyArray<{
+        id: string;
+        title: string;
+        original_filename: string;
+        mime_type: string;
+        file_size: number;
+        is_global: boolean;
+        notation_tracks: unknown;
+        assigned_track_index: number | null;
+      }>;
+      const scheduledLessonsArray = data.scheduledLessons as ReadonlyArray<{
+        id: string;
+        student_id: string;
+        gcal_event_id: string | null;
+        scheduled_at: Date | string;
+        duration_minutes: number;
+        location_type: "in_person_student_travels" | "in_person_teacher_travels" | "online" | "studio";
+        status: "scheduled" | "completed" | "cancelled" | "no_show";
+        cancellation_reason: string | null;
+        cancelled_at: Date | string | null;
+        completed_at: Date | string | null;
+        cancellation_fee_cents: number;
+        remainder_due_cents: number;
+        created_at: Date | string;
+      }>;
+      const studentMessages: ReturnType<typeof serializeMessage>[] = messagesArray.map(serializeMessage);
+      const studentAssignments: ReturnType<typeof serializeMaterial>[] = assignmentsArray.map(serializeMaterial);
+      const studentScheduledLessons: ReturnType<typeof serializeLesson>[] = scheduledLessonsArray.map(serializeLesson);
       return toServerFunctionPayload({
         kind: "student" as const,
-        messages: data.messages.map(serializeMessage),
-        assignments: data.assignments.map(serializeMaterial),
-        scheduledLessons: data.scheduledLessons.map(serializeLesson),
+        messages: studentMessages,
+        assignments: studentAssignments,
+        scheduledLessons: studentScheduledLessons,
         courses: [...S.decodeUnknownSync(S.Array(SharedSchemas.Course))(data.courses)],
         testimonial: data.testimonial ? serializeTestimonial(data.testimonial) : null,
         canShowTestimonialPrompt,

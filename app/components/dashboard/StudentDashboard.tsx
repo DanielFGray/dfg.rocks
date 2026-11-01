@@ -1,8 +1,9 @@
 import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import type { Message, Lesson, Material, Course, Testimonial } from "../../../shared/schemas.js";
 import { useAuth } from "../../lib/hooks/useAuth.js";
-import { practiceLogsQuery } from "../../lib/queries.js";
+import { practiceLogsQuery, getEffectiveStudentId } from "../../lib/queries.js";
 import { Button } from "../ui/Button.js";
 import { Card } from "../ui/Card.js";
 import { locationLabel } from "./helpers.js";
@@ -26,7 +27,8 @@ export function StudentDashboard({
   canShowTestimonialPrompt: boolean;
   onRefresh: () => Promise<void>;
 }) {
-  const { user } = useAuth();
+  const { user, activeStudentId } = useAuth();
+  const queryClient = useQueryClient();
 
   // Unread messages (from teacher, not sent by me)
   const unread = messages.filter((m) => !m.is_read && m.sender_id !== user?.id);
@@ -39,7 +41,8 @@ export function StudentDashboard({
 
   const firstName = user?.name ? user.name.split(" ")[0] : null;
 
-  const { data: logs = [] } = useQuery(practiceLogsQuery);
+  const effectiveStudentId = activeStudentId ?? getEffectiveStudentId(queryClient);
+  const { data: logs = [] } = useQuery(practiceLogsQuery(effectiveStudentId));
   const materialsById = new Map(assignments.map((a) => [a.id, a]));
 
   function relativeTime(iso: string): string {

@@ -17,6 +17,50 @@ export async function fetchAuthUser(queryClient: QueryClient) {
   return decodeAuthState(await queryClient.fetchQuery(authUserQuery));
 }
 
+/**
+ * Get the effective student ID for query keys.
+ * Returns the active student ID for parents, or undefined for self-acting users.
+ * Uses the cached auth state to avoid additional queries.
+ */
+export function getEffectiveStudentId(queryClient: QueryClient): string | undefined {
+  const cached = queryClient.getQueryData<string>(authUserQuery.queryKey);
+  if (!cached) return undefined;
+  const authState = decodeAuthState(cached);
+  if (authState.isParent && authState.activeStudentId) {
+    return authState.activeStudentId;
+  }
+  return undefined;
+}
+
+/**
+ * Invalidate all queries that depend on the active student identity.
+ * Call this after switching active student to ensure fresh data for the new student.
+ */
+export function invalidateStudentQueries(queryClient: QueryClient, studentId?: string) {
+  const prefix = studentId ? ["messages", studentId] : ["messages"];
+  queryClient.invalidateQueries({ queryKey: prefix, exact: false });
+
+  if (studentId) {
+    queryClient.invalidateQueries({ queryKey: ["assignments", studentId] });
+    queryClient.invalidateQueries({ queryKey: ["practice-logs", studentId] });
+    queryClient.invalidateQueries({ queryKey: ["courses", studentId] });
+    queryClient.invalidateQueries({ queryKey: ["my-lessons", "scheduled", studentId] });
+    queryClient.invalidateQueries({ queryKey: ["my-lessons", studentId] });
+    queryClient.invalidateQueries({ queryKey: ["my-lesson-notes", studentId] });
+  } else {
+    // Invalidate all student-scoped variants
+    queryClient.invalidateQueries({ queryKey: ["assignments"], exact: false });
+    queryClient.invalidateQueries({ queryKey: ["practice-logs"], exact: false });
+    queryClient.invalidateQueries({ queryKey: ["courses"], exact: false });
+    queryClient.invalidateQueries({ queryKey: ["my-lessons", "scheduled"], exact: false });
+    queryClient.invalidateQueries({ queryKey: ["my-lessons"], exact: false });
+    queryClient.invalidateQueries({ queryKey: ["my-lesson-notes"], exact: false });
+  }
+
+  // Also invalidate auth user to refresh activeStudentId in UI
+  queryClient.invalidateQueries({ queryKey: ["auth", "user"] });
+}
+
 // ---- Admin queries ----
 
 export const adminStudentsQuery = queryOptions({
@@ -88,25 +132,33 @@ export const libraryQuery = queryOptions({
   queryFn: () => Effect.runPromise(api.authenticated.library({ query: {} })),
 });
 
-export const messagesQuery = queryOptions({
-  queryKey: ["messages"],
-  queryFn: () => Effect.runPromise(api.authenticated.messages({ query: {} })),
-});
+export function messagesQuery(studentId?: string) {
+  return queryOptions({
+    queryKey: ["messages", studentId],
+    queryFn: () => Effect.runPromise(api.authenticated.messages({ query: {} })),
+  });
+}
 
-export const assignmentsQuery = queryOptions({
-  queryKey: ["assignments"],
-  queryFn: () => Effect.runPromise(api.authenticated.assignments()),
-});
+export function assignmentsQuery(studentId?: string) {
+  return queryOptions({
+    queryKey: ["assignments", studentId],
+    queryFn: () => Effect.runPromise(api.authenticated.assignments()),
+  });
+}
 
-export const practiceLogsQuery = queryOptions({
-  queryKey: ["practice-logs"],
-  queryFn: () => Effect.runPromise(api.authenticated.practiceLogs({ query: {} })),
-});
+export function practiceLogsQuery(studentId?: string) {
+  return queryOptions({
+    queryKey: ["practice-logs", studentId],
+    queryFn: () => Effect.runPromise(api.authenticated.practiceLogs({ query: {} })),
+  });
+}
 
-export const coursesQuery = queryOptions({
-  queryKey: ["courses"],
-  queryFn: () => Effect.runPromise(api.authenticated.courses()),
-});
+export function coursesQuery(studentId?: string) {
+  return queryOptions({
+    queryKey: ["courses", studentId],
+    queryFn: () => Effect.runPromise(api.authenticated.courses()),
+  });
+}
 
 export const courseDetailQuery = (id: string) =>
   queryOptions({
@@ -114,21 +166,27 @@ export const courseDetailQuery = (id: string) =>
     queryFn: () => Effect.runPromise(api.authenticated.courseById({ params: { id } })),
   });
 
-export const scheduledLessonsQuery = queryOptions({
-  queryKey: ["my-lessons", "scheduled"],
-  queryFn: () =>
-    Effect.runPromise(api.authenticated.myLessons({ query: { status: "scheduled", limit: 5 } })),
-});
+export function scheduledLessonsQuery(studentId?: string) {
+  return queryOptions({
+    queryKey: ["my-lessons", "scheduled", studentId],
+    queryFn: () =>
+      Effect.runPromise(api.authenticated.myLessons({ query: { status: "scheduled", limit: 5 } })),
+  });
+}
 
-export const myLessonsQuery = queryOptions({
-  queryKey: ["my-lessons"],
-  queryFn: () => Effect.runPromise(api.authenticated.myLessons({ query: {} })),
-});
+export function myLessonsQuery(studentId?: string) {
+  return queryOptions({
+    queryKey: ["my-lessons", studentId],
+    queryFn: () => Effect.runPromise(api.authenticated.myLessons({ query: {} })),
+  });
+}
 
-export const myLessonNotesQuery = queryOptions({
-  queryKey: ["my-lesson-notes"],
-  queryFn: () => Effect.runPromise(api.authenticated.myLessonNotesList({ query: { limit: 100 } })),
-});
+export function myLessonNotesQuery(studentId?: string) {
+  return queryOptions({
+    queryKey: ["my-lesson-notes", studentId],
+    queryFn: () => Effect.runPromise(api.authenticated.myLessonNotesList({ query: { limit: 100 } })),
+  });
+}
 
 export const myEmailsQuery = queryOptions({
   queryKey: ["my-emails"],
@@ -145,9 +203,9 @@ export const workingHoursQuery = queryOptions({
   queryFn: () => Effect.runPromise(api.admin.workingHours()),
 });
 
-export const availableSlotsQuery = (date: string) =>
+export const availableSlotsQuery = (date: string, studentId?: string) =>
   queryOptions({
-    queryKey: ["available-slots", date],
+    queryKey: ["available-slots", date, studentId],
     queryFn: () =>
       Effect.runPromise(
         api.authenticated.availableSlots({ query: { date, days: 7, duration: 60 } }),
@@ -163,8 +221,8 @@ export function useSwitchActiveStudent() {
           payload: { student_id: studentId },
         }),
       ),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["auth", "user"] });
+    onSuccess: (_data, studentId) => {
+      invalidateStudentQueries(queryClient, studentId);
     },
   });
 }

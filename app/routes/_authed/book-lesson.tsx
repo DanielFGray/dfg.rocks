@@ -1,5 +1,5 @@
 import { Effect } from "effect";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { createFileRoute, useNavigate, useRouter } from "@tanstack/react-router";
 import { useMutation } from "@tanstack/react-query";
 import { createServerFn } from "@tanstack/react-start";
@@ -132,6 +132,12 @@ function BookLessonPage() {
     start: string;
     end: string;
   } | null>(null);
+
+  // Reset booking state when active student changes
+  useEffect(() => {
+    setSelectedStudentId(activeStudentId ?? (isParent ? familyStudents[0]?.id : user?.id) ?? "");
+    setBookingSlot(null);
+  }, [activeStudentId, isParent, familyStudents, user?.id]);
 
   const bookMutation = useMutation({
     mutationFn: (slot: { start: string; end: string }) =>

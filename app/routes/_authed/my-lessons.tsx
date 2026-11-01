@@ -29,9 +29,14 @@ const getMyLessonsPageData = createServerFn({ method: "GET" }).handler(() =>
       const session = yield* requireSession(getCookie("session"));
       const authSvc = yield* AuthenticatedRouteService;
 
+      const effectiveStudentId =
+        session.user.role === "parent" && session.session.active_student_id
+          ? session.session.active_student_id
+          : undefined;
+
       const [lessons, notes] = yield* Effect.all([
-        authSvc.myLessons(session.session.id, { limit: 50, offset: 0 }),
-        authSvc.myLessonNotesList(session.session.id, { limit: 100, offset: 0 }),
+        authSvc.myLessons(session.session.id, { limit: 50, offset: 0 }, effectiveStudentId),
+        authSvc.myLessonNotesList(session.session.id, { limit: 100, offset: 0 }, effectiveStudentId),
       ]);
 
       return toServerFunctionPayload({
