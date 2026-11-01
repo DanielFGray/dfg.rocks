@@ -1,7 +1,7 @@
 import { Effect } from "effect";
 import { queryOptions, useMutation, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { api } from "./api.js";
-import { decodeAuthState, getAuthUser } from "./auth.js";
+import { decodeAuthState, getAuthUser, type AuthState } from "./auth.js";
 import { todayRange, weekRange } from "../../shared/dateRanges.js";
 
 export const authUserQuery = queryOptions({
@@ -12,9 +12,9 @@ export const authUserQuery = queryOptions({
 });
 
 export async function fetchAuthUser(queryClient: QueryClient) {
-  const cached = queryClient.getQueryData<string>(authUserQuery.queryKey);
-  if (cached) return decodeAuthState(cached);
-  return decodeAuthState(await queryClient.fetchQuery(authUserQuery));
+  const cached = queryClient.getQueryData<AuthState>(authUserQuery.queryKey);
+  if (cached) return cached;
+  return queryClient.fetchQuery(authUserQuery) as Promise<AuthState>;
 }
 
 /**
@@ -23,11 +23,10 @@ export async function fetchAuthUser(queryClient: QueryClient) {
  * Uses the cached auth state to avoid additional queries.
  */
 export function getEffectiveStudentId(queryClient: QueryClient): string | undefined {
-  const cached = queryClient.getQueryData<string>(authUserQuery.queryKey);
+  const cached = queryClient.getQueryData<AuthState>(authUserQuery.queryKey);
   if (!cached) return undefined;
-  const authState = decodeAuthState(cached);
-  if (authState.isParent && authState.activeStudentId) {
-    return authState.activeStudentId;
+  if (cached.isParent && cached.activeStudentId) {
+    return cached.activeStudentId;
   }
   return undefined;
 }
