@@ -17,7 +17,7 @@ import { AuthenticatedRouteService } from "../../../server/services/authenticate
 import { AdminRouteService } from "../../../server/services/adminRouteService.js";
 import { serializeMessage, normalizeStudents } from "../../../shared/responseMappers.js";
 import { toServerFunctionPayload } from "../../lib/serverFunctionPayload.js";
-import { requireSession } from "../../lib/sessionGuards.server.js";
+import { requireSession, resolveEffectiveStudent } from "../../lib/sessionGuards.server.js";
 
 const getMessagesPageData = createServerFn({ method: "GET" }).handler(() =>
   serverRuntime.runPromise(
@@ -25,10 +25,8 @@ const getMessagesPageData = createServerFn({ method: "GET" }).handler(() =>
       const session = yield* requireSession(getCookie("session"));
       const authSvc = yield* AuthenticatedRouteService;
 
-      const effectiveStudentId =
-        session.user.role === "parent" && session.session.active_student_id
-          ? session.session.active_student_id
-          : undefined;
+      const effective = resolveEffectiveStudent(session);
+      const filterStudentId = effective.isActing ? effective.studentId : undefined;
 
       const messages = yield* authSvc.messages(
         session.session.id,
@@ -36,7 +34,7 @@ const getMessagesPageData = createServerFn({ method: "GET" }).handler(() =>
           limit: 50,
           offset: 0,
         },
-        effectiveStudentId,
+        filterStudentId,
       );
 
       // Explicitly type the messages array to fix inference

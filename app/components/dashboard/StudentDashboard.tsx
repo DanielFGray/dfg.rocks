@@ -27,11 +27,17 @@ export function StudentDashboard({
   canShowTestimonialPrompt: boolean;
   onRefresh: () => Promise<void>;
 }) {
-  const { user, activeStudentId } = useAuth();
+  const { user, activeStudentId, activeStudent } = useAuth();
   const queryClient = useQueryClient();
 
-  // Unread messages (from teacher, not sent by me)
-  const unread = messages.filter((m) => !m.is_read && m.sender_id !== user?.id);
+  // The effective student ID for this dashboard view
+  const effectiveStudentId = activeStudentId ?? getEffectiveStudentId(queryClient);
+  // The effective student's name (for greeting)
+  const effectiveStudentName = activeStudent?.name ?? user?.name;
+  const firstName = effectiveStudentName ? effectiveStudentName.split(" ")[0] : null;
+
+  // Unread messages (from teacher, not sent by the active student)
+  const unread = messages.filter((m) => !m.is_read && m.sender_id !== effectiveStudentId);
 
   // Next upcoming lessons
   const now = new Date();
@@ -39,9 +45,6 @@ export function StudentDashboard({
     .filter((l) => new Date(l.scheduled_at) > now)
     .sort((a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime());
 
-  const firstName = user?.name ? user.name.split(" ")[0] : null;
-
-  const effectiveStudentId = activeStudentId ?? getEffectiveStudentId(queryClient);
   const { data: logs = [] } = useQuery(practiceLogsQuery(effectiveStudentId));
   const materialsById = new Map(assignments.map((a) => [a.id, a]));
 

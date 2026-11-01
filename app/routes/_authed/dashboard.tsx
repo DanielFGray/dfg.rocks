@@ -14,7 +14,7 @@ import { ParentDashboard } from "../../components/dashboard/ParentDashboard.js";
 import { serverRuntime } from "../../../server/runtime.js";
 import { AdminRouteService } from "../../../server/services/adminRouteService.js";
 import { TestimonialReminderService } from "../../../server/services/testimonialReminderService.js";
-import { SessionService } from "../../../server/services/sessionService.js";
+import { SessionService, resolveEffectiveStudent } from "../../../server/services/sessionService.js";
 import { AuthenticatedRouteService } from "../../../server/services/authenticatedRouteService.js";
 import * as SharedSchemas from "../../../shared/schemas.js";
 import {
@@ -36,12 +36,8 @@ const getDashboardPageData = createServerFn({ method: "GET" }).handler(() =>
       );
       if (!session) throw new Error("Unauthorized");
 
-      const effectiveStudentId =
-        session.user.role === "parent" && session.session.active_student_id
-          ? session.session.active_student_id
-          : null;
-      const isActing = effectiveStudentId !== null;
-      const filterStudentId = isActing ? effectiveStudentId : undefined;
+      const effective = resolveEffectiveStudent(session);
+      const filterStudentId = effective.isActing ? effective.studentId : undefined;
 
       if (session.user.role === "admin") {
         const today = todayRange();

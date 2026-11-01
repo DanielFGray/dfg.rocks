@@ -11,10 +11,11 @@ export const authUserQuery = queryOptions({
   staleTime: 5_000,
 });
 
-export async function fetchAuthUser(queryClient: QueryClient) {
+export async function fetchAuthUser(queryClient: QueryClient): Promise<AuthState> {
   const cached = queryClient.getQueryData<AuthState>(authUserQuery.queryKey);
   if (cached) return cached;
-  return queryClient.fetchQuery(authUserQuery) as Promise<AuthState>;
+  const raw = await queryClient.fetchQuery(authUserQuery);
+  return decodeAuthState(raw);
 }
 
 /**
@@ -46,6 +47,11 @@ export function invalidateStudentQueries(queryClient: QueryClient, studentId?: s
     queryClient.invalidateQueries({ queryKey: ["my-lessons", "scheduled", studentId] });
     queryClient.invalidateQueries({ queryKey: ["my-lessons", studentId] });
     queryClient.invalidateQueries({ queryKey: ["my-lesson-notes", studentId] });
+    // available-slots uses date as second param, so invalidate all dates for this student
+    queryClient.invalidateQueries({ queryKey: ["available-slots"], exact: false, predicate: (query) => {
+      const key = query.queryKey;
+      return key[0] === "available-slots" && key[2] === studentId;
+    }});
   } else {
     // Invalidate all student-scoped variants
     queryClient.invalidateQueries({ queryKey: ["assignments"], exact: false });
@@ -54,6 +60,7 @@ export function invalidateStudentQueries(queryClient: QueryClient, studentId?: s
     queryClient.invalidateQueries({ queryKey: ["my-lessons", "scheduled"], exact: false });
     queryClient.invalidateQueries({ queryKey: ["my-lessons"], exact: false });
     queryClient.invalidateQueries({ queryKey: ["my-lesson-notes"], exact: false });
+    queryClient.invalidateQueries({ queryKey: ["available-slots"], exact: false });
   }
 
   // Also invalidate auth user to refresh activeStudentId in UI

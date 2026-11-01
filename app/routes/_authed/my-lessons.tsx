@@ -16,7 +16,7 @@ import { serverRuntime } from "../../../server/runtime.js";
 import { AuthenticatedRouteService } from "../../../server/services/authenticatedRouteService.js";
 import { serializeLesson, serializeLessonNote } from "../../../shared/responseMappers.js";
 import { toServerFunctionPayload } from "../../lib/serverFunctionPayload.js";
-import { requireSession } from "../../lib/sessionGuards.server.js";
+import { requireSession, resolveEffectiveStudent } from "../../lib/sessionGuards.server.js";
 
 type MyLessonsPageData = {
   lessons: Lesson[];
@@ -29,14 +29,12 @@ const getMyLessonsPageData = createServerFn({ method: "GET" }).handler(() =>
       const session = yield* requireSession(getCookie("session"));
       const authSvc = yield* AuthenticatedRouteService;
 
-      const effectiveStudentId =
-        session.user.role === "parent" && session.session.active_student_id
-          ? session.session.active_student_id
-          : undefined;
+      const effective = resolveEffectiveStudent(session);
+      const filterStudentId = effective.isActing ? effective.studentId : undefined;
 
       const [lessons, notes] = yield* Effect.all([
-        authSvc.myLessons(session.session.id, { limit: 50, offset: 0 }, effectiveStudentId),
-        authSvc.myLessonNotesList(session.session.id, { limit: 100, offset: 0 }, effectiveStudentId),
+        authSvc.myLessons(session.session.id, { limit: 50, offset: 0 }, filterStudentId),
+        authSvc.myLessonNotesList(session.session.id, { limit: 100, offset: 0 }, filterStudentId),
       ]);
 
       return toServerFunctionPayload({

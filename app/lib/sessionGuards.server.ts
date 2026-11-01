@@ -1,6 +1,6 @@
 import { Effect } from "effect";
 import { HttpError } from "../../server/pgErrors.js";
-import { SessionService } from "../../server/services/sessionService.js";
+import { SessionService, resolveEffectiveStudent } from "../../server/services/sessionService.js";
 
 export const requireSession = Effect.fnUntraced(function* (token: string | undefined) {
   const session = yield* SessionService.use((sessionService) =>
@@ -19,3 +19,5 @@ export const requireAdminSession = Effect.fnUntraced(function* (token: string | 
   }
   return session;
 });
+
+export { resolveEffectiveStudent };

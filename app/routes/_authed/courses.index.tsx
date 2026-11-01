@@ -16,7 +16,7 @@ import { Main } from "../../components/ui/Container.js";
 import { serverRuntime } from "../../../server/runtime.js";
 import { serializeCourse } from "../../../shared/responseMappers.js";
 import { toServerFunctionPayload } from "../../lib/serverFunctionPayload.js";
-import { requireSession } from "../../lib/sessionGuards.server.js";
+import { requireSession, resolveEffectiveStudent } from "../../lib/sessionGuards.server.js";
 import { AuthenticatedRouteService } from "../../../server/services/authenticatedRouteService.js";
 
 type CoursesPageData = Course[];
@@ -25,12 +25,10 @@ const getCoursesPageData = createServerFn({ method: "GET" }).handler(() =>
   serverRuntime.runPromise(
     Effect.gen(function* () {
       const session = yield* requireSession(getCookie("session"));
-      const effectiveStudentId =
-        session.user.role === "parent" && session.session.active_student_id
-          ? session.session.active_student_id
-          : undefined;
+      const effective = resolveEffectiveStudent(session);
+      const filterStudentId = effective.isActing ? effective.studentId : undefined;
       const data = yield* AuthenticatedRouteService.use((authenticatedRouteService) =>
-        authenticatedRouteService.courses(session.session.id, effectiveStudentId),
+        authenticatedRouteService.courses(session.session.id, filterStudentId),
       );
       return toServerFunctionPayload(data.map(serializeCourse)) satisfies CoursesPageData;
     }),
