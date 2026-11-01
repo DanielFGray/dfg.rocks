@@ -8,45 +8,55 @@ The active-student context (for parents acting on behalf of children) is inconsi
 - **Switching students** only invalidates `["auth", "user"]` → stale data in other queries
 - **Booking state** not reset when student changes → wrong student booked
 
-## Files to Modify
+## Files Modified
 
-1. **`app/lib/queries.ts`** - Core query key definitions and switch helper
-2. **`app/routes/_authed/dashboard.tsx`** - SSR loader alignment
-3. **`app/routes/_authed/messages.tsx`** - Query key usage
-4. **`app/routes/_authed/book-lesson.tsx`** - Reset booking state on student switch
-5. **`app/routes/_authed/courses.index.tsx`** - Query key usage
-6. **`app/components/dashboard/StudentDashboard.tsx`** - Query key usage
-7. **`app/components/dashboard/ParentDashboard.tsx`** - Use enhanced switch helper
+1. **`app/lib/queries.ts`** - Core query key definitions and switch helper ✅
+2. **`app/routes/_authed/dashboard.tsx`** - SSR loader alignment ✅
+3. **`app/routes/_authed/messages.tsx`** - Query key usage ✅
+4. **`app/routes/_authed/book-lesson.tsx`** - Reset booking state on student switch ✅
+5. **`app/routes/_authed/courses.index.tsx`** - Query key usage ✅
+6. **`app/components/dashboard/StudentDashboard.tsx`** - Query key usage ✅
+7. **`app/routes/_authed/assignments.index.tsx`** - Query invalidation fix ✅
+8. **`app/routes/_authed/my-lessons.tsx`** - SSR loader filter ✅
+9. **`e2e/active-student.spec.ts`** - Parity tests ✅
 
-## Implementation Steps
+## Implementation Completed
 
-### 1. Create effective student ID selector for query keys
-Add `getEffectiveStudentId()` helper that reads from auth query cache and returns the student ID to use for query keys.
+### 1. Created effective student ID selector for query keys ✅
+Added `getEffectiveStudentId()` helper that reads from auth query cache and returns the student ID to use for query keys.
 
-### 2. Update all student-dependent query keys to include active student ID
-- `messagesQuery` → `["messages", studentId]`
-- `assignmentsQuery` → `["assignments", studentId]`
-- `practiceLogsQuery` → `["practice-logs", studentId]`
-- `coursesQuery` → `["courses", studentId]`
-- `scheduledLessonsQuery` → `["my-lessons", "scheduled", studentId]`
-- `myLessonsQuery` → `["my-lessons", studentId]`
-- `myLessonNotesQuery` → `["my-lesson-notes", studentId]`
-- `availableSlotsQuery` → `["available-slots", date, studentId]` (if student-specific)
+### 2. Updated all student-dependent query keys to include active student ID ✅
+- `messagesQuery(studentId?)` → `["messages", studentId]`
+- `assignmentsQuery(studentId?)` → `["assignments", studentId]`
+- `practiceLogsQuery(studentId?)` → `["practice-logs", studentId]`
+- `coursesQuery(studentId?)` → `["courses", studentId]`
+- `scheduledLessonsQuery(studentId?)` → `["my-lessons", "scheduled", studentId]`
+- `myLessonsQuery(studentId?)` → `["my-lessons", studentId]`
+- `myLessonNotesQuery(studentId?)` → `["my-lesson-notes", studentId]`
+- `availableSlotsQuery(date, studentId?)` → `["available-slots", date, studentId]`
 
-### 3. Create `invalidateStudentQueries()` helper
+### 3. Created `invalidateStudentQueries()` helper ✅
 Single function that invalidates all student-dependent query keys for a given student ID (or all if none provided).
 
-### 4. Enhance `useSwitchActiveStudent()` to call `invalidateStudentQueries()`
-After successful switch, invalidate all student-dependent queries for the new student.
+### 4. Enhanced `useSwitchActiveStudent()` to call `invalidateStudentQueries()` ✅
+After successful switch, invalidates all student-dependent queries for the new student.
 
-### 5. Update SSR loaders to use same effective student resolution
-Ensure `dashboard.tsx` loader and other SSR loaders use `resolveEffectiveStudent` consistently.
+### 5. Updated SSR loaders to use same effective student resolution ✅
+Ensured `dashboard.tsx`, `messages.tsx`, `courses.index.tsx`, `my-lessons.tsx` loaders use `resolveEffectiveStudent` consistently.
 
-### 6. Update `book-lesson.tsx` to reset state on student change
-Add effect to clear `selectedStudentId`, `bookingSlot` when `activeStudentId` changes.
+### 6. Updated `book-lesson.tsx` to reset state on student change ✅
+Added useEffect to clear `selectedStudentId`, `bookingSlot` when `activeStudentId` changes.
 
-### 7. Add parity tests (E2E)
-Test switching between two children covers: courses, messages, dashboard, practice, booking.
+### 7. Fixed query invalidation in assignments.index.tsx ✅
+Changed to use `exact: false` to match new query key structure.
+
+### 8. Added parity tests (E2E) ✅
+Created `e2e/active-student.spec.ts` testing switching between two children covering:
+- Dashboard data
+- Courses page
+- Messages page
+- Practice logs
+- Booking state reset
 
 ## Query Key Schema
 
@@ -63,3 +73,10 @@ Test switching between two children covers: courses, messages, dashboard, practi
 ```
 
 Note: `studentId` is `undefined` for non-parents (acts as self), or the active student ID for parents.
+
+## Verification
+
+- ✅ Build passes (`bun run build`)
+- ✅ TypeScript typecheck passes for modified files
+- ✅ Lint passes
+- ✅ E2E test file created (requires database to run)
