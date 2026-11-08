@@ -72,11 +72,7 @@
         { "_tag": "KvSecret", "path": "secret/data/dfg-rocks", "key": "google_client_id", "env": "GOOGLE_CLIENT_ID" },
         { "_tag": "KvSecret", "path": "secret/data/dfg-rocks", "key": "google_client_secret", "env": "GOOGLE_CLIENT_SECRET" },
         { "_tag": "KvSecret", "path": "secret/data/dfg-rocks", "key": "google_calendar_client_id", "env": "GOOGLE_CALENDAR_CLIENT_ID" },
-        { "_tag": "KvSecret", "path": "secret/data/dfg-rocks", "key": "google_calendar_client_secret", "env": "GOOGLE_CALENDAR_CLIENT_SECRET" },
-        { "_tag": "KvSecret", "path": "secret/data/dfg-rocks", "key": "apple_client_id", "env": "APPLE_CLIENT_ID" },
-        { "_tag": "KvSecret", "path": "secret/data/dfg-rocks", "key": "apple_team_id", "env": "APPLE_TEAM_ID" },
-        { "_tag": "KvSecret", "path": "secret/data/dfg-rocks", "key": "apple_key_id", "env": "APPLE_KEY_ID" },
-        { "_tag": "KvSecret", "path": "secret/data/dfg-rocks", "key": "apple_private_key", "env": "APPLE_PRIVATE_KEY" }
+        { "_tag": "KvSecret", "path": "secret/data/dfg-rocks", "key": "google_calendar_client_secret", "env": "GOOGLE_CALENDAR_CLIENT_SECRET" }
       ]
     },
     {
