@@ -1,5 +1,5 @@
 import { Effect } from "effect";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { createFileRoute, useNavigate, useRouter } from "@tanstack/react-router";
 import { useMutation } from "@tanstack/react-query";
 import { createServerFn } from "@tanstack/react-start";
@@ -133,11 +133,14 @@ function BookLessonPage() {
     end: string;
   } | null>(null);
 
-  // Reset booking state when active student changes
-  useEffect(() => {
+  // Reset the booking when the active student changes. Only the id is compared, so an
+  // auth refetch that returns a new familyStudents array does not clear a chosen slot.
+  const [trackedActiveStudentId, setTrackedActiveStudentId] = useState(activeStudentId);
+  if (trackedActiveStudentId !== activeStudentId) {
+    setTrackedActiveStudentId(activeStudentId);
     setSelectedStudentId(activeStudentId ?? (isParent ? familyStudents[0]?.id : user?.id) ?? "");
     setBookingSlot(null);
-  }, [activeStudentId, isParent, familyStudents, user?.id]);
+  }
 
   const bookMutation = useMutation({
     mutationFn: (slot: { start: string; end: string }) =>
