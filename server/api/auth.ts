@@ -4,7 +4,7 @@ import * as HttpServerResponse from "effect/http/HttpServerResponse";
 import { Effect } from "effect";
 import { authGroup } from "../../shared/httpApi.js";
 import { adaptHttpApiErrors } from "../httpApiErrors.js";
-import { checkRateLimit } from "../services/rateLimiter.js";
+import { checkRateLimit } from "../rateLimit.js";
 import { AuthService } from "../services/authService.js";
 import { AuthRouteService } from "../services/authRouteService.js";
 import { SessionService } from "../services/sessionService.js";
@@ -30,7 +30,7 @@ export function makeAuthLayer() {
         "login",
         Effect.fnUntraced(function* ({ request, payload }) {
           yield* csrfCheck(request.headers);
-          yield* checkRateLimit("login", request.headers, 10, 60000);
+          yield* checkRateLimit("login", request.headers);
           const result = yield* AuthService.use((authService) => authService.login(payload));
           const { email } = yield* UserService.use((userService) =>
             userService.primaryEmailForUser(result.user.user_id),
@@ -51,7 +51,7 @@ export function makeAuthLayer() {
         "magicLink",
         Effect.fnUntraced(function* ({ request, payload }) {
           yield* csrfCheck(request.headers);
-          yield* checkRateLimit("magic-link", request.headers, 5, 60000);
+          yield* checkRateLimit("magic-link", request.headers);
           yield* AuthRouteService.use((authRouteService) =>
             authRouteService.generateMagicLink(payload.email),
           );
@@ -86,6 +86,7 @@ export function makeAuthLayer() {
         "forgotPassword",
         Effect.fnUntraced(function* ({ request, payload }) {
           yield* csrfCheck(request.headers);
+          yield* checkRateLimit("forgot-password", request.headers);
           yield* AuthService.use((authService) => authService.forgotPassword(payload));
           return { success: true as const };
         }, adaptAuthHttpApiErrors),
@@ -94,6 +95,7 @@ export function makeAuthLayer() {
         "resetPassword",
         Effect.fnUntraced(function* ({ request, payload }) {
           yield* csrfCheck(request.headers);
+          yield* checkRateLimit("reset-password", request.headers);
           const result = yield* AuthService.use((authService) =>
             authService.resetPassword(payload),
           );

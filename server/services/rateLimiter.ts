@@ -1,79 +1,45 @@
-import net from "node:net";
-import { Context, Duration, Effect, Layer } from "effect";
-import * as PersistenceRateLimiter from "effect/persistence/RateLimiter";
-import { HttpError } from "../pgErrors.js";
+import { Config, Duration, Layer } from "effect";
+import {
+  make,
+  RateLimiter,
+  type RateLimiterStore,
+  layerStoreMemory,
+  layerStoreRedisConfig,
+} from "effect/persistence/RateLimiter";
 
-export class RateLimitError extends HttpError {
-  constructor() {
-    super(429, "Too many requests");
-  }
+/**
+ * The `RateLimiter` that RateLimitService (server/rateLimit.ts) counts against
+ * in production. Counts live in Valkey, so a limit holds across restarts and
+ * replicas.
+ *
+ * It requires Effect's `Redis` service (`effect/persistence/Redis`), which is
+ * the Valkey client: server/runtime.ts provides it from `VALKEY_URL` with
+ * `BunRedis`, since production runs on Bun. Valkey speaks the Redis protocol.
+ *
+ * Keys start with `VALKEY_KEY_PREFIX` and then `rl:`. The platform sets the
+ * prefix to `<cartridge name>:`, the only keys the app's Valkey user may touch.
+ */
+export const RateLimiterValkey = rateLimiterWithStore(
+  layerStoreRedisConfig({
+    prefix: Config.String("VALKEY_KEY_PREFIX").pipe(Config.map((prefix) => `${prefix}rl:`)),
+  }),
+);
+
+/** Counts in process memory, for tests that must run without a Valkey. */
+export const RateLimiterMemory = rateLimiterWithStore(layerStoreMemory);
+
+/**
+ * The longest a caller waits for the store. The Valkey clients queue commands
+ * while they reconnect, so without a deadline an outage would stall each
+ * caller instead of letting it apply its own policy for a store that is down.
+ */
+export const storeTimeout = Duration.seconds(1);
+
+/**
+ * A `RateLimiter` over `store`. Each call makes a new Layer: a build memoizes
+ * layers by reference, so two limiters made from Effect's one shared `layer`
+ * would both get the store of whichever was built first.
+ */
+export function rateLimiterWithStore<E, R>(store: Layer.Layer<RateLimiterStore, E, R>) {
+  return Layer.effect(RateLimiter, make).pipe(Layer.provide(store));
 }
-
-interface RateLimitServiceShape {
-  readonly consume: (
-    key: string,
-    max: number,
-    windowMs: number,
-  ) => Effect.Effect<void, RateLimitError | PersistenceRateLimiter.RateLimiterError>;
-}
-
-export class RateLimitService extends Context.Service<RateLimitService, RateLimitServiceShape>()(
-  "RateLimitService",
-) {
-  static readonly Live = Layer.effect(
-    this,
-    Effect.gen(function* () {
-      const limiter = yield* PersistenceRateLimiter.RateLimiter;
-
-      return {
-        consume: (key, max, windowMs) =>
-          limiter
-            .consume({
-              key,
-              algorithm: "fixed-window",
-              window: Duration.millis(windowMs),
-              limit: max,
-              onExceeded: "fail",
-            })
-            .pipe(
-              Effect.catchReason("RateLimiterError", "RateLimitExceeded", () =>
-                Effect.fail(new RateLimitError()),
-              ),
-              Effect.asVoid,
-            ),
-      } satisfies RateLimitServiceShape;
-    }),
-  ).pipe(
-    Layer.provide(
-      PersistenceRateLimiter.layer.pipe(Layer.provide(PersistenceRateLimiter.layerStoreMemory)),
-    ),
-  );
-
-  static readonly Test = Layer.succeed(this, {
-    consume: () => Effect.void,
-  });
-}
-
-// The ingress proxy (Traefik) discards any client-sent X-Real-Ip and sets it from the connection.
-// Every other client-IP header passes through it unchanged, so a client could forge it.
-export function clientIdentifierFromHeaders(
-  headers: Record<string, string | undefined>,
-): string | undefined {
-  const candidate = headers["x-real-ip"]?.trim();
-  return candidate && net.isIP(candidate) ? candidate : undefined;
-}
-
-export const checkRateLimit = Effect.fnUntraced(function* (
-  scope: string,
-  headers: Record<string, string | undefined>,
-  max: number,
-  windowMs: number,
-) {
-  // Requests without a proxy-set address share one bucket, so they are limited rather than exempt.
-  const ip = clientIdentifierFromHeaders(headers) ?? "unknown";
-
-  const rateLimiter = yield* RateLimitService;
-  yield* rateLimiter.consume(`dfg:rl:${scope}:${ip}`, max, windowMs);
-
-  return yield* Effect.void;
-});

@@ -21,7 +21,7 @@ import {
 } from "../services/oauthService.js";
 import { GeolocationService } from "../services/geolocation.js";
 import { PublicRouteService } from "../services/publicRouteService.js";
-import { checkRateLimit, clientIdentifierFromHeaders } from "../services/rateLimiter.js";
+import { checkRateLimit, clientIdentifierFromHeaders } from "../rateLimit.js";
 import { UserService } from "../services/userService.js";
 import { csrfCheck, setSessionCookie } from "./raw.js";
 
@@ -67,7 +67,7 @@ export function makePublicLayer() {
           if (payload.website) {
             return yield* new HttpError(400, "Invalid submission");
           }
-          yield* checkRateLimit("contact", request.headers, 5, 60000);
+          yield* checkRateLimit("contact", request.headers);
           const ip = clientIdentifierFromHeaders(request.headers);
           if (ip) {
             const loc = yield* GeolocationService.use((geolocationService) =>
@@ -301,7 +301,7 @@ export function makePublicLayer() {
         "acceptInvitation",
         Effect.fnUntraced(function* ({ request, params, payload }) {
           yield* csrfCheck(request.headers);
-          yield* checkRateLimit("accept-invite", request.headers, 10, 60000);
+          yield* checkRateLimit("accept-invite", request.headers);
           const session = yield* PublicRouteService.use((publicRouteService) =>
             publicRouteService.acceptInvitation({
               invitationId: params.id,

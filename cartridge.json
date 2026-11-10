@@ -8,6 +8,7 @@
     }
   ],
   "objectStore": {},
+  "valkey": {},
   "services": [
     {
       "name": "dfg-rocks-server",
@@ -47,7 +48,8 @@
         { "name": "MAIL_PROVIDER", "value": "cloudflare" },
         { "name": "EMAIL_FROM", "value": "DFG Music Lessons <noreply@dfg.rocks>" },
         { "name": "DATABASE_VISITOR", "database": "dfg_rocks", "role": "visitor" },
-        { "name": "DATABASE_OWNER", "database": "dfg_rocks", "role": "owner" }
+        { "name": "DATABASE_OWNER", "database": "dfg_rocks", "role": "owner" },
+        { "name": "VALKEY_KEY_PREFIX", "valkey": "keyPrefix" }
       ],
       "connections": [],
       "secrets": [
@@ -71,6 +73,7 @@
           "accessKeyIdEnv": "S3_ACCESS_KEY_ID",
           "secretAccessKeyEnv": "S3_SECRET_ACCESS_KEY"
         },
+        { "_tag": "ValkeyCredentials", "urlEnv": "VALKEY_URL" },
         { "_tag": "KvSecret", "path": "secret/data/dfg-rocks", "key": "admin_email", "env": "ADMIN_EMAIL" },
         { "_tag": "KvSecret", "path": "secret/data/dfg-rocks", "key": "google_client_id", "env": "GOOGLE_CLIENT_ID" },
         { "_tag": "KvSecret", "path": "secret/data/dfg-rocks", "key": "google_client_secret", "env": "GOOGLE_CLIENT_SECRET" },

@@ -3,6 +3,7 @@ import * as HttpApi from "effect/http-api/HttpApi";
 import * as HttpApiBuilder from "effect/http-api/HttpApiBuilder";
 import * as Etag from "effect/http/Etag";
 import * as FetchHttpClient from "effect/http/FetchHttpClient";
+import * as BunRedis from "@effect/platform-bun/BunRedis";
 import * as NodeFileSystem from "@effect/platform-node/NodeFileSystem";
 import * as NodeHttpPlatform from "@effect/platform-node/NodeHttpPlatform";
 import * as NodePath from "@effect/platform-node/NodePath";
@@ -27,7 +28,8 @@ import { GoogleCalendarService } from "./services/googleCalendarService.js";
 import { LessonPolicyService } from "./services/lessonPolicyService.js";
 import { PublicRouteService } from "./services/publicRouteService.js";
 import { PdfService } from "./services/pdfService.js";
-import { RateLimitService } from "./services/rateLimiter.js";
+import { RateLimitService } from "./rateLimit.js";
+import { RateLimiterValkey } from "./services/rateLimiter.js";
 import { RecurringScheduleService } from "./services/recurringScheduleService.js";
 import { RealtimeService } from "./services/realtimeService.js";
 import { SessionService } from "./services/sessionService.js";
@@ -48,7 +50,13 @@ const infrastructureLayer = Layer.mergeAll(
 // Outside production, E2E browsers share one address, so a real limiter would throttle the suite.
 const rateLimitLayer = Layer.unwrap(
   Effect.map(Config.String("NODE_ENV"), (nodeEnv) =>
-    nodeEnv === "production" ? RateLimitService.Live : RateLimitService.Test,
+    nodeEnv === "production"
+      ? RateLimitService.Live.pipe(
+          Layer.provide(RateLimiterValkey),
+          // Bun's client connects on first use, so the server starts while Valkey is down.
+          Layer.provide(BunRedis.layerConfig({ url: Config.String("VALKEY_URL") })),
+        )
+      : RateLimitService.Test,
   ),
 );
 
