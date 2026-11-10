@@ -10,6 +10,7 @@ import { AdminRouteService } from "./services/adminRouteService.js";
 import { AuthenticatedRouteService } from "./services/authenticatedRouteService.js";
 import { AuthRouteService } from "./services/authRouteService.js";
 import { AuthService } from "./services/authService.js";
+import { BackgroundWorker } from "./services/backgroundWorker.js";
 import { BillingLedgerService } from "./services/billingLedgerService.js";
 import { FileService } from "./services/fileService.js";
 import { FamilyBillingService } from "./services/familyBillingService.js";
@@ -61,6 +62,7 @@ const servicesLayer = Layer.mergeAll(
   lessonServicesLayer,
   AuthService.layer,
   AuthRouteService.layer,
+  BackgroundWorker.Live,
   billingServicesLayer,
   rateLimitLayer,
   FileService.layer,

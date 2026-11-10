@@ -7,6 +7,7 @@ import { env } from "../assertEnv.js";
 import { PgAuthDB } from "../db.js";
 import { adaptHttpApiErrors } from "../httpApiErrors.js";
 import { HttpError } from "../pgErrors.js";
+import { BackgroundWorker } from "../services/backgroundWorker.js";
 import {
   createAuthorizationRequest,
   decodeOAuthRedirect,
@@ -78,8 +79,11 @@ export function makeHealthLayer() {
             Effect.logError("Health check: database unreachable", cause).pipe(Effect.as(true)),
           ),
         );
-        if (databaseDown) {
-          return yield* new HealthUnavailableError({ commit, failed: ["database"] });
+        const worker = yield* BackgroundWorker;
+        const workerFailed = yield* worker.failed;
+        const failed = [...(databaseDown ? ["database"] : []), ...(workerFailed ? ["worker"] : [])];
+        if (failed.length > 0) {
+          return yield* new HealthUnavailableError({ commit, failed });
         }
         return { status: "ok" as const, commit };
       }),

@@ -15,6 +15,7 @@ import { makeAuthLayer } from "./routes/auth.js";
 import { authenticatedGroup, makeAuthenticatedLayer } from "./routes/authenticated.js";
 import { makeHealthLayer, makePublicLayer } from "./routes/public.js";
 import { serverRuntime } from "./runtime.js";
+import { BackgroundWorker, type WorkerPaths } from "./services/backgroundWorker.js";
 
 type WebHandler = {
   readonly handler: (request: Request) => Promise<Response>;
@@ -94,6 +95,11 @@ async function getWebHandler() {
 export async function handleApiRequest(request: Request): Promise<Response> {
   const handler = await getWebHandler();
   return handler.handler(request);
+}
+
+// Starts the in-process job runner. The production entry calls this once, after the HTTP server listens.
+export async function startWorker(paths: WorkerPaths): Promise<void> {
+  await serverRuntime.runPromise(BackgroundWorker.use((worker) => worker.start(paths)));
 }
 
 export async function disposeApiHandler(): Promise<void> {

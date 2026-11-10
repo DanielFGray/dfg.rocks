@@ -9,6 +9,7 @@ import path from "node:path";
 import handler from "./dist/server/server.js";
 
 const clientDir = path.resolve(import.meta.dir, "dist/client");
+const workerDir = path.resolve(import.meta.dir, "worker");
 
 const server = Bun.serve({
   hostname: process.env.HOST || "0.0.0.0",
@@ -31,3 +32,18 @@ const server = Bun.serve({
 });
 
 console.log(`Listening on ${server.url}`);
+
+await handler.startWorker({
+  taskDirectory: path.join(workerDir, "tasks"),
+  crontabFile: path.join(workerDir, "crontab"),
+});
+
+// The platform stops the container with SIGTERM. Stop taking requests first, then dispose the
+// runtime, which stops the job runner before the database pools close.
+for (const signal of ["SIGINT", "SIGTERM"] as const) {
+  process.once(signal, async () => {
+    server.stop();
+    await handler.dispose();
+    process.exit(0);
+  });
+}

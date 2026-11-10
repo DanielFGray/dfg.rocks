@@ -50,6 +50,7 @@ vi.mock("effect/Layer", () => ({
 
 vi.mock("../../shared/httpApi.js", () => ({
   authGroup: {},
+  healthGroup: {},
   publicGroup: {},
   familyBillingGroup: {},
   adminGroup: {},
@@ -66,7 +67,10 @@ vi.mock("../routes/authenticated.js", () => ({
   authenticatedGroup: {},
   makeAuthenticatedLayer: () => ({}),
 }));
-vi.mock("../routes/public.js", () => ({ makePublicLayer: () => ({}) }));
+vi.mock("../routes/public.js", () => ({
+  makeHealthLayer: () => ({}),
+  makePublicLayer: () => ({}),
+}));
 
 describe("API runtime lifecycle", () => {
   beforeEach(() => {
