@@ -11,9 +11,6 @@ import {
   PostgresQueryCompiler,
   sql,
 } from "kysely";
-import { EventEmitter } from "node:events";
-
-EventEmitter.defaultMaxListeners = 20;
 import type { DB } from "../generated/db.js";
 
 /** Anything Kysely can compile: query builders and `sql` template expressions. */
