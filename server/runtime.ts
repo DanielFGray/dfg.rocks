@@ -7,9 +7,10 @@ import * as BunRedis from "@effect/platform-bun/BunRedis";
 import * as NodeFileSystem from "@effect/platform-node/NodeFileSystem";
 import * as NodeHttpPlatform from "@effect/platform-node/NodeHttpPlatform";
 import * as NodePath from "@effect/platform-node/NodePath";
-import { authGroup, healthGroup, publicGroup } from "../shared/httpApi.js";
+import { authGroup, familyBillingGroup, healthGroup, publicGroup } from "../shared/httpApi.js";
 import { adminGroup, makeAdminLayer } from "./api/admin.js";
 import { makeAuthLayer } from "./api/auth.js";
+import { makeFamilyBillingLayer } from "./api/familyBilling.js";
 import { authenticatedGroup, makeAuthenticatedLayer } from "./api/authenticated.js";
 import { makeHealthLayer } from "./api/health.js";
 import { makeMaterialDownloadLayer, materialDownloadGroup } from "./api/materialDownload.js";
@@ -114,7 +115,8 @@ const ServerApi = HttpApi.make("dfg")
   .add(authGroup)
   .add(authenticatedGroup)
   .add(adminGroup)
-  .add(materialDownloadGroup);
+  .add(materialDownloadGroup)
+  .add(familyBillingGroup);
 
 const GroupHandlersLive = Layer.mergeAll(
   makeHealthLayer(),
@@ -123,6 +125,7 @@ const GroupHandlersLive = Layer.mergeAll(
   makeAuthenticatedLayer(),
   makeAdminLayer(),
   makeMaterialDownloadLayer(),
+  makeFamilyBillingLayer(),
 );
 
 const ApiLive = HttpApiBuilder.layer(ServerApi).pipe(Layer.provide(GroupHandlersLive));

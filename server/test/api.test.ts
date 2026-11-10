@@ -1404,4 +1404,93 @@ describe("DFG Portal API", () => {
       }),
     30_000,
   );
+
+  it.effect(
+    "serves family billing only to the family that pays it",
+    () =>
+      Effect.gen(function* () {
+        const query = (text: string, values: ReadonlyArray<unknown>) =>
+          Effect.promise(() => testDb.query(text, [...values]));
+        const makeUser = Effect.fn(function* (username: string, role: string) {
+          const created = yield* query(
+            `select id from app_private.really_create_user($1::citext, $2, null, true, $3::citext, $4)`,
+            [username, username, `${username}@test.com`, `${username}123`],
+          );
+          const id: string = created.rows[0].id;
+          yield* query(`update app_public.users set role = $1 where id = $2`, [role, id]);
+          const login = yield* reqEffect("POST", "/api/login", {
+            body: { id: username, password: `${username}123` },
+          });
+          return { id, cookie: getCookie(login) ?? "" };
+        });
+        const makeFamily = Effect.fn(function* (slug: string, payerId: string) {
+          const family = yield* query(
+            `insert into app_public.families (slug, name) values ($1, $2) returning id`,
+            [slug, slug],
+          );
+          yield* query(
+            `insert into app_public.family_memberships (family_id, user_id, is_owner, is_billing_contact) values ($1, $2, true, true)`,
+            [family.rows[0].id, payerId],
+          );
+        });
+
+        const payer = yield* makeUser("fam_http_payer", "parent");
+        const otherPayer = yield* makeUser("fam_http_other", "parent");
+        const teacher = yield* makeUser("fam_http_teacher", "teacher");
+        yield* makeFamily("fam-http-payer", payer.id);
+        yield* makeFamily("fam-http-other", otherPayer.id);
+        const bill = yield* query(
+          `insert into app_public.bills (payer_id, bill_number, billing_period_start, billing_period_end, due_date, subtotal_cents, discount_cents, tax_cents, total_cents, status)
+           values ($1, app_public.next_bill_number(), '2026-07-01', '2026-07-31', '2026-07-15', 5000, 0, 0, 5000, 'draft') returning id`,
+          [payer.id],
+        );
+        const billId: string = bill.rows[0].id;
+        yield* query(
+          `update app_public.bills set status = 'issued', issued_at = now() where id = $1`,
+          [billId],
+        );
+        const payment = yield* query(
+          `insert into app_public.payments (payer_id, payment_number, amount_cents, method, received_at)
+           values ($1, app_public.next_payment_number(), 5000, 'check', now()) returning id`,
+          [payer.id],
+        );
+        const paymentId: string = payment.rows[0].id;
+
+        const lists = [
+          "/api/family/billing",
+          "/api/family/billing/bills",
+          "/api/family/billing/payments",
+          "/api/family/billing/credits",
+        ];
+        const records = [
+          `/api/family/billing/bills/${billId}`,
+          `/api/family/billing/bills/${billId}/pdf`,
+          `/api/family/billing/payments/${paymentId}`,
+          `/api/family/billing/payments/${paymentId}/receipt`,
+        ];
+        const statuses = (paths: ReadonlyArray<string>, cookie?: string) =>
+          Effect.forEach(paths, (path) =>
+            reqEffect("GET", path, { cookie }).pipe(Effect.map((res) => [path, res.status])),
+          );
+        const all = [...lists, ...records];
+
+        expect(yield* statuses(all)).toEqual(all.map((path) => [path, 401]));
+        expect(yield* statuses(all, teacher.cookie)).toEqual(all.map((path) => [path, 403]));
+        expect(yield* statuses(records, otherPayer.cookie)).toEqual(
+          records.map((path) => [path, 404]),
+        );
+        const otherBills = yield* reqEffect("GET", "/api/family/billing/bills", {
+          cookie: otherPayer.cookie,
+        }).pipe(Effect.flatMap(resJson));
+        expect(otherBills).toEqual([]);
+
+        // The payer reads every one of the same URLs, so the refusals above come from access rules.
+        expect(yield* statuses(all, payer.cookie)).toEqual(all.map((path) => [path, 200]));
+        const payerBills = yield* reqEffect("GET", "/api/family/billing/bills", {
+          cookie: payer.cookie,
+        }).pipe(Effect.flatMap(resJson));
+        expect(payerBills.map((row: { id: string }) => row.id)).toEqual([billId]);
+      }),
+    60_000,
+  );
 });
