@@ -4,18 +4,16 @@ import { api } from "./api.js";
 import { decodeAuthState, getAuthUser, type AuthState } from "./auth.js";
 import { todayRange, weekRange } from "../../shared/dateRanges.js";
 
+// The server function returns JSON text; the cache holds the decoded state, so code that reads
+// the cache directly (getQueryData) gets the same AuthState that useQuery does.
 export const authUserQuery = queryOptions({
   queryKey: ["auth", "user"],
-  queryFn: getAuthUser,
-  select: decodeAuthState,
+  queryFn: async () => decodeAuthState(await getAuthUser()),
   staleTime: 5_000,
 });
 
-export async function fetchAuthUser(queryClient: QueryClient): Promise<AuthState> {
-  const cached = queryClient.getQueryData<AuthState>(authUserQuery.queryKey);
-  if (cached) return cached;
-  const raw = await queryClient.fetchQuery(authUserQuery);
-  return decodeAuthState(raw);
+export function fetchAuthUser(queryClient: QueryClient): Promise<AuthState> {
+  return queryClient.ensureQueryData(authUserQuery);
 }
 
 /**
@@ -24,7 +22,7 @@ export async function fetchAuthUser(queryClient: QueryClient): Promise<AuthState
  * Uses the cached auth state to avoid additional queries.
  */
 export function getEffectiveStudentId(queryClient: QueryClient): string | undefined {
-  const cached = queryClient.getQueryData<AuthState>(authUserQuery.queryKey);
+  const cached = queryClient.getQueryData(authUserQuery.queryKey);
   if (!cached) return undefined;
   if (cached.isParent && cached.activeStudentId) {
     return cached.activeStudentId;
