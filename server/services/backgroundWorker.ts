@@ -1,6 +1,5 @@
-import { Context, Effect, Layer, Ref } from "effect";
+import { Config, Context, Effect, Layer, Redacted, Ref } from "effect";
 import { run, type Runner } from "graphile-worker";
-import { env } from "../assertEnv.js";
 
 export interface WorkerPaths {
   readonly taskDirectory: string;
@@ -23,6 +22,7 @@ export class BackgroundWorker extends Context.Service<BackgroundWorker, Backgrou
   static readonly Live = Layer.effect(
     this,
     Effect.gen(function* () {
+      const connectionString = Redacted.value(yield* Config.Redacted("DATABASE_URL"));
       const failedRef = yield* Ref.make(false);
       const runnerRef = yield* Ref.make<Runner | undefined>(undefined);
       const markFailed = Ref.set(failedRef, true);
@@ -30,7 +30,7 @@ export class BackgroundWorker extends Context.Service<BackgroundWorker, Backgrou
       const start = Effect.fnUntraced(function* (paths: WorkerPaths) {
         const runner = yield* Effect.tryPromise({
           // The signal handlers belong to the server, which stops the runner on SIGTERM and SIGINT.
-          try: () => run({ connectionString: env.DATABASE_URL, noHandleSignals: true, ...paths }),
+          try: () => run({ connectionString, noHandleSignals: true, ...paths }),
           catch: (cause) => cause,
         }).pipe(
           Effect.catch((cause) =>

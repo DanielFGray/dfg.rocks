@@ -6,29 +6,14 @@ import {
   generateCodeVerifier,
   generateState,
 } from "arctic";
-import { Duration, Effect } from "effect";
-import * as Redacted from "effect/Redacted";
+import { Config, Duration, Effect, Redacted } from "effect";
 import * as S from "effect/Schema";
 import { createRemoteJWKSet, jwtVerify } from "jose";
-import { env } from "../assertEnv.js";
 import { HttpError } from "../pgErrors.js";
 
 const oauthScopeByProvider = {
   google: ["openid", "email", "profile"],
   apple: ["name", "email"],
-} as const;
-
-export const oauthConfig = {
-  google: {
-    clientId: env.GOOGLE_CLIENT_ID ?? "",
-    clientSecret: env.GOOGLE_CLIENT_SECRET ? Redacted.value(env.GOOGLE_CLIENT_SECRET) : "",
-  },
-  apple: {
-    clientId: env.APPLE_CLIENT_ID ?? "",
-    teamId: env.APPLE_TEAM_ID ?? "",
-    keyId: env.APPLE_KEY_ID ?? "",
-    privateKey: env.APPLE_PRIVATE_KEY ? Redacted.value(env.APPLE_PRIVATE_KEY) : "",
-  },
 } as const;
 
 export type OAuthProvider = keyof typeof oauthScopeByProvider;
@@ -66,24 +51,21 @@ function providerName(provider: OAuthProvider): string {
   return provider === "google" ? "Google" : "Apple";
 }
 
-const googleConfig = Effect.fnUntraced(function* () {
-  if (!oauthConfig.google.clientId || !oauthConfig.google.clientSecret) {
-    return yield* new HttpError(503, "Google OAuth is not configured");
-  }
-  return oauthConfig.google;
-});
+const googleConfig = Effect.gen(function* () {
+  return {
+    clientId: yield* Config.NonEmptyString("GOOGLE_CLIENT_ID"),
+    clientSecret: yield* Config.Redacted("GOOGLE_CLIENT_SECRET"),
+  };
+}).pipe(Effect.mapError(() => new HttpError(503, "Google OAuth is not configured")));
 
-const appleConfigEffect = Effect.sync(() => {
-  if (
-    !oauthConfig.apple.clientId ||
-    !oauthConfig.apple.teamId ||
-    !oauthConfig.apple.keyId ||
-    !oauthConfig.apple.privateKey
-  ) {
-    throw new HttpError(503, "Apple OAuth is not configured");
-  }
-  return oauthConfig.apple;
-});
+const appleConfigEffect = Effect.gen(function* () {
+  return {
+    clientId: yield* Config.NonEmptyString("APPLE_CLIENT_ID"),
+    teamId: yield* Config.NonEmptyString("APPLE_TEAM_ID"),
+    keyId: yield* Config.NonEmptyString("APPLE_KEY_ID"),
+    privateKey: yield* Config.Redacted("APPLE_PRIVATE_KEY"),
+  };
+}).pipe(Effect.mapError(() => new HttpError(503, "Apple OAuth is not configured")));
 
 const normalizeApplePrivateKey = Effect.fnUntraced(function* (privateKey: string) {
   const normalizedPem = privateKey.replaceAll("\\n", "\n").trim();
@@ -101,13 +83,17 @@ const normalizeApplePrivateKey = Effect.fnUntraced(function* (privateKey: string
 });
 
 const getGoogleClientEffect = Effect.fnUntraced(function* (rootUrl: string) {
-  const config = yield* googleConfig();
-  return new Google(config.clientId, config.clientSecret, `${rootUrl}/api/oauth/google/callback`);
+  const config = yield* googleConfig;
+  return new Google(
+    config.clientId,
+    Redacted.value(config.clientSecret),
+    `${rootUrl}/api/oauth/google/callback`,
+  );
 });
 
 const getAppleClientEffect = Effect.fnUntraced(function* (rootUrl: string) {
   const appleConfig = yield* appleConfigEffect;
-  const privateKey = yield* normalizeApplePrivateKey(appleConfig.privateKey);
+  const privateKey = yield* normalizeApplePrivateKey(Redacted.value(appleConfig.privateKey));
   return new Apple(
     appleConfig.clientId,
     appleConfig.teamId,
@@ -117,57 +103,35 @@ const getAppleClientEffect = Effect.fnUntraced(function* (rootUrl: string) {
   );
 });
 
-export function createAuthorizationRequest(
-  provider: "google",
-  rootUrl: string,
-  redirect?: string,
-): {
-  state: OAuthRequestState;
-  url: URL;
-};
-
-export function createAuthorizationRequest(
-  provider: "apple",
-  rootUrl: string,
-  redirect?: string,
-): {
-  state: OAuthRequestState;
-  url: URL;
-};
-
-export function createAuthorizationRequest(
+export const createAuthorizationRequest = Effect.fnUntraced(function* (
   provider: OAuthProvider,
   rootUrl: string,
   redirect?: string,
 ) {
-  return runSync(
-    Effect.fnUntraced(function* (provider: OAuthProvider, rootUrl: string, redirect?: string) {
-      const normalizedRedirect = normalizeRedirect(redirect);
-      const state = generateState();
-      if (provider === "google") {
-        const codeVerifier = generateCodeVerifier();
-        const url = (yield* getGoogleClientEffect(rootUrl)).createAuthorizationURL(
-          state,
-          codeVerifier,
-          [...oauthScopeByProvider.google],
-        );
-        url.searchParams.set("access_type", "offline");
-        return {
-          state: { state, redirect: normalizedRedirect, codeVerifier },
-          url,
-        };
-      }
-      const url = (yield* getAppleClientEffect(rootUrl)).createAuthorizationURL(state, [
-        ...oauthScopeByProvider.apple,
-      ]);
-      url.searchParams.set("response_mode", "form_post");
-      return {
-        state: { state, redirect: normalizedRedirect },
-        url,
-      };
-    })(provider, rootUrl, redirect),
-  );
-}
+  const normalizedRedirect = normalizeRedirect(redirect);
+  const state = generateState();
+  if (provider === "google") {
+    const codeVerifier = generateCodeVerifier();
+    const url = (yield* getGoogleClientEffect(rootUrl)).createAuthorizationURL(
+      state,
+      codeVerifier,
+      [...oauthScopeByProvider.google],
+    );
+    url.searchParams.set("access_type", "offline");
+    return {
+      state: { state, redirect: normalizedRedirect, codeVerifier } satisfies OAuthRequestState,
+      url,
+    };
+  }
+  const url = (yield* getAppleClientEffect(rootUrl)).createAuthorizationURL(state, [
+    ...oauthScopeByProvider.apple,
+  ]);
+  url.searchParams.set("response_mode", "form_post");
+  return {
+    state: { state, redirect: normalizedRedirect } satisfies OAuthRequestState,
+    url,
+  };
+});
 
 export function encodeOAuthState(value: OAuthRequestState): string {
   return runSync(
@@ -206,12 +170,15 @@ export function getOAuthRedirectCookieName(
   return `oauth_${provider}_redirect`;
 }
 
-export function getOAuthCookieOptions(provider: OAuthProvider, rootUrl: string) {
+export const getOAuthCookieOptions = Effect.fnUntraced(function* (
+  provider: OAuthProvider,
+  rootUrl: string,
+) {
+  const isProduction = (yield* Config.String("NODE_ENV")) === "production";
   const rootOrigin = getRootOrigin(rootUrl);
   const isLocalhost = rootOrigin.hostname === "localhost" || rootOrigin.hostname === "127.0.0.1";
-  const secureCookies =
-    env.NODE_ENV === "production" || rootOrigin.protocol === "https:" || isLocalhost;
-  const standardSecureCookies = env.NODE_ENV === "production" || rootOrigin.protocol === "https:";
+  const secureCookies = isProduction || rootOrigin.protocol === "https:" || isLocalhost;
+  const standardSecureCookies = isProduction || rootOrigin.protocol === "https:";
   return {
     httpOnly: true,
     sameSite: provider === "apple" ? ("none" as const) : ("lax" as const),
@@ -219,7 +186,7 @@ export function getOAuthCookieOptions(provider: OAuthProvider, rootUrl: string) 
     path: "/api/oauth",
     maxAge: Duration.minutes(10),
   };
-}
+});
 
 export function encodeOAuthRedirect(value: string): string {
   return Buffer.from(value, "utf8").toString("base64url");

@@ -1,6 +1,5 @@
 /** @typedef {import("./send_email").SendEmailPayload} SendEmailPayload */
 /** @typedef {import("graphile-worker").Task} Task */
-import { env } from "../../server/assertEnv.ts";
 
 /** @typedef {{
   id: string;
@@ -39,7 +38,7 @@ export default async (inPayload, { addJob, withPgClient }) => {
     template: "magic_link.mjml",
     variables: {
       token,
-      loginLink: `${env.VITE_ROOT_URL}/magic-login?token=${encodeURIComponent(token)}`,
+      loginLink: `${process.env.VITE_ROOT_URL}/magic-login?token=${encodeURIComponent(token)}`,
     },
   };
   await addJob("send_email", sendEmailPayload);

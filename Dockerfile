@@ -19,8 +19,6 @@ COPY --from=build /app/dist ./dist
 COPY package.json .gmrc.cjs serve.ts ./
 COPY migrations ./migrations
 COPY worker ./worker
-# The worker reads its configuration through the server's env schema.
-COPY server/assertEnv.ts ./server/assertEnv.ts
 
 ENV NODE_ENV=production
 ENV PORT=3000

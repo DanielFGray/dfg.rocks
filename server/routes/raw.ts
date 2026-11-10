@@ -1,8 +1,7 @@
 import * as Cookies from "effect/http/Cookies";
 import * as HttpServerRequest from "effect/http/HttpServerRequest";
 import * as HttpServerResponse from "effect/http/HttpServerResponse";
-import { Effect, Schema as S } from "effect";
-import { env } from "../assertEnv.js";
+import { Config, Effect, Schema as S } from "effect";
 import { HttpError } from "../pgErrors.js";
 
 export type RawRequest = HttpServerRequest.HttpServerRequest;
@@ -13,28 +12,29 @@ export function params<const Name extends string>(...names: readonly Name[]) {
   );
 }
 
-function defaultCookieOptions(): NonNullable<Cookies.Cookie["options"]> {
+const defaultCookieOptions = Effect.gen(function* () {
   return {
     httpOnly: true,
     sameSite: "lax",
-    secure: env.NODE_ENV === "production",
+    secure: (yield* Config.String("NODE_ENV")) === "production",
     path: "/",
-  };
-}
+  } satisfies NonNullable<Cookies.Cookie["options"]>;
+});
 
 export function setSessionCookie(
   response: HttpServerResponse.HttpServerResponse,
   token: string,
   expiresAt: Date,
 ) {
-  return HttpServerResponse.setCookie(response, "session", token, {
-    ...defaultCookieOptions(),
-    expires: expiresAt,
-  });
+  return Effect.flatMap(defaultCookieOptions, (options) =>
+    HttpServerResponse.setCookie(response, "session", token, { ...options, expires: expiresAt }),
+  );
 }
 
 export function expireSessionCookie(response: HttpServerResponse.HttpServerResponse) {
-  return HttpServerResponse.expireCookie(response, "session", defaultCookieOptions());
+  return Effect.flatMap(defaultCookieOptions, (options) =>
+    HttpServerResponse.expireCookie(response, "session", options),
+  );
 }
 
 export function csrfCheck(

@@ -1,8 +1,7 @@
-import { Effect, Schema as S, Context, Layer } from "effect";
+import { Config, Effect, Schema as S, Context, Layer } from "effect";
 import { sql } from "kysely";
 import { serializeTestimonial } from "../../shared/responseMappers.js";
 import { FamilyInviteRole, type Testimonial } from "../../shared/schemas.js";
-import { env } from "../assertEnv.js";
 import { addJob, PgRootDB } from "../db.js";
 import { catchPgErrors, HttpError } from "../pgErrors.js";
 import type { UserRow } from "./userService.js";
@@ -17,6 +16,7 @@ export class PublicRouteService extends Context.Service<PublicRouteService>()(
   {
     make: Effect.gen(function* () {
       const db = yield* PgRootDB;
+      const adminEmail = yield* Config.NonEmptyString("ADMIN_EMAIL");
 
       const invitationById = (invitationId: string) =>
         db
@@ -87,7 +87,7 @@ export class PublicRouteService extends Context.Service<PublicRouteService>()(
               );
               yield* addJob(db, "send_email", {
                 options: {
-                  to: env.ADMIN_EMAIL,
+                  to: adminEmail,
                   subject: `New contact: ${values.name} (${values.instrument})`,
                 },
                 template: "contact_submission.mjml",

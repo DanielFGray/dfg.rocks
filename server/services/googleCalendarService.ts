@@ -5,13 +5,11 @@ import {
   generateCodeVerifier,
   generateState,
 } from "arctic";
-import { Duration, Effect, Option, Context, Layer } from "effect";
-import * as Redacted from "effect/Redacted";
+import { Config, Duration, Effect, Option, Context, Layer, Redacted } from "effect";
 import * as S from "effect/Schema";
 import * as HttpClient from "effect/http/HttpClient";
 import * as HttpBody from "effect/http/HttpBody";
 import { PgRootDB } from "../db.js";
-import { env } from "../assertEnv.js";
 import { HttpError } from "../pgErrors.js";
 import { WorkingHours } from "../../shared/schemas.js";
 import { defaultWorkingHours } from "../../shared/workingHours.js";
@@ -78,9 +76,12 @@ const GCAL_AUTH_COOKIE_NAME = "gcal_oauth";
 const TOKEN_EXPIRY_BUFFER_MS = 60000;
 
 // Helpers
-const getClientId = () => env.GOOGLE_CALENDAR_CLIENT_ID ?? "";
-const getClientSecret = () =>
-  env.GOOGLE_CALENDAR_CLIENT_SECRET ? Redacted.value(env.GOOGLE_CALENDAR_CLIENT_SECRET) : "";
+const calendarCredentials = Effect.gen(function* () {
+  return {
+    clientId: yield* Config.NonEmptyString("GOOGLE_CALENDAR_CLIENT_ID"),
+    clientSecret: yield* Config.Redacted("GOOGLE_CALENDAR_CLIENT_SECRET"),
+  };
+}).pipe(Effect.mapError(() => new HttpError(503, "Google Calendar OAuth is not configured")));
 const getRedirectUri = (rootUrl: string) => `${rootUrl}/api/admin/gcal/callback`;
 
 type GoogleCalendarAuthState = {
@@ -90,12 +91,8 @@ type GoogleCalendarAuthState = {
 };
 
 const getGoogleCalendarClient = Effect.fnUntraced(function* (rootUrl: string) {
-  const clientId = getClientId();
-  const clientSecret = getClientSecret();
-  if (!clientId || !clientSecret) {
-    return yield* new HttpError(503, "Google Calendar OAuth is not configured");
-  }
-  return new Google(clientId, clientSecret, getRedirectUri(rootUrl));
+  const { clientId, clientSecret } = yield* calendarCredentials;
+  return new Google(clientId, Redacted.value(clientSecret), getRedirectUri(rootUrl));
 });
 
 function mapGoogleCalendarAuthError(error: unknown): HttpError {
@@ -178,13 +175,11 @@ export class GoogleCalendarService extends Context.Service<GoogleCalendarService
         ) {
           return cached;
         }
-        if (!getClientId() || !getClientSecret()) {
-          return yield* new HttpError(503, "Google Calendar OAuth is not configured");
-        }
+        const { clientId, clientSecret } = yield* calendarCredentials;
         const refreshToken = yield* getRefreshTokenEffect();
         const body = new URLSearchParams({
-          client_id: getClientId(),
-          client_secret: getClientSecret(),
+          client_id: clientId,
+          client_secret: Redacted.value(clientSecret),
           refresh_token: refreshToken,
           grant_type: "refresh_token",
         });
@@ -605,14 +600,15 @@ export class GoogleCalendarService extends Context.Service<GoogleCalendarService
     ).pipe(Effect.catch(() => Effect.succeed(null)));
   }
 
-  static getAuthCookieOptions(rootUrl: string) {
+  static getAuthCookieOptions = Effect.fnUntraced(function* (rootUrl: string) {
+    const isProduction = (yield* Config.String("NODE_ENV")) === "production";
     const root = new URL(rootUrl);
     return {
       httpOnly: true,
       maxAge: Duration.minutes(10),
       path: "/api/admin/gcal",
       sameSite: "lax" as const,
-      secure: env.NODE_ENV === "production" || root.protocol === "https:",
+      secure: isProduction || root.protocol === "https:",
     };
-  }
+  });
 }

@@ -25,7 +25,7 @@ Local Postgres is the shared cluster from `ops dev db` (container `ops-dev-pg17`
 
 Production runs on the server-ansible platform (`~/build/server-ansible`), described by `cartridge.json`. `ops release` builds the Dockerfile from committed HEAD, so the image never sees `.env` or `generated/`. Traefik ends TLS and sets `X-Real-Ip`, the only client-address header the rate limiter trusts. The platform creates `dfg_rocks_owner` and `dfg_rocks_visitor` group roles, a migration login in the owner role, and a NOINHERIT API login in the visitor role. The server prestart runs `bun run migrate`, which installs the graphile-worker schema and applies committed migrations.
 
-`server/assertEnv.ts` holds only what the server and worker read at runtime. `scripts/devEnv.ts` adds the admin seed values.
+The server reads each setting with Effect `Config` where it uses it. Worker tasks read `process.env`, and the graphile-worker CLI takes `DATABASE_URL` from the environment.
 
 ## Backend reference
 

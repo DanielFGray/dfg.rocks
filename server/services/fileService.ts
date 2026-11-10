@@ -147,8 +147,9 @@ export class FileService extends Context.Service<FileService>()("FileService", {
           yield* ensureStoredBlobEffect(existingMaterial, bytes);
           return yield* Effect.succeed(toMaterialResponse(existingMaterial));
         }
-        const location = StorageService.createMaterialLocation(contentHash);
-        yield* StorageService.use((storageService) => storageService.put(location, bytes));
+        const storage = yield* StorageService;
+        const location = storage.materialLocation(contentHash);
+        yield* storage.put(location, bytes);
         // Handle concurrent uploads with the same content hash (unique constraint race)
         return yield* withAuthContext(sessionId, (db) =>
           db

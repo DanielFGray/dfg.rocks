@@ -3,8 +3,7 @@ import { createReadStream } from "node:fs";
 import path from "node:path";
 import { Readable } from "node:stream";
 import * as FileSystem from "effect/FileSystem";
-import { Context, Effect, Layer, Redacted } from "effect";
-import { env } from "../assertEnv.js";
+import { Config, Context, Effect, Layer, Option, Redacted, Schema as S } from "effect";
 import { createS3Client, makeS3ObjectStore, type S3Settings } from "./s3Objects.js";
 
 export type StorageBackend = "local" | "s3";
@@ -15,6 +14,9 @@ export type StorageLocation = {
 };
 
 interface StorageServiceShape {
+  /** Where a new material blob goes. A stored row keeps the backend it was written to. */
+  readonly materialLocation: (contentHash: string) => StorageLocation;
+  readonly testingLocation: (filename: string) => StorageLocation;
   readonly exists: (location: StorageLocation) => Effect.Effect<boolean, unknown>;
   readonly put: (location: StorageLocation, bytes: Uint8Array) => Effect.Effect<void, unknown>;
   readonly delete: (location: StorageLocation) => Effect.Effect<void, unknown>;
@@ -29,49 +31,44 @@ interface KeyedStore {
   readonly open: (storageKey: string) => Effect.Effect<ReadableStream<Uint8Array>, unknown>;
 }
 
-const uploadsDir = env.UPLOADS_DIR || "./uploads";
+/** Some S3 variables are set and some are not. */
+export class StoragePartlyConfiguredError extends S.TaggedError<StoragePartlyConfiguredError>()(
+  "StoragePartlyConfiguredError",
+  { message: S.String },
+) {}
+
+const s3Config = Config.all({
+  endpoint: Config.option(Config.NonEmptyString("S3_ENDPOINT")),
+  region: Config.option(Config.NonEmptyString("S3_REGION")),
+  bucket: Config.option(Config.NonEmptyString("S3_BUCKET")),
+  accessKeyId: Config.option(Config.NonEmptyString("S3_ACCESS_KEY_ID")),
+  secretAccessKey: Config.option(Config.Redacted("S3_SECRET_ACCESS_KEY")),
+});
 
 /**
  * S3 is enabled only when all five variables are set. A partial set is a deploy mistake, so it
  * stops startup rather than writing new files to local disk.
  */
-function readS3Settings(): S3Settings | undefined {
-  const {
-    S3_ENDPOINT: endpoint,
-    S3_REGION: region,
-    S3_BUCKET: bucket,
-    S3_ACCESS_KEY_ID: accessKeyId,
-    S3_SECRET_ACCESS_KEY: secretAccessKey,
-  } = env;
-  if (
-    endpoint === undefined &&
-    region === undefined &&
-    bucket === undefined &&
-    accessKeyId === undefined &&
-    secretAccessKey === undefined
-  ) {
-    return undefined;
+const readS3Settings = Effect.gen(function* () {
+  const s3 = yield* s3Config;
+  const complete = Option.all(s3);
+  if (Option.isSome(complete)) {
+    const settings = complete.value;
+    return Option.some({
+      ...settings,
+      secretAccessKey: Redacted.value(settings.secretAccessKey),
+    } satisfies S3Settings);
   }
-  if (
-    endpoint === undefined ||
-    region === undefined ||
-    bucket === undefined ||
-    accessKeyId === undefined ||
-    secretAccessKey === undefined
-  ) {
-    throw new Error(
+  if (Object.values(s3).every((value: Option.Option<unknown>) => Option.isNone(value))) {
+    return Option.none<S3Settings>();
+  }
+  return yield* new StoragePartlyConfiguredError({
+    message:
       "S3 storage is partly configured: set all of S3_ENDPOINT, S3_REGION, S3_BUCKET, S3_ACCESS_KEY_ID and S3_SECRET_ACCESS_KEY, or none of them",
-    );
-  }
-  return { endpoint, region, bucket, accessKeyId, secretAccessKey: Redacted.value(secretAccessKey) };
-}
+  });
+});
 
-const s3Settings = readS3Settings();
-
-/** Backend for files written from now on. A stored row keeps the backend it was written to. */
-const newFileBackend: StorageBackend = s3Settings ? "s3" : "local";
-
-function resolveLocalPath(storageKey: string): string {
+function resolveLocalPath(uploadsDir: string, storageKey: string): string {
   return path.isAbsolute(storageKey) ? storageKey : path.join(uploadsDir, storageKey);
 }
 
@@ -79,21 +76,21 @@ function getExtension(filename: string): string {
   return path.extname(filename).toLowerCase();
 }
 
-function makeLocalStore(fileSystem: FileSystem.FileSystem): KeyedStore {
+function makeLocalStore(fileSystem: FileSystem.FileSystem, uploadsDir: string): KeyedStore {
   return {
-    exists: (storageKey) => fileSystem.exists(resolveLocalPath(storageKey)),
+    exists: (storageKey) => fileSystem.exists(resolveLocalPath(uploadsDir, storageKey)),
     put: (storageKey, bytes) => {
-      const filePath = resolveLocalPath(storageKey);
+      const filePath = resolveLocalPath(uploadsDir, storageKey);
       return fileSystem
         .makeDirectory(path.dirname(filePath), { recursive: true })
         .pipe(Effect.andThen(fileSystem.writeFile(filePath, bytes)));
     },
-    delete: (storageKey) => fileSystem.remove(resolveLocalPath(storageKey)),
+    delete: (storageKey) => fileSystem.remove(resolveLocalPath(uploadsDir, storageKey)),
     open: (storageKey) =>
       Effect.try({
         try: () =>
           Readable.toWeb(
-            createReadStream(resolveLocalPath(storageKey)),
+            createReadStream(resolveLocalPath(uploadsDir, storageKey)),
           ) as unknown as ReadableStream<Uint8Array>,
         catch: (error) => error,
       }),
@@ -102,23 +99,29 @@ function makeLocalStore(fileSystem: FileSystem.FileSystem): KeyedStore {
 
 const makeLive = Effect.gen(function* () {
   const fileSystem = yield* FileSystem.FileSystem;
-  const localStore = makeLocalStore(fileSystem);
-  const s3Store = s3Settings ? makeS3ObjectStore(createS3Client(s3Settings)) : undefined;
+  const uploadsDir = yield* Config.NonEmptyString("UPLOADS_DIR").pipe(
+    Config.withDefault("./uploads"),
+  );
+  const s3Settings = yield* readS3Settings;
+  const localStore = makeLocalStore(fileSystem, uploadsDir);
+  const s3Store = Option.map(s3Settings, (settings) => makeS3ObjectStore(createS3Client(settings)));
 
   const storeFor = (location: StorageLocation): Effect.Effect<KeyedStore, Error> => {
     switch (location.storageBackend) {
       case "local":
         return Effect.succeed(localStore);
       case "s3":
-        return s3Store
-          ? Effect.succeed(s3Store)
-          : Effect.fail(new Error("S3 storage is not configured"));
+        return Option.match(s3Store, {
+          onNone: () => Effect.fail(new Error("S3 storage is not configured")),
+          onSome: Effect.succeed,
+        });
       default:
         return Effect.fail(new Error(`Unsupported storage backend: ${location.storageBackend}`));
     }
   };
 
   return {
+    ...makeLocations(Option.isSome(s3Settings) ? "s3" : "local"),
     exists: (location) =>
       storeFor(location).pipe(Effect.flatMap((store) => store.exists(location.storageKey))),
     put: (location, bytes) =>
@@ -135,6 +138,7 @@ const makeTest = Effect.sync(() => {
   const keyOf = (location: StorageLocation) => `${location.storageBackend}:${location.storageKey}`;
 
   return {
+    ...makeLocations("local"),
     exists: (location) => Effect.sync(() => files.has(keyOf(location))),
     put: (location, bytes) =>
       Effect.sync(() => {
@@ -174,18 +178,17 @@ export class StorageService extends Context.Service<StorageService, StorageServi
   static hashBytes(bytes: Uint8Array): string {
     return createHash("sha256").update(bytes).digest("hex");
   }
+}
 
-  static createMaterialLocation(contentHash: string): StorageLocation {
-    return {
-      storageBackend: newFileBackend,
+function makeLocations(backend: StorageBackend) {
+  return {
+    materialLocation: (contentHash: string): StorageLocation => ({
+      storageBackend: backend,
       storageKey: path.posix.join("materials", contentHash.slice(0, 2), contentHash),
-    };
-  }
-
-  static createTestingLocation(filename: string): StorageLocation {
-    return {
-      storageBackend: newFileBackend,
+    }),
+    testingLocation: (filename: string): StorageLocation => ({
+      storageBackend: backend,
       storageKey: path.posix.join("test", `${randomUUID()}${getExtension(filename)}`),
-    };
-  }
+    }),
+  };
 }

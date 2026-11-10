@@ -23,9 +23,14 @@ const lifecycle = vi.hoisted(() => {
   return { disposeRuntime, disposeWebHandler, getContext, handlers, services, toWebHandler };
 });
 
-vi.mock("../assertEnv.js", () => ({ env: { NODE_ENV: "production" } }));
+// app.ts runs one effect on the runtime before it builds the handler: the NODE_ENV read. Production
+// skips the dynamic import of the testing routes, which these mocks do not cover.
 vi.mock("../runtime.js", () => ({
-  serverRuntime: { context: lifecycle.getContext, dispose: lifecycle.disposeRuntime },
+  serverRuntime: {
+    context: lifecycle.getContext,
+    dispose: lifecycle.disposeRuntime,
+    runPromise: async () => "production",
+  },
 }));
 
 vi.mock("effect/http-api/HttpApi", () => ({

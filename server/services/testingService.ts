@@ -267,8 +267,9 @@ export class TestingService extends Context.Service<TestingService>()("TestingSe
               "utf8",
             );
 
-        const location = StorageService.createTestingLocation(originalFilename);
-        yield* StorageService.use((storageService) => storageService.put(location, bytes));
+        const storage = yield* StorageService;
+        const location = storage.testingLocation(originalFilename);
+        yield* storage.put(location, bytes);
 
         const notationTracks = body.source_file_path
           ? yield* extractNotationTracksFromBytes(bytes, originalFilename)

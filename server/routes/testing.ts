@@ -7,14 +7,13 @@ import * as HttpApiBuilder from "effect/http-api/HttpApiBuilder";
 import * as HttpApiGroup from "effect/http-api/HttpApiGroup";
 import * as HttpApiEndpoint from "effect/http-api/HttpApiEndpoint";
 import * as HttpServerResponse from "effect/http/HttpServerResponse";
-import { Effect } from "effect";
+import { Config, Effect, Layer, Schema as S } from "effect";
 import {
   BadRequestErrorSchema,
   ConflictErrorSchema,
   InternalServerErrorSchema,
   NotFoundErrorSchema,
 } from "../../shared/httpApiErrors.js";
-import { env } from "../assertEnv.js";
 import { adaptHttpApiErrors } from "../httpApiErrors.js";
 import { TestingService } from "../services/testingService.js";
 import { normalizeToResponse, setSessionCookie } from "./raw.js";
@@ -31,8 +30,6 @@ import {
   TestingSeedDeleteAccountQuery,
   TestingSeedLessonQuery,
 } from "../../shared/httpApi.js";
-
-if (env.NODE_ENV === "production") throw new Error("testing API must not be enabled in production");
 
 const testingErrors = [
   BadRequestErrorSchema,
@@ -119,7 +116,24 @@ const testingErrorStatuses = [400, 404, 409, 500] as const;
 const adaptTestingHandler = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
   adaptHttpApiErrors(effect, testingErrorStatuses).pipe(Effect.map(normalizeToResponse));
 
+/** The testing routes create users and sessions at will, so they refuse to build in production. */
+export class TestingApiInProductionError extends S.TaggedError<TestingApiInProductionError>()(
+  "TestingApiInProductionError",
+  {},
+) {}
+
 export function makeTestingLayer() {
+  return Layer.unwrap(
+    Effect.gen(function* () {
+      if ((yield* Config.String("NODE_ENV")) === "production") {
+        return yield* new TestingApiInProductionError();
+      }
+      return makeTestingGroupLayer();
+    }),
+  );
+}
+
+function makeTestingGroupLayer() {
   return HttpApiBuilder.group(testingApi, "testing", (handlers) =>
     handlers
       .handle(

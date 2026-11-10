@@ -1,11 +1,10 @@
-import { Layer, ManagedRuntime } from "effect";
+import { Config, Effect, Layer, ManagedRuntime } from "effect";
 import * as Etag from "effect/http/Etag";
 import * as FetchHttpClient from "effect/http/FetchHttpClient";
 import * as NodeFileSystem from "@effect/platform-node/NodeFileSystem";
 import * as NodeHttpPlatform from "@effect/platform-node/NodeHttpPlatform";
 import * as NodePath from "@effect/platform-node/NodePath";
 import { PgAuthDB, PgRootDB } from "./db.js";
-import { env } from "./assertEnv.js";
 import { AdminRouteService } from "./services/adminRouteService.js";
 import { AuthenticatedRouteService } from "./services/authenticatedRouteService.js";
 import { AuthRouteService } from "./services/authRouteService.js";
@@ -38,8 +37,11 @@ const infrastructureLayer = Layer.mergeAll(
 );
 
 // Outside production, E2E browsers share one address, so a real limiter would throttle the suite.
-const rateLimitLayer =
-  env.NODE_ENV === "production" ? RateLimitService.Live : RateLimitService.Test;
+const rateLimitLayer = Layer.unwrap(
+  Effect.map(Config.String("NODE_ENV"), (nodeEnv) =>
+    nodeEnv === "production" ? RateLimitService.Live : RateLimitService.Test,
+  ),
+);
 
 const lessonServicesLayer = Layer.mergeAll(
   AdminRouteService.layer,

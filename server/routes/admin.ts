@@ -3,7 +3,7 @@ import * as HttpApiBuilder from "effect/http-api/HttpApiBuilder";
 import * as HttpApiGroup from "effect/http-api/HttpApiGroup";
 import * as HttpApiEndpoint from "effect/http-api/HttpApiEndpoint";
 import * as HttpServerResponse from "effect/http/HttpServerResponse";
-import { Effect } from "effect";
+import { Config, Effect } from "effect";
 import {
   ForbiddenErrorSchema,
   InternalServerErrorSchema,
@@ -11,7 +11,6 @@ import {
   UnauthorizedErrorSchema,
 } from "../../shared/httpApiErrors.js";
 import { adminClientErrors, adminClientGroup, GcalCallbackQuery } from "../../shared/httpApi.js";
-import { env } from "../assertEnv.js";
 import { adaptHttpApiErrors } from "../httpApiErrors.js";
 import { HttpError } from "../pgErrors.js";
 import { AdminRouteService } from "../services/adminRouteService.js";
@@ -276,7 +275,7 @@ export function makeAdminLayer() {
         "gcalConnect",
         Effect.fnUntraced(function* (context) {
           yield* requireAdminSession(context.request, { csrf: false });
-          const rootUrl = env.VITE_ROOT_URL;
+          const rootUrl = yield* Config.String("VITE_ROOT_URL");
           const authorization = yield* GoogleCalendarService.use((googleCalendarService) =>
             googleCalendarService.createAuthorizationRequest(rootUrl),
           );
@@ -285,7 +284,7 @@ export function makeAdminLayer() {
             response,
             GoogleCalendarService.getAuthCookieName(),
             GoogleCalendarService.encodeAuthState(authorization.state),
-            GoogleCalendarService.getAuthCookieOptions(rootUrl),
+            yield* GoogleCalendarService.getAuthCookieOptions(rootUrl),
           );
           return response;
         }, adaptAdminErrors),
@@ -294,9 +293,9 @@ export function makeAdminLayer() {
         "gcalCallback",
         Effect.fnUntraced(function* ({ request, query }) {
           yield* requireAdminSession(request, { csrf: false });
-          const rootUrl = env.VITE_ROOT_URL;
+          const rootUrl = yield* Config.String("VITE_ROOT_URL");
           const authCookieName = GoogleCalendarService.getAuthCookieName();
-          const cookieOptions = GoogleCalendarService.getAuthCookieOptions(rootUrl);
+          const cookieOptions = yield* GoogleCalendarService.getAuthCookieOptions(rootUrl);
           const authState = yield* GoogleCalendarService.decodeAuthState(
             request.cookies[authCookieName],
           );
@@ -649,7 +648,7 @@ export function makeAdminLayer() {
           const invitation = yield* AdminRouteService.use((adminRouteService) =>
             adminRouteService.createQrInvite(familyId, payload.invited_role),
           );
-          const rootUrl = env.VITE_ROOT_URL;
+          const rootUrl = yield* Config.String("VITE_ROOT_URL");
           return {
             invitationId: invitation.id,
             code: invitation.code,

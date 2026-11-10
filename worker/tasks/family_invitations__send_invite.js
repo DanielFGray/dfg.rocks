@@ -1,6 +1,5 @@
 /** @typedef {import("./send_email").SendEmailPayload} SendEmailPayload */
 /** @typedef {import("graphile-worker").Task} Task */
-import { env } from "../../server/assertEnv.ts";
 
 /** @typedef {{
   id: string;
@@ -48,7 +47,7 @@ export default async (inPayload, { addJob, withPgClient }) => {
     },
     template: "invitation.mjml",
     variables: {
-      inviteLink: `${env.VITE_ROOT_URL}/accept-invite?${query}`,
+      inviteLink: `${process.env.VITE_ROOT_URL}/accept-invite?${query}`,
     },
   };
   await addJob("send_email", sendEmailPayload);

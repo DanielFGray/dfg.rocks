@@ -1,9 +1,8 @@
 import * as HttpApi from "effect/http-api/HttpApi";
 import * as HttpApiBuilder from "effect/http-api/HttpApiBuilder";
 import * as HttpServerResponse from "effect/http/HttpServerResponse";
-import { Effect } from "effect";
+import { Config, Effect } from "effect";
 import { HealthUnavailableError, healthGroup, publicGroup } from "../../shared/httpApi.js";
-import { env } from "../assertEnv.js";
 import { PgAuthDB } from "../db.js";
 import { adaptHttpApiErrors } from "../httpApiErrors.js";
 import { HttpError } from "../pgErrors.js";
@@ -67,26 +66,30 @@ const DATABASE_CHECK_TIMEOUT = "2 seconds";
 
 export function makeHealthLayer() {
   return HttpApiBuilder.group(healthApi, "health", (handlers) =>
-    handlers.handle(
-      "healthz",
-      Effect.fnUntraced(function* () {
-        const commit = process.env.GIT_COMMIT || "unknown";
-        const db = yield* PgAuthDB;
-        const databaseDown = yield* db.execute(db.selectNoFrom((eb) => eb.lit(1).as("one"))).pipe(
-          Effect.timeout(DATABASE_CHECK_TIMEOUT),
-          Effect.as(false),
-          Effect.catch((cause) =>
-            Effect.logError("Health check: database unreachable", cause).pipe(Effect.as(true)),
-          ),
-        );
-        const worker = yield* BackgroundWorker;
-        const workerFailed = yield* worker.failed;
-        const failed = [...(databaseDown ? ["database"] : []), ...(workerFailed ? ["worker"] : [])];
-        if (failed.length > 0) {
-          return yield* new HealthUnavailableError({ commit, failed });
-        }
-        return { status: "ok" as const, commit };
-      }),
+    Effect.map(Config.NonEmptyString("GIT_COMMIT").pipe(Config.withDefault("unknown")), (commit) =>
+      handlers.handle(
+        "healthz",
+        Effect.fnUntraced(function* () {
+          const db = yield* PgAuthDB;
+          const databaseDown = yield* db.execute(db.selectNoFrom((eb) => eb.lit(1).as("one"))).pipe(
+            Effect.timeout(DATABASE_CHECK_TIMEOUT),
+            Effect.as(false),
+            Effect.catch((cause) =>
+              Effect.logError("Health check: database unreachable", cause).pipe(Effect.as(true)),
+            ),
+          );
+          const worker = yield* BackgroundWorker;
+          const workerFailed = yield* worker.failed;
+          const failed = [
+            ...(databaseDown ? ["database"] : []),
+            ...(workerFailed ? ["worker"] : []),
+          ];
+          if (failed.length > 0) {
+            return yield* new HealthUnavailableError({ commit, failed });
+          }
+          return { status: "ok" as const, commit };
+        }),
+      ),
     ),
   );
 }
@@ -136,15 +139,15 @@ export function makePublicLayer() {
         "oauthGoogle",
         Effect.fnUntraced(function* ({ request }) {
           const webRequest = request.source as Request;
-          const rootUrl = env.VITE_ROOT_URL;
-          const authorization = createAuthorizationRequest(
+          const rootUrl = yield* Config.String("VITE_ROOT_URL");
+          const authorization = yield* createAuthorizationRequest(
             "google",
             rootUrl,
             new URL(webRequest.url).searchParams.get("redirect") ?? undefined,
           );
           const oauthCookieName = getOAuthCookieName("google");
           const redirectCookieName = getOAuthRedirectCookieName("google");
-          const cookieOptions = getOAuthCookieOptions("google", rootUrl);
+          const cookieOptions = yield* getOAuthCookieOptions("google", rootUrl);
           let response = HttpServerResponse.redirect(authorization.url.toString());
           response = yield* HttpServerResponse.setCookie(
             response,
@@ -168,7 +171,7 @@ export function makePublicLayer() {
         "oauthGoogleCallback",
         Effect.fnUntraced(function* ({ request }) {
           const webRequest = request.source as Request;
-          const rootUrl = env.VITE_ROOT_URL;
+          const rootUrl = yield* Config.String("VITE_ROOT_URL");
           const query = new URL(webRequest.url).searchParams;
           const cookieName = getOAuthCookieName("google");
           const redirectCookieName = getOAuthRedirectCookieName("google");
@@ -207,12 +210,12 @@ export function makePublicLayer() {
           response = yield* HttpServerResponse.expireCookie(
             response,
             cookieName,
-            getOAuthCookieOptions("google", rootUrl),
+            yield* getOAuthCookieOptions("google", rootUrl),
           );
           response = yield* HttpServerResponse.expireCookie(
             response,
             redirectCookieName,
-            getOAuthCookieOptions("google", rootUrl),
+            yield* getOAuthCookieOptions("google", rootUrl),
           );
           response = yield* setSessionCookie(response, session.token, session.expiresAt);
           return response;
@@ -223,15 +226,15 @@ export function makePublicLayer() {
         "oauthApple",
         Effect.fnUntraced(function* ({ request }) {
           const webRequest = request.source as Request;
-          const rootUrl = env.VITE_ROOT_URL;
-          const authorization = createAuthorizationRequest(
+          const rootUrl = yield* Config.String("VITE_ROOT_URL");
+          const authorization = yield* createAuthorizationRequest(
             "apple",
             rootUrl,
             new URL(webRequest.url).searchParams.get("redirect") ?? undefined,
           );
           const oauthCookieName = getOAuthCookieName("apple");
           const redirectCookieName = getOAuthRedirectCookieName("apple");
-          const cookieOptions = getOAuthCookieOptions("apple", rootUrl);
+          const cookieOptions = yield* getOAuthCookieOptions("apple", rootUrl);
           let response = yield* HttpServerResponse.setCookie(
             HttpServerResponse.redirect(authorization.url.toString()),
             oauthCookieName,
@@ -253,7 +256,7 @@ export function makePublicLayer() {
       .handle(
         "oauthAppleCallback",
         Effect.fnUntraced(function* ({ request, payload }) {
-          const rootUrl = env.VITE_ROOT_URL;
+          const rootUrl = yield* Config.String("VITE_ROOT_URL");
           const cookieName = getOAuthCookieName("apple");
           const redirectCookieName = getOAuthRedirectCookieName("apple");
           const oauthState = decodeOAuthState(request.cookies[cookieName]);
@@ -299,12 +302,12 @@ export function makePublicLayer() {
           response = yield* HttpServerResponse.expireCookie(
             response,
             cookieName,
-            getOAuthCookieOptions("apple", rootUrl),
+            yield* getOAuthCookieOptions("apple", rootUrl),
           );
           response = yield* HttpServerResponse.expireCookie(
             response,
             redirectCookieName,
-            getOAuthCookieOptions("apple", rootUrl),
+            yield* getOAuthCookieOptions("apple", rootUrl),
           );
           response = yield* setSessionCookie(response, session.token, session.expiresAt);
           return response;

@@ -7,7 +7,6 @@ import nodemailer from "nodemailer";
 import { fileURLToPath } from "url";
 import { dirname } from "path";
 import getTransport from "../transport.js";
-import { env } from "../../server/assertEnv.ts";
 import packageJson from "../../package.json" with { type: "json" };
 
 const __filename = fileURLToPath(import.meta.url);
@@ -18,9 +17,11 @@ global.TEST_EMAILS = [];
 const { readFile } = fs;
 
 // @ts-expect-error json import assertions were a mistake
-const fromEmail = env.EMAIL_FROM || packageJson.fromEmail;
+const fromEmail = process.env.EMAIL_FROM || packageJson.fromEmail;
 if (!fromEmail)
-  throw new Error(`Warning: no sender address configured. Please set EMAIL_FROM or "fromEmail" in package.json`);
+  throw new Error(
+    `Warning: no sender address configured. Please set EMAIL_FROM or "fromEmail" in package.json`,
+  );
 // @ts-expect-error json import assertions were a mistake
 const projectName = packageJson.projectName ?? packageJson.name;
 if (!projectName)
@@ -28,8 +29,8 @@ if (!projectName)
 // @ts-expect-error json import assertions were a mistake
 const legalText = packageJson.legalText ?? "";
 
-const isTest = env.NODE_ENV === "test";
-const isDev = env.NODE_ENV !== "production";
+const isTest = process.env.NODE_ENV === "test";
+const isDev = process.env.NODE_ENV !== "production";
 
 /** @typedef {{
   options: {

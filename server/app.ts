@@ -1,10 +1,10 @@
 import * as HttpApi from "effect/http-api/HttpApi";
 import * as HttpApiBuilder from "effect/http-api/HttpApiBuilder";
 import * as HttpRouter from "effect/http/HttpRouter";
+import * as Config from "effect/Config";
 import * as Layer from "effect/Layer";
 import type * as ManagedRuntime from "effect/ManagedRuntime";
 import { authGroup, healthGroup, publicGroup } from "../shared/httpApi.js";
-import { env } from "./assertEnv.js";
 import {
   makeAdminLayer,
   adminGroup,
@@ -41,7 +41,8 @@ async function createHandler() {
     makeAdminLayer(),
     makeMaterialDownloadLayer(),
   ] as const;
-  if (env.NODE_ENV !== "production") {
+  // The testing routes are imported only outside production, so the production bundle never loads them.
+  if ((await serverRuntime.runPromise(Config.String("NODE_ENV"))) !== "production") {
     const { makeTestingLayer, testingGroup } = await import("./routes/testing.js");
     const { TestingService } = await import("./services/testingService.js");
     const api = baseApi.add(testingGroup);
@@ -68,8 +69,8 @@ type RouteRequirements =
   | ApplicationServices
   | HttpRouter.Request<"Requires", ApplicationServices>;
 
-async function makeWebHandler(
-  apiLayer: Layer.Layer<never, never, RouteRequirements>,
+async function makeWebHandler<E>(
+  apiLayer: Layer.Layer<never, E, RouteRequirements>,
 ): Promise<WebHandler> {
   const services = await serverRuntime.context();
   const web = HttpRouter.toWebHandler(
