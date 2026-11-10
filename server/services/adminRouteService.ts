@@ -947,7 +947,7 @@ export class AdminRouteService extends Context.Service<AdminRouteService>()("Adm
                   yield* db.execute(
                     db
                       .updateTable("app_public.bills")
-                      .set({ status: "paid", paid_at: new Date() })
+                      .set({ status: "paid", paid_at: sql`now()` })
                       .where("id", "=", obligation.value.bill_id),
                   );
                 }

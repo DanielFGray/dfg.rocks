@@ -552,7 +552,7 @@ export class AuthenticatedRouteService extends Context.Service<AuthenticatedRout
                     .onConflict((oc) =>
                       oc.columns(["student_id", "material_id"]).doUpdateSet({
                         body: values.body,
-                        updated_at: new Date(),
+                        updated_at: sql`now()`,
                       }),
                     )
                     .returning([

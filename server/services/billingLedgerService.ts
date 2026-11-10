@@ -254,7 +254,7 @@ export class BillingLedgerService extends Context.Service<BillingLedgerService>(
                 .execute(
                   db
                     .updateTable("app_public.bills")
-                    .set({ status: "issued", issued_at: new Date() })
+                    .set({ status: "issued", issued_at: sql`now()` })
                     .where("id", "=", billId)
                     .where("status", "=", "draft")
                     .returningAll(),
@@ -438,7 +438,7 @@ export class BillingLedgerService extends Context.Service<BillingLedgerService>(
                     .updateTable("app_public.bills")
                     .set({
                       status: "void",
-                      voided_at: new Date(),
+                      voided_at: sql`now()`,
                       notes: sql<string>`case when notes is null or notes = '' then ${input.reason} else notes || E'\\nVoid reason: ' || ${input.reason} end`,
                     })
                     .where("id", "=", input.billId)
@@ -458,7 +458,7 @@ export class BillingLedgerService extends Context.Service<BillingLedgerService>(
                 .execute(
                   db
                     .updateTable("app_public.bills")
-                    .set({ status: "cancelled", cancelled_at: new Date() })
+                    .set({ status: "cancelled", cancelled_at: sql`now()` })
                     .where("id", "=", billId)
                     .where("status", "=", "draft")
                     .returningAll(),
@@ -673,7 +673,7 @@ export class BillingLedgerService extends Context.Service<BillingLedgerService>(
                     .execute(
                       db
                         .updateTable("app_public.bills")
-                        .set({ status: "paid", paid_at: new Date() })
+                        .set({ status: "paid", paid_at: sql`now()` })
                         .where("id", "=", billId)
                         .returning("id"),
                     )
@@ -811,7 +811,7 @@ export class BillingLedgerService extends Context.Service<BillingLedgerService>(
                   .execute(
                     db
                       .updateTable("app_public.bills")
-                      .set({ status: "paid", paid_at: new Date() })
+                      .set({ status: "paid", paid_at: sql`now()` })
                       .where("id", "=", input.billId)
                       .returning("id"),
                   )
@@ -958,7 +958,7 @@ export class BillingLedgerService extends Context.Service<BillingLedgerService>(
                       amount_cents: input.amountCents,
                       reason: input.reason,
                       created_by: userId,
-                      refunded_at: new Date(),
+                      refunded_at: sql`now()`,
                       notes: input.notes ?? null,
                     })
                     .returningAll(),
