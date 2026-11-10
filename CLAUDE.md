@@ -23,7 +23,7 @@ Local Postgres is the shared cluster from `ops dev db` (container `ops-dev-pg17`
 
 ## Deploy
 
-Production runs on the server-ansible platform (`~/build/server-ansible`), described by `cartridge.json`. `ops release` builds the Dockerfile from committed HEAD, so the image never sees `.env` or `generated/`. Traefik ends TLS and sets `X-Real-Ip`, the only client-address header the rate limiter trusts. The platform creates `dfg_rocks_owner` and `dfg_rocks_visitor` group roles, a migration login in the owner role, and a NOINHERIT API login in the visitor role. The server prestart runs `bun run migrate`, which installs the graphile-worker schema and applies committed migrations.
+Production runs on the server-ansible platform (`~/build/server-ansible`), described by `cartridge.json`. `ops release` builds the Dockerfile from committed HEAD, so the image never sees `.env` or `generated/`. Traefik ends TLS and sets `X-Real-Ip`, the only client-address header the rate limiter trusts. `cartridge.json` asks for Valkey, and the platform sets `VALKEY_URL` and `VALKEY_KEY_PREFIX` (`dfg-rocks:`, the only keys the app's Valkey user may touch). The platform creates `dfg_rocks_owner` and `dfg_rocks_visitor` group roles, a migration login in the owner role, and a NOINHERIT API login in the visitor role. The server prestart runs `bun run migrate`, which installs the graphile-worker schema and applies committed migrations.
 
 The server reads each setting with Effect `Config` where it uses it. Worker tasks read `process.env`, and the graphile-worker CLI takes `DATABASE_URL` from the environment.
 
@@ -129,7 +129,7 @@ RLS policies derive user context from `current_setting('my.session_id')` joined 
 
 ### Testing
 
-- Rate limiting uses the in-memory limiter only when `NODE_ENV=production`; other environments get `RateLimitService.Test`
+- Rate limits count in Valkey only when `NODE_ENV=production`; other environments get `RateLimitService.Test`, which allows every request. `server/rateLimit.ts` holds each rule's limit, window, and what to do when Valkey cannot answer.
 - Testing API (`/api/testing/*`) creates users, seeds data, clears state — only loaded when `NODE_ENV !== "production"`
 - Playwright fixtures: `testing.login()`, `testing.clear()`, `testing.seedCourse()`, `testing.enroll()`
 
