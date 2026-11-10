@@ -5,6 +5,7 @@ import {
   Effect,
   Layer,
   Option,
+  PubSub,
   Queue,
   Redacted,
   Schedule,
@@ -14,9 +15,15 @@ import { ConnectionError, SqlError } from "effect/sql/SqlError";
 import { sql } from "kysely";
 import pg from "pg";
 import { PgRootDB } from "../db.js";
-import { realtimeBus } from "./realtimeBus.js";
-
 type QueryKey = readonly string[];
+
+/** A change one signed-in user should see: the client refetches `queryKeys`. */
+type RealtimeMessage = {
+  readonly userId: string;
+  readonly event: string;
+  readonly subject: string;
+  readonly queryKeys: readonly QueryKey[];
+};
 
 const CHANNEL_QUERY_KEYS: Record<string, QueryKey[]> = {
   "rt:messages": [["messages"]],
@@ -62,6 +69,7 @@ export class RealtimeService extends Context.Service<RealtimeService>()("Realtim
   make: Effect.gen(function* () {
     const databaseUrl = yield* Config.Redacted("DATABASE_URL");
     const db = yield* PgRootDB;
+    const hub = yield* PubSub.unbounded<RealtimeMessage>();
 
     let staffCache: { ids: string[]; expiresAt: number } | null = null;
 
@@ -221,15 +229,14 @@ export class RealtimeService extends Context.Service<RealtimeService>()("Realtim
         return;
       }
 
-      yield* Effect.forEach(userIds, (userId) =>
-        Effect.sync(() =>
-          realtimeBus.publish({
-            userId,
-            event: row.event,
-            subject: row.subject,
-            queryKeys,
-          }),
-        ),
+      yield* PubSub.publishAll(
+        hub,
+        userIds.map((userId) => ({
+          userId,
+          event: row.event,
+          subject: row.subject,
+          queryKeys,
+        })),
       );
     });
 
@@ -302,7 +309,10 @@ export class RealtimeService extends Context.Service<RealtimeService>()("Realtim
         ),
     );
 
-    return {};
+    return {
+      /** Every message published after the stream starts, for every user. */
+      messages: Stream.fromPubSub(hub),
+    };
   }),
 }) {
   static readonly layer = Layer.effect(this, this.make);

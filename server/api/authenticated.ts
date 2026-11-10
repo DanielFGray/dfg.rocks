@@ -2,15 +2,15 @@ import * as HttpApi from "effect/http-api/HttpApi";
 import * as HttpApiBuilder from "effect/http-api/HttpApiBuilder";
 import * as HttpApiEndpoint from "effect/http-api/HttpApiEndpoint";
 import * as HttpServerResponse from "effect/http/HttpServerResponse";
-import { Effect, Queue, Schedule, Schema as S, Stream } from "effect";
+import { Effect, Schedule, Schema as S, Stream } from "effect";
 import { authenticatedClientErrors, authenticatedClientGroup } from "../../shared/httpApi.js";
 import { serializeLesson, serializeTestimonial } from "../../shared/responseMappers.js";
 import { AssignedMaterial, Material } from "../../shared/schemas.js";
 import { adaptHttpApiErrors } from "../httpApiErrors.js";
 import { HttpError } from "../pgErrors.js";
-import { realtimeBus, type RealtimeMessage } from "../services/realtimeBus.js";
 import { AuthenticatedRouteService } from "../services/authenticatedRouteService.js";
 import { GoogleCalendarService } from "../services/googleCalendarService.js";
+import { RealtimeService } from "../services/realtimeService.js";
 import {
   resolveEffectiveStudent,
   SessionService,
@@ -634,20 +634,7 @@ export function makeAuthenticatedLayer() {
           const listenerIds = effective.isActing ? [userId, effective.studentId] : [userId];
           const encoder = new TextEncoder();
 
-          const eventStream: Stream.Stream<RealtimeMessage> = Stream.callback((queue) => {
-            const push = (message: RealtimeMessage) => {
-              Queue.offerUnsafe(queue, message);
-            };
-            return Effect.acquireRelease(
-              Effect.sync(() => {
-                realtimeBus.on("message", push);
-              }),
-              () =>
-                Effect.sync(() => {
-                  realtimeBus.off("message", push);
-                }),
-            );
-          });
+          const { messages: eventStream } = yield* RealtimeService;
 
           const heartbeat = Stream.fromEffectRepeat(
             Effect.succeed(encoder.encode(":heartbeat\n\n")),

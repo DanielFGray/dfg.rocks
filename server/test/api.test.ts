@@ -8,7 +8,7 @@ import * as HttpClientRequest from "effect/http/HttpClientRequest";
 import * as HttpClientResponse from "effect/http/HttpClientResponse";
 import * as HttpBody from "effect/http/HttpBody";
 import * as Cookies from "effect/http/Cookies";
-import { Effect, ManagedRuntime, Layer, Option } from "effect";
+import { Effect, ManagedRuntime, Layer, Option, Schedule, Stream } from "effect";
 import { Logger, consoleLogFactory } from "graphile-worker";
 import pg from "pg";
 import generatePrepaidPeriodTask from "../../worker/tasks/lessons__generate_prepaid_period.js";
@@ -1359,5 +1359,49 @@ describe("DFG Portal API", () => {
         testDb.query("delete from app_public.users where id = $1", [parentId]),
       );
     }),
+  );
+  it.live(
+    "delivers a change to the signed-in user it concerns over /api/events",
+    () =>
+      Effect.gen(function* () {
+        const { handleApiRequest } = yield* Effect.promise(() => import("../app.js"));
+        const res = yield* Effect.promise(() =>
+          handleApiRequest(
+            new Request(`${TEST_ROOT_URL}/api/events`, {
+              headers: { Cookie: `session=${studentCookie}` },
+            }),
+          ),
+        );
+        expect(res.status).toBe(200);
+        const body = res.body;
+        if (body === null) return yield* Effect.die("the events response has no body");
+
+        const firstMessage = Stream.fromReadableStream({
+          evaluate: () => body,
+          onError: (cause) => cause,
+        }).pipe(
+          Stream.decodeText,
+          Stream.filter((chunk) => chunk.startsWith("data: ")),
+          Stream.runHead,
+        );
+        // The stream subscribes when it is first read, so the change is written until one arrives.
+        const writeChange = Effect.promise(() =>
+          testDb.query(
+            `insert into app_private.realtime_events (topic, event, subject) values ('rt:messages', 'insert', $1)`,
+            [studentId],
+          ),
+        ).pipe(Effect.repeat(Schedule.spaced("200 millis")));
+
+        const message = yield* Effect.raceFirst(
+          firstMessage,
+          writeChange.pipe(Effect.andThen(Effect.never)),
+        ).pipe(Effect.timeout("10 seconds"));
+        expect(message).toStrictEqual(
+          Option.some(
+            `data: ${JSON.stringify({ event: "insert", subject: studentId, queryKeys: [["messages"]] })}\n\n`,
+          ),
+        );
+      }),
+    30_000,
   );
 });
