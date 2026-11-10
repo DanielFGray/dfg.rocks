@@ -205,9 +205,9 @@ describe("DFG Portal API", () => {
   it.effect(
     "public: health check and contact form",
     Effect.fnUntraced(function* () {
-      const health = yield* reqEffect("GET", "/api/health");
+      const health = yield* reqEffect("GET", "/healthz");
       expect(health.status).toBe(200);
-      expect(yield* resJson(health)).toEqual({ success: true });
+      expect(yield* resJson(health)).toEqual({ status: "ok", commit: expect.any(String) });
 
       const contact = yield* reqEffect("POST", "/api/contact", {
         body: {

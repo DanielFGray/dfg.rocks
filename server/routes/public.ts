@@ -2,8 +2,9 @@ import * as HttpApi from "effect/http-api/HttpApi";
 import * as HttpApiBuilder from "effect/http-api/HttpApiBuilder";
 import * as HttpServerResponse from "effect/http/HttpServerResponse";
 import { Effect } from "effect";
-import { publicGroup } from "../../shared/httpApi.js";
+import { HealthUnavailableError, healthGroup, publicGroup } from "../../shared/httpApi.js";
 import { env } from "../assertEnv.js";
+import { PgAuthDB } from "../db.js";
 import { adaptHttpApiErrors } from "../httpApiErrors.js";
 import { HttpError } from "../pgErrors.js";
 import {
@@ -58,11 +59,37 @@ const fetchGoogleUserInfo = Effect.fnUntraced(function* (accessToken: string) {
 
 const publicApi = HttpApi.make("dfg").add(publicGroup);
 
+export const healthApi = HttpApi.make("dfg").add(healthGroup);
+
+// How long the database check may take before the platform sees the app as down.
+const DATABASE_CHECK_TIMEOUT = "2 seconds";
+
+export function makeHealthLayer() {
+  return HttpApiBuilder.group(healthApi, "health", (handlers) =>
+    handlers.handle(
+      "healthz",
+      Effect.fnUntraced(function* () {
+        const commit = process.env.GIT_COMMIT || "unknown";
+        const db = yield* PgAuthDB;
+        const databaseDown = yield* db.execute(db.selectNoFrom((eb) => eb.lit(1).as("one"))).pipe(
+          Effect.timeout(DATABASE_CHECK_TIMEOUT),
+          Effect.as(false),
+          Effect.catch((cause) =>
+            Effect.logError("Health check: database unreachable", cause).pipe(Effect.as(true)),
+          ),
+        );
+        if (databaseDown) {
+          return yield* new HealthUnavailableError({ commit, failed: ["database"] });
+        }
+        return { status: "ok" as const, commit };
+      }),
+    ),
+  );
+}
+
 export function makePublicLayer() {
   return HttpApiBuilder.group(publicApi, "public", (handlers) =>
     handlers
-      .handle("health", () => adaptPublicHttpApiErrors(Effect.succeed({ success: true as const })))
-
       .handle(
         "contact",
         Effect.fnUntraced(function* ({ request, payload }) {

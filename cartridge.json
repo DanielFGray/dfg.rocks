@@ -14,7 +14,7 @@
       "image": "registry.cluster:5000/dfg-rocks",
       "hostPort": "dynamic",
       "containerPort": 3000,
-      "healthCheck": { "type": "http", "path": "/api/health" },
+      "healthCheck": { "type": "http", "path": "/healthz" },
       "cpu": 300,
       "memoryMB": 512,
       "networkMode": "bridge",

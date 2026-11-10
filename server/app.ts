@@ -3,7 +3,7 @@ import * as HttpApiBuilder from "effect/http-api/HttpApiBuilder";
 import * as HttpRouter from "effect/http/HttpRouter";
 import * as Layer from "effect/Layer";
 import type * as ManagedRuntime from "effect/ManagedRuntime";
-import { authGroup, publicGroup } from "../shared/httpApi.js";
+import { authGroup, healthGroup, publicGroup } from "../shared/httpApi.js";
 import { env } from "./assertEnv.js";
 import {
   makeAdminLayer,
@@ -13,7 +13,7 @@ import {
 } from "./routes/admin.js";
 import { makeAuthLayer } from "./routes/auth.js";
 import { authenticatedGroup, makeAuthenticatedLayer } from "./routes/authenticated.js";
-import { makePublicLayer } from "./routes/public.js";
+import { makeHealthLayer, makePublicLayer } from "./routes/public.js";
 import { serverRuntime } from "./runtime.js";
 
 type WebHandler = {
@@ -25,6 +25,7 @@ let handlerPromise: Promise<WebHandler> | undefined;
 
 async function createHandler() {
   const baseApi = HttpApi.make("dfg")
+    .add(healthGroup)
     .add(publicGroup)
     .add(authGroup)
     .add(authenticatedGroup)
@@ -32,6 +33,7 @@ async function createHandler() {
     .add(materialDownloadGroup);
 
   const baseRouteLayers = [
+    makeHealthLayer(),
     makePublicLayer(),
     makeAuthLayer(),
     makeAuthenticatedLayer(),
