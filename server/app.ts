@@ -1,9 +1,7 @@
 import * as HttpApi from "effect/http-api/HttpApi";
 import * as HttpApiBuilder from "effect/http-api/HttpApiBuilder";
 import * as HttpRouter from "effect/http/HttpRouter";
-import * as Config from "effect/Config";
-import * as Layer from "effect/Layer";
-import type * as ManagedRuntime from "effect/ManagedRuntime";
+import { Config, Effect, Layer } from "effect";
 import { authGroup, healthGroup, publicGroup } from "../shared/httpApi.js";
 import {
   makeAdminLayer,
@@ -14,88 +12,51 @@ import {
 import { makeAuthLayer } from "./routes/auth.js";
 import { authenticatedGroup, makeAuthenticatedLayer } from "./routes/authenticated.js";
 import { makeHealthLayer, makePublicLayer } from "./routes/public.js";
-import { serverRuntime } from "./runtime.js";
+import { applicationLayer, memoMap, serverRuntime } from "./runtime.js";
 import { BackgroundWorker, type WorkerPaths } from "./services/backgroundWorker.js";
 
-type WebHandler = {
-  readonly handler: (request: Request) => Promise<Response>;
-  readonly dispose: () => Promise<void>;
-};
+const ServerApi = HttpApi.make("dfg")
+  .add(healthGroup)
+  .add(publicGroup)
+  .add(authGroup)
+  .add(authenticatedGroup)
+  .add(adminGroup)
+  .add(materialDownloadGroup);
 
-let handlerPromise: Promise<WebHandler> | undefined;
+const ApiLive = HttpApiBuilder.layer(ServerApi).pipe(
+  Layer.provide(
+    Layer.mergeAll(
+      makeHealthLayer(),
+      makePublicLayer(),
+      makeAuthLayer(),
+      makeAuthenticatedLayer(),
+      makeAdminLayer(),
+      makeMaterialDownloadLayer(),
+    ),
+  ),
+);
 
-async function createHandler() {
-  const baseApi = HttpApi.make("dfg")
-    .add(healthGroup)
-    .add(publicGroup)
-    .add(authGroup)
-    .add(authenticatedGroup)
-    .add(adminGroup)
-    .add(materialDownloadGroup);
+/** The testing routes are imported only outside production, so the production bundle never loads them. */
+const TestingMountLive = Layer.unwrap(
+  Effect.gen(function* () {
+    if ((yield* Config.String("NODE_ENV")) === "production") return Layer.empty;
+    const { TestingHttpApiLive } = yield* Effect.promise(() => import("./routes/testing.js"));
+    return TestingHttpApiLive;
+  }),
+);
 
-  const baseRouteLayers = [
-    makeHealthLayer(),
-    makePublicLayer(),
-    makeAuthLayer(),
-    makeAuthenticatedLayer(),
-    makeAdminLayer(),
-    makeMaterialDownloadLayer(),
-  ] as const;
-  // The testing routes are imported only outside production, so the production bundle never loads them.
-  if ((await serverRuntime.runPromise(Config.String("NODE_ENV"))) !== "production") {
-    const { makeTestingLayer, testingGroup } = await import("./routes/testing.js");
-    const { TestingService } = await import("./services/testingService.js");
-    const api = baseApi.add(testingGroup);
-    const apiLayer = HttpApiBuilder.layer(api).pipe(
-      Layer.provide(Layer.mergeAll(...baseRouteLayers, makeTestingLayer())),
-      HttpRouter.provideRequest(TestingService.layer),
-    );
+/**
+ * Every /api route, with the application services merged in so handlers find them per request.
+ * It builds from the memo map serverRuntime uses, so pages and /api share one set of services.
+ */
+export const HttpApiLive = Layer.mergeAll(ApiLive, TestingMountLive).pipe(
+  Layer.provideMerge(applicationLayer),
+);
 
-    return makeWebHandler(apiLayer);
-  }
+const web = HttpRouter.toWebHandler(HttpApiLive, { memoMap, disableLogger: true });
 
-  const apiLayer = HttpApiBuilder.layer(baseApi).pipe(
-    Layer.provide(Layer.mergeAll(...baseRouteLayers)),
-  );
-
-  return makeWebHandler(apiLayer);
-}
-
-type ApplicationServices = ManagedRuntime.ManagedRuntime.Services<typeof serverRuntime>;
-
-// Route layers need the application services when they are built, and handlers need them again per request.
-type RouteRequirements =
-  | HttpRouter.HttpRouter
-  | ApplicationServices
-  | HttpRouter.Request<"Requires", ApplicationServices>;
-
-async function makeWebHandler<E>(
-  apiLayer: Layer.Layer<never, E, RouteRequirements>,
-): Promise<WebHandler> {
-  const services = await serverRuntime.context();
-  const web = HttpRouter.toWebHandler(
-    apiLayer.pipe(Layer.provide(Layer.succeedContext(services))),
-    {
-      disableLogger: true,
-    },
-  );
-  return {
-    handler: (request) => web.handler(request, services),
-    dispose: web.dispose,
-  };
-}
-
-async function getWebHandler() {
-  if (!handlerPromise) {
-    handlerPromise = createHandler();
-  }
-
-  return handlerPromise;
-}
-
-export async function handleApiRequest(request: Request): Promise<Response> {
-  const handler = await getWebHandler();
-  return handler.handler(request);
+export function handleApiRequest(request: Request): Promise<Response> {
+  return web.handler(request);
 }
 
 // Starts the in-process job runner. The production entry calls this once, after the HTTP server listens.
@@ -104,8 +65,6 @@ export async function startWorker(paths: WorkerPaths): Promise<void> {
 }
 
 export async function disposeApiHandler(): Promise<void> {
-  const handler = handlerPromise;
-  handlerPromise = undefined;
-  await (await handler)?.dispose();
+  await web.dispose();
   await serverRuntime.dispose();
 }

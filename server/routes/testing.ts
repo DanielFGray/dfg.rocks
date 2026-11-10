@@ -6,6 +6,7 @@ import * as HttpApi from "effect/http-api/HttpApi";
 import * as HttpApiBuilder from "effect/http-api/HttpApiBuilder";
 import * as HttpApiGroup from "effect/http-api/HttpApiGroup";
 import * as HttpApiEndpoint from "effect/http-api/HttpApiEndpoint";
+import * as HttpRouter from "effect/http/HttpRouter";
 import * as HttpServerResponse from "effect/http/HttpServerResponse";
 import { Config, Effect, Layer, Schema as S } from "effect";
 import {
@@ -115,6 +116,12 @@ const testingErrorStatuses = [400, 404, 409, 500] as const;
 // Testing endpoints intentionally return redirects or ad-hoc raw JSON responses.
 const adaptTestingHandler = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
   adaptHttpApiErrors(effect, testingErrorStatuses).pipe(Effect.map(normalizeToResponse));
+
+/** The testing API as its own router layer. app.ts imports this module only outside production. */
+export const TestingHttpApiLive = HttpApiBuilder.layer(testingApi).pipe(
+  Layer.provide(makeTestingLayer()),
+  HttpRouter.provideRequest(TestingService.layer),
+);
 
 /** The testing routes create users and sessions at will, so they refuse to build in production. */
 export class TestingApiInProductionError extends S.TaggedError<TestingApiInProductionError>()(

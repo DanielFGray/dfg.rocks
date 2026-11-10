@@ -77,4 +77,10 @@ const servicesLayer = Layer.mergeAll(
 
 export const applicationLayer = servicesLayer;
 
-export const serverRuntime = ManagedRuntime.make(applicationLayer);
+/**
+ * Server functions run on serverRuntime, and the /api handler in app.ts builds its own layer. Both
+ * build from this memo map, so each service, pool and job runner exists once per process.
+ */
+export const memoMap = Effect.runSync(Layer.makeMemoMap);
+
+export const serverRuntime = ManagedRuntime.make(applicationLayer, { memoMap });
