@@ -27,6 +27,17 @@ Production runs on the server-ansible platform (`~/build/server-ansible`), descr
 
 `server/assertEnv.ts` holds only what the server and worker read at runtime. `scripts/devEnv.ts` adds the admin seed values.
 
+## Backend reference
+
+The backend follows ~/build/effect-web-template. Before you add or change a
+backend pattern (config, HTTP server, database access, errors, sessions, rate
+limits, Valkey, realtime, worker, tests), read how the template does it and do
+the same. Security code and auth SQL come from the ~/build/effect-backend
+packages.
+
+When the template has no pattern for what you need, file a task in
+effect-web-template and ask; do not invent a local one.
+
 ## Architecture
 
 ### Single-process: TanStack Start + Effect HttpApi
