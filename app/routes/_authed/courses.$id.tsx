@@ -65,10 +65,7 @@ const getCourseDetailData = createServerFn({ method: "GET" })
           enrolledStudents: normalizeStudents(enrolledStudents),
           allStudents: normalizeStudents(allStudents),
         }) satisfies CourseDetailPageData;
-      }).pipe(
-        Effect.provide(AuthenticatedRouteService.layer),
-        Effect.provide(AdminRouteService.layer),
-      ),
+      }),
     ),
   );
 

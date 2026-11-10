@@ -76,12 +76,8 @@ const lessonServicesLayer = Layer.mergeAll(
   RecurringScheduleService.layer,
 ).pipe(Layer.provideMerge(LessonPolicyService.layer));
 
-const billingServicesLayer = Layer.mergeAll(
-  PdfService.layer,
-  BillingLedgerService.layer,
-  FamilyBillingService.layer.pipe(
-    Layer.provide(Layer.mergeAll(PdfService.layer, BillingLedgerService.layer)),
-  ),
+const billingServicesLayer = FamilyBillingService.layer.pipe(
+  Layer.provideMerge(Layer.mergeAll(PdfService.layer, BillingLedgerService.layer)),
 );
 
 const servicesLayer = Layer.mergeAll(
