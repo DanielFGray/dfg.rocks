@@ -90,7 +90,7 @@ export const applicationLayer = servicesLayer;
  * Server functions run on serverRuntime, and the /api handler in app.ts builds HttpApiLive. Both
  * build from this memo map, so each service, pool and job runner exists once per process.
  */
-export const memoMap = Effect.runSync(Layer.makeMemoMap);
+export const memoMap = Layer.makeMemoMapUnsafe();
 
 export const serverRuntime = ManagedRuntime.make(applicationLayer, { memoMap });
 
