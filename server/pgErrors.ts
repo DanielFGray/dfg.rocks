@@ -29,6 +29,8 @@ const pg_errcodes: Record<string, (msg: string) => HttpError> = {
   NTFND: (msg) => new HttpError(404, msg || "Not found"),
   /** Denied -- business rule violation */
   DNIED: (msg) => new HttpError(400, msg || "Operation denied"),
+  /** Email already verified by another account */
+  EMTKN: (msg) => new HttpError(409, msg || "An account already uses this email address"),
   /** Unique violation (duplicate username, email, etc.) */
   23505: (msg) => new HttpError(409, msg || "A record with this value already exists"),
 };

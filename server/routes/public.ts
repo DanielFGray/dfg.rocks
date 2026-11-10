@@ -277,9 +277,12 @@ export function makePublicLayer() {
           }
           const firstName = user?.name?.firstName;
           const lastName = user?.name?.lastName;
+          // Email comes only from the signed id token: the `user` form field is
+          // unsigned, and link_or_register_user links accounts by verified email.
           const profile = {
             sub,
-            email: typeof claims.email === "string" ? claims.email : user?.email,
+            email: typeof claims.email === "string" ? claims.email : undefined,
+            email_verified: claims.email_verified,
             name: [firstName, lastName].filter(Boolean).join(" ").trim() || undefined,
           };
           const linkedUser = yield* PublicRouteService.use((publicRouteService) =>
