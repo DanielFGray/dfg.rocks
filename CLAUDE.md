@@ -46,15 +46,17 @@ effect-web-template and ask; do not invent a local one.
 TanStack Start (Vite)
   ├── app/routes/          React pages (file-based routing, SSR)
   └── app/routes/api.$.ts  Catch-all server route → Effect web handler
-        └── server/app.ts  Effect HttpApi app with /api/* routes
-              ├── server/routes/public.ts
-              ├── server/routes/auth.ts
-              ├── server/routes/authenticated.ts
-              ├── server/routes/admin.ts
-              └── server/routes/testing.ts (non-production)
+        └── server/app.ts  Web handler over HttpApiLive (server/runtime.ts)
+              ├── server/api/health.ts
+              ├── server/api/public.ts
+              ├── server/api/auth.ts
+              ├── server/api/authenticated.ts
+              ├── server/api/admin.ts
+              ├── server/api/materialDownload.ts
+              └── server/api/testing.ts (non-production)
 ```
 
-No separate API server process. Effect HttpApi runs in-process via TanStack Start's server route handlers.
+No separate API server process. Effect HttpApi runs in-process via TanStack Start's server route handlers. serverRuntime and the web handler build from one memo map, so server functions and /api share one set of services.
 
 ### Client: Typed Fetch API
 
@@ -163,28 +165,31 @@ Benign warning, no functionality impact.
 
 ## Key Files
 
-| File                                       | Purpose                                               |
-| ------------------------------------------ | ----------------------------------------------------- |
-| `shared/schemas.ts`                        | Response schemas (UserResponse, CourseResponse, etc.) |
-| `app/lib/api.ts`                           | Typed fetch client (all endpoint wrappers)            |
-| `app/lib/types.ts`                         | Type aliases derived from shared schemas              |
-| `app/lib/hooks/useAuth.ts`                 | Auth hook (useQuery + isAdmin)                        |
-| `app/routes/__root.tsx`                    | Root layout (html, head, providers)                   |
-| `app/routes/_authed.tsx`                   | Auth guard layout route                               |
-| `app/routes/api.$.ts`                      | Catch-all route mounting the Effect web handler       |
-| `app/config.ts`                            | Site metadata (name, city, testimonials, etc.)        |
-| `server/app.ts`                            | Effect HttpApi app composition                        |
-| `server/db.ts`                             | Database, PgRootDB, PgAuthDB, withAuthContext         |
-| `server/routes/public.ts`                  | Public endpoints (health, contact, OAuth)             |
-| `server/routes/auth.ts`                    | Auth endpoints (login, logout, me, password)          |
-| `server/routes/authenticated.ts`           | Authed endpoints (courses, messages, lessons)         |
-| `server/routes/admin.ts`                   | Admin endpoints (CRUD, gcal, settings)                |
-| `server/routes/testing.ts`                 | Test data seeding (non-production)                    |
-| `server/services/sessionService.ts`        | Session CRUD (PG)                                     |
-| `server/services/authService.ts`           | Login, password reset                                 |
-| `server/services/googleCalendarService.ts` | Google Calendar integration                           |
-| `server/pgErrors.ts`                       | HttpError class, PG errcode mapping                   |
-| `migrations/current/`                      | SQL schema (graphile-migrate)                         |
+| File                                       | Purpose                                                |
+| ------------------------------------------ | ------------------------------------------------------ |
+| `shared/schemas.ts`                        | Response schemas (UserResponse, CourseResponse, etc.)  |
+| `app/lib/api.ts`                           | Typed fetch client (all endpoint wrappers)             |
+| `app/lib/types.ts`                         | Type aliases derived from shared schemas               |
+| `app/lib/hooks/useAuth.ts`                 | Auth hook (useQuery + isAdmin)                         |
+| `app/routes/__root.tsx`                    | Root layout (html, head, providers)                    |
+| `app/routes/_authed.tsx`                   | Auth guard layout route                                |
+| `app/routes/api.$.ts`                      | Catch-all route mounting the Effect web handler        |
+| `app/config.ts`                            | Site metadata (name, city, testimonials, etc.)         |
+| `server/app.ts`                            | Web handler over HttpApiLive; worker start and dispose |
+| `server/runtime.ts`                        | Application layer, serverRuntime, HttpApiLive          |
+| `server/db.ts`                             | Database, PgRootDB, PgAuthDB, withAuthContext          |
+| `server/api/health.ts`                     | GET /healthz (database and worker)                     |
+| `server/api/public.ts`                     | Public endpoints (contact, OAuth)                      |
+| `server/api/auth.ts`                       | Auth endpoints (login, logout, me, password)           |
+| `server/api/authenticated.ts`              | Authed endpoints (courses, messages, lessons)          |
+| `server/api/admin.ts`                      | Admin endpoints (CRUD, gcal, settings)                 |
+| `server/api/materialDownload.ts`           | Material file download                                 |
+| `server/api/testing.ts`                    | Test data seeding (non-production)                     |
+| `server/services/sessionService.ts`        | Session CRUD (PG)                                      |
+| `server/services/authService.ts`           | Login, password reset                                  |
+| `server/services/googleCalendarService.ts` | Google Calendar integration                            |
+| `server/pgErrors.ts`                       | HttpError class, PG errcode mapping                    |
+| `migrations/current/`                      | SQL schema (graphile-migrate)                          |
 
 ## Rules
 
