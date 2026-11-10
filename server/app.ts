@@ -8,10 +8,10 @@ import {
   adminGroup,
   makeMaterialDownloadLayer,
   materialDownloadGroup,
-} from "./routes/admin.js";
-import { makeAuthLayer } from "./routes/auth.js";
-import { authenticatedGroup, makeAuthenticatedLayer } from "./routes/authenticated.js";
-import { makeHealthLayer, makePublicLayer } from "./routes/public.js";
+} from "./api/admin.js";
+import { makeAuthLayer } from "./api/auth.js";
+import { authenticatedGroup, makeAuthenticatedLayer } from "./api/authenticated.js";
+import { makeHealthLayer, makePublicLayer } from "./api/public.js";
 import { applicationLayer, memoMap, serverRuntime } from "./runtime.js";
 import { BackgroundWorker, type WorkerPaths } from "./services/backgroundWorker.js";
 
@@ -40,7 +40,7 @@ const ApiLive = HttpApiBuilder.layer(ServerApi).pipe(
 const TestingMountLive = Layer.unwrap(
   Effect.gen(function* () {
     if ((yield* Config.String("NODE_ENV")) === "production") return Layer.empty;
-    const { TestingHttpApiLive } = yield* Effect.promise(() => import("./routes/testing.js"));
+    const { TestingHttpApiLive } = yield* Effect.promise(() => import("./api/testing.js"));
     return TestingHttpApiLive;
   }),
 );

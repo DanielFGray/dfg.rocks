@@ -12,7 +12,7 @@ import type * as SqlClient from "effect/sql/SqlClient";
 import { ConnectionError, SqlError } from "effect/sql/SqlError";
 import { Database, PgAuthDB } from "../db.js";
 import { BackgroundWorker } from "../services/backgroundWorker.js";
-import { healthApi, makeHealthLayer } from "../routes/public.js";
+import { healthApi, makeHealthLayer } from "../api/public.js";
 
 // Serves /healthz through the real HttpApi layer. The database is a stub client: `Database.execute`
 // reaches only `unsafe`, so the stub answers that one call. The worker stub reports only `failed`.
