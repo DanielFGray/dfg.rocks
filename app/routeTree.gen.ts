@@ -9,79 +9,53 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as VerifyEmailRouteImport } from './routes/verify-email'
-import { Route as ResetPasswordRouteImport } from './routes/reset-password'
-import { Route as MagicLoginRouteImport } from './routes/magic-login'
-import { Route as LoginRouteImport } from './routes/login'
-import { Route as HealthzRouteImport } from './routes/healthz'
-import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
-import { Route as ConfirmDeleteAccountRouteImport } from './routes/confirm-delete-account'
-import { Route as AcceptInviteRouteImport } from './routes/accept-invite'
-import { Route as AuthedRouteImport } from './routes/_authed'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as ApiSplatRouteImport } from './routes/api.$'
-import { Route as AuthedSubmissionsRouteImport } from './routes/_authed/submissions'
-import { Route as AuthedSettingsRouteImport } from './routes/_authed/settings'
-import { Route as AuthedMyLessonsRouteImport } from './routes/_authed/my-lessons'
-import { Route as AuthedMessagesRouteImport } from './routes/_authed/messages'
-import { Route as AuthedLibraryRouteImport } from './routes/_authed/library'
-import { Route as AuthedLessonsRouteImport } from './routes/_authed/lessons'
-import { Route as AuthedFamilyRouteImport } from './routes/_authed/family'
-import { Route as AuthedDashboardRouteImport } from './routes/_authed/dashboard'
-import { Route as AuthedBookLessonRouteImport } from './routes/_authed/book-lesson'
-import { Route as AuthedBillingRouteImport } from './routes/_authed/billing'
-import { Route as AuthedAssignmentsRouteImport } from './routes/_authed/assignments'
+import { Route as AuthedRouteImport } from './routes/_authed'
+import { Route as AcceptInviteRouteImport } from './routes/accept-invite'
+import { Route as ConfirmDeleteAccountRouteImport } from './routes/confirm-delete-account'
+import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
+import { Route as HealthzRouteImport } from './routes/healthz'
+import { Route as LoginRouteImport } from './routes/login'
+import { Route as MagicLoginRouteImport } from './routes/magic-login'
+import { Route as ResetPasswordRouteImport } from './routes/reset-password'
+import { Route as VerifyEmailRouteImport } from './routes/verify-email'
 import { Route as AuthedAssignmentNotesRouteImport } from './routes/_authed/assignment-notes'
-import { Route as AuthedStudentsIndexRouteImport } from './routes/_authed/students.index'
-import { Route as AuthedCoursesIndexRouteImport } from './routes/_authed/courses.index'
-import { Route as AuthedBillingIndexRouteImport } from './routes/_authed/billing.index'
+import { Route as AuthedAssignmentsRouteImport } from './routes/_authed/assignments'
+import { Route as AuthedBillingRouteImport } from './routes/_authed/billing'
+import { Route as AuthedBookLessonRouteImport } from './routes/_authed/book-lesson'
+import { Route as AuthedDashboardRouteImport } from './routes/_authed/dashboard'
+import { Route as AuthedFamilyRouteImport } from './routes/_authed/family'
+import { Route as AuthedLessonsRouteImport } from './routes/_authed/lessons'
+import { Route as AuthedLibraryRouteImport } from './routes/_authed/library'
+import { Route as AuthedMessagesRouteImport } from './routes/_authed/messages'
+import { Route as AuthedMyLessonsRouteImport } from './routes/_authed/my-lessons'
+import { Route as AuthedSettingsRouteImport } from './routes/_authed/settings'
+import { Route as AuthedSubmissionsRouteImport } from './routes/_authed/submissions'
+import { Route as ApiSplatRouteImport } from './routes/api.$'
 import { Route as AuthedAssignmentsIndexRouteImport } from './routes/_authed/assignments.index'
-import { Route as AuthedStudentsIdRouteImport } from './routes/_authed/students.$id'
-import { Route as AuthedFamilyBillingRouteImport } from './routes/_authed/family/billing'
-import { Route as AuthedCoursesIdRouteImport } from './routes/_authed/courses.$id'
-import { Route as AuthedBillingMonthlyRouteImport } from './routes/_authed/billing.monthly'
 import { Route as AuthedAssignmentsMaterialIdRouteImport } from './routes/_authed/assignments.$materialId'
+import { Route as AuthedBillingIndexRouteImport } from './routes/_authed/billing.index'
+import { Route as AuthedBillingMonthlyRouteImport } from './routes/_authed/billing.monthly'
+import { Route as AuthedCoursesIndexRouteImport } from './routes/_authed/courses.index'
+import { Route as AuthedCoursesIdRouteImport } from './routes/_authed/courses.$id'
+import { Route as AuthedFamilyBillingRouteImport } from './routes/_authed/family/billing'
+import { Route as AuthedStudentsIndexRouteImport } from './routes/_authed/students.index'
+import { Route as AuthedStudentsIdRouteImport } from './routes/_authed/students.$id'
+import { Route as AuthedBillingBillsBillIdRouteImport } from './routes/_authed/billing.bills.$billId'
+import { Route as AuthedBillingPayersPayerIdRouteImport } from './routes/_authed/billing.payers.$payerId'
 import { Route as AuthedFamilyBillingIndexRouteImport } from './routes/_authed/family/billing.index'
 import { Route as AuthedFamilyBillingBillsRouteImport } from './routes/_authed/family/billing/bills'
-import { Route as AuthedBillingPayersPayerIdRouteImport } from './routes/_authed/billing.payers.$payerId'
-import { Route as AuthedBillingBillsBillIdRouteImport } from './routes/_authed/billing.bills.$billId'
-import { Route as AuthedFamilyBillingPaymentsPaymentIdRouteImport } from './routes/_authed/family/billing/payments.$paymentId'
 import { Route as AuthedFamilyBillingBillsBillIdRouteImport } from './routes/_authed/family/billing/bills.$billId'
+import { Route as AuthedFamilyBillingPaymentsPaymentIdRouteImport } from './routes/_authed/family/billing/payments.$paymentId'
 import { Route as AuthedCoursesCourseIdModulesModuleIdEditRouteImport } from './routes/_authed/courses.$courseId.modules.$moduleId.edit'
 
-const VerifyEmailRoute = VerifyEmailRouteImport.update({
-  id: '/verify-email',
-  path: '/verify-email',
+const IndexRoute = IndexRouteImport.update({
+  id: '/',
+  path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ResetPasswordRoute = ResetPasswordRouteImport.update({
-  id: '/reset-password',
-  path: '/reset-password',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const MagicLoginRoute = MagicLoginRouteImport.update({
-  id: '/magic-login',
-  path: '/magic-login',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const LoginRoute = LoginRouteImport.update({
-  id: '/login',
-  path: '/login',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const HealthzRoute = HealthzRouteImport.update({
-  id: '/healthz',
-  path: '/healthz',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ForgotPasswordRoute = ForgotPasswordRouteImport.update({
-  id: '/forgot-password',
-  path: '/forgot-password',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ConfirmDeleteAccountRoute = ConfirmDeleteAccountRouteImport.update({
-  id: '/confirm-delete-account',
-  path: '/confirm-delete-account',
+const AuthedRoute = AuthedRouteImport.update({
+  id: '/_authed',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AcceptInviteRoute = AcceptInviteRouteImport.update({
@@ -89,68 +63,44 @@ const AcceptInviteRoute = AcceptInviteRouteImport.update({
   path: '/accept-invite',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AuthedRoute = AuthedRouteImport.update({
-  id: '/_authed',
+const ConfirmDeleteAccountRoute = ConfirmDeleteAccountRouteImport.update({
+  id: '/confirm-delete-account',
+  path: '/confirm-delete-account',
   getParentRoute: () => rootRouteImport,
 } as any)
-const IndexRoute = IndexRouteImport.update({
-  id: '/',
-  path: '/',
+const ForgotPasswordRoute = ForgotPasswordRouteImport.update({
+  id: '/forgot-password',
+  path: '/forgot-password',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiSplatRoute = ApiSplatRouteImport.update({
-  id: '/api/$',
-  path: '/api/$',
+const HealthzRoute = HealthzRouteImport.update({
+  id: '/healthz',
+  path: '/healthz',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AuthedSubmissionsRoute = AuthedSubmissionsRouteImport.update({
-  id: '/submissions',
-  path: '/submissions',
-  getParentRoute: () => AuthedRoute,
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
+  getParentRoute: () => rootRouteImport,
 } as any)
-const AuthedSettingsRoute = AuthedSettingsRouteImport.update({
-  id: '/settings',
-  path: '/settings',
-  getParentRoute: () => AuthedRoute,
+const MagicLoginRoute = MagicLoginRouteImport.update({
+  id: '/magic-login',
+  path: '/magic-login',
+  getParentRoute: () => rootRouteImport,
 } as any)
-const AuthedMyLessonsRoute = AuthedMyLessonsRouteImport.update({
-  id: '/my-lessons',
-  path: '/my-lessons',
-  getParentRoute: () => AuthedRoute,
+const ResetPasswordRoute = ResetPasswordRouteImport.update({
+  id: '/reset-password',
+  path: '/reset-password',
+  getParentRoute: () => rootRouteImport,
 } as any)
-const AuthedMessagesRoute = AuthedMessagesRouteImport.update({
-  id: '/messages',
-  path: '/messages',
-  getParentRoute: () => AuthedRoute,
+const VerifyEmailRoute = VerifyEmailRouteImport.update({
+  id: '/verify-email',
+  path: '/verify-email',
+  getParentRoute: () => rootRouteImport,
 } as any)
-const AuthedLibraryRoute = AuthedLibraryRouteImport.update({
-  id: '/library',
-  path: '/library',
-  getParentRoute: () => AuthedRoute,
-} as any)
-const AuthedLessonsRoute = AuthedLessonsRouteImport.update({
-  id: '/lessons',
-  path: '/lessons',
-  getParentRoute: () => AuthedRoute,
-} as any)
-const AuthedFamilyRoute = AuthedFamilyRouteImport.update({
-  id: '/family',
-  path: '/family',
-  getParentRoute: () => AuthedRoute,
-} as any)
-const AuthedDashboardRoute = AuthedDashboardRouteImport.update({
-  id: '/dashboard',
-  path: '/dashboard',
-  getParentRoute: () => AuthedRoute,
-} as any)
-const AuthedBookLessonRoute = AuthedBookLessonRouteImport.update({
-  id: '/book-lesson',
-  path: '/book-lesson',
-  getParentRoute: () => AuthedRoute,
-} as any)
-const AuthedBillingRoute = AuthedBillingRouteImport.update({
-  id: '/billing',
-  path: '/billing',
+const AuthedAssignmentNotesRoute = AuthedAssignmentNotesRouteImport.update({
+  id: '/assignment-notes',
+  path: '/assignment-notes',
   getParentRoute: () => AuthedRoute,
 } as any)
 const AuthedAssignmentsRoute = AuthedAssignmentsRouteImport.update({
@@ -158,34 +108,90 @@ const AuthedAssignmentsRoute = AuthedAssignmentsRouteImport.update({
   path: '/assignments',
   getParentRoute: () => AuthedRoute,
 } as any)
-const AuthedAssignmentNotesRoute = AuthedAssignmentNotesRouteImport.update({
-  id: '/assignment-notes',
-  path: '/assignment-notes',
+const AuthedBillingRoute = AuthedBillingRouteImport.update({
+  id: '/billing',
+  path: '/billing',
   getParentRoute: () => AuthedRoute,
 } as any)
-const AuthedStudentsIndexRoute = AuthedStudentsIndexRouteImport.update({
-  id: '/students/',
-  path: '/students/',
+const AuthedBookLessonRoute = AuthedBookLessonRouteImport.update({
+  id: '/book-lesson',
+  path: '/book-lesson',
   getParentRoute: () => AuthedRoute,
 } as any)
-const AuthedCoursesIndexRoute = AuthedCoursesIndexRouteImport.update({
-  id: '/courses/',
-  path: '/courses/',
+const AuthedDashboardRoute = AuthedDashboardRouteImport.update({
+  id: '/dashboard',
+  path: '/dashboard',
   getParentRoute: () => AuthedRoute,
 } as any)
-const AuthedBillingIndexRoute = AuthedBillingIndexRouteImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => AuthedBillingRoute,
+const AuthedFamilyRoute = AuthedFamilyRouteImport.update({
+  id: '/family',
+  path: '/family',
+  getParentRoute: () => AuthedRoute,
+} as any)
+const AuthedLessonsRoute = AuthedLessonsRouteImport.update({
+  id: '/lessons',
+  path: '/lessons',
+  getParentRoute: () => AuthedRoute,
+} as any)
+const AuthedLibraryRoute = AuthedLibraryRouteImport.update({
+  id: '/library',
+  path: '/library',
+  getParentRoute: () => AuthedRoute,
+} as any)
+const AuthedMessagesRoute = AuthedMessagesRouteImport.update({
+  id: '/messages',
+  path: '/messages',
+  getParentRoute: () => AuthedRoute,
+} as any)
+const AuthedMyLessonsRoute = AuthedMyLessonsRouteImport.update({
+  id: '/my-lessons',
+  path: '/my-lessons',
+  getParentRoute: () => AuthedRoute,
+} as any)
+const AuthedSettingsRoute = AuthedSettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => AuthedRoute,
+} as any)
+const AuthedSubmissionsRoute = AuthedSubmissionsRouteImport.update({
+  id: '/submissions',
+  path: '/submissions',
+  getParentRoute: () => AuthedRoute,
+} as any)
+const ApiSplatRoute = ApiSplatRouteImport.update({
+  id: '/api/$',
+  path: '/api/$',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const AuthedAssignmentsIndexRoute = AuthedAssignmentsIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => AuthedAssignmentsRoute,
 } as any)
-const AuthedStudentsIdRoute = AuthedStudentsIdRouteImport.update({
-  id: '/students/$id',
-  path: '/students/$id',
+const AuthedAssignmentsMaterialIdRoute =
+  AuthedAssignmentsMaterialIdRouteImport.update({
+    id: '/$materialId',
+    path: '/$materialId',
+    getParentRoute: () => AuthedAssignmentsRoute,
+  } as any)
+const AuthedBillingIndexRoute = AuthedBillingIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AuthedBillingRoute,
+} as any)
+const AuthedBillingMonthlyRoute = AuthedBillingMonthlyRouteImport.update({
+  id: '/monthly',
+  path: '/monthly',
+  getParentRoute: () => AuthedBillingRoute,
+} as any)
+const AuthedCoursesIndexRoute = AuthedCoursesIndexRouteImport.update({
+  id: '/courses/',
+  path: '/courses/',
+  getParentRoute: () => AuthedRoute,
+} as any)
+const AuthedCoursesIdRoute = AuthedCoursesIdRouteImport.update({
+  id: '/courses/$id',
+  path: '/courses/$id',
   getParentRoute: () => AuthedRoute,
 } as any)
 const AuthedFamilyBillingRoute = AuthedFamilyBillingRouteImport.update({
@@ -193,21 +199,27 @@ const AuthedFamilyBillingRoute = AuthedFamilyBillingRouteImport.update({
   path: '/billing',
   getParentRoute: () => AuthedFamilyRoute,
 } as any)
-const AuthedCoursesIdRoute = AuthedCoursesIdRouteImport.update({
-  id: '/courses/$id',
-  path: '/courses/$id',
+const AuthedStudentsIndexRoute = AuthedStudentsIndexRouteImport.update({
+  id: '/students/',
+  path: '/students/',
   getParentRoute: () => AuthedRoute,
 } as any)
-const AuthedBillingMonthlyRoute = AuthedBillingMonthlyRouteImport.update({
-  id: '/monthly',
-  path: '/monthly',
-  getParentRoute: () => AuthedBillingRoute,
+const AuthedStudentsIdRoute = AuthedStudentsIdRouteImport.update({
+  id: '/students/$id',
+  path: '/students/$id',
+  getParentRoute: () => AuthedRoute,
 } as any)
-const AuthedAssignmentsMaterialIdRoute =
-  AuthedAssignmentsMaterialIdRouteImport.update({
-    id: '/$materialId',
-    path: '/$materialId',
-    getParentRoute: () => AuthedAssignmentsRoute,
+const AuthedBillingBillsBillIdRoute =
+  AuthedBillingBillsBillIdRouteImport.update({
+    id: '/bills/$billId',
+    path: '/bills/$billId',
+    getParentRoute: () => AuthedBillingRoute,
+  } as any)
+const AuthedBillingPayersPayerIdRoute =
+  AuthedBillingPayersPayerIdRouteImport.update({
+    id: '/payers/$payerId',
+    path: '/payers/$payerId',
+    getParentRoute: () => AuthedBillingRoute,
   } as any)
 const AuthedFamilyBillingIndexRoute =
   AuthedFamilyBillingIndexRouteImport.update({
@@ -221,29 +233,17 @@ const AuthedFamilyBillingBillsRoute =
     path: '/bills',
     getParentRoute: () => AuthedFamilyBillingRoute,
   } as any)
-const AuthedBillingPayersPayerIdRoute =
-  AuthedBillingPayersPayerIdRouteImport.update({
-    id: '/payers/$payerId',
-    path: '/payers/$payerId',
-    getParentRoute: () => AuthedBillingRoute,
-  } as any)
-const AuthedBillingBillsBillIdRoute =
-  AuthedBillingBillsBillIdRouteImport.update({
-    id: '/bills/$billId',
-    path: '/bills/$billId',
-    getParentRoute: () => AuthedBillingRoute,
+const AuthedFamilyBillingBillsBillIdRoute =
+  AuthedFamilyBillingBillsBillIdRouteImport.update({
+    id: '/$billId',
+    path: '/$billId',
+    getParentRoute: () => AuthedFamilyBillingBillsRoute,
   } as any)
 const AuthedFamilyBillingPaymentsPaymentIdRoute =
   AuthedFamilyBillingPaymentsPaymentIdRouteImport.update({
     id: '/payments/$paymentId',
     path: '/payments/$paymentId',
     getParentRoute: () => AuthedFamilyBillingRoute,
-  } as any)
-const AuthedFamilyBillingBillsBillIdRoute =
-  AuthedFamilyBillingBillsBillIdRouteImport.update({
-    id: '/$billId',
-    path: '/$billId',
-    getParentRoute: () => AuthedFamilyBillingBillsRoute,
   } as any)
 const AuthedCoursesCourseIdModulesModuleIdEditRoute =
   AuthedCoursesCourseIdModulesModuleIdEditRouteImport.update({
@@ -508,60 +508,11 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/verify-email': {
-      id: '/verify-email'
-      path: '/verify-email'
-      fullPath: '/verify-email'
-      preLoaderRoute: typeof VerifyEmailRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/reset-password': {
-      id: '/reset-password'
-      path: '/reset-password'
-      fullPath: '/reset-password'
-      preLoaderRoute: typeof ResetPasswordRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/magic-login': {
-      id: '/magic-login'
-      path: '/magic-login'
-      fullPath: '/magic-login'
-      preLoaderRoute: typeof MagicLoginRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/login': {
-      id: '/login'
-      path: '/login'
-      fullPath: '/login'
-      preLoaderRoute: typeof LoginRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/healthz': {
-      id: '/healthz'
-      path: '/healthz'
-      fullPath: '/healthz'
-      preLoaderRoute: typeof HealthzRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/forgot-password': {
-      id: '/forgot-password'
-      path: '/forgot-password'
-      fullPath: '/forgot-password'
-      preLoaderRoute: typeof ForgotPasswordRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/confirm-delete-account': {
-      id: '/confirm-delete-account'
-      path: '/confirm-delete-account'
-      fullPath: '/confirm-delete-account'
-      preLoaderRoute: typeof ConfirmDeleteAccountRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/accept-invite': {
-      id: '/accept-invite'
-      path: '/accept-invite'
-      fullPath: '/accept-invite'
-      preLoaderRoute: typeof AcceptInviteRouteImport
+    '/': {
+      id: '/'
+      path: '/'
+      fullPath: '/'
+      preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_authed': {
@@ -571,88 +522,67 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/': {
-      id: '/'
-      path: '/'
-      fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
+    '/accept-invite': {
+      id: '/accept-invite'
+      path: '/accept-invite'
+      fullPath: '/accept-invite'
+      preLoaderRoute: typeof AcceptInviteRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/$': {
-      id: '/api/$'
-      path: '/api/$'
-      fullPath: '/api/$'
-      preLoaderRoute: typeof ApiSplatRouteImport
+    '/confirm-delete-account': {
+      id: '/confirm-delete-account'
+      path: '/confirm-delete-account'
+      fullPath: '/confirm-delete-account'
+      preLoaderRoute: typeof ConfirmDeleteAccountRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/_authed/submissions': {
-      id: '/_authed/submissions'
-      path: '/submissions'
-      fullPath: '/submissions'
-      preLoaderRoute: typeof AuthedSubmissionsRouteImport
-      parentRoute: typeof AuthedRoute
+    '/forgot-password': {
+      id: '/forgot-password'
+      path: '/forgot-password'
+      fullPath: '/forgot-password'
+      preLoaderRoute: typeof ForgotPasswordRouteImport
+      parentRoute: typeof rootRouteImport
     }
-    '/_authed/settings': {
-      id: '/_authed/settings'
-      path: '/settings'
-      fullPath: '/settings'
-      preLoaderRoute: typeof AuthedSettingsRouteImport
-      parentRoute: typeof AuthedRoute
+    '/healthz': {
+      id: '/healthz'
+      path: '/healthz'
+      fullPath: '/healthz'
+      preLoaderRoute: typeof HealthzRouteImport
+      parentRoute: typeof rootRouteImport
     }
-    '/_authed/my-lessons': {
-      id: '/_authed/my-lessons'
-      path: '/my-lessons'
-      fullPath: '/my-lessons'
-      preLoaderRoute: typeof AuthedMyLessonsRouteImport
-      parentRoute: typeof AuthedRoute
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
     }
-    '/_authed/messages': {
-      id: '/_authed/messages'
-      path: '/messages'
-      fullPath: '/messages'
-      preLoaderRoute: typeof AuthedMessagesRouteImport
-      parentRoute: typeof AuthedRoute
+    '/magic-login': {
+      id: '/magic-login'
+      path: '/magic-login'
+      fullPath: '/magic-login'
+      preLoaderRoute: typeof MagicLoginRouteImport
+      parentRoute: typeof rootRouteImport
     }
-    '/_authed/library': {
-      id: '/_authed/library'
-      path: '/library'
-      fullPath: '/library'
-      preLoaderRoute: typeof AuthedLibraryRouteImport
-      parentRoute: typeof AuthedRoute
+    '/reset-password': {
+      id: '/reset-password'
+      path: '/reset-password'
+      fullPath: '/reset-password'
+      preLoaderRoute: typeof ResetPasswordRouteImport
+      parentRoute: typeof rootRouteImport
     }
-    '/_authed/lessons': {
-      id: '/_authed/lessons'
-      path: '/lessons'
-      fullPath: '/lessons'
-      preLoaderRoute: typeof AuthedLessonsRouteImport
-      parentRoute: typeof AuthedRoute
+    '/verify-email': {
+      id: '/verify-email'
+      path: '/verify-email'
+      fullPath: '/verify-email'
+      preLoaderRoute: typeof VerifyEmailRouteImport
+      parentRoute: typeof rootRouteImport
     }
-    '/_authed/family': {
-      id: '/_authed/family'
-      path: '/family'
-      fullPath: '/family'
-      preLoaderRoute: typeof AuthedFamilyRouteImport
-      parentRoute: typeof AuthedRoute
-    }
-    '/_authed/dashboard': {
-      id: '/_authed/dashboard'
-      path: '/dashboard'
-      fullPath: '/dashboard'
-      preLoaderRoute: typeof AuthedDashboardRouteImport
-      parentRoute: typeof AuthedRoute
-    }
-    '/_authed/book-lesson': {
-      id: '/_authed/book-lesson'
-      path: '/book-lesson'
-      fullPath: '/book-lesson'
-      preLoaderRoute: typeof AuthedBookLessonRouteImport
-      parentRoute: typeof AuthedRoute
-    }
-    '/_authed/billing': {
-      id: '/_authed/billing'
-      path: '/billing'
-      fullPath: '/billing'
-      preLoaderRoute: typeof AuthedBillingRouteImport
+    '/_authed/assignment-notes': {
+      id: '/_authed/assignment-notes'
+      path: '/assignment-notes'
+      fullPath: '/assignment-notes'
+      preLoaderRoute: typeof AuthedAssignmentNotesRouteImport
       parentRoute: typeof AuthedRoute
     }
     '/_authed/assignments': {
@@ -662,33 +592,82 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedAssignmentsRouteImport
       parentRoute: typeof AuthedRoute
     }
-    '/_authed/assignment-notes': {
-      id: '/_authed/assignment-notes'
-      path: '/assignment-notes'
-      fullPath: '/assignment-notes'
-      preLoaderRoute: typeof AuthedAssignmentNotesRouteImport
+    '/_authed/billing': {
+      id: '/_authed/billing'
+      path: '/billing'
+      fullPath: '/billing'
+      preLoaderRoute: typeof AuthedBillingRouteImport
       parentRoute: typeof AuthedRoute
     }
-    '/_authed/students/': {
-      id: '/_authed/students/'
-      path: '/students'
-      fullPath: '/students/'
-      preLoaderRoute: typeof AuthedStudentsIndexRouteImport
+    '/_authed/book-lesson': {
+      id: '/_authed/book-lesson'
+      path: '/book-lesson'
+      fullPath: '/book-lesson'
+      preLoaderRoute: typeof AuthedBookLessonRouteImport
       parentRoute: typeof AuthedRoute
     }
-    '/_authed/courses/': {
-      id: '/_authed/courses/'
-      path: '/courses'
-      fullPath: '/courses/'
-      preLoaderRoute: typeof AuthedCoursesIndexRouteImport
+    '/_authed/dashboard': {
+      id: '/_authed/dashboard'
+      path: '/dashboard'
+      fullPath: '/dashboard'
+      preLoaderRoute: typeof AuthedDashboardRouteImport
       parentRoute: typeof AuthedRoute
     }
-    '/_authed/billing/': {
-      id: '/_authed/billing/'
-      path: '/'
-      fullPath: '/billing/'
-      preLoaderRoute: typeof AuthedBillingIndexRouteImport
-      parentRoute: typeof AuthedBillingRoute
+    '/_authed/family': {
+      id: '/_authed/family'
+      path: '/family'
+      fullPath: '/family'
+      preLoaderRoute: typeof AuthedFamilyRouteImport
+      parentRoute: typeof AuthedRoute
+    }
+    '/_authed/lessons': {
+      id: '/_authed/lessons'
+      path: '/lessons'
+      fullPath: '/lessons'
+      preLoaderRoute: typeof AuthedLessonsRouteImport
+      parentRoute: typeof AuthedRoute
+    }
+    '/_authed/library': {
+      id: '/_authed/library'
+      path: '/library'
+      fullPath: '/library'
+      preLoaderRoute: typeof AuthedLibraryRouteImport
+      parentRoute: typeof AuthedRoute
+    }
+    '/_authed/messages': {
+      id: '/_authed/messages'
+      path: '/messages'
+      fullPath: '/messages'
+      preLoaderRoute: typeof AuthedMessagesRouteImport
+      parentRoute: typeof AuthedRoute
+    }
+    '/_authed/my-lessons': {
+      id: '/_authed/my-lessons'
+      path: '/my-lessons'
+      fullPath: '/my-lessons'
+      preLoaderRoute: typeof AuthedMyLessonsRouteImport
+      parentRoute: typeof AuthedRoute
+    }
+    '/_authed/settings': {
+      id: '/_authed/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof AuthedSettingsRouteImport
+      parentRoute: typeof AuthedRoute
+    }
+    '/_authed/submissions': {
+      id: '/_authed/submissions'
+      path: '/submissions'
+      fullPath: '/submissions'
+      preLoaderRoute: typeof AuthedSubmissionsRouteImport
+      parentRoute: typeof AuthedRoute
+    }
+    '/api/$': {
+      id: '/api/$'
+      path: '/api/$'
+      fullPath: '/api/$'
+      preLoaderRoute: typeof ApiSplatRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/_authed/assignments/': {
       id: '/_authed/assignments/'
@@ -697,11 +676,39 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedAssignmentsIndexRouteImport
       parentRoute: typeof AuthedAssignmentsRoute
     }
-    '/_authed/students/$id': {
-      id: '/_authed/students/$id'
-      path: '/students/$id'
-      fullPath: '/students/$id'
-      preLoaderRoute: typeof AuthedStudentsIdRouteImport
+    '/_authed/assignments/$materialId': {
+      id: '/_authed/assignments/$materialId'
+      path: '/$materialId'
+      fullPath: '/assignments/$materialId'
+      preLoaderRoute: typeof AuthedAssignmentsMaterialIdRouteImport
+      parentRoute: typeof AuthedAssignmentsRoute
+    }
+    '/_authed/billing/': {
+      id: '/_authed/billing/'
+      path: '/'
+      fullPath: '/billing/'
+      preLoaderRoute: typeof AuthedBillingIndexRouteImport
+      parentRoute: typeof AuthedBillingRoute
+    }
+    '/_authed/billing/monthly': {
+      id: '/_authed/billing/monthly'
+      path: '/monthly'
+      fullPath: '/billing/monthly'
+      preLoaderRoute: typeof AuthedBillingMonthlyRouteImport
+      parentRoute: typeof AuthedBillingRoute
+    }
+    '/_authed/courses/': {
+      id: '/_authed/courses/'
+      path: '/courses'
+      fullPath: '/courses/'
+      preLoaderRoute: typeof AuthedCoursesIndexRouteImport
+      parentRoute: typeof AuthedRoute
+    }
+    '/_authed/courses/$id': {
+      id: '/_authed/courses/$id'
+      path: '/courses/$id'
+      fullPath: '/courses/$id'
+      preLoaderRoute: typeof AuthedCoursesIdRouteImport
       parentRoute: typeof AuthedRoute
     }
     '/_authed/family/billing': {
@@ -711,26 +718,33 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedFamilyBillingRouteImport
       parentRoute: typeof AuthedFamilyRoute
     }
-    '/_authed/courses/$id': {
-      id: '/_authed/courses/$id'
-      path: '/courses/$id'
-      fullPath: '/courses/$id'
-      preLoaderRoute: typeof AuthedCoursesIdRouteImport
+    '/_authed/students/': {
+      id: '/_authed/students/'
+      path: '/students'
+      fullPath: '/students/'
+      preLoaderRoute: typeof AuthedStudentsIndexRouteImport
       parentRoute: typeof AuthedRoute
     }
-    '/_authed/billing/monthly': {
-      id: '/_authed/billing/monthly'
-      path: '/monthly'
-      fullPath: '/billing/monthly'
-      preLoaderRoute: typeof AuthedBillingMonthlyRouteImport
+    '/_authed/students/$id': {
+      id: '/_authed/students/$id'
+      path: '/students/$id'
+      fullPath: '/students/$id'
+      preLoaderRoute: typeof AuthedStudentsIdRouteImport
+      parentRoute: typeof AuthedRoute
+    }
+    '/_authed/billing/bills/$billId': {
+      id: '/_authed/billing/bills/$billId'
+      path: '/bills/$billId'
+      fullPath: '/billing/bills/$billId'
+      preLoaderRoute: typeof AuthedBillingBillsBillIdRouteImport
       parentRoute: typeof AuthedBillingRoute
     }
-    '/_authed/assignments/$materialId': {
-      id: '/_authed/assignments/$materialId'
-      path: '/$materialId'
-      fullPath: '/assignments/$materialId'
-      preLoaderRoute: typeof AuthedAssignmentsMaterialIdRouteImport
-      parentRoute: typeof AuthedAssignmentsRoute
+    '/_authed/billing/payers/$payerId': {
+      id: '/_authed/billing/payers/$payerId'
+      path: '/payers/$payerId'
+      fullPath: '/billing/payers/$payerId'
+      preLoaderRoute: typeof AuthedBillingPayersPayerIdRouteImport
+      parentRoute: typeof AuthedBillingRoute
     }
     '/_authed/family/billing/': {
       id: '/_authed/family/billing/'
@@ -746,19 +760,12 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedFamilyBillingBillsRouteImport
       parentRoute: typeof AuthedFamilyBillingRoute
     }
-    '/_authed/billing/payers/$payerId': {
-      id: '/_authed/billing/payers/$payerId'
-      path: '/payers/$payerId'
-      fullPath: '/billing/payers/$payerId'
-      preLoaderRoute: typeof AuthedBillingPayersPayerIdRouteImport
-      parentRoute: typeof AuthedBillingRoute
-    }
-    '/_authed/billing/bills/$billId': {
-      id: '/_authed/billing/bills/$billId'
-      path: '/bills/$billId'
-      fullPath: '/billing/bills/$billId'
-      preLoaderRoute: typeof AuthedBillingBillsBillIdRouteImport
-      parentRoute: typeof AuthedBillingRoute
+    '/_authed/family/billing/bills/$billId': {
+      id: '/_authed/family/billing/bills/$billId'
+      path: '/$billId'
+      fullPath: '/family/billing/bills/$billId'
+      preLoaderRoute: typeof AuthedFamilyBillingBillsBillIdRouteImport
+      parentRoute: typeof AuthedFamilyBillingBillsRoute
     }
     '/_authed/family/billing/payments/$paymentId': {
       id: '/_authed/family/billing/payments/$paymentId'
@@ -766,13 +773,6 @@ declare module '@tanstack/react-router' {
       fullPath: '/family/billing/payments/$paymentId'
       preLoaderRoute: typeof AuthedFamilyBillingPaymentsPaymentIdRouteImport
       parentRoute: typeof AuthedFamilyBillingRoute
-    }
-    '/_authed/family/billing/bills/$billId': {
-      id: '/_authed/family/billing/bills/$billId'
-      path: '/$billId'
-      fullPath: '/family/billing/bills/$billId'
-      preLoaderRoute: typeof AuthedFamilyBillingBillsBillIdRouteImport
-      parentRoute: typeof AuthedFamilyBillingBillsRoute
     }
     '/_authed/courses/$courseId/modules/$moduleId/edit': {
       id: '/_authed/courses/$courseId/modules/$moduleId/edit'
