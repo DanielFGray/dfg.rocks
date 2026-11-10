@@ -3,6 +3,7 @@ import * as HttpApiBuilder from "effect/http-api/HttpApiBuilder";
 import * as HttpServerResponse from "effect/http/HttpServerResponse";
 import { Effect } from "effect";
 import { publicGroup } from "../../shared/httpApi.js";
+import { env } from "../assertEnv.js";
 import { adaptHttpApiErrors } from "../httpApiErrors.js";
 import { HttpError } from "../pgErrors.js";
 import {
@@ -104,7 +105,7 @@ export function makePublicLayer() {
         "oauthGoogle",
         Effect.fnUntraced(function* ({ request }) {
           const webRequest = request.source as Request;
-          const rootUrl = new URL(webRequest.url).origin;
+          const rootUrl = env.VITE_ROOT_URL;
           const authorization = createAuthorizationRequest(
             "google",
             rootUrl,
@@ -136,7 +137,7 @@ export function makePublicLayer() {
         "oauthGoogleCallback",
         Effect.fnUntraced(function* ({ request }) {
           const webRequest = request.source as Request;
-          const rootUrl = new URL(webRequest.url).origin;
+          const rootUrl = env.VITE_ROOT_URL;
           const query = new URL(webRequest.url).searchParams;
           const cookieName = getOAuthCookieName("google");
           const redirectCookieName = getOAuthRedirectCookieName("google");
@@ -170,7 +171,7 @@ export function makePublicLayer() {
             userService.sessionFromUser(user),
           );
           let response = HttpServerResponse.redirect(
-            new URL(getOAuthRedirectTarget(redirectTarget), webRequest.url).toString(),
+            new URL(getOAuthRedirectTarget(redirectTarget), rootUrl).toString(),
           );
           response = yield* HttpServerResponse.expireCookie(
             response,
@@ -191,7 +192,7 @@ export function makePublicLayer() {
         "oauthApple",
         Effect.fnUntraced(function* ({ request }) {
           const webRequest = request.source as Request;
-          const rootUrl = new URL(webRequest.url).origin;
+          const rootUrl = env.VITE_ROOT_URL;
           const authorization = createAuthorizationRequest(
             "apple",
             rootUrl,
@@ -221,8 +222,7 @@ export function makePublicLayer() {
       .handle(
         "oauthAppleCallback",
         Effect.fnUntraced(function* ({ request, payload }) {
-          const webRequest = request.source as Request;
-          const rootUrl = new URL(webRequest.url).origin;
+          const rootUrl = env.VITE_ROOT_URL;
           const cookieName = getOAuthCookieName("apple");
           const redirectCookieName = getOAuthRedirectCookieName("apple");
           const oauthState = decodeOAuthState(request.cookies[cookieName]);
@@ -263,7 +263,7 @@ export function makePublicLayer() {
             userService.sessionFromUser(linkedUser),
           );
           let response = HttpServerResponse.redirect(
-            new URL(getOAuthRedirectTarget(redirectTarget), webRequest.url).toString(),
+            new URL(getOAuthRedirectTarget(redirectTarget), rootUrl).toString(),
           );
           response = yield* HttpServerResponse.expireCookie(
             response,

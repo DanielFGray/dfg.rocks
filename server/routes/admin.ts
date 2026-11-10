@@ -276,7 +276,7 @@ export function makeAdminLayer() {
         "gcalConnect",
         Effect.fnUntraced(function* (context) {
           yield* requireAdminSession(context.request, { csrf: false });
-          const rootUrl = new URL((context.request.source as Request).url).origin;
+          const rootUrl = env.VITE_ROOT_URL;
           const authorization = yield* GoogleCalendarService.use((googleCalendarService) =>
             googleCalendarService.createAuthorizationRequest(rootUrl),
           );
@@ -294,7 +294,7 @@ export function makeAdminLayer() {
         "gcalCallback",
         Effect.fnUntraced(function* ({ request, query }) {
           yield* requireAdminSession(request, { csrf: false });
-          const rootUrl = new URL((request.source as Request).url).origin;
+          const rootUrl = env.VITE_ROOT_URL;
           const authCookieName = GoogleCalendarService.getAuthCookieName();
           const cookieOptions = GoogleCalendarService.getAuthCookieOptions(rootUrl);
           const authState = yield* GoogleCalendarService.decodeAuthState(

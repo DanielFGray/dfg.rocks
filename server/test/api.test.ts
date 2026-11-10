@@ -40,6 +40,10 @@ function runPlatform<A, E>(effect: Effect.Effect<A, E, NodeServices.NodeServices
 }
 
 const TEST_ROOT_URL = "http://127.0.0.1:3000";
+// The server's VITE_ROOT_URL. It differs from TEST_ROOT_URL as it does in production, where
+// Traefik ends TLS and the app receives plain-HTTP requests: OAuth redirect URIs must come from
+// this value, not from the request.
+const CONFIGURED_ROOT_URL = "https://dfg.test";
 type TitledItem = { title: string };
 type SubmissionSummary = { id: string; email: string; is_read: boolean };
 type StudentSummary = { username: string };
@@ -94,7 +98,6 @@ describe("DFG Portal API", () => {
   beforeAll(async () => {
     const dbUrl = forceIpv4(requiredEnv("DATABASE_URL"));
     const authDbUrl = forceIpv4(requiredEnv("AUTH_DATABASE_URL"));
-    const viteRootUrl = forceIpv4(process.env.VITE_ROOT_URL || "http://localhost:5174");
     const adminEmail = process.env.ADMIN_EMAIL || "admin@test.com";
     const childEnv = Object.fromEntries(
       Object.entries({
@@ -104,7 +107,7 @@ describe("DFG Portal API", () => {
         NOCONFIRM: "1",
         NODE_ENV: "test",
         PORT: "0",
-        VITE_ROOT_URL: viteRootUrl,
+        VITE_ROOT_URL: CONFIGURED_ROOT_URL,
         ADMIN_EMAIL: adminEmail,
         GOOGLE_CALENDAR_CLIENT_ID: process.env.GOOGLE_CALENDAR_CLIENT_ID || "gcal-client-id",
         GOOGLE_CALENDAR_CLIENT_SECRET:
@@ -355,7 +358,7 @@ describe("DFG Portal API", () => {
       expect(googleLocation.searchParams.get("client_id")).toBe(process.env.GOOGLE_CLIENT_ID);
       expect(googleLocation.searchParams.get("access_type")).toBe("offline");
       expect(googleLocation.searchParams.get("redirect_uri")).toBe(
-        `${TEST_ROOT_URL}/api/oauth/google/callback`,
+        `${CONFIGURED_ROOT_URL}/api/oauth/google/callback`,
       );
       expect(googleLocation.searchParams.get("code_challenge")).toBeTruthy();
       expect(googleLocation.searchParams.get("state")).toBeTruthy();
@@ -380,7 +383,7 @@ describe("DFG Portal API", () => {
       const appleLocation = new URL(appleStart.headers["location"]!);
       expect(appleLocation.searchParams.get("client_id")).toBe(process.env.APPLE_CLIENT_ID);
       expect(appleLocation.searchParams.get("redirect_uri")).toBe(
-        `${TEST_ROOT_URL}/api/oauth/apple/callback`,
+        `${CONFIGURED_ROOT_URL}/api/oauth/apple/callback`,
       );
       expect(appleLocation.searchParams.get("response_mode")).toBe("form_post");
       expect(appleLocation.searchParams.get("state")).toBeTruthy();
@@ -417,7 +420,7 @@ describe("DFG Portal API", () => {
       expect(authUrl.searchParams.get("client_id")).toBe(process.env.GOOGLE_CALENDAR_CLIENT_ID);
       expect(authUrl.searchParams.get("access_type")).toBe("offline");
       expect(authUrl.searchParams.get("redirect_uri")).toBe(
-        `${TEST_ROOT_URL}/api/admin/gcal/callback`,
+        `${CONFIGURED_ROOT_URL}/api/admin/gcal/callback`,
       );
       expect(authUrl.searchParams.get("code_challenge")).toBeTruthy();
       expect(authUrl.searchParams.get("state")).toBeTruthy();
