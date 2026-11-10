@@ -29,14 +29,14 @@ begin
     raise exception 'A student can belong to only one family' using errcode = 'DNIED';
   end if;
 end;
-$$ language plpgsql volatile security definer set search_path to pg_catalog;
+$$ language plpgsql volatile security definer set search_path to pg_catalog, pg_temp;
 
 create function app_private.tg_family_memberships__one_family_per_student() returns trigger as $$
 begin
   perform app_private.assert_student_in_one_family(NEW.user_id);
   return null;
 end;
-$$ language plpgsql volatile security definer set search_path to pg_catalog;
+$$ language plpgsql volatile security definer set search_path to pg_catalog, pg_temp;
 
 create constraint trigger _200_one_family_per_student
   after insert or update of user_id on app_public.family_memberships
@@ -47,7 +47,7 @@ begin
   perform app_private.assert_student_in_one_family(NEW.id);
   return null;
 end;
-$$ language plpgsql volatile security definer set search_path to pg_catalog;
+$$ language plpgsql volatile security definer set search_path to pg_catalog, pg_temp;
 
 create constraint trigger _200_one_family_per_student
   after update of role on app_public.users
@@ -136,7 +136,7 @@ create function app_private.join_family(p_family_id uuid, p_user_id uuid) return
   from app_public.users u
   where u.id = p_user_id
   on conflict do nothing;
-$$ language sql volatile security definer set search_path to pg_catalog;
+$$ language sql volatile security definer set search_path to pg_catalog, pg_temp;
 
 create or replace function app_public.accept_invitation_to_family(invitation_id uuid, code text default null)
 returns void as $$
@@ -195,7 +195,7 @@ begin
   end if;
   return v_payer_id;
 end;
-$$ language plpgsql stable security definer set search_path to pg_catalog;
+$$ language plpgsql stable security definer set search_path to pg_catalog, pg_temp;
 
 create function app_public.current_user_visible_payer_ids() returns setof uuid as $$
   select app_public.current_user_id()
@@ -204,7 +204,7 @@ create function app_public.current_user_visible_payer_ids() returns setof uuid a
     from app_public.family_memberships fm
    where fm.is_billing_contact
      and fm.family_id in (select app_public.current_user_member_family_ids());
-$$ language sql stable security definer set search_path to pg_catalog;
+$$ language sql stable security definer set search_path to pg_catalog, pg_temp;
 
 comment on function app_public.current_user_visible_payer_ids() is
   E'Payers whose ledger the current user may read: the user, and the billing contact of each family the user belongs to.';
@@ -219,11 +219,11 @@ drop table app_public.payment_number_sequences;
 
 create function app_public.next_bill_number() returns integer as $$
   select nextval('app_public.bill_number_seq')::integer;
-$$ language sql volatile security definer set search_path to pg_catalog;
+$$ language sql volatile security definer set search_path to pg_catalog, pg_temp;
 
 create function app_public.next_payment_number() returns integer as $$
   select nextval('app_public.payment_number_seq')::integer;
-$$ language sql volatile security definer set search_path to pg_catalog;
+$$ language sql volatile security definer set search_path to pg_catalog, pg_temp;
 
 alter table app_public.bills drop constraint bills_family_id_fkey;
 alter table app_public.bills rename column family_id to payer_id;
@@ -379,7 +379,7 @@ create function app_public.get_effective_discount(p_payer_id uuid, p_on_date dat
     and (d.effective_until is null or d.effective_until >= p_on_date)
   order by d.created_at
   limit 1;
-$$ language sql stable security definer set search_path to pg_catalog;
+$$ language sql stable security definer set search_path to pg_catalog, pg_temp;
 
 drop function app_public.get_effective_tax_rate(uuid, date);
 create function app_public.get_effective_tax_rate(p_payer_id uuid, p_on_date date) returns jsonb as $$
@@ -404,7 +404,7 @@ create function app_public.get_effective_tax_rate(p_payer_id uuid, p_on_date dat
     )
   order by tr.created_at
   limit 1;
-$$ language sql stable security definer set search_path to pg_catalog;
+$$ language sql stable security definer set search_path to pg_catalog, pg_temp;
 
 drop function app_public.monthly_billing_eligible(date);
 create function app_public.monthly_billing_eligible(p_billing_month date)
@@ -432,7 +432,7 @@ returns table(
   where rs.active
     and rs.starts_on <= (p_billing_month + interval '1 month - 1 day')::date
     and (rs.ends_on is null or rs.ends_on >= p_billing_month)
-$$ language sql stable security definer set search_path to pg_catalog;
+$$ language sql stable security definer set search_path to pg_catalog, pg_temp;
 
 create or replace function app_public.create_monthly_bill_line_items(
   p_bill_id uuid, p_student_id uuid, p_billing_month date, p_due_date date
@@ -598,7 +598,7 @@ begin
   from app_public.bill_line_items bli
   where bli.bill_id = p_bill_id;
 end;
-$$ language plpgsql volatile security definer set search_path to pg_catalog;
+$$ language plpgsql volatile security definer set search_path to pg_catalog, pg_temp;
 
 create or replace function app_public.issue_monthly_bills(p_billing_month date) returns jsonb as $$
 declare
@@ -722,7 +722,7 @@ begin
     'errors', v_errors
   );
 end;
-$$ language plpgsql volatile security definer set search_path to pg_catalog;
+$$ language plpgsql volatile security definer set search_path to pg_catalog, pg_temp;
 
 -- The bill for one single-booking lesson. The price is the student's rate for
 -- the lesson's location; a lesson under any other billing model, or with no
@@ -798,7 +798,7 @@ begin
 
   return v_bill_id;
 end;
-$$ language plpgsql volatile security definer set search_path to pg_catalog;
+$$ language plpgsql volatile security definer set search_path to pg_catalog, pg_temp;
 
 drop function app_public.settle_single_booking_cancellation(uuid, integer, boolean);
 -- Cancels a lesson's open single-booking bill; a captured deposit becomes a
@@ -850,7 +850,7 @@ begin
     );
   end if;
 end;
-$$ language plpgsql volatile security definer set search_path to pg_catalog;
+$$ language plpgsql volatile security definer set search_path to pg_catalog, pg_temp;
 
 -- Ledger triggers -------------------------------------------------------------
 
@@ -885,7 +885,7 @@ begin
          >= amount_cents;
   return NEW;
 end;
-$$ language plpgsql volatile security definer set search_path to pg_catalog;
+$$ language plpgsql volatile security definer set search_path to pg_catalog, pg_temp;
 
 create or replace function app_private.tg_credit_applications__validate() returns trigger as $$
 declare
@@ -925,7 +925,7 @@ begin
   end if;
   return NEW;
 end;
-$$ language plpgsql volatile security definer set search_path to pg_catalog;
+$$ language plpgsql volatile security definer set search_path to pg_catalog, pg_temp;
 
 create or replace function app_private.tg_payment_allocations__validate() returns trigger as $$
 declare
@@ -967,7 +967,7 @@ begin
   end if;
   return NEW;
 end;
-$$ language plpgsql volatile security definer set search_path to pg_catalog;
+$$ language plpgsql volatile security definer set search_path to pg_catalog, pg_temp;
 
 -- The audit log is append-only and must outlive the users it names. A foreign
 -- key with "on delete set null" updates audit rows, which the append-only
