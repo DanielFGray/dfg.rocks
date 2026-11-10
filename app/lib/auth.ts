@@ -2,7 +2,6 @@ import { createServerFn } from "@tanstack/react-start";
 import { getCookie } from "@tanstack/react-start/server";
 import { serverRuntime } from "../../server/runtime.js";
 import { AuthRouteService } from "../../server/services/authRouteService.js";
-import { SessionService } from "../../server/services/sessionService.js";
 import type { MeResponse } from "../../shared/httpApi.js";
 
 export type AuthUser = {
@@ -15,14 +14,6 @@ export type AuthUser = {
 };
 
 export type AuthState = MeResponse;
-
-const anonymousAuthState = (): AuthState => ({
-  user: null,
-  isParent: false,
-  familyStudents: [],
-  activeStudentId: null,
-  activeStudent: null,
-});
 
 function toPlainAuthState(state: AuthState): AuthState {
   const plainUser = (user: NonNullable<AuthState["user"]>) => ({
@@ -49,18 +40,8 @@ function toPlainAuthState(state: AuthState): AuthState {
 }
 
 export const getAuthUser = createServerFn({ method: "GET" }).handler(async () => {
-  const token = getCookie("session");
-  if (!token) return JSON.stringify(anonymousAuthState());
-
-  const session = await serverRuntime.runPromise(
-    SessionService.use((sessionService) => sessionService.validateSessionToken(token)),
-  );
-  if (!session) return JSON.stringify(anonymousAuthState());
-
   const state = await serverRuntime.runPromise(
-    AuthRouteService.use((authRouteService) =>
-      authRouteService.me(session.session.id, session.user.id, session.session.active_student_id),
-    ),
+    AuthRouteService.use((authRouteService) => authRouteService.currentUser(getCookie("session"))),
   );
   return JSON.stringify(toPlainAuthState(state));
 });

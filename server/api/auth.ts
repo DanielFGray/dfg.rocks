@@ -106,29 +106,10 @@ export function makeAuthLayer() {
           return response;
         }, adaptAuthHttpApiErrors),
       )
-      .handle(
-        "me",
-        Effect.fnUntraced(function* ({ request }) {
-          const session = yield* SessionService.use((sessionService) =>
-            sessionService.validateSessionToken(request.cookies.session),
-          );
-          if (!session) {
-            return {
-              user: null,
-              isParent: false,
-              familyStudents: [],
-              activeStudentId: null,
-              activeStudent: null,
-            };
-          }
-          return yield* AuthRouteService.use((authRouteService) =>
-            authRouteService.me(
-              session.session.id,
-              session.user.id,
-              session.session.active_student_id,
-            ),
-          );
-        }, adaptAuthHttpApiErrors),
+      .handle("me", ({ request }) =>
+        AuthRouteService.use((authRouteService) =>
+          authRouteService.currentUser(request.cookies.session),
+        ).pipe(adaptAuthHttpApiErrors),
       )
       .handle(
         "resendVerification",
