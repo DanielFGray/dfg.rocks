@@ -1,9 +1,18 @@
 import { Config, Effect, Layer, ManagedRuntime } from "effect";
+import * as HttpApi from "effect/http-api/HttpApi";
+import * as HttpApiBuilder from "effect/http-api/HttpApiBuilder";
 import * as Etag from "effect/http/Etag";
 import * as FetchHttpClient from "effect/http/FetchHttpClient";
 import * as NodeFileSystem from "@effect/platform-node/NodeFileSystem";
 import * as NodeHttpPlatform from "@effect/platform-node/NodeHttpPlatform";
 import * as NodePath from "@effect/platform-node/NodePath";
+import { authGroup, healthGroup, publicGroup } from "../shared/httpApi.js";
+import { adminGroup, makeAdminLayer } from "./api/admin.js";
+import { makeAuthLayer } from "./api/auth.js";
+import { authenticatedGroup, makeAuthenticatedLayer } from "./api/authenticated.js";
+import { makeHealthLayer } from "./api/health.js";
+import { makeMaterialDownloadLayer, materialDownloadGroup } from "./api/materialDownload.js";
+import { makePublicLayer } from "./api/public.js";
 import { PgAuthDB, PgRootDB } from "./db.js";
 import { AdminRouteService } from "./services/adminRouteService.js";
 import { AuthenticatedRouteService } from "./services/authenticatedRouteService.js";
@@ -78,9 +87,42 @@ const servicesLayer = Layer.mergeAll(
 export const applicationLayer = servicesLayer;
 
 /**
- * Server functions run on serverRuntime, and the /api handler in app.ts builds its own layer. Both
+ * Server functions run on serverRuntime, and the /api handler in app.ts builds HttpApiLive. Both
  * build from this memo map, so each service, pool and job runner exists once per process.
  */
 export const memoMap = Effect.runSync(Layer.makeMemoMap);
 
 export const serverRuntime = ManagedRuntime.make(applicationLayer, { memoMap });
+
+const ServerApi = HttpApi.make("dfg")
+  .add(healthGroup)
+  .add(publicGroup)
+  .add(authGroup)
+  .add(authenticatedGroup)
+  .add(adminGroup)
+  .add(materialDownloadGroup);
+
+const GroupHandlersLive = Layer.mergeAll(
+  makeHealthLayer(),
+  makePublicLayer(),
+  makeAuthLayer(),
+  makeAuthenticatedLayer(),
+  makeAdminLayer(),
+  makeMaterialDownloadLayer(),
+);
+
+const ApiLive = HttpApiBuilder.layer(ServerApi).pipe(Layer.provide(GroupHandlersLive));
+
+/** The testing routes are imported only outside production, so the production bundle never loads them. */
+const TestingMountLive = Layer.unwrap(
+  Effect.gen(function* () {
+    if ((yield* Config.String("NODE_ENV")) === "production") return Layer.empty;
+    const { TestingHttpApiLive } = yield* Effect.promise(() => import("./api/testing.js"));
+    return TestingHttpApiLive;
+  }),
+);
+
+/** Every /api route, with the application services merged in so handlers find them per request. */
+export const HttpApiLive = Layer.mergeAll(ApiLive, TestingMountLive).pipe(
+  Layer.provideMerge(applicationLayer),
+);

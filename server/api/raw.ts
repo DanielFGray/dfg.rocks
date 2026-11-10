@@ -3,8 +3,20 @@ import * as HttpServerRequest from "effect/http/HttpServerRequest";
 import * as HttpServerResponse from "effect/http/HttpServerResponse";
 import { Config, Effect, Schema as S } from "effect";
 import { HttpError } from "../pgErrors.js";
+import { SessionService } from "../services/sessionService.js";
 
 export type RawRequest = HttpServerRequest.HttpServerRequest;
+
+/** The session named by the request's cookie, or a 401 when there is none. */
+export const requireSession = Effect.fnUntraced(function* (request: RawRequest) {
+  const session = yield* SessionService.use((sessionService) =>
+    sessionService.validateSessionToken(request.cookies.session),
+  );
+  if (!session) {
+    return yield* new HttpError(401, "Unauthorized");
+  }
+  return session;
+});
 
 export function params<const Name extends string>(...names: readonly Name[]) {
   return S.Struct(

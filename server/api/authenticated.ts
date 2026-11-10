@@ -16,7 +16,7 @@ import {
   SessionService,
   type SessionResult,
 } from "../services/sessionService.js";
-import { csrfCheck, expireSessionCookie, type RawRequest } from "./raw.js";
+import { csrfCheck, expireSessionCookie, requireSession } from "./raw.js";
 
 type Auth = NonNullable<SessionResult>;
 
@@ -43,15 +43,6 @@ const assertCanTrackOwnAssignments = Effect.fnUntraced(function* (auth: Auth) {
   }
 });
 
-function requireAuth(request: RawRequest) {
-  return Effect.flatMap(
-    SessionService.use((sessionService) =>
-      sessionService.validateSessionToken(request.cookies.session),
-    ),
-    (auth) => (auth ? Effect.succeed(auth) : new HttpError(401, "Unauthorized")),
-  );
-}
-
 const events = HttpApiEndpoint.get("events", "/api/events", { error: authenticatedClientErrors });
 
 export const authenticatedGroup = authenticatedClientGroup.add(events);
@@ -63,7 +54,7 @@ export function makeAuthenticatedLayer() {
       .handle(
         "courses",
         Effect.fnUntraced(function* ({ request }) {
-          const auth = yield* requireAuth(request);
+          const auth = yield* requireSession(request);
           const effective = resolveEffectiveStudent(auth);
           const filterStudentId = effective.isActing ? effective.studentId : undefined;
           return yield* AuthenticatedRouteService.use((authenticatedRouteService) =>
@@ -74,7 +65,7 @@ export function makeAuthenticatedLayer() {
       .handle(
         "courseById",
         Effect.fnUntraced(function* ({ request, params }) {
-          const auth = yield* requireAuth(request);
+          const auth = yield* requireSession(request);
           return yield* AuthenticatedRouteService.use((authenticatedRouteService) =>
             authenticatedRouteService.courseById(auth.session.id, params.id),
           );
@@ -83,7 +74,7 @@ export function makeAuthenticatedLayer() {
       .handle(
         "library",
         Effect.fnUntraced(function* ({ request, query }) {
-          const auth = yield* requireAuth(request);
+          const auth = yield* requireSession(request);
           const rows = yield* AuthenticatedRouteService.use((authenticatedRouteService) =>
             authenticatedRouteService.library(auth.session.id, {
               limit: query.limit ?? 50,
@@ -96,7 +87,7 @@ export function makeAuthenticatedLayer() {
       .handle(
         "assignments",
         Effect.fnUntraced(function* ({ request }) {
-          const auth = yield* requireAuth(request);
+          const auth = yield* requireSession(request);
           const effective = resolveEffectiveStudent(auth);
           const filterStudentId = effective.isActing ? effective.studentId : undefined;
           const rows = yield* AuthenticatedRouteService.use((authenticatedRouteService) =>
@@ -108,7 +99,7 @@ export function makeAuthenticatedLayer() {
       .handle(
         "assignStudentMaterial",
         Effect.fnUntraced(function* ({ request, params, payload }) {
-          const auth = yield* requireAuth(request);
+          const auth = yield* requireSession(request);
           yield* assertCanManageAssignments(auth);
           yield* AuthenticatedRouteService.use((authenticatedRouteService) =>
             authenticatedRouteService.assignStudentMaterial({
@@ -124,7 +115,7 @@ export function makeAuthenticatedLayer() {
       .handle(
         "unassignStudentMaterial",
         Effect.fnUntraced(function* ({ request, params }) {
-          const auth = yield* requireAuth(request);
+          const auth = yield* requireSession(request);
           yield* assertCanManageAssignments(auth);
           yield* AuthenticatedRouteService.use((authenticatedRouteService) =>
             authenticatedRouteService.unassignStudentMaterial(
@@ -139,7 +130,7 @@ export function makeAuthenticatedLayer() {
       .handle(
         "practiceLogs",
         Effect.fnUntraced(function* ({ request, query }) {
-          const auth = yield* requireAuth(request);
+          const auth = yield* requireSession(request);
           const effective = resolveEffectiveStudent(auth);
           const filterStudentId = effective.isActing ? effective.studentId : undefined;
           const rows = yield* AuthenticatedRouteService.use((authenticatedRouteService) =>
@@ -158,7 +149,7 @@ export function makeAuthenticatedLayer() {
       .handle(
         "createPracticeLog",
         Effect.fnUntraced(function* ({ request, payload }) {
-          const auth = yield* requireAuth(request);
+          const auth = yield* requireSession(request);
           const effective = resolveEffectiveStudent(auth);
           const row = yield* AuthenticatedRouteService.use((authenticatedRouteService) =>
             authenticatedRouteService.createPracticeLog({
@@ -178,7 +169,7 @@ export function makeAuthenticatedLayer() {
       .handle(
         "ratePracticeLog",
         Effect.fnUntraced(function* ({ request, payload }) {
-          const auth = yield* requireAuth(request);
+          const auth = yield* requireSession(request);
           const effective = resolveEffectiveStudent(auth);
           const row = yield* AuthenticatedRouteService.use((authenticatedRouteService) =>
             authenticatedRouteService.ratePracticeLog(
@@ -197,7 +188,7 @@ export function makeAuthenticatedLayer() {
       .handle(
         "recordAssignmentPlayback",
         Effect.fnUntraced(function* ({ request, params, payload }) {
-          const auth = yield* requireAuth(request);
+          const auth = yield* requireSession(request);
           yield* assertCanTrackOwnAssignments(auth);
           const effective = resolveEffectiveStudent(auth);
           const row = yield* AuthenticatedRouteService.use((authenticatedRouteService) =>
@@ -217,7 +208,7 @@ export function makeAuthenticatedLayer() {
       .handle(
         "createAssignmentReview",
         Effect.fnUntraced(function* ({ request, params, payload }) {
-          const auth = yield* requireAuth(request);
+          const auth = yield* requireSession(request);
           yield* assertCanTrackOwnAssignments(auth);
           const effective = resolveEffectiveStudent(auth);
           const row = yield* AuthenticatedRouteService.use((authenticatedRouteService) =>
@@ -237,7 +228,7 @@ export function makeAuthenticatedLayer() {
       .handle(
         "assignmentNotes",
         Effect.fnUntraced(function* ({ request, params }) {
-          const auth = yield* requireAuth(request);
+          const auth = yield* requireSession(request);
           const row = yield* AuthenticatedRouteService.use((authenticatedRouteService) =>
             authenticatedRouteService.assignmentNotes(auth.session.id, params.materialId),
           );
@@ -254,7 +245,7 @@ export function makeAuthenticatedLayer() {
       .handle(
         "upsertAssignmentNotes",
         Effect.fnUntraced(function* ({ request, params, payload }) {
-          const auth = yield* requireAuth(request);
+          const auth = yield* requireSession(request);
           const effective = resolveEffectiveStudent(auth);
           const row = yield* AuthenticatedRouteService.use((authenticatedRouteService) =>
             authenticatedRouteService.upsertAssignmentNotes({
@@ -274,7 +265,7 @@ export function makeAuthenticatedLayer() {
       .handle(
         "messages",
         Effect.fnUntraced(function* ({ request, query }) {
-          const auth = yield* requireAuth(request);
+          const auth = yield* requireSession(request);
           const effective = resolveEffectiveStudent(auth);
           const filterStudentId = effective.isActing ? effective.studentId : undefined;
           const rows = yield* AuthenticatedRouteService.use((authenticatedRouteService) =>
@@ -297,7 +288,7 @@ export function makeAuthenticatedLayer() {
       .handle(
         "createMessage",
         Effect.fnUntraced(function* ({ request, payload }) {
-          const auth = yield* requireAuth(request);
+          const auth = yield* requireSession(request);
           const effective = resolveEffectiveStudent(auth);
           const row = yield* AuthenticatedRouteService.use((authenticatedRouteService) =>
             authenticatedRouteService.createMessage({
@@ -316,7 +307,7 @@ export function makeAuthenticatedLayer() {
       .handle(
         "markMessageRead",
         Effect.fnUntraced(function* ({ request, params }) {
-          const auth = yield* requireAuth(request);
+          const auth = yield* requireSession(request);
           yield* AuthenticatedRouteService.use((authenticatedRouteService) =>
             authenticatedRouteService.markMessageRead(auth.session.id, params.id),
           );
@@ -326,7 +317,7 @@ export function makeAuthenticatedLayer() {
       .handle(
         "myLessons",
         Effect.fnUntraced(function* ({ request, query }) {
-          const auth = yield* requireAuth(request);
+          const auth = yield* requireSession(request);
           const effective = resolveEffectiveStudent(auth);
           const filterStudentId = effective.isActing ? effective.studentId : undefined;
           const rows = yield* AuthenticatedRouteService.use((authenticatedRouteService) =>
@@ -348,7 +339,7 @@ export function makeAuthenticatedLayer() {
       .handle(
         "myLessonCancellationPolicy",
         Effect.fnUntraced(function* ({ request, params }) {
-          const auth = yield* requireAuth(request);
+          const auth = yield* requireSession(request);
           const effective = resolveEffectiveStudent(auth);
           return yield* AuthenticatedRouteService.use((authenticatedRouteService) =>
             authenticatedRouteService.myLessonCancellationPolicy({
@@ -362,7 +353,7 @@ export function makeAuthenticatedLayer() {
       .handle(
         "cancelMyLesson",
         Effect.fnUntraced(function* ({ request, params, payload }) {
-          const auth = yield* requireAuth(request);
+          const auth = yield* requireSession(request);
           yield* csrfCheck(request.headers);
           const effective = resolveEffectiveStudent(auth);
           const lesson = yield* AuthenticatedRouteService.use((authenticatedRouteService) =>
@@ -379,7 +370,7 @@ export function makeAuthenticatedLayer() {
       .handle(
         "rescheduleMyLesson",
         Effect.fnUntraced(function* ({ request, params, payload }) {
-          const auth = yield* requireAuth(request);
+          const auth = yield* requireSession(request);
           yield* csrfCheck(request.headers);
           const effective = resolveEffectiveStudent(auth);
           const lesson = yield* AuthenticatedRouteService.use((authenticatedRouteService) =>
@@ -396,7 +387,7 @@ export function makeAuthenticatedLayer() {
       .handle(
         "requestDeleteAccount",
         Effect.fnUntraced(function* ({ request }) {
-          const auth = yield* requireAuth(request);
+          const auth = yield* requireSession(request);
           yield* csrfCheck(request.headers);
           yield* AuthenticatedRouteService.use((authenticatedRouteService) =>
             authenticatedRouteService.requestDeleteAccount(auth.session.id),
@@ -407,7 +398,7 @@ export function makeAuthenticatedLayer() {
       .handle(
         "confirmDeleteAccount",
         Effect.fnUntraced(function* ({ request, payload }) {
-          const auth = yield* requireAuth(request);
+          const auth = yield* requireSession(request);
           yield* csrfCheck(request.headers);
           const deleted = yield* AuthenticatedRouteService.use((authenticatedRouteService) =>
             authenticatedRouteService.confirmDeleteAccount(auth.session.id, payload.token),
@@ -426,7 +417,7 @@ export function makeAuthenticatedLayer() {
       .handle(
         "myLessonNotesList",
         Effect.fnUntraced(function* ({ request, query }) {
-          const auth = yield* requireAuth(request);
+          const auth = yield* requireSession(request);
           const effective = resolveEffectiveStudent(auth);
           const filterStudentId = effective.isActing ? effective.studentId : undefined;
           const rows = yield* AuthenticatedRouteService.use((authenticatedRouteService) =>
@@ -450,7 +441,7 @@ export function makeAuthenticatedLayer() {
       .handle(
         "myEmails",
         Effect.fnUntraced(function* ({ request }) {
-          const auth = yield* requireAuth(request);
+          const auth = yield* requireSession(request);
           const rows = yield* AuthenticatedRouteService.use((authenticatedRouteService) =>
             authenticatedRouteService.myEmails(auth.session.id),
           );
@@ -463,7 +454,7 @@ export function makeAuthenticatedLayer() {
       .handle(
         "addMyEmail",
         Effect.fnUntraced(function* ({ request, payload }) {
-          const auth = yield* requireAuth(request);
+          const auth = yield* requireSession(request);
           const row = yield* AuthenticatedRouteService.use((authenticatedRouteService) =>
             authenticatedRouteService.addMyEmail(auth.session.id, payload.email),
           );
@@ -476,7 +467,7 @@ export function makeAuthenticatedLayer() {
       .handle(
         "deleteMyEmail",
         Effect.fnUntraced(function* ({ request, params }) {
-          const auth = yield* requireAuth(request);
+          const auth = yield* requireSession(request);
           yield* AuthenticatedRouteService.use((authenticatedRouteService) =>
             authenticatedRouteService.deleteMyEmail(auth.session.id, params.id),
           );
@@ -486,7 +477,7 @@ export function makeAuthenticatedLayer() {
       .handle(
         "makePrimaryEmail",
         Effect.fnUntraced(function* ({ request, params }) {
-          const auth = yield* requireAuth(request);
+          const auth = yield* requireSession(request);
           const row = yield* AuthenticatedRouteService.use((authenticatedRouteService) =>
             authenticatedRouteService.makePrimaryEmail(auth.session.id, params.id),
           );
@@ -499,7 +490,7 @@ export function makeAuthenticatedLayer() {
       .handle(
         "resendEmailVerification",
         Effect.fnUntraced(function* ({ request, params }) {
-          const auth = yield* requireAuth(request);
+          const auth = yield* requireSession(request);
           yield* AuthenticatedRouteService.use((authenticatedRouteService) =>
             authenticatedRouteService.resendEmailVerification(auth.session.id, params.id),
           );
@@ -509,7 +500,7 @@ export function makeAuthenticatedLayer() {
       .handle(
         "upsertTestimonial",
         Effect.fnUntraced(function* ({ request, payload }) {
-          const auth = yield* requireAuth(request);
+          const auth = yield* requireSession(request);
           yield* assertCanManageTestimonial(auth);
           const testimonial = yield* AuthenticatedRouteService.use((authenticatedRouteService) =>
             authenticatedRouteService.upsertTestimonial(
@@ -524,7 +515,7 @@ export function makeAuthenticatedLayer() {
       .handle(
         "deleteTestimonial",
         Effect.fnUntraced(function* ({ request }) {
-          const auth = yield* requireAuth(request);
+          const auth = yield* requireSession(request);
           yield* assertCanManageTestimonial(auth);
           yield* AuthenticatedRouteService.use((authenticatedRouteService) =>
             authenticatedRouteService.deleteTestimonial(auth.session.id, auth.user.id),
@@ -535,7 +526,7 @@ export function makeAuthenticatedLayer() {
       .handle(
         "availableSlots",
         Effect.fnUntraced(function* ({ request, query }) {
-          yield* requireAuth(request);
+          yield* requireSession(request);
           if (!query.date) {
             return yield* new HttpError(400, "Missing date");
           }
@@ -551,7 +542,7 @@ export function makeAuthenticatedLayer() {
       .handle(
         "bookLesson",
         Effect.fnUntraced(function* ({ request, payload }) {
-          const auth = yield* requireAuth(request);
+          const auth = yield* requireSession(request);
           const effective = resolveEffectiveStudent(auth);
           const studentId = payload.student_id ?? effective.studentId;
           const lesson = yield* AuthenticatedRouteService.use((authenticatedRouteService) =>
@@ -569,7 +560,7 @@ export function makeAuthenticatedLayer() {
       .handle(
         "switchActiveStudent",
         Effect.fnUntraced(function* ({ request, payload }) {
-          const auth = yield* requireAuth(request);
+          const auth = yield* requireSession(request);
           if (auth.user.role !== "parent") {
             return yield* new HttpError(403, "Only parents can switch active student");
           }
@@ -586,7 +577,7 @@ export function makeAuthenticatedLayer() {
       .handle(
         "createChild",
         Effect.fnUntraced(function* ({ request, payload }) {
-          const auth = yield* requireAuth(request);
+          const auth = yield* requireSession(request);
           if (auth.user.role !== "parent") {
             return yield* new HttpError(403, "Only parents can create child accounts");
           }
@@ -598,7 +589,7 @@ export function makeAuthenticatedLayer() {
       .handle(
         "family",
         Effect.fnUntraced(function* ({ request }) {
-          const auth = yield* requireAuth(request);
+          const auth = yield* requireSession(request);
           return yield* AuthenticatedRouteService.use((authenticatedRouteService) =>
             authenticatedRouteService.family(auth.session.id, auth.user.id),
           );
@@ -607,7 +598,7 @@ export function makeAuthenticatedLayer() {
       .handle(
         "removeFamilyMember",
         Effect.fnUntraced(function* ({ request, payload }) {
-          const auth = yield* requireAuth(request);
+          const auth = yield* requireSession(request);
           yield* csrfCheck(request.headers);
           yield* AuthenticatedRouteService.use((authenticatedRouteService) =>
             authenticatedRouteService.removeFamilyMember(
@@ -622,7 +613,7 @@ export function makeAuthenticatedLayer() {
       .handle(
         "inviteFamilyMember",
         Effect.fnUntraced(function* ({ request, payload }) {
-          const auth = yield* requireAuth(request);
+          const auth = yield* requireSession(request);
           yield* csrfCheck(request.headers);
           yield* AuthenticatedRouteService.use((authenticatedRouteService) =>
             authenticatedRouteService.inviteFamilyMember(
@@ -637,7 +628,7 @@ export function makeAuthenticatedLayer() {
       .handle(
         "events",
         Effect.fnUntraced(function* ({ request }) {
-          const auth = yield* requireAuth(request);
+          const auth = yield* requireSession(request);
           const effective = resolveEffectiveStudent(auth);
           const userId = auth.user.id;
           const listenerIds = effective.isActing ? [userId, effective.studentId] : [userId];
@@ -686,7 +677,7 @@ export function makeAuthenticatedLayer() {
       .handle(
         "setChildEmail",
         Effect.fnUntraced(function* ({ request, params, payload }) {
-          const auth = yield* requireAuth(request);
+          const auth = yield* requireSession(request);
           yield* csrfCheck(request.headers);
           if (auth.user.role !== "parent") {
             return yield* new HttpError(403, "Only parents can manage child accounts");
@@ -705,7 +696,7 @@ export function makeAuthenticatedLayer() {
       .handle(
         "requestChildPasswordSet",
         Effect.fnUntraced(function* ({ request, params }) {
-          const auth = yield* requireAuth(request);
+          const auth = yield* requireSession(request);
           yield* csrfCheck(request.headers);
           if (auth.user.role !== "parent") {
             return yield* new HttpError(403, "Only parents can manage child accounts");
@@ -722,7 +713,7 @@ export function makeAuthenticatedLayer() {
       .handle(
         "setChildPassword",
         Effect.fnUntraced(function* ({ request, params, payload }) {
-          const auth = yield* requireAuth(request);
+          const auth = yield* requireSession(request);
           yield* csrfCheck(request.headers);
           yield* AuthenticatedRouteService.use((authenticatedRouteService) =>
             authenticatedRouteService.setChildPassword(

@@ -13,7 +13,8 @@ import {
 import { adaptHttpApiErrors } from "../httpApiErrors.js";
 import { HttpError } from "../pgErrors.js";
 import { FamilyBillingService } from "../services/familyBillingService.js";
-import { SessionService, type SessionResult } from "../services/sessionService.js";
+import type { SessionResult } from "../services/sessionService.js";
+import { requireSession } from "./raw.js";
 import type { Selectable } from "kysely";
 import type {
   AppPublicBills,
@@ -35,15 +36,6 @@ const adaptFamilyBillingErrors = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
 
 const adaptPdfErrors = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
   adaptHttpApiErrors(effect, pdfErrorStatuses);
-
-function requireAuth(request: { cookies: Record<string, string | undefined> }) {
-  return Effect.flatMap(
-    SessionService.use((sessionService) =>
-      sessionService.validateSessionToken(request.cookies.session),
-    ),
-    (auth) => (auth ? Effect.succeed(auth) : new HttpError(401, "Unauthorized")),
-  );
-}
 
 // Serialize helpers
 function isDateLike(value: unknown): value is { toISOString(): string } {
@@ -131,7 +123,7 @@ export function makeFamilyBillingLayer() {
       .handle(
         "overview",
         Effect.fnUntraced(function* ({ request }) {
-          const auth: Auth = yield* requireAuth(request);
+          const auth: Auth = yield* requireSession(request);
           if (auth.user.role === "teacher") {
             return yield* new HttpError(403, "Forbidden");
           }
@@ -150,7 +142,7 @@ export function makeFamilyBillingLayer() {
       .handle(
         "bills",
         Effect.fnUntraced(function* ({ request }) {
-          const auth: Auth = yield* requireAuth(request);
+          const auth: Auth = yield* requireSession(request);
           if (auth.user.role === "teacher") {
             return yield* new HttpError(403, "Forbidden");
           }
@@ -163,7 +155,7 @@ export function makeFamilyBillingLayer() {
       .handle(
         "billDetail",
         Effect.fnUntraced(function* ({ request, params }) {
-          const auth: Auth = yield* requireAuth(request);
+          const auth: Auth = yield* requireSession(request);
           if (auth.user.role === "teacher") {
             return yield* new HttpError(403, "Forbidden");
           }
@@ -197,7 +189,7 @@ export function makeFamilyBillingLayer() {
       .handle(
         "payments",
         Effect.fnUntraced(function* ({ request }) {
-          const auth: Auth = yield* requireAuth(request);
+          const auth: Auth = yield* requireSession(request);
           if (auth.user.role === "teacher") {
             return yield* new HttpError(403, "Forbidden");
           }
@@ -210,7 +202,7 @@ export function makeFamilyBillingLayer() {
       .handle(
         "paymentDetail",
         Effect.fnUntraced(function* ({ request, params }) {
-          const auth: Auth = yield* requireAuth(request);
+          const auth: Auth = yield* requireSession(request);
           if (auth.user.role === "teacher") {
             return yield* new HttpError(403, "Forbidden");
           }
@@ -231,7 +223,7 @@ export function makeFamilyBillingLayer() {
       .handle(
         "credits",
         Effect.fnUntraced(function* ({ request }) {
-          const auth: Auth = yield* requireAuth(request);
+          const auth: Auth = yield* requireSession(request);
           if (auth.user.role === "teacher") {
             return yield* new HttpError(403, "Forbidden");
           }
@@ -244,7 +236,7 @@ export function makeFamilyBillingLayer() {
       .handle(
         "billPdf",
         Effect.fnUntraced(function* ({ request, params }) {
-          const auth: Auth = yield* requireAuth(request);
+          const auth: Auth = yield* requireSession(request);
           if (auth.user.role === "teacher") {
             return yield* new HttpError(403, "Forbidden");
           }
@@ -264,7 +256,7 @@ export function makeFamilyBillingLayer() {
       .handle(
         "paymentReceipt",
         Effect.fnUntraced(function* ({ request, params }) {
-          const auth: Auth = yield* requireAuth(request);
+          const auth: Auth = yield* requireSession(request);
           if (auth.user.role === "teacher") {
             return yield* new HttpError(403, "Forbidden");
           }

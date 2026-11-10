@@ -1,15 +1,8 @@
 import * as HttpApi from "effect/http-api/HttpApi";
 import * as HttpApiBuilder from "effect/http-api/HttpApiBuilder";
-import * as HttpApiGroup from "effect/http-api/HttpApiGroup";
 import * as HttpApiEndpoint from "effect/http-api/HttpApiEndpoint";
 import * as HttpServerResponse from "effect/http/HttpServerResponse";
 import { Config, Effect } from "effect";
-import {
-  ForbiddenErrorSchema,
-  InternalServerErrorSchema,
-  NotFoundErrorSchema,
-  UnauthorizedErrorSchema,
-} from "../../shared/httpApiErrors.js";
 import { adminClientErrors, adminClientGroup, GcalCallbackQuery } from "../../shared/httpApi.js";
 import { adaptHttpApiErrors } from "../httpApiErrors.js";
 import { HttpError } from "../pgErrors.js";
@@ -22,7 +15,6 @@ import {
 } from "../services/recurringScheduleService.js";
 import { FileService } from "../services/fileService.js";
 import { GoogleCalendarService } from "../services/googleCalendarService.js";
-import { SessionService } from "../services/sessionService.js";
 import { TestimonialReminderService } from "../services/testimonialReminderService.js";
 import {
   type Adjustment as AdjustmentResponse,
@@ -39,7 +31,7 @@ import {
   type Material as MaterialResponse,
 } from "../../shared/schemas.js";
 import { serializeLesson, serializeLessonNote } from "../../shared/responseMappers.js";
-import { params, csrfCheck, type RawRequest } from "./raw.js";
+import { csrfCheck, requireSession, type RawRequest } from "./raw.js";
 import type { Selectable } from "kysely";
 import type {
   AppPublicBills,
@@ -55,13 +47,9 @@ import type {
 } from "../../generated/db.js";
 
 const adminErrorStatuses = [400, 401, 403, 404, 409, 413, 500, 502, 503] as const;
-const materialDownloadErrorStatuses = [401, 403, 404, 500] as const;
 
 const adaptAdminErrors = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
   adaptHttpApiErrors(effect, adminErrorStatuses);
-
-const adaptMaterialDownloadErrors = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
-  adaptHttpApiErrors(effect, materialDownloadErrorStatuses);
 
 const requireAdminSession = Effect.fnUntraced(function* (
   request: RawRequest,
@@ -69,27 +57,12 @@ const requireAdminSession = Effect.fnUntraced(function* (
     csrf?: boolean;
   } = {},
 ) {
-  const result = yield* SessionService.use((sessionService) =>
-    sessionService.validateSessionToken(request.cookies.session),
-  );
-  if (!result) {
-    return yield* new HttpError(401, "Unauthorized");
-  }
+  const result = yield* requireSession(request);
   if (result.user.role !== "admin") {
     return yield* new HttpError(403, "Forbidden");
   }
   if (options.csrf !== false) {
     yield* csrfCheck(request.headers);
-  }
-  return result;
-});
-
-const requireAuthenticatedSession = Effect.fnUntraced(function* (request: RawRequest) {
-  const result = yield* SessionService.use((sessionService) =>
-    sessionService.validateSessionToken(request.cookies.session),
-  );
-  if (!result) {
-    return yield* new HttpError(401, "Not authenticated");
   }
   return result;
 });
@@ -248,25 +221,7 @@ export const adminGroup = adminClientGroup
     }),
   );
 
-const materialDownloadErrors = [
-  UnauthorizedErrorSchema,
-  ForbiddenErrorSchema,
-  NotFoundErrorSchema,
-  InternalServerErrorSchema,
-] as const;
-
-export const materialDownloadGroup = HttpApiGroup.make("materialDownload")
-  .add(
-    HttpApiEndpoint.get("materialDownload", "/materials/:id/download", {
-      error: materialDownloadErrors,
-      params: params("id"),
-    }),
-  )
-  .prefix("/api");
-
 const adminApi = HttpApi.make("dfg").add(adminGroup);
-
-const materialDownloadApi = HttpApi.make("dfg").add(materialDownloadGroup);
 
 export function makeAdminLayer() {
   return HttpApiBuilder.group(adminApi, "admin", (handlers) =>
@@ -363,7 +318,7 @@ export function makeAdminLayer() {
       .handle(
         "students",
         Effect.fnUntraced(function* ({ request }) {
-          const auth = yield* requireAuthenticatedSession(request);
+          const auth = yield* requireSession(request);
           if (auth.user.role !== "admin" && auth.user.role !== "teacher") {
             return yield* new HttpError(403, "Forbidden");
           }
@@ -381,7 +336,7 @@ export function makeAdminLayer() {
       .handle(
         "student",
         Effect.fnUntraced(function* (context) {
-          const auth = yield* requireAuthenticatedSession(context.request);
+          const auth = yield* requireSession(context.request);
           if (auth.user.role !== "admin" && auth.user.role !== "teacher") {
             return yield* new HttpError(403, "Forbidden");
           }
@@ -1405,31 +1360,5 @@ export function makeAdminLayer() {
           return serializeTaxExemption(result);
         }, adaptAdminErrors),
       ),
-  );
-}
-
-export function makeMaterialDownloadLayer() {
-  return HttpApiBuilder.group(materialDownloadApi, "materialDownload", (handlers) =>
-    handlers.handle(
-      "materialDownload",
-      Effect.fnUntraced(function* (context) {
-        const auth = yield* requireAuthenticatedSession(context.request);
-        const { params } = context;
-        const fileInfo = yield* FileService.use((fileService) =>
-          fileService.download(params.id, auth.user.id, auth.session.id),
-        );
-        return HttpServerResponse.fromWeb(
-          new Response(fileInfo.stream as unknown as BodyInit, {
-            headers: {
-              "content-type": fileInfo.mimeType,
-              "content-disposition":
-                fileInfo.mimeType === "application/pdf"
-                  ? `inline; filename="${encodeURIComponent(fileInfo.filename)}"`
-                  : `attachment; filename="${encodeURIComponent(fileInfo.filename)}"`,
-            },
-          }),
-        );
-      }, adaptMaterialDownloadErrors),
-    ),
   );
 }
