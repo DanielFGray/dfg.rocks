@@ -1,3 +1,4 @@
+import type { json } from "@coderline/alphatab";
 import { useEffect, useState } from "react";
 
 export function useColorScheme() {
@@ -29,4 +30,71 @@ export function formatTime(seconds: number): string {
   const mins = Math.floor(seconds / 60);
   const secs = Math.floor(seconds % 60);
   return `${mins}:${secs.toString().padStart(2, "0")}`;
+}
+
+const MIN_DISPLAY_SCALE = 0.7;
+const MAX_DISPLAY_SCALE = 1.5;
+
+/**
+ * The display settings the player starts with in a container of `width`
+ * pixels. The server draws static scores with the same settings, so the
+ * static score and the player match when the player takes over.
+ */
+export function notationDisplaySettings(width: number, zoomFactor: number, isDark: boolean) {
+  const { scale, stretchForce } = getResponsiveDisplayConfig(width, zoomFactor);
+  const colors = getColors(isDark);
+  return {
+    scale,
+    stretchForce,
+    staveProfile: "Default",
+    resources: {
+      mainGlyphColor: colors.mainColor,
+      secondaryGlyphColor: colors.secondaryColor,
+      scoreInfoColor: colors.mainColor,
+      staffLineColor: colors.staffLineColor,
+      barSeparatorColor: colors.barSeparatorColor,
+    },
+  } satisfies json.DisplaySettingsJson;
+}
+
+export function getResponsiveDisplayConfig(
+  width: number,
+  zoomFactor: number,
+): { scale: number; stretchForce: number } {
+  if (width <= 360) {
+    return {
+      scale: clampValue(0.78 * zoomFactor, MIN_DISPLAY_SCALE, MAX_DISPLAY_SCALE),
+      stretchForce: 0.82,
+    };
+  }
+
+  if (width <= 420) {
+    return {
+      scale: clampValue(0.84 * zoomFactor, MIN_DISPLAY_SCALE, MAX_DISPLAY_SCALE),
+      stretchForce: 0.88,
+    };
+  }
+
+  if (width <= 520) {
+    return {
+      scale: clampValue(0.9 * zoomFactor, MIN_DISPLAY_SCALE, MAX_DISPLAY_SCALE),
+      stretchForce: 0.94,
+    };
+  }
+
+  if (width < 768) {
+    return {
+      scale: clampValue(0.96 * zoomFactor, MIN_DISPLAY_SCALE, MAX_DISPLAY_SCALE),
+      stretchForce: 0.97,
+    };
+  }
+
+  return {
+    scale: clampValue(zoomFactor, MIN_DISPLAY_SCALE, MAX_DISPLAY_SCALE),
+    stretchForce: 1,
+  };
+}
+
+export function clampValue(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
 }

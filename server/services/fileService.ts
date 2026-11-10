@@ -35,7 +35,7 @@ type StoredMaterialRecord = MaterialRecord & {
   storage_key: string;
 };
 
-function toStorageLocation(
+export function toStorageLocation(
   material: Pick<StoredMaterialRecord, "storage_backend" | "storage_key">,
 ): StorageLocation {
   return {
@@ -91,6 +91,87 @@ const ensureStoredBlobEffect = Effect.fnUntraced(function* (
   if (!exists) {
     yield* StorageService.use((storageService) => storageService.put(location, bytes));
   }
+});
+
+/**
+ * Loads a material's stored-file record when the user may read it: admins
+ * always, others when the material is global, assigned to them, or in a course
+ * they are enrolled in. Fails with 404 or 403 otherwise.
+ */
+const authorizeDownload = Effect.fnUntraced(function* (
+  materialId: string,
+  userId: string,
+  sessionId: string,
+) {
+  const material = yield* withAuthContext(sessionId, (db) =>
+    db
+      .execute(
+        db
+          .selectFrom("app_public.materials")
+          .select([
+            "id",
+            "title",
+            "original_filename",
+            "storage_backend",
+            "storage_key",
+            "mime_type",
+            "is_global",
+            "uploaded_by",
+          ])
+          .where("id", "=", materialId),
+      )
+      .pipe(
+        Effect.head,
+        Effect.catchTags({
+          NoSuchElementError: () => new HttpError(404, "Material not found"),
+        }),
+      ),
+  );
+  const user = yield* withAuthContext(sessionId, (db) =>
+    db
+      .execute(
+        db.selectFrom("app_public.users").select(["id", "role"]).where("id", "=", userId),
+      )
+      .pipe(
+        Effect.head,
+        Effect.catchTags({
+          NoSuchElementError: () => new HttpError(404, "User not found"),
+        }),
+      ),
+  );
+  if (user.role !== "admin") {
+    let hasAccess = material.is_global;
+    if (!hasAccess) {
+      const assignedRows = yield* withAuthContext(sessionId, (db) =>
+        db.execute(
+          db
+            .selectFrom("app_public.student_materials")
+            .select(["material_id"])
+            .where("student_id", "=", userId)
+            .where("material_id", "=", materialId),
+        ),
+      );
+      if (assignedRows[0]) hasAccess = true;
+    }
+    if (!hasAccess) {
+      const enrolledRows = yield* withAuthContext(sessionId, (db) =>
+        db.execute(
+          db
+            .selectFrom("app_public.module_materials as mm")
+            .innerJoin("app_public.modules as mod", "mod.id", "mm.module_id")
+            .innerJoin("app_public.enrollments as e", "e.course_id", "mod.course_id")
+            .where("mm.material_id", "=", materialId)
+            .where("e.student_id", "=", userId)
+            .select(["mm.material_id"]),
+        ),
+      );
+      if (enrolledRows[0]) hasAccess = true;
+    }
+    if (!hasAccess) {
+      return yield* new HttpError(403, "Access denied");
+    }
+  }
+  return material;
 });
 
 /**
@@ -207,79 +288,13 @@ export class FileService extends Context.Service<FileService>()("FileService", {
         );
       }),
 
+      authorize: authorizeDownload,
       download: Effect.fnUntraced(function* (
         materialId: string,
         userId: string,
         sessionId: string,
       ) {
-        const material = yield* withAuthContext(sessionId, (db) =>
-          db
-            .execute(
-              db
-                .selectFrom("app_public.materials")
-                .select([
-                  "id",
-                  "title",
-                  "original_filename",
-                  "storage_backend",
-                  "storage_key",
-                  "mime_type",
-                  "is_global",
-                  "uploaded_by",
-                ])
-                .where("id", "=", materialId),
-            )
-            .pipe(
-              Effect.head,
-              Effect.catchTags({
-                NoSuchElementError: () => new HttpError(404, "Material not found"),
-              }),
-            ),
-        );
-        const user = yield* withAuthContext(sessionId, (db) =>
-          db
-            .execute(
-              db.selectFrom("app_public.users").select(["id", "role"]).where("id", "=", userId),
-            )
-            .pipe(
-              Effect.head,
-              Effect.catchTags({
-                NoSuchElementError: () => new HttpError(404, "User not found"),
-              }),
-            ),
-        );
-        if (user.role !== "admin") {
-          let hasAccess = material.is_global;
-          if (!hasAccess) {
-            const assignedRows = yield* withAuthContext(sessionId, (db) =>
-              db.execute(
-                db
-                  .selectFrom("app_public.student_materials")
-                  .select(["material_id"])
-                  .where("student_id", "=", userId)
-                  .where("material_id", "=", materialId),
-              ),
-            );
-            if (assignedRows[0]) hasAccess = true;
-          }
-          if (!hasAccess) {
-            const enrolledRows = yield* withAuthContext(sessionId, (db) =>
-              db.execute(
-                db
-                  .selectFrom("app_public.module_materials as mm")
-                  .innerJoin("app_public.modules as mod", "mod.id", "mm.module_id")
-                  .innerJoin("app_public.enrollments as e", "e.course_id", "mod.course_id")
-                  .where("mm.material_id", "=", materialId)
-                  .where("e.student_id", "=", userId)
-                  .select(["mm.material_id"]),
-              ),
-            );
-            if (enrolledRows[0]) hasAccess = true;
-          }
-          if (!hasAccess) {
-            return yield* new HttpError(403, "Access denied");
-          }
-        }
+        const material = yield* authorizeDownload(materialId, userId, sessionId);
         const location = toStorageLocation(material);
         const exists = yield* StorageService.use((storageService) =>
           storageService.exists(location),

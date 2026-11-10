@@ -52,3 +52,14 @@
     0 0 0 1px rgba(120, 140, 255, 0.14);
   backdrop-filter: saturate(1.25) brightness(1.1);
 }
+
+/*
+  Static scores are drawn on the server in the light colors. On a dark screen,
+  invert them until the player, drawn in the dark colors, takes over. Print
+  keeps the light colors.
+*/
+@media screen and (prefers-color-scheme: dark) {
+  .at-frame-static {
+    filter: invert(1) hue-rotate(180deg);
+  }
+}

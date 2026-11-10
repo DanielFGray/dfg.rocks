@@ -13,6 +13,7 @@ import type {
 } from "../../../shared/schemas.js";
 import { findNotationTrack, formatNotationTrackLabel } from "../../../shared/notationTracks.js";
 import { MaterialPreview } from "../library/MaterialPreview.js";
+import type { StaticScore } from "alphatab-kit/static";
 import { categorize } from "../library/helpers.js";
 import { Button } from "../ui/Button.js";
 
@@ -115,10 +116,12 @@ function StarsDisplay({ stars }: { stars: number }) {
 
 export function StudentAssignmentDetail({
   material,
+  staticScore,
   initialProgress,
   initialReviews,
 }: {
   material: AssignedMaterial;
+  staticScore?: StaticScore | null;
   initialProgress: AssignmentProgress | null;
   initialReviews: AssignmentReview[];
 }) {
@@ -249,6 +252,7 @@ export function StudentAssignmentDetail({
     <>
       <MaterialPreview
         material={material}
+        staticScore={staticScore}
         notationPlayerProps={
           category === "notation"
             ? {

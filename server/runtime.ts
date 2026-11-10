@@ -23,6 +23,7 @@ import { RateLimitService } from "./services/rateLimiter.js";
 import { RecurringScheduleService } from "./services/recurringScheduleService.js";
 import { RealtimeService } from "./services/realtimeService.js";
 import { SessionService } from "./services/sessionService.js";
+import { StaticScoreService } from "./services/staticScoreService.js";
 import { StorageService } from "./services/storageService.js";
 import { TestimonialReminderService } from "./services/testimonialReminderService.js";
 import { UserService } from "./services/userService.js";
@@ -68,6 +69,7 @@ const servicesLayer = Layer.mergeAll(
   FileService.layer,
   GeolocationService.layer,
   PublicRouteService.layer,
+  StaticScoreService.layer,
   StorageService.layer,
   TestimonialReminderService.layer,
   UserService.layer,

@@ -1,10 +1,19 @@
 import { useEffect, useId, useRef, useState, useCallback } from "react";
+import { StaticScoreFrame } from "alphatab-kit/react";
+import type { StaticScore } from "alphatab-kit/static";
 import { AlphaTabApi, ScrollMode, model, synth } from "@coderline/alphatab";
+import { alphaTabAssetUrls } from "alphatab-kit";
 import {
   formatNotationTrackLabel,
   toMaterialNotationTrack,
 } from "../../../shared/notationTracks.js";
-import { useColorScheme, getColors } from "./helpers.js";
+import {
+  clampValue,
+  getColors,
+  getResponsiveDisplayConfig,
+  notationDisplaySettings,
+  useColorScheme,
+} from "./helpers.js";
 import { PlayerControls } from "./PlayerControls.js";
 import { ProgressBar } from "./ProgressBar.js";
 import { SpeedControl } from "./SpeedControl.js";
@@ -13,6 +22,8 @@ import { VolumeControl } from "./VolumeControl.js";
 
 export interface AlphaTabPlayerProps {
   src: string;
+  /** The score drawn on the server, shown until the player has drawn it, and in print. */
+  staticScore?: StaticScore | null;
   defaultTrackIndex?: number | null;
   onPlaybackSeconds?: (seconds: number) => void;
   onDurationSeconds?: (seconds: number) => void;
@@ -84,8 +95,6 @@ interface NavigableBeat {
 const MIN_ZOOM_FACTOR = 0.8;
 const MAX_ZOOM_FACTOR = 1.6;
 const ZOOM_STEP = 0.1;
-const MIN_DISPLAY_SCALE = 0.7;
-const MAX_DISPLAY_SCALE = 1.5;
 const MIN_PLAYBACK_SPEED = 0.25;
 const MAX_PLAYBACK_SPEED = 3;
 const DEFAULT_TRACK_VOLUME = 1;
@@ -105,10 +114,6 @@ interface PositionSnapshot {
   endTime: number;
   currentTick: number;
   endTick: number;
-}
-
-function clampValue(value: number, min: number, max: number): number {
-  return Math.min(max, Math.max(min, value));
 }
 
 function useLatestRef<T>(value: T) {
@@ -362,46 +367,9 @@ function parseCssPixelValue(value: string): number {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-function getResponsiveDisplayConfig(
-  width: number,
-  zoomFactor: number,
-): { scale: number; stretchForce: number } {
-  if (width <= 360) {
-    return {
-      scale: clampValue(0.78 * zoomFactor, MIN_DISPLAY_SCALE, MAX_DISPLAY_SCALE),
-      stretchForce: 0.82,
-    };
-  }
-
-  if (width <= 420) {
-    return {
-      scale: clampValue(0.84 * zoomFactor, MIN_DISPLAY_SCALE, MAX_DISPLAY_SCALE),
-      stretchForce: 0.88,
-    };
-  }
-
-  if (width <= 520) {
-    return {
-      scale: clampValue(0.9 * zoomFactor, MIN_DISPLAY_SCALE, MAX_DISPLAY_SCALE),
-      stretchForce: 0.94,
-    };
-  }
-
-  if (width < 768) {
-    return {
-      scale: clampValue(0.96 * zoomFactor, MIN_DISPLAY_SCALE, MAX_DISPLAY_SCALE),
-      stretchForce: 0.97,
-    };
-  }
-
-  return {
-    scale: clampValue(zoomFactor, MIN_DISPLAY_SCALE, MAX_DISPLAY_SCALE),
-    stretchForce: 1,
-  };
-}
-
 export function AlphaTabPlayer({
   src,
+  staticScore,
   defaultTrackIndex,
   onPlaybackSeconds,
   onDurationSeconds,
@@ -429,12 +397,10 @@ export function AlphaTabPlayer({
   } | null>(null);
   const isDark = useColorScheme();
   const instanceId = `alphatab${useId().replace(/:/g, "-")}`;
-  const assetBase = import.meta.env.BASE_URL.endsWith("/")
-    ? import.meta.env.BASE_URL
-    : `${import.meta.env.BASE_URL}/`;
 
   // Player state
   const [playerState, setPlayerState] = useState<PlayerState>("loading");
+  const [scoreDrawn, setScoreDrawn] = useState(false);
   const [position, setPosition] = useState<PlayerPosition>(EMPTY_POSITION);
   const [playbackSpeed, setPlaybackSpeed] = useState(1);
   const [metronomeVolume, setMetronomeVolume] = useState(0); // 0 = off
@@ -702,6 +668,7 @@ export function AlphaTabPlayer({
     pendingPlaybackMsRef.current = 0;
     lastPlaybackStartedAtRef.current = null;
     setPlayerState("loading");
+    setScoreDrawn(false);
     setPosition(EMPTY_POSITION);
     setTrackOptions([]);
     setSelectedTrackIndex(null);
@@ -717,34 +684,22 @@ export function AlphaTabPlayer({
     selectionHighlightRef.current = null;
     onDurationSecondsRef.current?.(0);
 
-    const colors = getColors(isDark);
-
+    const assetUrls = alphaTabAssetUrls();
     const api = new AlphaTabApi(container, {
       core: {
         file: src,
         engine: "svg",
         logLevel: 1,
-        scriptFile: `${assetBase}alphatab/alphaTab.mjs`,
-        fontDirectory: `${assetBase}font/`,
+        scriptFile: assetUrls.scriptFile,
+        fontDirectory: assetUrls.fontDirectory,
       },
-      display: {
-        scale: initialDisplay.scale,
-        staveProfile: "Default",
-        stretchForce: initialDisplay.stretchForce,
-        resources: {
-          mainGlyphColor: colors.mainColor,
-          secondaryGlyphColor: colors.secondaryColor,
-          scoreInfoColor: colors.mainColor,
-          staffLineColor: colors.staffLineColor,
-          barSeparatorColor: colors.barSeparatorColor,
-        },
-      },
+      display: notationDisplaySettings(initialWidth || 1024, zoomFactorRef.current, isDark),
       player: {
         enablePlayer: true,
         enableCursor: true,
         enableAnimatedBeatCursor: true,
         enableUserInteraction: true,
-        soundFont: `${assetBase}soundfont/sonivox.sf2`,
+        soundFont: assetUrls.soundFont,
         scrollMode: ScrollMode.Continuous,
       },
     });
@@ -942,6 +897,13 @@ export function AlphaTabPlayer({
       if (api.playerState === synth.PlayerState.Playing) {
         api.scrollToCursor();
       }
+    });
+
+    // With lazy loading, renderFinished means only that the layout is done; each
+    // part is drawn later. alphaTab writes a drawn part into the page in its own
+    // partialRenderFinished handler, which runs before this one.
+    api.renderer.partialRenderFinished.on((part) => {
+      if (part.renderResult) setScoreDrawn(true);
     });
 
     api.renderFinished.on(() => {
@@ -1499,11 +1461,22 @@ export function AlphaTabPlayer({
   const controlsViewportClassName =
     "box-border mx-[calc(50%-(var(--viewport-client-width)/2))] w-(--viewport-client-width) max-w-(--viewport-client-width) md:mx-0 md:w-auto md:max-w-none";
 
+  const notationSurface = (
+    <div
+      ref={containerRef}
+      className="alphatab-player-surface min-h-50 w-full overscroll-x-contain rounded-sm focus-visible:ring-2 focus-visible:ring-[rgba(55,55,255,0.35)] focus-visible:ring-offset-2 focus-visible:ring-offset-transparent focus-visible:outline-none [&_.at-cursor-bar]:bg-[rgba(55,55,255,0.15)] [&_.at-cursor-beat]:w-0.75 [&_.at-cursor-beat]:bg-[rgba(180,180,180,0.75)] [&_.at-cursor-beat]:[backdrop-filter:invert(80%)]"
+      id={instanceId}
+      tabIndex={0}
+      aria-label="Interactive notation player"
+      onPointerDown={(event) => event.currentTarget.focus()}
+    />
+  );
+
   return (
     <div ref={wrapperRef} className="mb-8" onKeyDownCapture={handleKeyboardShortcut}>
       <div
         ref={controlsPanelRef}
-        className={`sticky top-[calc(env(safe-area-inset-top,0)+var(--portal-nav-visible-height))] z-30 bg-inherit backdrop-blur-md ${controlsViewportClassName}`}
+        className={`sticky print:hidden top-[calc(env(safe-area-inset-top,0)+var(--portal-nav-visible-height))] z-30 bg-inherit backdrop-blur-md ${controlsViewportClassName}`}
       >
         <div className="flex min-w-0 flex-col gap-2 p-2 pb-1 md:flex-row md:items-center md:gap-3 md:overflow-visible md:pb-0 md:[&::-webkit-scrollbar]:h-1.5">
           <div className="flex min-w-0 flex-1 items-center gap-2 md:gap-3">
@@ -1618,15 +1591,16 @@ export function AlphaTabPlayer({
       </div>
 
       {/* Notation container */}
-      <div className={`relative z-0 overflow-hidden bg-inherit ${controlsViewportClassName}`}>
-        <div
-          ref={containerRef}
-          className="alphatab-player-surface min-h-50 w-full overscroll-x-contain rounded-sm focus-visible:ring-2 focus-visible:ring-[rgba(55,55,255,0.35)] focus-visible:ring-offset-2 focus-visible:ring-offset-transparent focus-visible:outline-none [&_.at-cursor-bar]:bg-[rgba(55,55,255,0.15)] [&_.at-cursor-beat]:w-0.75 [&_.at-cursor-beat]:bg-[rgba(180,180,180,0.75)] [&_.at-cursor-beat]:[backdrop-filter:invert(80%)]"
-          id={instanceId}
-          tabIndex={0}
-          aria-label="Interactive notation player"
-          onPointerDown={(event) => event.currentTarget.focus()}
-        />
+      <div
+        className={`relative z-0 overflow-hidden bg-inherit print:overflow-visible ${controlsViewportClassName}`}
+      >
+        {staticScore ? (
+          <StaticScoreFrame score={staticScore} playerReady={scoreDrawn}>
+            {notationSurface}
+          </StaticScoreFrame>
+        ) : (
+          notationSurface
+        )}
       </div>
     </div>
   );

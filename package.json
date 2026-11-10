@@ -34,7 +34,7 @@
     "prepare": "git rev-parse --git-dir >/dev/null 2>&1 || exit 0; lefthook install --reset-hooks-path"
   },
   "dependencies": {
-    "@coderline/alphatab": "^1.9.0-alpha.1861",
+    "@coderline/alphatab": "1.9.0-alpha.1891",
     "@effect/platform-node": "4.1.0",
     "@effect/sql-pg": "4.1.0",
     "@internationalized/date": "^3.12.2",
@@ -50,6 +50,7 @@
     "@tiptap/react": "^3.28.0",
     "@tiptap/starter-kit": "^3.28.0",
     "@tw-classed/react": "^2.0.0",
+    "alphatab-kit": "github:DanielFGray/alphatab-kit#v0.2.0",
     "arctic": "^3.7.0",
     "effect": "4.1.0",
     "graphile-migrate": "2.0.0-rc.2",
@@ -94,7 +95,7 @@
   },
   "fromEmail": "noreply@dfg.rocks",
   "patchedDependencies": {
-    "@coderline/alphatab@1.9.0-alpha.1785": "patches/@coderline%2Falphatab@1.9.0-alpha.1785.patch",
+    "@coderline/alphatab@1.9.0-alpha.1891": "patches/@coderline%2Falphatab@1.9.0-alpha.1891.patch",
     "@tanstack/router-generator@1.166.36": "patches/@tanstack%2Frouter-generator@1.166.36.patch"
   },
   "projectName": "DFG Music Lessons"

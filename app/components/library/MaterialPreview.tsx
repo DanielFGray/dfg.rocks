@@ -1,4 +1,6 @@
 import { lazy, Suspense } from "react";
+import type { StaticScore } from "alphatab-kit/static";
+import { StaticScoreFrame } from "alphatab-kit/react";
 import type { Material } from "../../../shared/schemas.js";
 import { categorize, downloadUrl } from "./helpers.js";
 import type { AlphaTabPlayerProps } from "../alphatab/AlphaTabPlayer.js";
@@ -15,11 +17,14 @@ const card =
 export const MaterialPreview = ({
   material,
   embedded,
+  staticScore,
   notationPlayerProps,
 }: {
   material: Material;
   embedded?: boolean;
-  notationPlayerProps?: Omit<AlphaTabPlayerProps, "src">;
+  /** Drawn on the server; shown until the player has loaded and drawn. */
+  staticScore?: StaticScore | null;
+  notationPlayerProps?: Omit<AlphaTabPlayerProps, "src" | "staticScore">;
 }) => {
   const cat = categorize(material.mime_type, material.original_filename);
   const src = downloadUrl(material.id);
@@ -67,12 +72,18 @@ export const MaterialPreview = ({
       return (
         <Suspense
           fallback={
-            <div className="p-6 text-center text-sm text-muted dark:text-muted-dark">
-              Loading...
-            </div>
+            staticScore ? (
+              <StaticScoreFrame score={staticScore} playerReady={false}>
+                {null}
+              </StaticScoreFrame>
+            ) : (
+              <div className="p-6 text-center text-sm text-muted dark:text-muted-dark">
+                Loading...
+              </div>
+            )
           }
         >
-          <AlphaTabPlayer src={src} {...notationPlayerProps} />
+          <AlphaTabPlayer src={src} staticScore={staticScore} {...notationPlayerProps} />
         </Suspense>
       );
     default:
