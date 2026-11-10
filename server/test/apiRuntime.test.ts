@@ -24,9 +24,8 @@ describe("API handler and server runtime", () => {
 
         const fileSystem = yield* FileSystem.FileSystem;
         const dir = yield* fileSystem.makeTempDirectoryScoped();
-        const crontabFile = `${dir}/crontab`;
-        yield* fileSystem.writeFileString(crontabFile, "not a crontab line\n");
-        yield* Effect.promise(() => startWorker({ taskDirectory: `${dir}/tasks`, crontabFile }));
+        yield* fileSystem.writeFileString(`${dir}/crontab`, "not a crontab line\n");
+        yield* Effect.promise(() => startWorker(dir));
 
         const after = yield* healthz;
         expect(after.status).toBe(503);

@@ -23,6 +23,6 @@
       }
     ]
   },
-  "include": ["app", "server", "shared", "scripts", "e2e"],
+  "include": ["app", "server", "shared", "scripts", "e2e", "worker/main.ts", "worker/email"],
   "exclude": ["node_modules", "dist"]
 }

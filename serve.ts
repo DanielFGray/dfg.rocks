@@ -33,10 +33,7 @@ const server = Bun.serve({
 
 console.log(`Listening on ${server.url}`);
 
-await handler.startWorker({
-  taskDirectory: path.join(workerDir, "tasks"),
-  crontabFile: path.join(workerDir, "crontab"),
-});
+await handler.startWorker(workerDir);
 
 // The platform stops the container with SIGTERM. Stop taking requests first, then dispose the
 // runtime, which stops the job runner before the database pools close.
