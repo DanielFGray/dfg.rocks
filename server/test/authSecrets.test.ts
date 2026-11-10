@@ -134,6 +134,27 @@ describe("app_private.reset_password", () => {
       expect(await login(db, user.username, "old-password")).not.toBeNull();
     }));
 
+  it("rejects a matching token older than its 3-day lifetime", () =>
+    inRolledBackTransaction(async (db) => {
+      const user = await createUser(db, "old-password");
+      await setPendingResetToken(db, user.id, "reset-token");
+      await db.query(
+        `update app_private.user_secrets
+           set reset_password_token_generated = now() - interval '3 days 1 minute'
+         where user_id = $1`,
+        [user.id],
+      );
+
+      const { rows } = await db.query<{ session_id: string | null }>(
+        `select (app_private.reset_password($1, 'reset-token', 'new-password')).id as session_id`,
+        [user.id],
+      );
+
+      expect(rows[0].session_id).toBeNull();
+      expect(await login(db, user.username, "new-password")).toBeNull();
+      expect(await login(db, user.username, "old-password")).not.toBeNull();
+    }));
+
   it("accepts the pending token and sets the new password", () =>
     inRolledBackTransaction(async (db) => {
       const user = await createUser(db, "old-password");
