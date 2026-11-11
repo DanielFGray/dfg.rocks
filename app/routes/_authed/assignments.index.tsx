@@ -22,7 +22,6 @@ import { AdminRouteService } from "../../../server/services/adminRouteService.js
 import { SessionService } from "../../../server/services/sessionService.js";
 import { getCookie } from "@tanstack/react-start/server";
 import { serializeMaterial, normalizeStudents } from "../../../shared/responseMappers.js";
-import { toServerFunctionPayload } from "../../lib/serverFunctionPayload.js";
 import { Button } from "../../components/ui/Button.js";
 import { Card } from "../../components/ui/Card.js";
 import { ConfirmDialog } from "../../components/ui/ConfirmDialog.js";
@@ -55,7 +54,7 @@ const getAssignmentsPageData = createServerFn({ method: "GET" }).handler(() =>
           authSvc.library(session.session.id, { limit: 1000, offset: 0 }),
         ]);
 
-        return toServerFunctionPayload({
+        return {
           kind: "staff" as const,
           students: normalizeStudents(studentsResult),
           allMaterials: libraryResult.map((m) => ({
@@ -69,7 +68,7 @@ const getAssignmentsPageData = createServerFn({ method: "GET" }).handler(() =>
               S.NullishOr(S.Array(SharedSchemas.MaterialNotationTrack)),
             )(m.notation_tracks),
           })),
-        }) as {
+        } as {
           kind: "staff";
           students: User[];
           allMaterials: Material[];
@@ -78,10 +77,10 @@ const getAssignmentsPageData = createServerFn({ method: "GET" }).handler(() =>
 
       const assignments = yield* authSvc.assignments(session.session.id, filterStudentId);
 
-      return toServerFunctionPayload({
+      return {
         kind: "student" as const,
         materials: assignments.map(serializeMaterial),
-      }) as {
+      } as {
         kind: "student";
         materials: AssignedMaterial[];
       };

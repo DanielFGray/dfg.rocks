@@ -6,8 +6,6 @@ import { BillingLedgerService } from "../services/billingLedgerService.js";
 import { adaptAdminErrors } from "../httpApiErrors.js";
 import {
   serializeBillResponse,
-  serializePaymentResponse,
-  serializeCreditResponse,
   serializeDiscount,
   serializeTaxExemption,
 } from "./billingResponses.js";
@@ -46,8 +44,8 @@ export const PayersAdminApiGroupLive = HttpApiBuilder.group(Contract, "payersAdm
         return {
           ...detail,
           bills: detail.bills.map(serializeBillResponse),
-          payments: detail.payments.map(serializePaymentResponse),
-          credits: detail.credits.map(serializeCreditResponse),
+          payments: detail.payments,
+          credits: detail.credits,
         };
       }, adaptAdminErrors),
     )
@@ -68,7 +66,7 @@ export const PayersAdminApiGroupLive = HttpApiBuilder.group(Contract, "payersAdm
         const payments = yield* BillingLedgerService.use((billingLedgerService) =>
           billingLedgerService.listPayerPayments(auth.session.id, params.payerId),
         );
-        return payments.map(serializePaymentResponse);
+        return payments;
       }, adaptAdminErrors),
     )
     .handle(
@@ -78,7 +76,7 @@ export const PayersAdminApiGroupLive = HttpApiBuilder.group(Contract, "payersAdm
         const credits = yield* BillingLedgerService.use((billingLedgerService) =>
           billingLedgerService.listPayerCredits(auth.session.id, params.payerId),
         );
-        return credits.map(serializeCreditResponse);
+        return credits;
       }, adaptAdminErrors),
     )
     .handle(

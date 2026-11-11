@@ -23,10 +23,7 @@ export const PracticeApiGroupLive = HttpApiBuilder.group(Contract, "practice", (
             filterStudentId,
           ),
         );
-        return rows.map((row) => ({
-          ...row,
-          logged_at: row.logged_at.toISOString(),
-        }));
+        return rows;
       }, adaptSignedInErrors),
     )
     .handle(
@@ -43,10 +40,7 @@ export const PracticeApiGroupLive = HttpApiBuilder.group(Contract, "practice", (
             durationMinutes: payload.duration_minutes,
           }),
         );
-        return {
-          ...row,
-          logged_at: row.logged_at.toISOString(),
-        };
+        return row;
       }, adaptSignedInErrors),
     )
     .handle(
@@ -62,10 +56,7 @@ export const PracticeApiGroupLive = HttpApiBuilder.group(Contract, "practice", (
             payload.rating,
           ),
         );
-        return {
-          ...row,
-          logged_at: row.logged_at.toISOString(),
-        };
+        return row;
       }, adaptSignedInErrors),
     ),
 );
@@ -86,10 +77,7 @@ export const PracticeAdminApiGroupLive = HttpApiBuilder.group(
               query.offset ?? 0,
             ),
           );
-          return rows.map((row) => ({
-            ...row,
-            created_at: row.created_at.toISOString(),
-          }));
+          return rows;
         }, adaptAdminErrors),
       )
       .handle(

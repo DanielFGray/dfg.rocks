@@ -18,10 +18,7 @@ import type {
   AppPublicBills,
   AppPublicPayments,
   AppPublicCredits,
-  AppPublicBillLineItems,
   AppPublicBillAdjustments,
-  AppPublicCreditApplications,
-  AppPublicPaymentAllocations,
 } from "../../generated/db.js";
 
 const familyBillingErrorStatuses = [400, 401, 403, 404, 500] as const;
@@ -36,12 +33,6 @@ const adaptPdfErrors = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
 // Serialize helpers
 function isDateLike(value: unknown): value is { toISOString(): string } {
   return typeof value === "object" && value !== null && "toISOString" in value;
-}
-
-function serializeDate(value: unknown): string | null {
-  if (value === null || value === undefined) return null;
-  if (isDateLike(value)) return value.toISOString();
-  return String(value);
 }
 
 function serializeDateShort(value: unknown): string {
@@ -64,12 +55,12 @@ function serializeBill(bill: Selectable<AppPublicBills>): Bill {
     tax_cents: bill.tax_cents,
     total_cents: bill.total_cents,
     notes: bill.notes,
-    created_at: serializeDate(bill.created_at)!,
-    updated_at: serializeDate(bill.updated_at)!,
-    issued_at: bill.issued_at ? serializeDate(bill.issued_at) : null,
-    paid_at: bill.paid_at ? serializeDate(bill.paid_at) : null,
-    cancelled_at: bill.cancelled_at ? serializeDate(bill.cancelled_at) : null,
-    voided_at: bill.voided_at ? serializeDate(bill.voided_at) : null,
+    created_at: bill.created_at,
+    updated_at: bill.updated_at,
+    issued_at: bill.issued_at,
+    paid_at: bill.paid_at,
+    cancelled_at: bill.cancelled_at,
+    voided_at: bill.voided_at,
   };
 }
 
@@ -86,10 +77,10 @@ function serializePayment(p: Selectable<AppPublicPayments>): Payment {
     amount_cents: p.amount_cents,
     method: p.method,
     reference: p.reference,
-    received_at: serializeDate(p.received_at)!,
+    received_at: p.received_at,
     notes: p.notes,
-    created_at: serializeDate(p.created_at)!,
-    updated_at: serializeDate(p.updated_at)!,
+    created_at: p.created_at,
+    updated_at: p.updated_at,
   };
 }
 
@@ -105,9 +96,9 @@ function serializeCredit(c: Selectable<AppPublicCredits>): Credit {
     student_id: c.student_id,
     amount_cents: c.amount_cents,
     reason: c.reason,
-    expires_at: c.expires_at ? serializeDate(c.expires_at) : null,
-    consumed_at: c.consumed_at ? serializeDate(c.consumed_at) : null,
-    created_at: serializeDate(c.created_at)!,
+    expires_at: c.expires_at,
+    consumed_at: c.consumed_at,
+    created_at: c.created_at,
   };
 }
 
@@ -161,22 +152,14 @@ export function makeFamilyBillingLayer() {
           result.creditApplications = result.creditApplications ?? [];
           return {
             ...serializeFamilyBill(result),
-            line_items: result.lineItems.map((li: Selectable<AppPublicBillLineItems>) => ({
-              ...li,
-              created_at: serializeDate(li.created_at)!,
-            })),
+            line_items: result.lineItems,
             adjustments: result.adjustments.map((adj: Selectable<AppPublicBillAdjustments>) => ({
               id: adj.id,
               bill_id: adj.bill_id,
               amount_cents: adj.amount_cents,
-              created_at: serializeDate(adj.created_at)!,
+              created_at: adj.created_at,
             })),
-            credit_applications: result.creditApplications.map(
-              (ca: Selectable<AppPublicCreditApplications>) => ({
-                ...ca,
-                created_at: serializeDate(ca.created_at)!,
-              }),
-            ),
+            credit_applications: result.creditApplications,
           };
         }, adaptFamilyBillingErrors),
       )
@@ -205,12 +188,7 @@ export function makeFamilyBillingLayer() {
           );
           return {
             ...serializeFamilyPayment(result),
-            allocations: (result.allocations ?? []).map(
-              (a: Selectable<AppPublicPaymentAllocations>) => ({
-                ...a,
-                created_at: serializeDate(a.created_at)!,
-              }),
-            ),
+            allocations: result.allocations ?? [],
           };
         }, adaptFamilyBillingErrors),
       )

@@ -8,6 +8,7 @@ import type {
   StudentRate,
 } from "../../../shared/schemas.js";
 import { api } from "../../lib/api.js";
+import { dateLabel } from "../billing/helpers.js";
 import { getErrorMessage } from "../../lib/errors.js";
 import { Button } from "../ui/Button.js";
 import { Card } from "../ui/Card.js";
@@ -48,17 +49,6 @@ const money = new Intl.NumberFormat("en-US", {
 
 function formatMoney(cents: number) {
   return money.format(cents / 100);
-}
-
-function dateLabel(value: string) {
-  const date = new Date(value.length === 10 ? `${value}T00:00:00` : value);
-  return Number.isNaN(date.getTime())
-    ? value
-    : date.toLocaleDateString("en-US", {
-        month: "short",
-        day: "numeric",
-        year: "numeric",
-      });
 }
 
 function timeLabel(value: string) {

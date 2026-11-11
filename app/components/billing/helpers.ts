@@ -9,28 +9,21 @@ export function formatCents(cents: number): string {
   return money.format(cents / 100);
 }
 
-export function dateLabel(value: string): string {
-  const d = new Date(value.length === 10 ? `${value}T00:00:00` : value);
-  return Number.isNaN(d.getTime())
-    ? value
-    : d.toLocaleDateString("en-US", {
-        month: "short",
-        day: "numeric",
-        year: "numeric",
-      });
+const dayFormat = {
+  month: "short",
+  day: "numeric",
+  year: "numeric",
+} satisfies Intl.DateTimeFormatOptions;
+
+/** A calendar date (YYYY-MM-DD), or the local day of an instant. */
+export function dateLabel(value: Date | string): string {
+  if (typeof value !== "string") return value.toLocaleDateString("en-US", dayFormat);
+  const d = new Date(`${value}T00:00:00`);
+  return Number.isNaN(d.getTime()) ? value : d.toLocaleDateString("en-US", dayFormat);
 }
 
-export function dateTimeLabel(value: string): string {
-  const d = new Date(value);
-  return Number.isNaN(d.getTime())
-    ? value
-    : d.toLocaleDateString("en-US", {
-        month: "short",
-        day: "numeric",
-        year: "numeric",
-        hour: "numeric",
-        minute: "2-digit",
-      });
+export function dateTimeLabel(value: Date): string {
+  return value.toLocaleDateString("en-US", { ...dayFormat, hour: "numeric", minute: "2-digit" });
 }
 
 const statusStyles: Record<BillStatus, string> = {

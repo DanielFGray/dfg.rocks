@@ -25,8 +25,7 @@ export function getAssignedTrackLabel(material: {
   return track ? formatNotationTrackLabel(track) : null;
 }
 
-export function formatDate(iso: string): string {
-  const d = new Date(iso);
+export function formatDate(d: Date): string {
   const now = new Date();
   const diffMs = now.getTime() - d.getTime();
   const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));

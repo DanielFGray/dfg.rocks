@@ -33,7 +33,7 @@ const InvitationResponse = S.Struct({
   slug: S.String,
   name: S.String,
   description: S.NullishOr(S.String),
-  created_at: S.String,
+  created_at: S.DateFromString,
   email: S.String,
   invited_role: S.optional(FamilyInviteRole),
 });

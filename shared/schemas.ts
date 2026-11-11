@@ -180,7 +180,7 @@ export const Submission = S.Struct({
   format: S.String,
   message: S.String,
   is_read: S.Boolean,
-  created_at: S.String,
+  created_at: S.DateFromString,
   ip_address: S.NullishOr(S.String),
   location_country: S.NullishOr(S.String),
   location_region: S.NullishOr(S.String),
@@ -195,7 +195,7 @@ export const PracticeLog = S.Struct({
   material_id: S.String,
   rating: S.NullishOr(S.Number.pipe(S.check(S.isBetween({ minimum: 1, maximum: 5 })))),
   duration_minutes: S.NullishOr(S.Number),
-  logged_at: S.String,
+  logged_at: S.DateFromString,
 });
 
 export type PracticeLog = S.Schema.Type<typeof PracticeLog>;
@@ -203,7 +203,7 @@ export type PracticeLog = S.Schema.Type<typeof PracticeLog>;
 export const AssignmentProgress = S.Struct({
   material_id: S.String,
   listened_seconds: S.Number,
-  updated_at: S.String,
+  updated_at: S.DateFromString,
 });
 
 export type AssignmentProgress = S.Schema.Type<typeof AssignmentProgress>;
@@ -213,8 +213,8 @@ export const AssignmentNote = S.Struct({
   student_id: S.String,
   material_id: S.String,
   body: S.String,
-  created_at: S.String,
-  updated_at: S.String,
+  created_at: S.DateFromString,
+  updated_at: S.DateFromString,
 });
 
 export type AssignmentNote = S.Schema.Type<typeof AssignmentNote>;
@@ -224,7 +224,7 @@ export const AssignmentReview = S.Struct({
   material_id: S.String,
   stars: S.Number.pipe(S.check(S.isBetween({ minimum: 1, maximum: 5 }))),
   listened_seconds: S.Number,
-  created_at: S.String,
+  created_at: S.DateFromString,
 });
 
 export type AssignmentReview = S.Schema.Type<typeof AssignmentReview>;
@@ -235,7 +235,7 @@ export const Message = S.Struct({
   recipient_id: S.String,
   body: S.String,
   is_read: S.Boolean,
-  created_at: S.String,
+  created_at: S.DateFromString,
 });
 
 export type Message = S.Schema.Type<typeof Message>;
@@ -245,7 +245,7 @@ export const Family = S.Struct({
   slug: S.String,
   name: S.String,
   description: S.NullishOr(S.String),
-  created_at: S.String,
+  created_at: S.DateFromString,
 });
 
 export type Family = S.Schema.Type<typeof Family>;
@@ -326,18 +326,18 @@ export const Lesson = S.Struct({
   id: S.String,
   student_id: S.String,
   gcal_event_id: S.NullishOr(S.String),
-  scheduled_at: S.String,
+  scheduled_at: S.DateFromString,
   duration_minutes: S.Number,
   location_type: LocationType,
   status: LessonStatus,
   cancellation_reason: S.NullishOr(S.String),
-  cancelled_at: S.NullishOr(S.String),
-  completed_at: S.NullishOr(S.String),
+  cancelled_at: S.NullishOr(S.DateFromString),
+  completed_at: S.NullishOr(S.DateFromString),
   cancellation_fee_cents: S.Number,
   remainder_due_cents: S.Number,
   recurring_schedule_id: S.NullishOr(S.String),
   recurrence_date: S.NullishOr(S.String),
-  created_at: S.String,
+  created_at: S.DateFromString,
 });
 
 export type Lesson = S.Schema.Type<typeof Lesson>;
@@ -350,7 +350,7 @@ export const StudentRate = S.Struct({
   location_type: LocationType,
   billing_model: BillingModel,
   notes: S.NullishOr(S.String),
-  created_at: S.String,
+  created_at: S.DateFromString,
 });
 
 export type StudentRate = S.Schema.Type<typeof StudentRate>;
@@ -383,11 +383,11 @@ export const MonthlyPayment = S.Struct({
   student_id: S.String,
   billing_month: S.String,
   amount_cents: S.Number,
-  paid_at: S.String,
+  paid_at: S.DateFromString,
   notes: S.NullishOr(S.String),
   generation_status: PaymentGenerationStatus,
   generation_error: S.NullishOr(S.String),
-  generated_at: S.NullishOr(S.String),
+  generated_at: S.NullishOr(S.DateFromString),
 });
 
 export type MonthlyPayment = S.Schema.Type<typeof MonthlyPayment>;
@@ -406,7 +406,7 @@ export const LessonDeposit = S.Struct({
   lesson_id: S.String,
   amount_cents: S.Number,
   status: DepositStatus,
-  created_at: S.String,
+  created_at: S.DateFromString,
 });
 
 export type LessonDeposit = S.Schema.Type<typeof LessonDeposit>;
@@ -416,7 +416,7 @@ export const UserEmail = S.Struct({
   email: S.String,
   is_verified: S.Boolean,
   is_primary: S.Boolean,
-  created_at: S.String,
+  created_at: S.DateFromString,
 });
 
 export type UserEmail = S.Schema.Type<typeof UserEmail>;
@@ -430,15 +430,15 @@ export const LessonNote = S.Struct({
   notes: S.NullishOr(S.String),
   material_ids: S.NullishOr(S.Array(S.String)),
   draft: S.Boolean,
-  created_at: S.String,
-  updated_at: S.String,
+  created_at: S.DateFromString,
+  updated_at: S.DateFromString,
 });
 
 export type LessonNote = S.Schema.Type<typeof LessonNote>;
 
 export const TimeSlot = S.Struct({
-  start: S.String,
-  end: S.String,
+  start: S.DateFromString,
+  end: S.DateFromString,
 });
 
 export type TimeSlot = S.Schema.Type<typeof TimeSlot>;
@@ -480,8 +480,8 @@ export const Testimonial = S.Struct({
   display_name: S.String,
   role_label: S.String,
   is_approved: S.Boolean,
-  created_at: S.String,
-  updated_at: S.String,
+  created_at: S.DateFromString,
+  updated_at: S.DateFromString,
 });
 
 export type Testimonial = S.Schema.Type<typeof Testimonial>;
@@ -542,12 +542,12 @@ export const Bill = S.Struct({
   tax_cents: S.Number,
   total_cents: S.Number,
   notes: S.NullOr(S.String),
-  created_at: S.String,
-  updated_at: S.String,
-  issued_at: S.NullOr(S.String),
-  paid_at: S.NullOr(S.String),
-  cancelled_at: S.NullOr(S.String),
-  voided_at: S.NullOr(S.String),
+  created_at: S.DateFromString,
+  updated_at: S.DateFromString,
+  issued_at: S.NullOr(S.DateFromString),
+  paid_at: S.NullOr(S.DateFromString),
+  cancelled_at: S.NullOr(S.DateFromString),
+  voided_at: S.NullOr(S.DateFromString),
 });
 
 export type Bill = S.Schema.Type<typeof Bill>;
@@ -558,7 +558,7 @@ export const LessonBill = S.Struct({
   bill_number: S.Number,
   status: BillStatus,
   lesson_id: S.String,
-  scheduled_at: S.String,
+  scheduled_at: S.DateFromString,
   student_id: S.String,
   student_name: S.String,
   payer_id: S.String,
@@ -576,10 +576,10 @@ export const Payment = S.Struct({
   amount_cents: S.Number,
   method: PaymentMethod,
   reference: S.NullOr(S.String),
-  received_at: S.String,
+  received_at: S.DateFromString,
   notes: S.NullOr(S.String),
-  created_at: S.String,
-  updated_at: S.String,
+  created_at: S.DateFromString,
+  updated_at: S.DateFromString,
 });
 
 export type Payment = S.Schema.Type<typeof Payment>;
@@ -597,12 +597,12 @@ export const FamilyBill = S.Struct({
   discount_cents: S.Number,
   tax_cents: S.Number,
   total_cents: S.Number,
-  created_at: S.String,
-  updated_at: S.String,
-  issued_at: S.NullOr(S.String),
-  paid_at: S.NullOr(S.String),
-  cancelled_at: S.NullOr(S.String),
-  voided_at: S.NullOr(S.String),
+  created_at: S.DateFromString,
+  updated_at: S.DateFromString,
+  issued_at: S.NullOr(S.DateFromString),
+  paid_at: S.NullOr(S.DateFromString),
+  cancelled_at: S.NullOr(S.DateFromString),
+  voided_at: S.NullOr(S.DateFromString),
 });
 export type FamilyBill = S.Schema.Type<typeof FamilyBill>;
 
@@ -613,9 +613,9 @@ export const FamilyPayment = S.Struct({
   amount_cents: S.Number,
   method: PaymentMethod,
   reference: S.NullOr(S.String),
-  received_at: S.String,
-  created_at: S.String,
-  updated_at: S.String,
+  received_at: S.DateFromString,
+  created_at: S.DateFromString,
+  updated_at: S.DateFromString,
 });
 export type FamilyPayment = S.Schema.Type<typeof FamilyPayment>;
 
@@ -625,9 +625,9 @@ export const Credit = S.Struct({
   student_id: S.NullOr(S.String),
   amount_cents: S.Number,
   reason: S.String,
-  expires_at: S.NullOr(S.String),
-  consumed_at: S.NullOr(S.String),
-  created_at: S.String,
+  expires_at: S.NullOr(S.DateFromString),
+  consumed_at: S.NullOr(S.DateFromString),
+  created_at: S.DateFromString,
 });
 
 export type Credit = S.Schema.Type<typeof Credit>;
@@ -639,9 +639,9 @@ export const AdminCredit = S.Struct({
   amount_cents: S.Number,
   reason: S.String,
   created_by: S.String,
-  expires_at: S.NullOr(S.String),
-  consumed_at: S.NullOr(S.String),
-  created_at: S.String,
+  expires_at: S.NullOr(S.DateFromString),
+  consumed_at: S.NullOr(S.DateFromString),
+  created_at: S.DateFromString,
 });
 export type AdminCredit = S.Schema.Type<typeof AdminCredit>;
 
@@ -657,12 +657,12 @@ export const FamilyBillDetailResponse = S.Struct({
   discount_cents: S.Number,
   tax_cents: S.Number,
   total_cents: S.Number,
-  created_at: S.String,
-  updated_at: S.String,
-  issued_at: S.NullOr(S.String),
-  paid_at: S.NullOr(S.String),
-  cancelled_at: S.NullOr(S.String),
-  voided_at: S.NullOr(S.String),
+  created_at: S.DateFromString,
+  updated_at: S.DateFromString,
+  issued_at: S.NullOr(S.DateFromString),
+  paid_at: S.NullOr(S.DateFromString),
+  cancelled_at: S.NullOr(S.DateFromString),
+  voided_at: S.NullOr(S.DateFromString),
   line_items: S.Array(
     S.Struct({
       id: S.String,
@@ -673,7 +673,7 @@ export const FamilyBillDetailResponse = S.Struct({
       quantity: S.Number,
       unit_price_cents: S.Number,
       amount_cents: S.Number,
-      created_at: S.String,
+      created_at: S.DateFromString,
     }),
   ),
   adjustments: S.Array(
@@ -681,7 +681,7 @@ export const FamilyBillDetailResponse = S.Struct({
       id: S.String,
       bill_id: S.String,
       amount_cents: S.Number,
-      created_at: S.String,
+      created_at: S.DateFromString,
     }),
   ),
   credit_applications: S.Array(
@@ -690,7 +690,7 @@ export const FamilyBillDetailResponse = S.Struct({
       credit_id: S.String,
       bill_id: S.String,
       amount_cents: S.Number,
-      created_at: S.String,
+      created_at: S.DateFromString,
     }),
   ),
 });
@@ -704,7 +704,7 @@ export const FamilyPaymentDetail = S.Struct({
       payment_id: S.String,
       bill_id: S.String,
       amount_cents: S.Number,
-      created_at: S.String,
+      created_at: S.DateFromString,
     }),
   ),
 });
@@ -723,12 +723,12 @@ export const BillDetailResponse = S.Struct({
   tax_cents: S.Number,
   total_cents: S.Number,
   notes: S.NullOr(S.String),
-  created_at: S.String,
-  updated_at: S.String,
-  issued_at: S.NullOr(S.String),
-  paid_at: S.NullOr(S.String),
-  cancelled_at: S.NullOr(S.String),
-  voided_at: S.NullOr(S.String),
+  created_at: S.DateFromString,
+  updated_at: S.DateFromString,
+  issued_at: S.NullOr(S.DateFromString),
+  paid_at: S.NullOr(S.DateFromString),
+  cancelled_at: S.NullOr(S.DateFromString),
+  voided_at: S.NullOr(S.DateFromString),
   line_items: S.Array(
     S.Struct({
       id: S.String,
@@ -739,7 +739,7 @@ export const BillDetailResponse = S.Struct({
       quantity: S.Number,
       unit_price_cents: S.Number,
       amount_cents: S.Number,
-      created_at: S.String,
+      created_at: S.DateFromString,
     }),
   ),
   adjustments: S.Array(
@@ -748,7 +748,7 @@ export const BillDetailResponse = S.Struct({
       bill_id: S.String,
       amount_cents: S.Number,
       reason: S.String,
-      created_at: S.String,
+      created_at: S.DateFromString,
     }),
   ),
   credit_applications: S.Array(
@@ -757,7 +757,7 @@ export const BillDetailResponse = S.Struct({
       credit_id: S.String,
       bill_id: S.String,
       amount_cents: S.Number,
-      created_at: S.String,
+      created_at: S.DateFromString,
     }),
   ),
 });
@@ -771,17 +771,17 @@ export const PaymentDetail = S.Struct({
   amount_cents: S.Number,
   method: PaymentMethod,
   reference: S.NullOr(S.String),
-  received_at: S.String,
+  received_at: S.DateFromString,
   notes: S.NullOr(S.String),
-  created_at: S.String,
-  updated_at: S.String,
+  created_at: S.DateFromString,
+  updated_at: S.DateFromString,
   allocations: S.Array(
     S.Struct({
       id: S.String,
       payment_id: S.String,
       bill_id: S.String,
       amount_cents: S.Number,
-      created_at: S.String,
+      created_at: S.DateFromString,
     }),
   ),
 });
@@ -854,8 +854,8 @@ export const Discount = S.Struct({
   effective_until: S.NullOr(S.String),
   is_active: S.Boolean,
   created_by: S.String,
-  created_at: S.String,
-  updated_at: S.String,
+  created_at: S.DateFromString,
+  updated_at: S.DateFromString,
 });
 
 export type Discount = S.Schema.Type<typeof Discount>;
@@ -870,8 +870,8 @@ export const TaxRate = S.Struct({
   effective_until: S.NullOr(S.String),
   is_active: S.Boolean,
   created_by: S.String,
-  created_at: S.String,
-  updated_at: S.String,
+  created_at: S.DateFromString,
+  updated_at: S.DateFromString,
 });
 
 export type TaxRate = S.Schema.Type<typeof TaxRate>;
@@ -884,7 +884,7 @@ export const TaxExemption = S.Struct({
   effective_from: S.String,
   effective_until: S.NullOr(S.String),
   created_by: S.String,
-  created_at: S.String,
+  created_at: S.DateFromString,
 });
 
 export type TaxExemption = S.Schema.Type<typeof TaxExemption>;
@@ -895,9 +895,9 @@ export const Refund = S.Struct({
   amount_cents: S.Number,
   reason: S.String,
   created_by: S.String,
-  refunded_at: S.String,
+  refunded_at: S.DateFromString,
   notes: S.NullOr(S.String),
-  created_at: S.String,
+  created_at: S.DateFromString,
 });
 
 export type Refund = S.Schema.Type<typeof Refund>;
@@ -907,7 +907,7 @@ export const Adjustment = S.Struct({
   bill_id: S.String,
   amount_cents: S.Number,
   reason: S.String,
-  created_at: S.String,
+  created_at: S.DateFromString,
 });
 
 export type Adjustment = S.Schema.Type<typeof Adjustment>;
@@ -917,7 +917,7 @@ export const CreditApplication = S.Struct({
   credit_id: S.String,
   bill_id: S.String,
   amount_cents: S.Number,
-  created_at: S.String,
+  created_at: S.DateFromString,
 });
 
 export type CreditApplication = S.Schema.Type<typeof CreditApplication>;

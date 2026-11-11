@@ -16,7 +16,6 @@ import { runServerEffect } from "../../lib/serverEffect.js";
 import { AuthenticatedRouteService } from "../../../server/services/authenticatedRouteService.js";
 import { AdminRouteService } from "../../../server/services/adminRouteService.js";
 import { serializeMessage, normalizeStudents } from "../../../shared/responseMappers.js";
-import { toServerFunctionPayload } from "../../lib/serverFunctionPayload.js";
 import { requireSession, resolveEffectiveStudent } from "../../lib/sessionGuards.server.js";
 
 const getMessagesPageData = createServerFn({ method: "GET" }).handler(() =>
@@ -36,17 +35,7 @@ const getMessagesPageData = createServerFn({ method: "GET" }).handler(() =>
         },
         filterStudentId,
       );
-
-      // Explicitly type the messages array to fix inference
-      const messagesArray = messages as Array<{
-        id: string;
-        sender_id: string;
-        recipient_id: string;
-        body: string;
-        is_read: boolean;
-        created_at: Date | string;
-      }>;
-      const serializedMessages: ReturnType<typeof serializeMessage>[] = messagesArray.map(serializeMessage);
+      const serializedMessages: ReturnType<typeof serializeMessage>[] = messages.map(serializeMessage);
 
       let students: ReturnType<typeof normalizeStudents> | null = null;
       if (session.user.role === "admin") {
@@ -54,12 +43,9 @@ const getMessagesPageData = createServerFn({ method: "GET" }).handler(() =>
         students = normalizeStudents(yield* adminSvc.listStudents(session.session.id));
       }
 
-      return toServerFunctionPayload({
+      return {
         messages: serializedMessages,
         students,
-      }) as {
-        messages: ReturnType<typeof serializeMessage>[];
-        students: ReturnType<typeof normalizeStudents> | null;
       };
     }),
   ),

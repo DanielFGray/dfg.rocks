@@ -408,7 +408,7 @@ export function AdminSection({
                   <div className="flex items-center justify-between gap-3">
                     <p className="text-xs text-muted dark:text-muted-dark">
                       Updated{" "}
-                      {new Date(testimonial.updated_at).toLocaleDateString("en-US", {
+                      {testimonial.updated_at.toLocaleDateString("en-US", {
                         month: "short",
                         day: "numeric",
                         year: "numeric",

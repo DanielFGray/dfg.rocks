@@ -63,26 +63,20 @@ export const StudentsAdminApiGroupLive = HttpApiBuilder.group(
               notes: payload.notes ?? null,
             }),
           );
-          return {
-            ...rate,
-            created_at: rate.created_at.toISOString(),
-          };
+          return rate;
         }, adaptAdminErrors),
       )
       .handle(
         "studentRates",
         Effect.fnUntraced(function* ({ params, query }) {
           const auth = yield* CurrentSession;
-          return (yield* AdminRouteService.use((adminRouteService) =>
+          return yield* AdminRouteService.use((adminRouteService) =>
             adminRouteService.listStudentRates(
               auth.session.id,
               params.studentId,
               query.location_type,
             ),
-          )).map((row) => ({
-            ...row,
-            created_at: row.created_at.toISOString(),
-          }));
+          );
         }, adaptAdminErrors),
       ),
 );

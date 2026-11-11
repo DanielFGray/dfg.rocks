@@ -22,7 +22,7 @@ export type SaveRecurringSchedulePayload = S.Schema.Type<typeof SaveRecurringSch
 export const RecordMonthlyPaymentPayload = S.Struct({
   billing_month: S.String,
   amount_cents: S.Number.pipe(S.check(S.isInt()), S.check(S.isGreaterThan(0))),
-  paid_at: S.String,
+  paid_at: S.DateFromString,
   notes: S.optional(S.NullishOr(S.String)),
 });
 

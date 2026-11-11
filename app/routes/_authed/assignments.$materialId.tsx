@@ -4,9 +4,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { getCookie } from "@tanstack/react-start/server";
 import { runServerEffect } from "../../lib/serverEffect.js";
 import { AuthenticatedRouteService } from "../../../server/services/authenticatedRouteService.js";
-import type { AssignedMaterial } from "../../../shared/schemas.js";
 import { serializeMaterial } from "../../../shared/responseMappers.js";
-import { toServerFunctionPayload } from "../../lib/serverFunctionPayload.js";
 import { requireSession } from "../../lib/sessionGuards.server.js";
 import {
   StudentAssignmentDetail,
@@ -22,7 +20,7 @@ const getAssignmentPageData = createServerFn({ method: "GET" }).handler(() =>
       const session = yield* requireSession(getCookie("session"));
       const authSvc = yield* AuthenticatedRouteService;
       const assignments = yield* authSvc.assignments(session.session.id);
-      return toServerFunctionPayload(assignments.map(serializeMaterial)) as AssignedMaterial[];
+      return assignments.map(serializeMaterial);
     }),
   ),
 );

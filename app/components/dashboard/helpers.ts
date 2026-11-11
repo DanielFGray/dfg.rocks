@@ -1,5 +1,5 @@
-export const formatTime = (iso: string) =>
-  new Date(iso).toLocaleTimeString("en-US", {
+export const formatTime = (value: Date) =>
+  value.toLocaleTimeString("en-US", {
     hour: "numeric",
     minute: "2-digit",
   });

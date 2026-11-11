@@ -19,7 +19,6 @@ import {
   serializeLibraryMaterial,
   serializeStudentDetail,
 } from "../../../shared/responseMappers.js";
-import { toServerFunctionPayload } from "../../lib/serverFunctionPayload.js";
 import { requireAdminSession } from "../../lib/sessionGuards.server.js";
 import { Button } from "../../components/ui/Button.js";
 import { Card } from "../../components/ui/Card.js";
@@ -55,11 +54,11 @@ const getStudentDetailPageData = createServerFn({ method: "GET" })
             }),
           ),
         ]);
-        return toServerFunctionPayload({
+        return {
           student: serializeStudentDetail(student),
           allCourses: allCourses.map(serializeCourse),
           allMaterials: allMaterials.map(serializeLibraryMaterial),
-        }) satisfies StudentDetailPageData;
+        } satisfies StudentDetailPageData;
       }),
     ),
   );
@@ -75,7 +74,7 @@ function StudentDetailPage() {
   const { id } = Route.useParams();
   const queryClient = useQueryClient();
   const router = useRouter();
-  const { student, allCourses, allMaterials } = Route.useLoaderData() as StudentDetailPageData;
+  const { student, allCourses, allMaterials } = Route.useLoaderData();
 
   const enrolledIds = new Set(student.enrolled_courses.map((c) => c.id));
   const assignedIds = new Set(student.assigned_materials.map((m) => m.id));

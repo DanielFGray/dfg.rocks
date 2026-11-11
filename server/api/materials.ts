@@ -104,10 +104,7 @@ export const MaterialsApiGroupLive = HttpApiBuilder.group(Contract, "materials",
             seconds: payload.seconds,
           }),
         );
-        return {
-          ...row,
-          updated_at: row.updated_at.toISOString(),
-        };
+        return row;
       }, adaptSignedInErrors),
     )
     .handle(
@@ -124,10 +121,7 @@ export const MaterialsApiGroupLive = HttpApiBuilder.group(Contract, "materials",
             stars: payload.stars,
           }),
         );
-        return {
-          ...row,
-          created_at: row.created_at.toISOString(),
-        };
+        return row;
       }, adaptSignedInErrors),
     )
     .handle(
@@ -140,11 +134,7 @@ export const MaterialsApiGroupLive = HttpApiBuilder.group(Contract, "materials",
         if (!row) {
           return null;
         }
-        return {
-          ...row,
-          created_at: row.created_at.toISOString(),
-          updated_at: row.updated_at.toISOString(),
-        };
+        return row;
       }, adaptSignedInErrors),
     )
     .handle(
@@ -160,11 +150,7 @@ export const MaterialsApiGroupLive = HttpApiBuilder.group(Contract, "materials",
             body: payload.body,
           }),
         );
-        return {
-          ...row,
-          created_at: row.created_at.toISOString(),
-          updated_at: row.updated_at.toISOString(),
-        };
+        return row;
       }, adaptSignedInErrors),
     )
     .handle(

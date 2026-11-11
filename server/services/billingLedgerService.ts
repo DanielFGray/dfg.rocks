@@ -61,7 +61,7 @@ export interface IssueCreditInput {
   studentId?: string | null;
   amountCents: number;
   reason: string;
-  expiresAt?: string | null;
+  expiresAt?: Date | null;
 }
 
 export interface VoidBillInput {
@@ -239,7 +239,7 @@ export class BillingLedgerService extends Context.Service<BillingLedgerService>(
                   .pipe(catchPgErrors);
               }
 
-              return JSON.parse(JSON.stringify(b)) as typeof b;
+              return b;
             }),
           );
 

@@ -16,7 +16,7 @@ const RecordPaymentPayload = S.Struct({
   amount_cents: S.Number,
   method: PaymentMethod,
   reference: S.optional(S.String),
-  received_at: S.optional(S.String),
+  received_at: S.optional(S.DateFromString),
   notes: S.optional(S.String),
   allocations: S.Array(PaymentAllocationPayload),
 });

@@ -1700,7 +1700,7 @@ export class AuthenticatedRouteService extends Context.Service<AuthenticatedRout
               email: i.email ?? null,
               invited_role: i.invited_role as string,
               code: i.code ?? null,
-              expires_at: i.expires_at?.toISOString() ?? null,
+              expires_at: i.expires_at,
             })),
           };
         }),

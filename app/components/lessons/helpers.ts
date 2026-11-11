@@ -1,3 +1,4 @@
+import type { CalendarDate } from "@internationalized/date";
 import type { LocationType } from "../../../shared/schemas.js";
 export { requiredValidator } from "../../lib/validators.js";
 
@@ -38,8 +39,7 @@ export const locationLabel: Record<string, string> = {
   online: "Online",
 };
 
-export function formatDateTime(iso: string): string {
-  const d = new Date(iso);
+export function formatDateTime(d: Date): string {
   return d.toLocaleDateString("en-US", {
     weekday: "short",
     month: "short",
@@ -48,4 +48,10 @@ export function formatDateTime(iso: string): string {
     hour: "numeric",
     minute: "2-digit",
   });
+}
+
+/** The instant a form's date and HH:MM time name in the browser's time zone. */
+export function localInstant(date: CalendarDate, time: string): Date {
+  // An ISO date-time with no offset is local time.
+  return new Date(`${date.toString()}T${time}:00`);
 }

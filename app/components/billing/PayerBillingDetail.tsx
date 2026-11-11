@@ -555,7 +555,8 @@ function RecordPaymentModal({
             amount_cents: Math.round(Number(amount) * 100),
             method: method as any,
             reference: reference.trim() || undefined,
-            received_at: receivedAt || undefined,
+            // A date-only ISO string parses as UTC midnight.
+            received_at: receivedAt ? new Date(receivedAt) : undefined,
             notes: notes.trim() || undefined,
             allocations: [],
           },
@@ -769,7 +770,7 @@ function IssueCreditModal({
             payer_id: payerId,
             amount_cents: Math.round(Number(amount) * 100),
             reason,
-            expires_at: expiresAt || undefined,
+            expires_at: expiresAt ? new Date(expiresAt) : undefined,
           },
         }),
       ),

@@ -100,7 +100,7 @@ export function TestimonialEditor({
               {testimonial ? (
                 <span>
                   {approvalMessage} Last updated{" "}
-                  {new Date(testimonial.updated_at).toLocaleDateString("en-US", {
+                  {testimonial.updated_at.toLocaleDateString("en-US", {
                     month: "short",
                     day: "numeric",
                     year: "numeric",

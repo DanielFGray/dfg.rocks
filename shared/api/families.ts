@@ -59,7 +59,7 @@ export const FamilyInfo = S.Struct({
       email: S.NullishOr(S.String),
       invited_role: S.String,
       code: S.NullishOr(S.String),
-      expires_at: S.NullishOr(S.String),
+      expires_at: S.NullishOr(S.DateFromString),
     }),
   ),
 });

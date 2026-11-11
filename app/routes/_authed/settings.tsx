@@ -12,7 +12,6 @@ import { AuthenticatedRouteService } from "../../../server/services/authenticate
 import { GoogleCalendarService } from "../../../server/services/googleCalendarService.js";
 import { TestimonialReminderService } from "../../../server/services/testimonialReminderService.js";
 import { serializeUserEmail, serializeTestimonial } from "../../../shared/responseMappers.js";
-import { toServerFunctionPayload } from "../../lib/serverFunctionPayload.js";
 import { requireSession } from "../../lib/sessionGuards.server.js";
 
 const getSettingsPageData = createServerFn({ method: "GET" }).handler(() =>
@@ -32,14 +31,14 @@ const getSettingsPageData = createServerFn({ method: "GET" }).handler(() =>
           ),
         ]);
 
-        return toServerFunctionPayload({
+        return {
           emails: emails.map(serializeUserEmail),
           testimonial: testimonial ? serializeTestimonial(testimonial) : null,
           gcalStatus: null,
           workingHours: null,
           testimonialReminderIntervalDays: null,
           adminTestimonials: null,
-        });
+        };
       }
 
       const [emails, gcalStatus, workingHours, intervalDays, adminTestimonials] = yield* Effect.all(
@@ -58,7 +57,7 @@ const getSettingsPageData = createServerFn({ method: "GET" }).handler(() =>
         ],
       );
 
-      return toServerFunctionPayload({
+      return {
         emails: emails.map(serializeUserEmail),
         testimonial: null,
         gcalStatus: {
@@ -68,7 +67,7 @@ const getSettingsPageData = createServerFn({ method: "GET" }).handler(() =>
         workingHours,
         testimonialReminderIntervalDays: intervalDays,
         adminTestimonials: adminTestimonials.map(serializeTestimonial),
-      });
+      };
     }),
   ),
 );

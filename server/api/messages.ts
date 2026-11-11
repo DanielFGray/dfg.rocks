@@ -25,10 +25,7 @@ export const MessagesApiGroupLive = HttpApiBuilder.group(Contract, "messages", (
             filterStudentId,
           ),
         );
-        return rows.map((row) => ({
-          ...row,
-          created_at: row.created_at.toISOString(),
-        }));
+        return rows;
       }, adaptSignedInErrors),
     )
     .handle(
@@ -44,10 +41,7 @@ export const MessagesApiGroupLive = HttpApiBuilder.group(Contract, "messages", (
             body: payload.body,
           }),
         );
-        return {
-          ...row,
-          created_at: row.created_at.toISOString(),
-        };
+        return row;
       }, adaptSignedInErrors),
     )
     .handle(

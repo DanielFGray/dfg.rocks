@@ -4,7 +4,7 @@ import { Contract } from "../../shared/httpApi.js";
 import { CurrentSession } from "../../shared/api/guards.js";
 import { BillingLedgerService } from "../services/billingLedgerService.js";
 import { adaptAdminErrors } from "../httpApiErrors.js";
-import { serializePaymentResponse, serializeRefund } from "./billingResponses.js";
+import { serializeRefund } from "./billingResponses.js";
 
 export const PaymentsAdminApiGroupLive = HttpApiBuilder.group(
   Contract,
@@ -21,7 +21,7 @@ export const PaymentsAdminApiGroupLive = HttpApiBuilder.group(
               amountCents: payload.amount_cents,
               method: payload.method,
               reference: payload.reference,
-              receivedAt: payload.received_at ? new Date(payload.received_at) : undefined,
+              receivedAt: payload.received_at,
               notes: payload.notes,
               allocations: payload.allocations.map(
                 (a: { bill_id: string; amount_cents: number }) => ({
@@ -31,7 +31,7 @@ export const PaymentsAdminApiGroupLive = HttpApiBuilder.group(
               ),
             }),
           );
-          return serializePaymentResponse(result);
+          return result;
         }, adaptAdminErrors),
       )
       .handle(

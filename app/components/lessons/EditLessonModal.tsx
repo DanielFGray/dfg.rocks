@@ -8,7 +8,7 @@ import { TimeField } from "../ui/TimeField.js";
 import { Select } from "../ui/Select.js";
 import { Button } from "../ui/Button.js";
 import type { Lesson, LocationType } from "../../../shared/schemas.js";
-import { requiredValidator, durationOptions, locationOptions } from "../lessons/helpers.js";
+import { localInstant, requiredValidator, durationOptions, locationOptions } from "./helpers.js";
 
 const requiredLocationValidator = {
   onChange: ({ value }: { value: "" | LocationType }) => (value ? undefined : "Required"),
@@ -26,13 +26,13 @@ export function EditLessonModal({
   lesson: Lesson;
   studentOptions: { value: string; label: string }[];
   onSubmit: (value: {
-    scheduled_at?: string;
+    scheduled_at?: Date;
     duration_minutes?: number;
     location_type?: LocationType;
   }) => void;
 }) {
   const initialDateTime = useMemo(() => {
-    const d = new Date(lesson.scheduled_at);
+    const d = lesson.scheduled_at;
     return {
       date: new CalendarDate(d.getFullYear(), d.getMonth() + 1, d.getDate()),
       time: `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`,
@@ -49,7 +49,7 @@ export function EditLessonModal({
     },
     onSubmit: async ({ value }) => {
       const payload: {
-        scheduled_at?: string;
+        scheduled_at?: Date;
         duration_minutes?: number;
         location_type?: LocationType;
       } = {};
@@ -58,8 +58,9 @@ export function EditLessonModal({
       const newDuration = Number(value.duration_minutes);
       const newLocation = value.location_type || undefined;
 
-      if (`${dateValue.toString()}T${newTime}:00` !== lesson.scheduled_at) {
-        payload.scheduled_at = `${dateValue.toString()}T${newTime}:00`;
+      const scheduledAt = localInstant(dateValue, newTime);
+      if (scheduledAt.getTime() !== lesson.scheduled_at.getTime()) {
+        payload.scheduled_at = scheduledAt;
       }
       if (newDuration !== lesson.duration_minutes) {
         payload.duration_minutes = newDuration;

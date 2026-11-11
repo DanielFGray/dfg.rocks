@@ -368,7 +368,7 @@ function FamilyPage() {
                     <p className="text-sm text-muted dark:text-muted-dark">
                       Role: {inv.invited_role} &middot;
                       {inv.expires_at ? (
-                        <> Expires: {new Date(inv.expires_at).toLocaleDateString()}</>
+                        <> Expires: {inv.expires_at.toLocaleDateString()}</>
                       ) : (
                         " No expiry"
                       )}

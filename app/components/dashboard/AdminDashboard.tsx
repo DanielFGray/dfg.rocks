@@ -27,7 +27,7 @@ export function AdminDashboard({
 
   // Today's lessons sorted by time
   const todayScheduled = [...todayLessons].sort(
-    (a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime(),
+    (a, b) => a.scheduled_at.getTime() - b.scheduled_at.getTime(),
   );
 
   // Week stats
@@ -196,7 +196,7 @@ export function AdminDashboard({
                   const existing = groups.get(m.sender_id);
                   if (existing) {
                     existing.count++;
-                    if (new Date(m.created_at) > new Date(existing.latest.created_at)) {
+                    if (m.created_at > existing.latest.created_at) {
                       existing.latest = m;
                     }
                   } else {
@@ -227,7 +227,7 @@ export function AdminDashboard({
                           </p>
                         </div>
                         <span className="ml-3 shrink-0 text-xs text-muted dark:text-muted-dark">
-                          {new Date(g.latest.created_at).toLocaleDateString("en-US", {
+                          {g.latest.created_at.toLocaleDateString("en-US", {
                             month: "short",
                             day: "numeric",
                           })}

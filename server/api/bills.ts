@@ -4,15 +4,8 @@ import { Contract } from "../../shared/httpApi.js";
 import { CurrentSession } from "../../shared/api/guards.js";
 import { HttpError } from "../pgErrors.js";
 import { BillingLedgerService } from "../services/billingLedgerService.js";
-import { type Selectable } from "kysely";
-import { type AppPublicBillLineItems } from "../../generated/db.js";
 import { adaptAdminErrors } from "../httpApiErrors.js";
-import {
-  serializeBillingDate,
-  serializeBillResponse,
-  serializeAdjustment,
-  mapBillDetail,
-} from "./billingResponses.js";
+import { serializeBillResponse, serializeAdjustment, mapBillDetail } from "./billingResponses.js";
 
 export const BillsAdminApiGroupLive = HttpApiBuilder.group(Contract, "billsAdmin", (handlers) =>
   handlers
@@ -23,10 +16,7 @@ export const BillsAdminApiGroupLive = HttpApiBuilder.group(Contract, "billsAdmin
         const bills = yield* BillingLedgerService.use((billingLedgerService) =>
           billingLedgerService.listLessonBills(auth.session.id, query.month),
         );
-        return bills.map((bill) => ({
-          ...bill,
-          scheduled_at: bill.scheduled_at.toISOString(),
-        }));
+        return bills;
       }, adaptAdminErrors),
     )
     .handle(
@@ -62,16 +52,12 @@ export const BillsAdminApiGroupLive = HttpApiBuilder.group(Contract, "billsAdmin
         const lineItems = yield* BillingLedgerService.use((billingLedgerService) =>
           billingLedgerService.billLineItems(auth.session.id, bill.id),
         );
-        const result = {
+        return {
           ...serializeBillResponse(bill),
-          line_items: lineItems.map((li: Selectable<AppPublicBillLineItems>) => ({
-            ...li,
-            created_at: serializeBillingDate(li.created_at)!,
-          })),
+          line_items: lineItems,
           adjustments: [],
           credit_applications: [],
         };
-        return JSON.parse(JSON.stringify(result));
       }, adaptAdminErrors),
     )
     .handle(

@@ -20,7 +20,6 @@ import {
   serializeCourseDetail,
   serializeLibraryMaterial,
 } from "../../../shared/responseMappers.js";
-import { toServerFunctionPayload } from "../../lib/serverFunctionPayload.js";
 import { requireSession } from "../../lib/sessionGuards.server.js";
 import { Input } from "../../components/ui/Input.js";
 import { Button } from "../../components/ui/Button.js";
@@ -45,10 +44,10 @@ const getModuleEditPageData = createServerFn({ method: "GET" })
             authenticatedRouteService.library(session.session.id, { limit: 1000, offset: 0 }),
           ),
         ]);
-        return toServerFunctionPayload({
+        return {
           course: serializeCourseDetail(course),
           allMaterials: allMaterials.map(serializeLibraryMaterial),
-        }) satisfies ModuleEditPageData;
+        } satisfies ModuleEditPageData;
       }),
     ),
   );
@@ -67,7 +66,7 @@ function ModuleEditPage() {
   const navigate = useNavigate();
   const router = useRouter();
   const queryClient = useQueryClient();
-  const { course, allMaterials } = Route.useLoaderData() as ModuleEditPageData;
+  const { course, allMaterials } = Route.useLoaderData();
 
   const mod = course.modules.find((m: ModuleWithMaterials) => m.id === moduleId);
 

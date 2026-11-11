@@ -15,7 +15,7 @@ import { getErrorMessage } from "../../lib/errors.js";
 import { runServerEffect } from "../../lib/serverEffect.js";
 import { AuthenticatedRouteService } from "../../../server/services/authenticatedRouteService.js";
 import { serializeLesson, serializeLessonNote } from "../../../shared/responseMappers.js";
-import { toServerFunctionPayload } from "../../lib/serverFunctionPayload.js";
+import { formatDateTime } from "../../components/lessons/helpers.js";
 import { requireSession, resolveEffectiveStudent } from "../../lib/sessionGuards.server.js";
 
 type MyLessonsPageData = {
@@ -37,10 +37,10 @@ const getMyLessonsPageData = createServerFn({ method: "GET" }).handler(() =>
         authSvc.myLessonNotesList(session.session.id, { limit: 100, offset: 0 }, filterStudentId),
       ]);
 
-      return toServerFunctionPayload({
+      return {
         lessons: lessons.map(serializeLesson),
         notes: notes.map(serializeLessonNote),
-      }) satisfies MyLessonsPageData;
+      } satisfies MyLessonsPageData;
     }),
   ),
 );
@@ -81,26 +81,13 @@ const locationLabel: Record<string, string> = {
   online: "Online",
 };
 
-function formatDateTime(iso: string): string {
-  const d = new Date(iso);
-  return d.toLocaleDateString("en-US", {
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
-}
-
-function toLocalDateTimeInput(iso: string): string {
-  const date = new Date(iso);
+function toLocalDateTimeInput(date: Date): string {
   const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
   return local.toISOString().slice(0, 16);
 }
 
 function isFutureScheduledLesson(lesson: Lesson): boolean {
-  return lesson.status === "scheduled" && new Date(lesson.scheduled_at).getTime() > Date.now();
+  return lesson.status === "scheduled" && lesson.scheduled_at.getTime() > Date.now();
 }
 
 function formatMoney(amountCents: number): string {
@@ -215,7 +202,7 @@ function MyLessonsPage() {
   const [cancellationReason, setCancellationReason] = useState("");
   const [newScheduledAt, setNewScheduledAt] = useState("");
   const [rescheduleValidationError, setRescheduleValidationError] = useState<string | null>(null);
-  const { lessons, notes } = Route.useLoaderData() as MyLessonsPageData;
+  const { lessons, notes } = Route.useLoaderData();
 
   const policyMutation = useMutation({
     mutationFn: (lessonId: string) =>
@@ -239,7 +226,7 @@ function MyLessonsPage() {
   });
 
   const rescheduleMutation = useMutation({
-    mutationFn: ({ lessonId, scheduledAt }: { lessonId: string; scheduledAt: string }) =>
+    mutationFn: ({ lessonId, scheduledAt }: { lessonId: string; scheduledAt: Date }) =>
       Effect.runPromise(
         api.lessons.rescheduleMyLesson({
           params: { id: lessonId },
@@ -472,7 +459,7 @@ function MyLessonsPage() {
             setRescheduleValidationError(null);
             rescheduleMutation.mutate({
               lessonId: rescheduleTarget.id,
-              scheduledAt: parsedDate.toISOString(),
+              scheduledAt: parsedDate,
             });
           }}
         >
@@ -483,7 +470,7 @@ function MyLessonsPage() {
               name="new_scheduled_at"
               data-testid="new-lesson-date-time"
               required
-              min={toLocalDateTimeInput(new Date().toISOString())}
+              min={toLocalDateTimeInput(new Date())}
               value={newScheduledAt}
               onChange={(event) => {
                 setNewScheduledAt(event.target.value);

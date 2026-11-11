@@ -7,7 +7,7 @@ import { getCookie } from "@tanstack/react-start/server";
 import { requireSession } from "../../lib/sessionGuards.server.js";
 import { api } from "../../lib/api.js";
 import { useAuth } from "../../lib/hooks/useAuth.js";
-import type { LocationType } from "../../../shared/schemas.js";
+import type { LocationType, TimeSlot } from "../../../shared/schemas.js";
 import { runServerEffect } from "../../lib/serverEffect.js";
 import { GoogleCalendarService } from "../../../server/services/googleCalendarService.js";
 import { Button } from "../../components/ui/Button.js";
@@ -83,8 +83,8 @@ const locationOptions = [
  * Helpers
  * --------------------------------------------------------------------------- */
 
-function formatTime(iso: string): string {
-  return new Date(iso).toLocaleTimeString("en-US", {
+function formatTime(value: Date): string {
+  return value.toLocaleTimeString("en-US", {
     hour: "numeric",
     minute: "2-digit",
   });
@@ -98,16 +98,16 @@ function formatWeekLabel(dateStr: string): string {
   });
 }
 
-function formatDayLabel(iso: string): string {
-  return new Date(iso).toLocaleDateString("en-US", {
+function formatDayLabel(value: Date): string {
+  return value.toLocaleDateString("en-US", {
     weekday: "short",
     month: "short",
     day: "numeric",
   });
 }
 
-function formatConfirmDate(iso: string): string {
-  return new Date(iso).toLocaleDateString("en-US", {
+function formatConfirmDate(value: Date): string {
+  return value.toLocaleDateString("en-US", {
     weekday: "long",
     month: "long",
     day: "numeric",
@@ -128,10 +128,7 @@ function BookLessonPage() {
   const [selectedStudentId, setSelectedStudentId] = useState(
     activeStudentId ?? (isParent ? familyStudents[0]?.id : user?.id) ?? "",
   );
-  const [bookingSlot, setBookingSlot] = useState<{
-    start: string;
-    end: string;
-  } | null>(null);
+  const [bookingSlot, setBookingSlot] = useState<TimeSlot | null>(null);
 
   // Reset the booking when the active student changes. Only the id is compared, so an
   // auth refetch that returns a new familyStudents array does not clear a chosen slot.
@@ -143,7 +140,7 @@ function BookLessonPage() {
   }
 
   const bookMutation = useMutation({
-    mutationFn: (slot: { start: string; end: string }) =>
+    mutationFn: (slot: TimeSlot) =>
       Effect.runPromise(
         api.lessons.bookLesson({
           payload: {
@@ -162,9 +159,9 @@ function BookLessonPage() {
   });
 
   // Group slots by day for display
-  const slotsByDay = new Map<string, Array<{ start: string; end: string }>>();
+  const slotsByDay = new Map<string, Array<TimeSlot>>();
   if (slots) {
-    slots.forEach((slot: { start: string; end: string }) => {
+    slots.forEach((slot) => {
       const dayKey = formatDayLabel(slot.start);
       const existing = slotsByDay.get(dayKey);
       if (existing) {
@@ -294,7 +291,7 @@ function BookLessonPage() {
               <div className="flex flex-wrap gap-2">
                 {daySlots.map((slot) => (
                   <button
-                    key={slot.start}
+                    key={slot.start.toISOString()}
                     type="button"
                     onClick={() => setBookingSlot(slot)}
                     className="cursor-pointer rounded-lg border border-overlay/10 bg-overlay/5 px-4 py-2 text-sm font-medium text-primary transition-colors hover:border-accent/50 hover:bg-accent/20 dark:border-overlay-dark/10 dark:bg-overlay-dark/5 dark:text-primary-dark"

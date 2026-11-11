@@ -195,7 +195,6 @@ export class PublicRouteService extends Context.Service<PublicRouteService>()(
             invited_role: invitation.invited_role
               ? S.decodeUnknownSync(FamilyInviteRole)(invitation.invited_role)
               : undefined,
-            created_at: family.created_at.toISOString(),
           };
         }),
 

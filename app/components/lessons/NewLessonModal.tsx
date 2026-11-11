@@ -8,15 +8,11 @@ import { TimeField } from "../ui/TimeField.js";
 import { Select } from "../ui/Select.js";
 import { Button } from "../ui/Button.js";
 import type { LocationType } from "../../../shared/schemas.js";
-import { requiredValidator, durationOptions, locationOptions } from "./helpers.js";
+import { localInstant, requiredValidator, durationOptions, locationOptions } from "./helpers.js";
 
 const requiredLocationValidator = {
   onChange: ({ value }: { value: "" | LocationType }) => (value ? undefined : "Required"),
 };
-
-function toLocalDatetime(date: CalendarDate, time: string): string {
-  return `${date.toString()}T${time}:00`;
-}
 
 export function NewLessonModal({
   open,
@@ -29,7 +25,7 @@ export function NewLessonModal({
   studentOptions: { value: string; label: string }[];
   onSubmit: (value: {
     student_id: string;
-    scheduled_at: string;
+    scheduled_at: Date;
     duration_minutes: number;
     location_type: LocationType;
   }) => void;
@@ -58,7 +54,7 @@ export function NewLessonModal({
 
       onSubmit({
         student_id: value.student_id,
-        scheduled_at: toLocalDatetime(dateValue ?? defaultValue.date, value.time),
+        scheduled_at: localInstant(dateValue ?? defaultValue.date, value.time),
         duration_minutes: Number(value.duration_minutes),
         location_type: value.location_type,
       });

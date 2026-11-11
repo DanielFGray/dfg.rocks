@@ -11,18 +11,13 @@ import * as HttpClient from "effect/http/HttpClient";
 import * as HttpBody from "effect/http/HttpBody";
 import { PgRootDB } from "../db.js";
 import { HttpError } from "../pgErrors.js";
-import { WorkingHours } from "../../shared/schemas.js";
+import { type TimeSlot, WorkingHours } from "../../shared/schemas.js";
 import { defaultWorkingHours } from "../../shared/workingHours.js";
 
 // Types
 interface GcalEventTime {
   dateTime?: string;
   date?: string;
-}
-
-export interface TimeSlot {
-  start: string; // ISO datetime
-  end: string; // ISO datetime
 }
 
 interface GcalEvent {
@@ -295,8 +290,8 @@ export class GoogleCalendarService extends Context.Service<GoogleCalendarService
           for (const b of busy) {
             while (cursor + durationMs <= b.s) {
               slots.push({
-                start: new Date(cursor).toISOString(),
-                end: new Date(cursor + durationMs).toISOString(),
+                start: new Date(cursor),
+                end: new Date(cursor + durationMs),
               });
               cursor += durationMs;
             }
@@ -304,8 +299,8 @@ export class GoogleCalendarService extends Context.Service<GoogleCalendarService
           }
           while (cursor + durationMs <= windowEnd) {
             slots.push({
-              start: new Date(cursor).toISOString(),
-              end: new Date(cursor + durationMs).toISOString(),
+              start: new Date(cursor),
+              end: new Date(cursor + durationMs),
             });
             cursor += durationMs;
           }

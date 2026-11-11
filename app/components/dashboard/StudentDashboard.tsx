@@ -42,14 +42,14 @@ export function StudentDashboard({
   // Next upcoming lessons
   const now = new Date();
   const upcoming = lessons
-    .filter((l) => new Date(l.scheduled_at) > now)
-    .sort((a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime());
+    .filter((l) => l.scheduled_at > now)
+    .sort((a, b) => a.scheduled_at.getTime() - b.scheduled_at.getTime());
 
   const { data: logs = [] } = useQuery(practiceLogsQuery(effectiveStudentId));
   const materialsById = new Map(assignments.map((a) => [a.id, a]));
 
-  function relativeTime(iso: string): string {
-    const diff = Date.now() - new Date(iso).getTime();
+  function relativeTime(value: Date): string {
+    const diff = Date.now() - value.getTime();
     const mins = Math.floor(diff / 60000);
     if (mins < 1) return "just now";
     if (mins < 60) return `${mins} min ago`;
@@ -58,7 +58,7 @@ export function StudentDashboard({
     const days = Math.floor(hours / 24);
     if (days === 1) return "yesterday";
     if (days < 7) return `${days} days ago`;
-    return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+    return value.toLocaleDateString("en-US", { month: "short", day: "numeric" });
   }
 
   return (
@@ -88,7 +88,7 @@ export function StudentDashboard({
                     {m.body}
                   </p>
                   <p className="mt-1 text-xs text-muted dark:text-muted-dark">
-                    {new Date(m.created_at).toLocaleDateString("en-US", {
+                    {m.created_at.toLocaleDateString("en-US", {
                       month: "short",
                       day: "numeric",
                       hour: "numeric",
@@ -217,14 +217,14 @@ export function StudentDashboard({
             <div className="flex items-center justify-between">
               <div>
                 <p className="font-medium text-primary dark:text-primary-dark">
-                  {new Date(upcoming[0]!.scheduled_at).toLocaleDateString("en-US", {
+                  {upcoming[0]!.scheduled_at.toLocaleDateString("en-US", {
                     weekday: "long",
                     month: "long",
                     day: "numeric",
                   })}
                 </p>
                 <p className="text-sm text-muted dark:text-muted-dark">
-                  {new Date(upcoming[0]!.scheduled_at).toLocaleTimeString("en-US", {
+                  {upcoming[0]!.scheduled_at.toLocaleTimeString("en-US", {
                     hour: "numeric",
                     minute: "2-digit",
                   })}

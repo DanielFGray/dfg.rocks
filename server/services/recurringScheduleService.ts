@@ -86,10 +86,6 @@ function dateOnly(value: Date | string): string {
   return value instanceof Date ? value.toISOString().slice(0, 10) : value;
 }
 
-function iso(value: Date | string): string {
-  return value instanceof Date ? value.toISOString() : new Date(value).toISOString();
-}
-
 export function serializeRecurringSchedule(row: {
   id: string;
   student_rate_id: string;
@@ -113,17 +109,15 @@ export function serializeMonthlyPayment(row: {
   student_id: string;
   billing_month: Date | string;
   amount_cents: number;
-  paid_at: Date | string;
+  paid_at: Date;
   notes: string | null;
   generation_status: PaymentGenerationStatus;
   generation_error: string | null;
-  generated_at: Date | string | null;
+  generated_at: Date | null;
 }): MonthlyPayment {
   return {
     ...row,
     billing_month: dateOnly(row.billing_month),
-    paid_at: iso(row.paid_at),
-    generated_at: row.generated_at === null ? null : iso(row.generated_at),
   };
 }
 
@@ -424,7 +418,7 @@ export class RecurringScheduleService extends Context.Service<RecurringScheduleS
                 .pipe(Effect.head);
               if (
                 payment.amount_cents !== input.amountCents ||
-                iso(payment.paid_at) !== input.paidAt.toISOString() ||
+                payment.paid_at.getTime() !== input.paidAt.getTime() ||
                 (payment.notes ?? null) !== input.notes
               ) {
                 return yield* new HttpError(

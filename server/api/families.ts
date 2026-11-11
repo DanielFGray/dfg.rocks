@@ -128,10 +128,7 @@ export const FamiliesAdminApiGroupLive = HttpApiBuilder.group(
           if (!family) {
             return yield* new HttpError(500, "Failed to create family");
           }
-          return {
-            ...family,
-            created_at: family.created_at.toISOString(),
-          };
+          return family;
         }, adaptAdminErrors),
       )
       .handle(
@@ -141,10 +138,7 @@ export const FamiliesAdminApiGroupLive = HttpApiBuilder.group(
           const rows = yield* AdminRouteService.use((adminRouteService) =>
             adminRouteService.listFamilies(auth.session.id),
           );
-          return rows.map((row) => ({
-            ...row,
-            created_at: row.created_at.toISOString(),
-          }));
+          return rows;
         }, adaptAdminErrors),
       )
       .handle(

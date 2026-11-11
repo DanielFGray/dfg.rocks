@@ -14,7 +14,7 @@ export function groupByPartner(messages: readonly Message[], myId: string): Map<
   });
   // Sort each thread oldest-first for display
   groups.forEach((thread) => {
-    thread.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+    thread.sort((a, b) => a.created_at.getTime() - b.created_at.getTime());
   });
   return groups;
 }
@@ -25,8 +25,7 @@ export function unreadCount(thread: readonly Message[], myId: string): number {
 }
 
 /** Format a timestamp for display. */
-export function formatTime(iso: string): string {
-  const d = new Date(iso);
+export function formatTime(d: Date): string {
   const now = new Date();
   const sameDay =
     d.getFullYear() === now.getFullYear() &&

@@ -25,7 +25,6 @@ import {
   normalizeStudents,
 } from "../../../shared/responseMappers.js";
 import { requireAdminSession } from "../../lib/sessionGuards.server.js";
-import { toServerFunctionPayload } from "../../lib/serverFunctionPayload.js";
 
 const getLessonsPageData = createServerFn({ method: "GET" }).handler(() =>
   runServerEffect(
@@ -40,10 +39,10 @@ const getLessonsPageData = createServerFn({ method: "GET" }).handler(() =>
         ),
       ]);
 
-      return toServerFunctionPayload({
+      return {
         lessons: lessons.map(serializeLesson),
         students: normalizeStudents(students),
-      }) as {
+      } as {
         lessons: ReturnType<typeof serializeLesson>[];
         students: User[];
       };
@@ -107,7 +106,7 @@ function LessonsPage() {
   const createLessonMutation = useMutation({
     mutationFn: (payload: {
       student_id: string;
-      scheduled_at: string;
+      scheduled_at: Date;
       duration_minutes: number;
       location_type: LocationType;
     }) => Effect.runPromise(api.lessonsAdmin.createLesson({ payload })),

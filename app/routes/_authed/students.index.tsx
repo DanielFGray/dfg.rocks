@@ -11,7 +11,6 @@ import { fieldError } from "../../lib/form.js";
 import { runServerEffect } from "../../lib/serverEffect.js";
 import { AdminRouteService } from "../../../server/services/adminRouteService.js";
 import { normalizeStudents, serializeFamily } from "../../../shared/responseMappers.js";
-import { toServerFunctionPayload } from "../../lib/serverFunctionPayload.js";
 import { requireAdminSession } from "../../lib/sessionGuards.server.js";
 import { FamilyInviteRole, type Family } from "../../../shared/schemas.js";
 import { Button } from "../../components/ui/Button.js";
@@ -41,10 +40,10 @@ const getStudentsPageData = createServerFn({ method: "GET" }).handler(() =>
           adminRouteService.listFamilies(session.session.id),
         ),
       ]);
-      return toServerFunctionPayload({
+      return {
         students: normalizeStudents(students),
         families: families.map(serializeFamily),
-      }) satisfies StudentsPageData;
+      } satisfies StudentsPageData;
     }),
   ),
 );
@@ -63,7 +62,7 @@ export const Route = createFileRoute("/_authed/students/")({
 function StudentsPage() {
   const queryClient = useQueryClient();
   const router = useRouter();
-  const { students, families } = Route.useLoaderData() as StudentsPageData;
+  const { students, families } = Route.useLoaderData();
 
   const [formOpen, setFormOpen] = useState(false);
   const [qrOpen, setQrOpen] = useState(false);

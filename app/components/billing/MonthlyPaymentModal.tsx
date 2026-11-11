@@ -50,7 +50,7 @@ export function MonthlyPaymentModal({
           payload: {
             billing_month: `${billingMonth}-01`,
             amount_cents: Math.round(Number(amount) * 100),
-            paid_at: new Date(paidAt).toISOString(),
+            paid_at: new Date(paidAt),
             notes: notes.trim() || null,
           },
         }),

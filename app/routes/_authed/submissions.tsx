@@ -5,10 +5,8 @@ import { useMutation } from "@tanstack/react-query";
 import { createServerFn } from "@tanstack/react-start";
 import { getCookie } from "@tanstack/react-start/server";
 import { requireSession } from "../../lib/sessionGuards.server.js";
-import { toServerFunctionPayload } from "../../lib/serverFunctionPayload.js";
 import { api } from "../../lib/api.js";
 import type { Submission } from "../../../shared/schemas.js";
-import { toIsoString } from "../../../shared/responseMappers.js";
 import { runServerEffect } from "../../lib/serverEffect.js";
 import { AdminRouteService } from "../../../server/services/adminRouteService.js";
 import { HttpError } from "../../../server/pgErrors.js";
@@ -27,14 +25,9 @@ const getSubmissionsPageData = createServerFn({ method: "GET" }).handler(() =>
       if (session.user.role !== "admin") {
         throw new HttpError(403, "Forbidden");
       }
-      return toServerFunctionPayload(
-        (yield* AdminRouteService.use((adminRouteService) =>
-          adminRouteService.listSubmissions(session.session.id, 5000, 0),
-        )).map((submission) => ({
-          ...submission,
-          created_at: toIsoString(submission.created_at),
-        })),
-      ) satisfies Submission[];
+      return (yield* AdminRouteService.use((adminRouteService) =>
+        adminRouteService.listSubmissions(session.session.id, 5000, 0),
+      )) satisfies ReadonlyArray<Submission>;
     }),
   ),
 );
@@ -56,7 +49,7 @@ function SubmissionsPage() {
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const sorted = [...allSubmissions].sort(
-    (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+    (a, b) => b.created_at.getTime() - a.created_at.getTime(),
   );
 
   const total = sorted.length;
@@ -168,14 +161,14 @@ function SubmissionsPage() {
 
                   <div className="flex shrink-0 flex-col items-end gap-2">
                     <time
-                      dateTime={s.created_at}
+                      dateTime={s.created_at.toISOString()}
                       className="text-xs whitespace-nowrap text-muted dark:text-muted-dark"
                     >
-                      {new Date(s.created_at).toLocaleDateString("en-US", {
+                      {s.created_at.toLocaleDateString("en-US", {
                         month: "short",
                         day: "numeric",
                         year:
-                          new Date(s.created_at).getFullYear() !== new Date().getFullYear()
+                          s.created_at.getFullYear() !== new Date().getFullYear()
                             ? "numeric"
                             : undefined,
                       })}

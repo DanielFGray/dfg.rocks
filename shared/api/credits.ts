@@ -10,7 +10,7 @@ const CreateCreditPayload = S.Struct({
   student_id: S.optional(S.String),
   amount_cents: S.Number,
   reason: S.String.pipe(S.check(S.isMinLength(1))),
-  expires_at: S.optional(S.String),
+  expires_at: S.optional(S.DateFromString),
 });
 
 const ApplyCreditPayload = S.Struct({

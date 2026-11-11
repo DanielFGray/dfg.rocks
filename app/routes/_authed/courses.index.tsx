@@ -15,7 +15,6 @@ import { CourseFormModal } from "../../components/CourseFormModal.js";
 import { Main } from "../../components/ui/Container.js";
 import { runServerEffect } from "../../lib/serverEffect.js";
 import { serializeCourse } from "../../../shared/responseMappers.js";
-import { toServerFunctionPayload } from "../../lib/serverFunctionPayload.js";
 import { requireSession, resolveEffectiveStudent } from "../../lib/sessionGuards.server.js";
 import { AuthenticatedRouteService } from "../../../server/services/authenticatedRouteService.js";
 
@@ -30,7 +29,7 @@ const getCoursesPageData = createServerFn({ method: "GET" }).handler(() =>
       const data = yield* AuthenticatedRouteService.use((authenticatedRouteService) =>
         authenticatedRouteService.courses(session.session.id, filterStudentId),
       );
-      return toServerFunctionPayload(data.map(serializeCourse)) satisfies CoursesPageData;
+      return data.map(serializeCourse) satisfies CoursesPageData;
     }),
   ),
 );
@@ -44,7 +43,7 @@ export const Route = createFileRoute("/_authed/courses/")({
 
 function CoursesPage() {
   const { isAdmin } = useAuth();
-  const courses = Route.useLoaderData() as CoursesPageData;
+  const courses = Route.useLoaderData();
 
   return isAdmin ? <AdminCourses courses={courses} /> : <StudentCourses courses={courses} />;
 }

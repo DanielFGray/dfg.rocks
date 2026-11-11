@@ -46,10 +46,7 @@ export const AccountsApiGroupLive = HttpApiBuilder.group(Contract, "accounts", (
         const rows = yield* AuthenticatedRouteService.use((authenticatedRouteService) =>
           authenticatedRouteService.myEmails(auth.session.id),
         );
-        return rows.map((row) => ({
-          ...row,
-          created_at: row.created_at.toISOString(),
-        }));
+        return rows;
       }, adaptSignedInErrors),
     )
     .handle(
@@ -59,10 +56,7 @@ export const AccountsApiGroupLive = HttpApiBuilder.group(Contract, "accounts", (
         const row = yield* AuthenticatedRouteService.use((authenticatedRouteService) =>
           authenticatedRouteService.addMyEmail(auth.session.id, payload.email),
         );
-        return {
-          ...row,
-          created_at: row.created_at.toISOString(),
-        };
+        return row;
       }, adaptSignedInErrors),
     )
     .handle(
@@ -82,10 +76,7 @@ export const AccountsApiGroupLive = HttpApiBuilder.group(Contract, "accounts", (
         const row = yield* AuthenticatedRouteService.use((authenticatedRouteService) =>
           authenticatedRouteService.makePrimaryEmail(auth.session.id, params.id),
         );
-        return {
-          ...row,
-          created_at: row.created_at.toISOString(),
-        };
+        return row;
       }, adaptSignedInErrors),
     )
     .handle(

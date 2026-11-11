@@ -8,8 +8,8 @@ import { requireSession } from "../../lib/sessionGuards.server.js";
 import { api } from "../../lib/api.js";
 import type { Material } from "../../../shared/schemas.js";
 import { runServerEffect } from "../../lib/serverEffect.js";
+import { serializeLibraryMaterial } from "../../../shared/responseMappers.js";
 import { AuthenticatedRouteService } from "../../../server/services/authenticatedRouteService.js";
-import { toServerFunctionPayload } from "../../lib/serverFunctionPayload.js";
 import { Button } from "../../components/ui/Button.js";
 import { Modal } from "../../components/ui/Modal.js";
 import { ConfirmDialog } from "../../components/ui/ConfirmDialog.js";
@@ -27,13 +27,13 @@ const getLibraryPageData = createServerFn({ method: "GET" }).handler(() =>
       if (session.user.role !== "admin") {
         return null;
       }
-      const data = yield* AuthenticatedRouteService.use((authenticatedRouteService) =>
+      const rows = yield* AuthenticatedRouteService.use((authenticatedRouteService) =>
         authenticatedRouteService.library(session.session.id, {
           limit: 1000,
           offset: 0,
         }),
       );
-      return toServerFunctionPayload(data) as Material[];
+      return rows.map(serializeLibraryMaterial);
     }),
   ),
 );

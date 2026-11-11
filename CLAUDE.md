@@ -140,7 +140,7 @@ RLS policies derive user context from `current_setting('my.session_id')` joined 
 - **Only `app_private` schema operations** (session creation, auth functions, background workers) use `rootDb` directly.
 - Even admin CRUD on `app_public` tables goes through `withAuthContext` — RLS confirms admin role via `current_user_role()`.
 - **`withAuthContext` callback signature**: `<A, E, R>(sessionId, (db) => Effect<A, E, R>)` — the `<R>` generic allows callbacks with environment requirements (e.g., `fileService.ts` which nests `withAuthContext` calls).
-- **Server function payloads**: `createServerFn` return values go through `toServerFunctionPayload` (a JSON round trip) in `app/lib/serverFunctionPayload.ts`.
+- **Server function payloads**: a `createServerFn` returns the contract types directly. TanStack Start serializes them with Seroval, so a Date arrives as a Date.
 
 ## Known Issues
 

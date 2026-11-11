@@ -8,7 +8,6 @@ import { AuthenticatedRouteService } from "../services/authenticatedRouteService
 import { GoogleCalendarService } from "../services/googleCalendarService.js";
 import { resolveEffectiveStudent } from "../services/sessionService.js";
 import { AdminRouteService } from "../services/adminRouteService.js";
-import { type LocationType } from "../../shared/schemas.js";
 import { adaptSignedInErrors, adaptAdminErrors } from "../httpApiErrors.js";
 
 export const LessonsApiGroupLive = HttpApiBuilder.group(Contract, "lessons", (handlers) =>
@@ -75,7 +74,7 @@ export const LessonsApiGroupLive = HttpApiBuilder.group(Contract, "lessons", (ha
             sessionId: auth.session.id,
             studentId: effective.studentId,
             lessonId: params.id,
-            scheduledAt: new Date(payload.scheduled_at),
+            scheduledAt: payload.scheduled_at,
           }),
         );
         return serializeLesson(lesson);
@@ -100,8 +99,6 @@ export const LessonsApiGroupLive = HttpApiBuilder.group(Contract, "lessons", (ha
         return rows.map((row) => ({
           ...row,
           material_ids: row.material_ids ?? null,
-          created_at: row.created_at.toISOString(),
-          updated_at: row.updated_at.toISOString(),
         }));
       }, adaptSignedInErrors),
     )
@@ -130,7 +127,7 @@ export const LessonsApiGroupLive = HttpApiBuilder.group(Contract, "lessons", (ha
           authenticatedRouteService.bookLesson({
             sessionId: auth.session.id,
             userId: studentId,
-            scheduledAt: new Date(payload.scheduled_at),
+            scheduledAt: payload.scheduled_at,
             durationMinutes: payload.duration_minutes,
             locationType: payload.location_type,
           }),
@@ -150,7 +147,7 @@ export const LessonsAdminApiGroupLive = HttpApiBuilder.group(Contract, "lessonsA
           adminRouteService.createLesson({
             sessionId: auth.session.id,
             studentId: payload.student_id,
-            scheduledAt: new Date(payload.scheduled_at),
+            scheduledAt: payload.scheduled_at,
             durationMinutes: payload.duration_minutes,
             locationType: payload.location_type,
             gcalEventId: null,
@@ -163,18 +160,11 @@ export const LessonsAdminApiGroupLive = HttpApiBuilder.group(Contract, "lessonsA
       "updateLesson",
       Effect.fnUntraced(function* ({ params, payload }) {
         const auth = yield* CurrentSession;
-        const updates: Record<string, unknown> = {};
-        const scheduledAt = payload.scheduled_at;
-        const durationMinutes = payload.duration_minutes;
-        const locationType = payload.location_type;
-        if (scheduledAt !== undefined) updates.scheduled_at = new Date(scheduledAt);
-        if (durationMinutes !== undefined) updates.duration_minutes = durationMinutes;
-        if (locationType !== undefined) updates.location_type = locationType;
         const lesson = yield* AdminRouteService.use((adminRouteService) =>
           adminRouteService.updateLesson(auth.session.id, params.id, {
-            scheduledAt: updates.scheduled_at as Date | undefined,
-            durationMinutes: updates.duration_minutes as number | undefined,
-            locationType: updates.location_type as LocationType | undefined,
+            scheduledAt: payload.scheduled_at,
+            durationMinutes: payload.duration_minutes,
+            locationType: payload.location_type,
           }),
         );
         if (!lesson) {

@@ -31,7 +31,7 @@ const AvailableSlotsQuery = S.Struct({
 });
 
 const BookLessonPayload = S.Struct({
-  scheduled_at: S.String,
+  scheduled_at: S.DateFromString,
   duration_minutes: S.Number,
   location_type: LocationType,
   student_id: S.optional(S.String),
@@ -39,13 +39,13 @@ const BookLessonPayload = S.Struct({
 
 const CreateLessonPayload = S.Struct({
   student_id: S.String,
-  scheduled_at: S.String,
+  scheduled_at: S.DateFromString,
   duration_minutes: S.Number,
   location_type: LocationType,
 });
 
 const UpdateLessonPayload = S.Struct({
-  scheduled_at: S.optional(S.String),
+  scheduled_at: S.optional(S.DateFromString),
   duration_minutes: S.optional(S.Number),
   location_type: S.optional(LocationType),
 });
@@ -73,7 +73,7 @@ export const CancelLessonPayload = S.Struct({
 });
 
 export const RescheduleLessonPayload = S.Struct({
-  scheduled_at: S.String,
+  scheduled_at: S.DateFromString,
 });
 
 export const SaveCancellationPolicySettingsPayload = S.Struct({

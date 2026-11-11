@@ -31,14 +31,6 @@ const testimonialRoleLabels = {
   teacher: "Teacher",
 } as const;
 
-export function toIsoString(value: Date | string): string {
-  return value instanceof Date ? value.toISOString() : value;
-}
-
-export function toIsoStringOrNull(value: Date | string | null): string | null {
-  return value ? toIsoString(value) : null;
-}
-
 export function serializeMaterial<
   T extends {
     id: string;
@@ -122,42 +114,35 @@ export function serializeFamily(family: {
   slug: string;
   name: string;
   description: string | null;
-  created_at: Date | string;
+  created_at: Date;
 }): Family {
-  return S.decodeUnknownSync(Schemas.Family)({
-    ...family,
-    created_at: toIsoString(family.created_at),
-  });
+  return S.decodeUnknownSync(S.toType(Schemas.Family))(family);
 }
 
 export function serializeLesson(lesson: {
   id: string;
   student_id: string;
   gcal_event_id: string | null;
-  scheduled_at: Date | string;
+  scheduled_at: Date;
   duration_minutes: number;
   location_type: Lesson["location_type"];
   status: Lesson["status"];
   cancellation_reason: string | null;
-  cancelled_at: Date | string | null;
-  completed_at: Date | string | null;
+  cancelled_at: Date | null;
+  completed_at: Date | null;
   cancellation_fee_cents: number;
   remainder_due_cents: number;
   recurring_schedule_id?: string | null;
   recurrence_date?: Date | string | null;
-  created_at: Date | string;
+  created_at: Date;
 }): Lesson {
-  return S.decodeUnknownSync(Schemas.Lesson)({
+  return S.decodeUnknownSync(S.toType(Schemas.Lesson))({
     ...lesson,
-    scheduled_at: toIsoString(lesson.scheduled_at),
-    cancelled_at: toIsoStringOrNull(lesson.cancelled_at),
-    completed_at: toIsoStringOrNull(lesson.completed_at),
     recurring_schedule_id: lesson.recurring_schedule_id ?? null,
     recurrence_date:
       lesson.recurrence_date instanceof Date
         ? lesson.recurrence_date.toISOString().slice(0, 10)
         : (lesson.recurrence_date ?? null),
-    created_at: toIsoString(lesson.created_at),
   });
 }
 
@@ -170,14 +155,12 @@ export function serializeLessonNote(note: {
   notes: string | null;
   material_ids: unknown;
   draft: boolean;
-  created_at: Date | string;
-  updated_at: Date | string;
+  created_at: Date;
+  updated_at: Date;
 }): LessonNote {
-  return S.decodeUnknownSync(Schemas.LessonNote)({
+  return S.decodeUnknownSync(S.toType(Schemas.LessonNote))({
     ...note,
     material_ids: S.decodeUnknownSync(S.NullishOr(S.Array(S.String)))(note.material_ids),
-    created_at: toIsoString(note.created_at),
-    updated_at: toIsoString(note.updated_at),
   });
 }
 
@@ -187,12 +170,9 @@ export function serializeMessage(message: {
   recipient_id: string;
   body: string;
   is_read: boolean;
-  created_at: Date | string;
+  created_at: Date;
 }): Message {
-  return S.decodeUnknownSync(Schemas.Message)({
-    ...message,
-    created_at: toIsoString(message.created_at),
-  });
+  return S.decodeUnknownSync(S.toType(Schemas.Message))(message);
 }
 
 export function serializeUserEmail(email: {
@@ -200,12 +180,9 @@ export function serializeUserEmail(email: {
   email: string;
   is_verified: boolean;
   is_primary: boolean;
-  created_at: Date | string;
+  created_at: Date;
 }): UserEmail {
-  return S.decodeUnknownSync(Schemas.UserEmail)({
-    ...email,
-    created_at: toIsoString(email.created_at),
-  });
+  return S.decodeUnknownSync(S.toType(Schemas.UserEmail))(email);
 }
 
 export function serializeTestimonial(testimonial: {
@@ -216,18 +193,18 @@ export function serializeTestimonial(testimonial: {
   username: string;
   name: string | null;
   role: "admin" | "student" | "parent" | "teacher";
-  created_at: Date | string;
-  updated_at: Date | string;
+  created_at: Date;
+  updated_at: Date;
 }): Testimonial {
-  return S.decodeUnknownSync(Schemas.Testimonial)({
+  return S.decodeUnknownSync(S.toType(Schemas.Testimonial))({
     id: testimonial.id,
     user_id: testimonial.user_id,
     body: testimonial.body,
     display_name: testimonial.name?.trim() || testimonial.username,
     role_label: testimonialRoleLabels[testimonial.role],
     is_approved: testimonial.is_approved,
-    created_at: toIsoString(testimonial.created_at),
-    updated_at: toIsoString(testimonial.updated_at),
+    created_at: testimonial.created_at,
+    updated_at: testimonial.updated_at,
   });
 }
 

@@ -4,7 +4,7 @@ import { Contract } from "../../shared/httpApi.js";
 import { CurrentSession } from "../../shared/api/guards.js";
 import { BillingLedgerService } from "../services/billingLedgerService.js";
 import { adaptAdminErrors } from "../httpApiErrors.js";
-import { serializeCreditResponse, serializeCreditApplication } from "./billingResponses.js";
+import { serializeCreditApplication } from "./billingResponses.js";
 
 export const CreditsAdminApiGroupLive = HttpApiBuilder.group(Contract, "creditsAdmin", (handlers) =>
   handlers
@@ -21,7 +21,7 @@ export const CreditsAdminApiGroupLive = HttpApiBuilder.group(Contract, "creditsA
             expiresAt: payload.expires_at,
           }),
         );
-        return serializeCreditResponse(result);
+        return result;
       }, adaptAdminErrors),
     )
     .handle(

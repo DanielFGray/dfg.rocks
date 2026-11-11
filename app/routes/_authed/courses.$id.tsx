@@ -22,7 +22,6 @@ import { EmptyState } from "../../components/ui/EmptyState.js";
 import { Input } from "../../components/ui/Input.js";
 import { runServerEffect } from "../../lib/serverEffect.js";
 import { normalizeStudents, serializeCourseDetail } from "../../../shared/responseMappers.js";
-import { toServerFunctionPayload } from "../../lib/serverFunctionPayload.js";
 import { requireSession } from "../../lib/sessionGuards.server.js";
 import { AuthenticatedRouteService } from "../../../server/services/authenticatedRouteService.js";
 import { AdminRouteService } from "../../../server/services/adminRouteService.js";
@@ -44,11 +43,11 @@ const getCourseDetailData = createServerFn({ method: "GET" })
         );
 
         if (session.user.role !== "admin") {
-          return toServerFunctionPayload({
+          return {
             course: serializeCourseDetail(course),
             enrolledStudents: [],
             allStudents: [],
-          }) satisfies CourseDetailPageData;
+          } satisfies CourseDetailPageData;
         }
 
         const [enrolledStudents, allStudents] = yield* Effect.all([
@@ -60,11 +59,11 @@ const getCourseDetailData = createServerFn({ method: "GET" })
           ),
         ]);
 
-        return toServerFunctionPayload({
+        return {
           course: serializeCourseDetail(course),
           enrolledStudents: normalizeStudents(enrolledStudents),
           allStudents: normalizeStudents(allStudents),
-        }) satisfies CourseDetailPageData;
+        } satisfies CourseDetailPageData;
       }),
     ),
   );
@@ -85,7 +84,7 @@ function CourseDetailPage() {
   const navigate = useNavigate();
   const router = useRouter();
   const { isAdmin } = useAuth();
-  const { course, enrolledStudents, allStudents } = Route.useLoaderData() as CourseDetailPageData;
+  const { course, enrolledStudents, allStudents } = Route.useLoaderData();
 
   const enrolledIds = new Set((enrolledStudents ?? []).map((s: User) => s.id));
   const availableStudents = (allStudents ?? []).filter((s: User) => !enrolledIds.has(s.id));

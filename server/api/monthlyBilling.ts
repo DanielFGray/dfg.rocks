@@ -80,7 +80,7 @@ export const MonthlyBillingAdminApiGroupLive = HttpApiBuilder.group(
               studentId: params.studentId,
               billingMonth: payload.billing_month,
               amountCents: payload.amount_cents,
-              paidAt: new Date(payload.paid_at),
+              paidAt: payload.paid_at,
               notes: payload.notes ?? null,
             }),
           );
