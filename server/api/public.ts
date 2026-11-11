@@ -1,8 +1,7 @@
-import * as HttpApi from "effect/http-api/HttpApi";
 import * as HttpApiBuilder from "effect/http-api/HttpApiBuilder";
 import * as HttpServerResponse from "effect/http/HttpServerResponse";
 import { Config, Effect } from "effect";
-import { publicGroup } from "../../shared/httpApi.js";
+import { Contract } from "../../shared/httpApi.js";
 import { adaptHttpApiErrors } from "../httpApiErrors.js";
 import { HttpError } from "../pgErrors.js";
 import {
@@ -55,10 +54,8 @@ const fetchGoogleUserInfo = Effect.fnUntraced(function* (accessToken: string) {
   };
 });
 
-const publicApi = HttpApi.make("dfg").add(publicGroup);
-
 export function makePublicLayer() {
-  return HttpApiBuilder.group(publicApi, "public", (handlers) =>
+  return HttpApiBuilder.group(Contract, "public", (handlers) =>
     handlers
       .handle(
         "contact",

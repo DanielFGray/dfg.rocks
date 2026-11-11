@@ -1,9 +1,7 @@
-import * as HttpApi from "effect/http-api/HttpApi";
 import * as HttpApiBuilder from "effect/http-api/HttpApiBuilder";
-import * as HttpApiEndpoint from "effect/http-api/HttpApiEndpoint";
 import * as HttpServerResponse from "effect/http/HttpServerResponse";
 import { Effect, Schedule, Schema as S, Stream } from "effect";
-import { authenticatedClientErrors, authenticatedClientGroup } from "../../shared/httpApi.js";
+import { Contract } from "../../shared/httpApi.js";
 import { serializeLesson, serializeTestimonial } from "../../shared/responseMappers.js";
 import { AssignedMaterial, Material } from "../../shared/schemas.js";
 import { adaptHttpApiErrors } from "../httpApiErrors.js";
@@ -43,13 +41,8 @@ const assertCanTrackOwnAssignments = Effect.fnUntraced(function* (auth: Auth) {
   }
 });
 
-const events = HttpApiEndpoint.get("events", "/api/events", { error: authenticatedClientErrors });
-
-export const authenticatedGroup = authenticatedClientGroup.add(events);
-
-const authenticatedApi = HttpApi.make("dfg").add(authenticatedGroup);
 export function makeAuthenticatedLayer() {
-  return HttpApiBuilder.group(authenticatedApi, "authenticated", (handlers) =>
+  return HttpApiBuilder.group(Contract, "authenticated", (handlers) =>
     handlers
       .handle(
         "courses",

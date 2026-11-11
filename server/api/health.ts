@@ -1,17 +1,14 @@
-import * as HttpApi from "effect/http-api/HttpApi";
 import * as HttpApiBuilder from "effect/http-api/HttpApiBuilder";
 import { Config, Effect } from "effect";
-import { HealthUnavailableError, healthGroup } from "../../shared/httpApi.js";
+import { Contract, HealthUnavailableError } from "../../shared/httpApi.js";
 import { PgAuthDB } from "../db.js";
 import { BackgroundWorker } from "../services/backgroundWorker.js";
-
-export const healthApi = HttpApi.make("dfg").add(healthGroup);
 
 // How long the database check may take before the platform sees the app as down.
 const DATABASE_CHECK_TIMEOUT = "2 seconds";
 
 export function makeHealthLayer() {
-  return HttpApiBuilder.group(healthApi, "health", (handlers) =>
+  return HttpApiBuilder.group(Contract, "health", (handlers) =>
     Effect.map(Config.NonEmptyString("GIT_COMMIT").pipe(Config.withDefault("unknown")), (commit) =>
       handlers.handle(
         "healthz",

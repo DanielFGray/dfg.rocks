@@ -1,9 +1,7 @@
-import * as HttpApi from "effect/http-api/HttpApi";
 import * as HttpApiBuilder from "effect/http-api/HttpApiBuilder";
-import * as HttpApiEndpoint from "effect/http-api/HttpApiEndpoint";
 import * as HttpServerResponse from "effect/http/HttpServerResponse";
 import { Config, Effect } from "effect";
-import { adminClientErrors, adminClientGroup, GcalCallbackQuery } from "../../shared/httpApi.js";
+import { Contract } from "../../shared/httpApi.js";
 import { adaptHttpApiErrors } from "../httpApiErrors.js";
 import { HttpError } from "../pgErrors.js";
 import { AdminRouteService } from "../services/adminRouteService.js";
@@ -212,19 +210,8 @@ function mapBillDetail(
   };
 }
 
-export const adminGroup = adminClientGroup
-  .add(HttpApiEndpoint.get("gcalConnect", "/api/admin/gcal/connect", { error: adminClientErrors }))
-  .add(
-    HttpApiEndpoint.get("gcalCallback", "/api/admin/gcal/callback", {
-      error: adminClientErrors,
-      query: GcalCallbackQuery,
-    }),
-  );
-
-const adminApi = HttpApi.make("dfg").add(adminGroup);
-
 export function makeAdminLayer() {
-  return HttpApiBuilder.group(adminApi, "admin", (handlers) =>
+  return HttpApiBuilder.group(Contract, "admin", (handlers) =>
     handlers
       .handle(
         "gcalConnect",

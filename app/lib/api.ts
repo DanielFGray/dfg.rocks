@@ -3,7 +3,7 @@ import * as HttpApiClient from "effect/http-api/HttpApiClient";
 import * as HttpClient from "effect/http/HttpClient";
 import * as HttpClientRequest from "effect/http/HttpClientRequest";
 import { Layer, ManagedRuntime } from "effect";
-import { clientApi } from "../../shared/httpApi.js";
+import { Contract } from "../../shared/httpApi.js";
 
 const clientLayer = Layer.mergeAll(
   FetchHttpClient.layer,
@@ -15,7 +15,7 @@ const clientLayer = Layer.mergeAll(
 const clientRuntime = ManagedRuntime.make(clientLayer);
 
 export const api = clientRuntime.runSync(
-  HttpApiClient.make(clientApi, {
+  HttpApiClient.make(Contract, {
     transformClient: HttpClient.mapRequest(HttpClientRequest.setHeader("X-Requested-With", "dfg")),
   }),
 );

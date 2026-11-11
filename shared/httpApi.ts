@@ -699,7 +699,9 @@ export const authenticatedClientErrors = [
   ServiceUnavailableErrorSchema,
 ] as const;
 
-export const authenticatedClientGroup = HttpApiGroup.make("authenticated")
+export const authenticatedGroup = HttpApiGroup.make("authenticated")
+  // A text/event-stream of realtime events for the signed-in user.
+  .add(HttpApiEndpoint.get("events", "/events", { error: authenticatedClientErrors }))
   .add(
     HttpApiEndpoint.get("courses", "/courses", {
       error: authenticatedClientErrors,
@@ -1112,7 +1114,15 @@ export const adminClientErrors = [
   ServiceUnavailableErrorSchema,
 ] as const;
 
-export const adminClientGroup = HttpApiGroup.make("admin")
+export const adminGroup = HttpApiGroup.make("admin")
+  // Browser redirects to and from Google for the calendar connection.
+  .add(HttpApiEndpoint.get("gcalConnect", "/gcal/connect", { error: adminClientErrors }))
+  .add(
+    HttpApiEndpoint.get("gcalCallback", "/gcal/callback", {
+      error: adminClientErrors,
+      query: GcalCallbackQuery,
+    }),
+  )
   .add(
     HttpApiEndpoint.get("submissions", "/submissions", {
       error: adminClientErrors,
@@ -1683,9 +1693,26 @@ export const familyBillingGroup = HttpApiGroup.make("familyBilling")
   )
   .prefix("/api/family");
 
-export const clientApi = HttpApi.make("dfg")
+export const materialDownloadGroup = HttpApiGroup.make("materialDownload")
+  .add(
+    HttpApiEndpoint.get("materialDownload", "/materials/:id/download", {
+      error: [
+        UnauthorizedErrorSchema,
+        ForbiddenErrorSchema,
+        NotFoundErrorSchema,
+        InternalServerErrorSchema,
+      ],
+      params: params("id"),
+    }),
+  )
+  .prefix("/api");
+
+/** Every endpoint the server serves, except the testing routes. The browser client uses it too. */
+export const Contract = HttpApi.make("dfg")
+  .add(healthGroup)
   .add(publicGroup)
   .add(authGroup)
-  .add(authenticatedClientGroup)
-  .add(adminClientGroup)
+  .add(authenticatedGroup)
+  .add(adminGroup)
+  .add(materialDownloadGroup)
   .add(familyBillingGroup);

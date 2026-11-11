@@ -1,5 +1,4 @@
 import { Config, Effect, Layer } from "effect";
-import * as HttpApi from "effect/http-api/HttpApi";
 import * as HttpApiBuilder from "effect/http-api/HttpApiBuilder";
 import * as Etag from "effect/http/Etag";
 import * as FetchHttpClient from "effect/http/FetchHttpClient";
@@ -7,13 +6,13 @@ import * as BunRedis from "@effect/platform-bun/BunRedis";
 import * as NodeFileSystem from "@effect/platform-node/NodeFileSystem";
 import * as NodeHttpPlatform from "@effect/platform-node/NodeHttpPlatform";
 import * as NodePath from "@effect/platform-node/NodePath";
-import { authGroup, familyBillingGroup, healthGroup, publicGroup } from "../shared/httpApi.js";
-import { adminGroup, makeAdminLayer } from "./api/admin.js";
+import { Contract } from "../shared/httpApi.js";
+import { makeAdminLayer } from "./api/admin.js";
 import { makeAuthLayer } from "./api/auth.js";
 import { makeFamilyBillingLayer } from "./api/familyBilling.js";
-import { authenticatedGroup, makeAuthenticatedLayer } from "./api/authenticated.js";
+import { makeAuthenticatedLayer } from "./api/authenticated.js";
 import { makeHealthLayer } from "./api/health.js";
-import { makeMaterialDownloadLayer, materialDownloadGroup } from "./api/materialDownload.js";
+import { makeMaterialDownloadLayer } from "./api/materialDownload.js";
 import { makePublicLayer } from "./api/public.js";
 import { PgAuthDB, PgRootDB } from "./db.js";
 import { AdminRouteService } from "./services/adminRouteService.js";
@@ -104,15 +103,6 @@ export const applicationLayer = servicesLayer;
 /** The services of the server process: the application services and the job runner. */
 export type AppServices = Layer.Success<typeof applicationLayer> | BackgroundWorker;
 
-const ServerApi = HttpApi.make("dfg")
-  .add(healthGroup)
-  .add(publicGroup)
-  .add(authGroup)
-  .add(authenticatedGroup)
-  .add(adminGroup)
-  .add(materialDownloadGroup)
-  .add(familyBillingGroup);
-
 const GroupHandlersLive = Layer.mergeAll(
   makeHealthLayer(),
   makePublicLayer(),
@@ -123,7 +113,7 @@ const GroupHandlersLive = Layer.mergeAll(
   makeFamilyBillingLayer(),
 );
 
-const ApiLive = HttpApiBuilder.layer(ServerApi).pipe(Layer.provide(GroupHandlersLive));
+const ApiLive = HttpApiBuilder.layer(Contract).pipe(Layer.provide(GroupHandlersLive));
 
 /** The testing routes are imported only outside production, so the production bundle never loads them. */
 const TestingMountLive = Layer.unwrap(

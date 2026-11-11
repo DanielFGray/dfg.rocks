@@ -1,8 +1,7 @@
-import * as HttpApi from "effect/http-api/HttpApi";
 import * as HttpApiBuilder from "effect/http-api/HttpApiBuilder";
 import * as HttpServerResponse from "effect/http/HttpServerResponse";
 import { Effect } from "effect";
-import { familyBillingGroup } from "../../shared/httpApi.js";
+import { Contract } from "../../shared/httpApi.js";
 import {
   FamilyBill,
   FamilyPayment,
@@ -115,10 +114,8 @@ function serializeCredit(c: Selectable<AppPublicCredits>): Credit {
   };
 }
 
-const familyBillingApi = HttpApi.make("dfg").add(familyBillingGroup);
-
 export function makeFamilyBillingLayer() {
-  return HttpApiBuilder.group(familyBillingApi, "familyBilling", (handlers) =>
+  return HttpApiBuilder.group(Contract, "familyBilling", (handlers) =>
     handlers
       .handle(
         "overview",
