@@ -2,7 +2,7 @@ import * as S from "effect/Schema";
 import { createServerFn } from "@tanstack/react-start";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { TokenSearch } from "../../shared/schemas.js";
-import { serverRuntime } from "../../server/runtime.js";
+import { runServerEffect } from "../lib/serverEffect.js";
 import { PublicRouteService } from "../../server/services/publicRouteService.js";
 
 const verifyEmailPageData = createServerFn({ method: "GET" })
@@ -14,7 +14,7 @@ const verifyEmailPageData = createServerFn({ method: "GET" })
     }
 
     try {
-      await serverRuntime.runPromise(
+      await runServerEffect(
         PublicRouteService.use((publicRouteService) => publicRouteService.verifyEmail(token)),
       );
       return { status: "verified" as const, error: null };

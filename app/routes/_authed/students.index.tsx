@@ -8,7 +8,7 @@ import { useForm } from "@tanstack/react-form";
 import { api } from "../../lib/api.js";
 import { requiredValidator, emailValidator } from "../../lib/validators.js";
 import { fieldError } from "../../lib/form.js";
-import { serverRuntime } from "../../../server/runtime.js";
+import { runServerEffect } from "../../lib/serverEffect.js";
 import { AdminRouteService } from "../../../server/services/adminRouteService.js";
 import { normalizeStudents, serializeFamily } from "../../../shared/responseMappers.js";
 import { toServerFunctionPayload } from "../../lib/serverFunctionPayload.js";
@@ -30,7 +30,7 @@ type StudentsPageData = {
 };
 
 const getStudentsPageData = createServerFn({ method: "GET" }).handler(() =>
-  serverRuntime.runPromise(
+  runServerEffect(
     Effect.gen(function* () {
       const session = yield* requireAdminSession(getCookie("session"));
       const [students, families] = yield* Effect.all([

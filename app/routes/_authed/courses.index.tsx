@@ -13,7 +13,7 @@ import { EmptyState } from "../../components/ui/EmptyState.js";
 import { ConfirmDialog } from "../../components/ui/ConfirmDialog.js";
 import { CourseFormModal } from "../../components/CourseFormModal.js";
 import { Main } from "../../components/ui/Container.js";
-import { serverRuntime } from "../../../server/runtime.js";
+import { runServerEffect } from "../../lib/serverEffect.js";
 import { serializeCourse } from "../../../shared/responseMappers.js";
 import { toServerFunctionPayload } from "../../lib/serverFunctionPayload.js";
 import { requireSession, resolveEffectiveStudent } from "../../lib/sessionGuards.server.js";
@@ -22,7 +22,7 @@ import { AuthenticatedRouteService } from "../../../server/services/authenticate
 type CoursesPageData = Course[];
 
 const getCoursesPageData = createServerFn({ method: "GET" }).handler(() =>
-  serverRuntime.runPromise(
+  runServerEffect(
     Effect.gen(function* () {
       const session = yield* requireSession(getCookie("session"));
       const effective = resolveEffectiveStudent(session);

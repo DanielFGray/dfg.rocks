@@ -17,7 +17,7 @@ import type { NoteEditorState, NoteFormValues } from "../../components/lessons/N
 import { EditLessonModal } from "../../components/lessons/EditLessonModal.js";
 import { NewLessonModal } from "../../components/lessons/NewLessonModal.js";
 import { LessonCard } from "../../components/lessons/LessonCard.js";
-import { serverRuntime } from "../../../server/runtime.js";
+import { runServerEffect } from "../../lib/serverEffect.js";
 import { AdminRouteService } from "../../../server/services/adminRouteService.js";
 import {
   serializeLesson,
@@ -28,7 +28,7 @@ import { requireAdminSession } from "../../lib/sessionGuards.server.js";
 import { toServerFunctionPayload } from "../../lib/serverFunctionPayload.js";
 
 const getLessonsPageData = createServerFn({ method: "GET" }).handler(() =>
-  serverRuntime.runPromise(
+  runServerEffect(
     Effect.gen(function* () {
       const session = yield* requireAdminSession(getCookie("session"));
       const [lessons, students] = yield* Effect.all([
@@ -54,7 +54,7 @@ const getLessonsPageData = createServerFn({ method: "GET" }).handler(() =>
 const getLessonNote = createServerFn({ method: "GET" })
   .validator(S.toStandardSchemaV1(S.Struct({ lessonId: S.String })))
   .handler(({ data }) =>
-    serverRuntime.runPromise(
+    runServerEffect(
       Effect.gen(function* () {
         const session = yield* requireAdminSession(getCookie("session"));
         const note = yield* AdminRouteService.use((adminRouteService) =>

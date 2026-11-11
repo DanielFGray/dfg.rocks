@@ -11,7 +11,7 @@ import { requiredValidator } from "../../lib/validators.js";
 import { fieldError } from "../../lib/form.js";
 import type { AssignedMaterial, Course, Material, StudentDetail } from "../../../shared/schemas.js";
 import { findNotationTrack, formatNotationTrackLabel } from "../../../shared/notationTracks.js";
-import { serverRuntime } from "../../../server/runtime.js";
+import { runServerEffect } from "../../lib/serverEffect.js";
 import { AdminRouteService } from "../../../server/services/adminRouteService.js";
 import { AuthenticatedRouteService } from "../../../server/services/authenticatedRouteService.js";
 import {
@@ -38,7 +38,7 @@ type StudentDetailPageData = {
 const getStudentDetailPageData = createServerFn({ method: "GET" })
   .validator(S.toStandardSchemaV1(S.Struct({ studentId: S.String })))
   .handler(({ data }) =>
-    serverRuntime.runPromise(
+    runServerEffect(
       Effect.gen(function* () {
         const session = yield* requireAdminSession(getCookie("session"));
         const [student, allCourses, allMaterials] = yield* Effect.all([

@@ -2,7 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { redirect } from "@tanstack/react-router";
 import { setCookie } from "@tanstack/react-start/server";
 import { Effect, Schema as S } from "effect";
-import { serverRuntime } from "../../server/runtime.js";
+import { runServerEffect } from "./serverEffect.js";
 import { AuthService } from "../../server/services/authService.js";
 import { AuthRouteService } from "../../server/services/authRouteService.js";
 import { PublicRouteService } from "../../server/services/publicRouteService.js";
@@ -39,32 +39,30 @@ export const loginWithPassword = createServerFn({ method: "POST" })
     return validateFormData(PasswordLoginSchema, data);
   })
   .handler(async ({ data }) => {
-    const result = await serverRuntime
-      .runPromise(
-        Effect.gen(function* () {
-          const login = yield* AuthService.use((authService) =>
-            authService.login({ id: data.id, password: data.password }),
-          );
-          yield* UserService.use((userService) =>
-            userService.primaryEmailForUser(login.user.user_id),
-          );
-          return {
-            token: login.token,
-            expiresAt: login.expiresAt,
-            redirectTo: normalizeLoginRedirect(data.redirect) ?? "/dashboard",
-          };
-        }),
-      )
-      .catch((error) => {
-        const message = messageFromError(error, "Login failed");
-        throw redirect({
-          to: "/login",
-          search: {
-            ...(data.redirect ? { redirect: data.redirect } : {}),
-            error: message,
-          },
-        });
+    const result = await runServerEffect(
+      Effect.gen(function* () {
+        const login = yield* AuthService.use((authService) =>
+          authService.login({ id: data.id, password: data.password }),
+        );
+        yield* UserService.use((userService) =>
+          userService.primaryEmailForUser(login.user.user_id),
+        );
+        return {
+          token: login.token,
+          expiresAt: login.expiresAt,
+          redirectTo: normalizeLoginRedirect(data.redirect) ?? "/dashboard",
+        };
+      }),
+    ).catch((error) => {
+      const message = messageFromError(error, "Login failed");
+      throw redirect({
+        to: "/login",
+        search: {
+          ...(data.redirect ? { redirect: data.redirect } : {}),
+          error: message,
+        },
       });
+    });
     setCookie("session", result.token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
@@ -87,7 +85,7 @@ export const requestMagicLink = createServerFn({ method: "POST" })
     return validateFormData(MagicLinkSchema, data);
   })
   .handler(async ({ data }) => {
-    await serverRuntime.runPromise(
+    await runServerEffect(
       AuthRouteService.use((authRouteService) => authRouteService.generateMagicLink(data.email)),
     );
     throw redirect({
@@ -110,7 +108,7 @@ export const forgotPassword = createServerFn({ method: "POST" })
     return validateFormData(ForgotPasswordSchema, data);
   })
   .handler(async ({ data }) => {
-    await serverRuntime.runPromise(
+    await runServerEffect(
       AuthService.use((authService) => authService.forgotPassword({ email: data.email })),
     );
     throw redirect({ to: "/forgot-password", search: { sent: true as const } });
@@ -127,21 +125,19 @@ export const resetPassword = createServerFn({ method: "POST" })
     return validateFormData(ResetPasswordSchema, data);
   })
   .handler(async ({ data }) => {
-    const result = await serverRuntime
-      .runPromise(
-        AuthService.use((authService) =>
-          authService.resetPassword({ token: data.token, password: data.password }),
-        ),
-      )
-      .catch((error) => {
-        throw redirect({
-          to: "/reset-password",
-          search: {
-            token: data.token,
-            error: messageFromError(error, "Password reset failed"),
-          },
-        });
+    const result = await runServerEffect(
+      AuthService.use((authService) =>
+        authService.resetPassword({ token: data.token, password: data.password }),
+      ),
+    ).catch((error) => {
+      throw redirect({
+        to: "/reset-password",
+        search: {
+          token: data.token,
+          error: messageFromError(error, "Password reset failed"),
+        },
       });
+    });
     setCookie("session", result.token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
@@ -168,29 +164,27 @@ export const acceptInvitation = createServerFn({ method: "POST" })
     return validateFormData(AcceptInviteSchema, data);
   })
   .handler(async ({ data }) => {
-    const session = await serverRuntime
-      .runPromise(
-        PublicRouteService.use((publicRouteService) =>
-          publicRouteService.acceptInvitation({
-            invitationId: data.id,
-            code: data.code,
-            username: data.username,
-            password: data.password,
-            name: data.name,
-            email: data.email,
-          }),
-        ),
-      )
-      .catch((err) => {
-        throw redirect({
-          to: "/accept-invite",
-          search: {
-            id: data.id,
-            code: data.code,
-            error: messageFromError(err, "Could not accept invitation"),
-          },
-        });
+    const session = await runServerEffect(
+      PublicRouteService.use((publicRouteService) =>
+        publicRouteService.acceptInvitation({
+          invitationId: data.id,
+          code: data.code,
+          username: data.username,
+          password: data.password,
+          name: data.name,
+          email: data.email,
+        }),
+      ),
+    ).catch((err) => {
+      throw redirect({
+        to: "/accept-invite",
+        search: {
+          id: data.id,
+          code: data.code,
+          error: messageFromError(err, "Could not accept invitation"),
+        },
       });
+    });
     setCookie("session", session.token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",

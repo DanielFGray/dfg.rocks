@@ -18,16 +18,16 @@ import { Select } from "../components/ui/Select.js";
 import { Textarea } from "../components/ui/Textarea.js";
 
 import { createServerFn } from "@tanstack/react-start";
-import { serverRuntime } from "../../server/runtime.js";
+import { runServerEffect } from "../lib/serverEffect.js";
 import { PublicRouteService } from "../../server/services/publicRouteService.js";
 import { toServerFunctionPayload } from "../lib/serverFunctionPayload.js";
 
 const [logoBefore, logoAfter] = site.logo.split(site.logoDot);
 
 export const getHomePageData = createServerFn({ method: "GET" }).handler(() =>
-  serverRuntime
-    .runPromise(PublicRouteService.use((publicRouteService) => publicRouteService.homePageData()))
-    .then(toServerFunctionPayload),
+  runServerEffect(
+    PublicRouteService.use((publicRouteService) => publicRouteService.homePageData()),
+  ).then(toServerFunctionPayload),
 );
 
 const ContactFormSchema = S.Struct({
@@ -51,7 +51,7 @@ export const submitContact = createServerFn({ method: "POST" })
   })
   .handler(async ({ data }) => {
     if (data.website) throw new Error("Invalid submission");
-    await serverRuntime.runPromise(
+    await runServerEffect(
       PublicRouteService.use((publicRouteService) =>
         publicRouteService.submitContact({
           name: data.name,

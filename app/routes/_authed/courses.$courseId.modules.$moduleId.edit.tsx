@@ -8,7 +8,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { getCookie } from "@tanstack/react-start/server";
 import { api } from "../../lib/api.js";
 import { getErrorMessage } from "../../lib/errors.js";
-import { serverRuntime } from "../../../server/runtime.js";
+import { runServerEffect } from "../../lib/serverEffect.js";
 import { AuthenticatedRouteService } from "../../../server/services/authenticatedRouteService.js";
 import type {
   CourseDetail,
@@ -34,7 +34,7 @@ type ModuleEditPageData = {
 const getModuleEditPageData = createServerFn({ method: "GET" })
   .validator(S.toStandardSchemaV1(S.Struct({ courseId: S.String })))
   .handler(({ data }) =>
-    serverRuntime.runPromise(
+    runServerEffect(
       Effect.gen(function* () {
         const session = yield* requireSession(getCookie("session"));
         const [course, allMaterials] = yield* Effect.all([

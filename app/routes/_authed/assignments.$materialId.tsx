@@ -2,7 +2,7 @@ import { Effect } from "effect";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
 import { getCookie } from "@tanstack/react-start/server";
-import { serverRuntime } from "../../../server/runtime.js";
+import { runServerEffect } from "../../lib/serverEffect.js";
 import { AuthenticatedRouteService } from "../../../server/services/authenticatedRouteService.js";
 import type { AssignedMaterial } from "../../../shared/schemas.js";
 import { serializeMaterial } from "../../../shared/responseMappers.js";
@@ -17,7 +17,7 @@ import { EmptyState } from "../../components/ui/EmptyState.js";
 import { Main } from "../../components/ui/Container.js";
 
 const getAssignmentPageData = createServerFn({ method: "GET" }).handler(() =>
-  serverRuntime.runPromise(
+  runServerEffect(
     Effect.gen(function* () {
       const session = yield* requireSession(getCookie("session"));
       const authSvc = yield* AuthenticatedRouteService;

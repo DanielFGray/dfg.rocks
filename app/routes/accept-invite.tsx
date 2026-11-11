@@ -9,7 +9,7 @@ import { Card } from "../components/ui/Card.js";
 import { Input } from "../components/ui/Input.js";
 import { acceptInvitation } from "../lib/authForms.js";
 import { InviteSearch } from "../../shared/schemas.js";
-import { serverRuntime } from "../../server/runtime.js";
+import { runServerEffect } from "../lib/serverEffect.js";
 import { PublicRouteService } from "../../server/services/publicRouteService.js";
 
 const getInvitationPageData = createServerFn({ method: "GET" })
@@ -21,7 +21,7 @@ const getInvitationPageData = createServerFn({ method: "GET" })
     }
 
     try {
-      const invitation = await serverRuntime.runPromise(
+      const invitation = await runServerEffect(
         PublicRouteService.use((publicRouteService) =>
           publicRouteService.invitation(id, data.code ?? ""),
         ),

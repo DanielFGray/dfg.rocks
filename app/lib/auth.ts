@@ -1,6 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { getCookie } from "@tanstack/react-start/server";
-import { serverRuntime } from "../../server/runtime.js";
+import { runServerEffect } from "./serverEffect.js";
 import { AuthRouteService } from "../../server/services/authRouteService.js";
 import type { MeResponse } from "../../shared/httpApi.js";
 
@@ -40,7 +40,7 @@ function toPlainAuthState(state: AuthState): AuthState {
 }
 
 export const getAuthUser = createServerFn({ method: "GET" }).handler(async () => {
-  const state = await serverRuntime.runPromise(
+  const state = await runServerEffect(
     AuthRouteService.use((authRouteService) => authRouteService.currentUser(getCookie("session"))),
   );
   return JSON.stringify(toPlainAuthState(state));

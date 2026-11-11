@@ -16,7 +16,7 @@ import {
   getAssignedTrackLabel,
 } from "../../components/assignments/StudentAssignmentDetail.js";
 import { categorize, categoryColor, categoryLabel } from "../../components/library/helpers.js";
-import { serverRuntime } from "../../../server/runtime.js";
+import { runServerEffect } from "../../lib/serverEffect.js";
 import { AuthenticatedRouteService } from "../../../server/services/authenticatedRouteService.js";
 import { AdminRouteService } from "../../../server/services/adminRouteService.js";
 import { SessionService } from "../../../server/services/sessionService.js";
@@ -32,7 +32,7 @@ import { ComboBox } from "../../components/ui/ComboBox.js";
 import { Main } from "../../components/ui/Container.js";
 
 const getAssignmentsPageData = createServerFn({ method: "GET" }).handler(() =>
-  serverRuntime.runPromise(
+  runServerEffect(
     Effect.gen(function* () {
       const token = yield* Effect.sync(() => getCookie("session"));
       const session = yield* SessionService.use((sessionService) =>

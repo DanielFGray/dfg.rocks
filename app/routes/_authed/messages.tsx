@@ -12,7 +12,7 @@ import { EmptyState } from "../../components/ui/EmptyState.js";
 import { groupByPartner } from "../../components/messages/helpers.js";
 import { MessageThread } from "../../components/messages/MessageThread.js";
 import { ConversationList } from "../../components/messages/ConversationList.js";
-import { serverRuntime } from "../../../server/runtime.js";
+import { runServerEffect } from "../../lib/serverEffect.js";
 import { AuthenticatedRouteService } from "../../../server/services/authenticatedRouteService.js";
 import { AdminRouteService } from "../../../server/services/adminRouteService.js";
 import { serializeMessage, normalizeStudents } from "../../../shared/responseMappers.js";
@@ -20,7 +20,7 @@ import { toServerFunctionPayload } from "../../lib/serverFunctionPayload.js";
 import { requireSession, resolveEffectiveStudent } from "../../lib/sessionGuards.server.js";
 
 const getMessagesPageData = createServerFn({ method: "GET" }).handler(() =>
-  serverRuntime.runPromise(
+  runServerEffect(
     Effect.gen(function* () {
       const session = yield* requireSession(getCookie("session"));
       const authSvc = yield* AuthenticatedRouteService;

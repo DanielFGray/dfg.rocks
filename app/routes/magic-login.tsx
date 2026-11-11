@@ -3,7 +3,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { setCookie } from "@tanstack/react-start/server";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { consumeLoginRedirect, normalizeLoginRedirect } from "../lib/loginRedirect.js";
-import { serverRuntime } from "../../server/runtime.js";
+import { runServerEffect } from "../lib/serverEffect.js";
 import { AuthRouteService } from "../../server/services/authRouteService.js";
 
 const SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 30;
@@ -20,7 +20,7 @@ const verifyMagicLogin = createServerFn({ method: "GET" })
     }
 
     try {
-      const session = await serverRuntime.runPromise(
+      const session = await runServerEffect(
         AuthRouteService.use((authRouteService) => authRouteService.consumeMagicLink(token)),
       );
       setCookie("session", session.token, {

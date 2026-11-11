@@ -5,7 +5,7 @@ import { createFileRoute, Link, redirect } from "@tanstack/react-router";
 import { decodeAuthState, getAuthUser } from "../lib/auth.js";
 import { Card } from "../components/ui/Card.js";
 import { TokenSearch } from "../../shared/schemas.js";
-import { serverRuntime } from "../../server/runtime.js";
+import { runServerEffect } from "../lib/serverEffect.js";
 import { HttpError } from "../../server/pgErrors.js";
 import { SessionService } from "../../server/services/sessionService.js";
 import { AuthenticatedRouteService } from "../../server/services/authenticatedRouteService.js";
@@ -19,7 +19,7 @@ const confirmDeleteAccountAction = createServerFn({ method: "POST" })
   })
   .handler(async ({ data }) => {
     const sessionToken = getCookie("session");
-    const auth = await serverRuntime.runPromise(
+    const auth = await runServerEffect(
       SessionService.use((sessionService) => sessionService.validateSessionToken(sessionToken)),
     );
     if (!auth) {
@@ -29,7 +29,7 @@ const confirmDeleteAccountAction = createServerFn({ method: "POST" })
       });
     }
 
-    const deleted = await serverRuntime.runPromise(
+    const deleted = await runServerEffect(
       AuthenticatedRouteService.use((authenticatedRouteService) =>
         authenticatedRouteService.confirmDeleteAccount(auth.session.id, data.token),
       ),
@@ -39,7 +39,7 @@ const confirmDeleteAccountAction = createServerFn({ method: "POST" })
       throw new HttpError(400, "Invalid or expired deletion token");
     }
 
-    await serverRuntime.runPromise(
+    await runServerEffect(
       SessionService.use((sessionService) => sessionService.deleteAllUserSessions(auth.user.id)),
     );
     deleteCookie("session");

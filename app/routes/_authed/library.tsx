@@ -7,7 +7,7 @@ import { getCookie } from "@tanstack/react-start/server";
 import { requireSession } from "../../lib/sessionGuards.server.js";
 import { api } from "../../lib/api.js";
 import type { Material } from "../../../shared/schemas.js";
-import { serverRuntime } from "../../../server/runtime.js";
+import { runServerEffect } from "../../lib/serverEffect.js";
 import { AuthenticatedRouteService } from "../../../server/services/authenticatedRouteService.js";
 import { toServerFunctionPayload } from "../../lib/serverFunctionPayload.js";
 import { Button } from "../../components/ui/Button.js";
@@ -20,7 +20,7 @@ import { Main } from "../../components/ui/Container.js";
 import { SearchField } from "../../components/ui/SearchField.js";
 
 const getLibraryPageData = createServerFn({ method: "GET" }).handler(() =>
-  serverRuntime.runPromise(
+  runServerEffect(
     Effect.gen(function* () {
       const token = getCookie("session");
       const session = yield* requireSession(token);

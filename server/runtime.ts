@@ -107,6 +107,9 @@ export const applicationLayer = servicesLayer;
  */
 export const memoMap = Layer.makeMemoMapUnsafe();
 
+/** The services every request and server function can use. */
+export type AppServices = Layer.Success<typeof applicationLayer>;
+
 export const serverRuntime = ManagedRuntime.make(applicationLayer, { memoMap });
 
 const ServerApi = HttpApi.make("dfg")

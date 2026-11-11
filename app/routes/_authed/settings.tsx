@@ -6,7 +6,7 @@ import { AdminSection } from "../../components/settings/AdminSection.js";
 import { EmailSection } from "../../components/settings/EmailSection.js";
 import { DeleteAccountSection } from "../../components/settings/DeleteAccountSection.js";
 import { TestimonialEditor } from "../../components/testimonials/TestimonialEditor.js";
-import { serverRuntime } from "../../../server/runtime.js";
+import { runServerEffect } from "../../lib/serverEffect.js";
 import { AdminRouteService } from "../../../server/services/adminRouteService.js";
 import { AuthenticatedRouteService } from "../../../server/services/authenticatedRouteService.js";
 import { GoogleCalendarService } from "../../../server/services/googleCalendarService.js";
@@ -16,7 +16,7 @@ import { toServerFunctionPayload } from "../../lib/serverFunctionPayload.js";
 import { requireSession } from "../../lib/sessionGuards.server.js";
 
 const getSettingsPageData = createServerFn({ method: "GET" }).handler(() =>
-  serverRuntime.runPromise(
+  runServerEffect(
     Effect.gen(function* () {
       const session = yield* requireSession(getCookie("session"));
 

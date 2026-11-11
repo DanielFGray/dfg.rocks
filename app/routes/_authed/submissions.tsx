@@ -9,7 +9,7 @@ import { toServerFunctionPayload } from "../../lib/serverFunctionPayload.js";
 import { api } from "../../lib/api.js";
 import type { Submission } from "../../../shared/schemas.js";
 import { toIsoString } from "../../../shared/responseMappers.js";
-import { serverRuntime } from "../../../server/runtime.js";
+import { runServerEffect } from "../../lib/serverEffect.js";
 import { AdminRouteService } from "../../../server/services/adminRouteService.js";
 import { HttpError } from "../../../server/pgErrors.js";
 import { Button } from "../../components/ui/Button.js";
@@ -20,7 +20,7 @@ import { Disclosure, DisclosureTrigger, DisclosurePanel } from "../../components
 const PAGE_SIZE = 25;
 
 const getSubmissionsPageData = createServerFn({ method: "GET" }).handler(() =>
-  serverRuntime.runPromise(
+  runServerEffect(
     Effect.gen(function* () {
       const token = getCookie("session");
       const session = yield* requireSession(token);

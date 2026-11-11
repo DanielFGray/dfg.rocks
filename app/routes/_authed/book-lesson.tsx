@@ -8,7 +8,7 @@ import { requireSession } from "../../lib/sessionGuards.server.js";
 import { api } from "../../lib/api.js";
 import { useAuth } from "../../lib/hooks/useAuth.js";
 import type { LocationType } from "../../../shared/schemas.js";
-import { serverRuntime } from "../../../server/runtime.js";
+import { runServerEffect } from "../../lib/serverEffect.js";
 import { GoogleCalendarService } from "../../../server/services/googleCalendarService.js";
 import { Button } from "../../components/ui/Button.js";
 import { Select } from "../../components/ui/Select.js";
@@ -40,10 +40,10 @@ const getBookLessonPageData = createServerFn({ method: "GET" })
   })
   .handler(async ({ data }) => {
     const token = getCookie("session");
-    await serverRuntime.runPromise(
+    await runServerEffect(
       requireSession(token).pipe(Effect.catch(() => Effect.fail(new Error("Unauthorized")))),
     );
-    return serverRuntime.runPromise(
+    return runServerEffect(
       GoogleCalendarService.use((googleCalendarService) =>
         googleCalendarService.getAvailableSlots({
           date: data.date,

@@ -12,7 +12,7 @@ import { Button } from "../../components/ui/Button.js";
 import { Modal } from "../../components/ui/Modal.js";
 import { api } from "../../lib/api.js";
 import { getErrorMessage } from "../../lib/errors.js";
-import { serverRuntime } from "../../../server/runtime.js";
+import { runServerEffect } from "../../lib/serverEffect.js";
 import { AuthenticatedRouteService } from "../../../server/services/authenticatedRouteService.js";
 import { serializeLesson, serializeLessonNote } from "../../../shared/responseMappers.js";
 import { toServerFunctionPayload } from "../../lib/serverFunctionPayload.js";
@@ -24,7 +24,7 @@ type MyLessonsPageData = {
 };
 
 const getMyLessonsPageData = createServerFn({ method: "GET" }).handler(() =>
-  serverRuntime.runPromise(
+  runServerEffect(
     Effect.gen(function* () {
       const session = yield* requireSession(getCookie("session"));
       const authSvc = yield* AuthenticatedRouteService;

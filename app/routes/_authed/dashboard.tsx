@@ -11,7 +11,7 @@ import { AdminDashboard } from "../../components/dashboard/AdminDashboard.js";
 import { StudentDashboard } from "../../components/dashboard/StudentDashboard.js";
 import { ParentOnboarding } from "../../components/dashboard/ParentOnboarding.js";
 import { ParentDashboard } from "../../components/dashboard/ParentDashboard.js";
-import { serverRuntime } from "../../../server/runtime.js";
+import { runServerEffect } from "../../lib/serverEffect.js";
 import { AdminRouteService } from "../../../server/services/adminRouteService.js";
 import { TestimonialReminderService } from "../../../server/services/testimonialReminderService.js";
 import { SessionService, resolveEffectiveStudent } from "../../../server/services/sessionService.js";
@@ -28,7 +28,7 @@ import { todayRange, weekRange } from "../../../shared/dateRanges.js";
 import { toServerFunctionPayload } from "../../lib/serverFunctionPayload.js";
 
 const getDashboardPageData = createServerFn({ method: "GET" }).handler(() =>
-  serverRuntime.runPromise(
+  runServerEffect(
     Effect.gen(function* () {
       const token = yield* Effect.sync(() => getCookie("session"));
       const session = yield* SessionService.use((sessionService) =>
