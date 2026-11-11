@@ -3,7 +3,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { TokenSearch } from "../../shared/schemas.js";
 import { runServerEffect } from "../lib/serverEffect.js";
-import { PublicRouteService } from "../../server/services/publicRouteService.js";
+import { AccountService } from "../../server/services/accountService.js";
 
 const verifyEmailPageData = createServerFn({ method: "GET" })
   .validator((data: unknown) => S.decodeUnknownSync(TokenSearch)(data))
@@ -15,7 +15,7 @@ const verifyEmailPageData = createServerFn({ method: "GET" })
 
     try {
       await runServerEffect(
-        PublicRouteService.use((publicRouteService) => publicRouteService.verifyEmail(token)),
+        AccountService.use((accountService) => accountService.verifyEmail(token)),
       );
       return { status: "verified" as const, error: null };
     } catch (error) {

@@ -8,7 +8,7 @@ import { TokenSearch } from "../../shared/schemas.js";
 import { runServerEffect } from "../lib/serverEffect.js";
 import { HttpError } from "../../server/pgErrors.js";
 import { SessionService } from "../../server/services/sessionService.js";
-import { AuthenticatedRouteService } from "../../server/services/authenticatedRouteService.js";
+import { AccountService } from "../../server/services/accountService.js";
 
 const confirmDeleteAccountAction = createServerFn({ method: "POST" })
   .validator((data) => {
@@ -30,8 +30,8 @@ const confirmDeleteAccountAction = createServerFn({ method: "POST" })
     }
 
     const deleted = await runServerEffect(
-      AuthenticatedRouteService.use((authenticatedRouteService) =>
-        authenticatedRouteService.confirmDeleteAccount(auth.session.id, data.token),
+      AccountService.use((accountService) =>
+        accountService.confirmDeleteAccount(auth.session.id, data.token),
       ),
     );
 

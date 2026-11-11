@@ -8,8 +8,8 @@ import { DeleteAccountSection } from "../../components/settings/DeleteAccountSec
 import { TestimonialEditor } from "../../components/testimonials/TestimonialEditor.js";
 import { runServerEffect } from "../../lib/serverEffect.js";
 import { AdminRouteService } from "../../../server/services/adminRouteService.js";
+import { AccountService } from "../../../server/services/accountService.js";
 import { TestimonialService } from "../../../server/services/testimonialService.js";
-import { AuthenticatedRouteService } from "../../../server/services/authenticatedRouteService.js";
 import { GoogleCalendarService } from "../../../server/services/googleCalendarService.js";
 import { TestimonialReminderService } from "../../../server/services/testimonialReminderService.js";
 import { serializeUserEmail, serializeTestimonial } from "../../../shared/responseMappers.js";
@@ -20,8 +20,8 @@ const getSettingsPageData = createServerFn({ method: "GET" }).handler(() =>
     Effect.gen(function* () {
       const session = yield* requireSession(getCookie("session"));
 
-      const emailsEffect = AuthenticatedRouteService.use((authenticatedRouteService) =>
-        authenticatedRouteService.myEmails(session.session.id),
+      const emailsEffect = AccountService.use((accountService) =>
+        accountService.myEmails(session.session.id),
       );
 
       if (session.user.role !== "admin") {

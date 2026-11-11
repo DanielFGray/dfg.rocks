@@ -4,7 +4,7 @@ import { Effect } from "effect";
 import { Contract } from "../../shared/httpApi.js";
 import { CurrentSession } from "../../shared/api/guards.js";
 import { HttpError } from "../pgErrors.js";
-import { AuthenticatedRouteService } from "../services/authenticatedRouteService.js";
+import { AccountService } from "../services/accountService.js";
 import { SessionService } from "../services/sessionService.js";
 import { expireSessionCookie } from "./raw.js";
 import { adaptSignedInErrors } from "../httpApiErrors.js";
@@ -15,8 +15,8 @@ export const AccountsApiGroupLive = HttpApiBuilder.group(Contract, "accounts", (
       "requestDeleteAccount",
       Effect.fnUntraced(function* () {
         const auth = yield* CurrentSession;
-        yield* AuthenticatedRouteService.use((authenticatedRouteService) =>
-          authenticatedRouteService.requestDeleteAccount(auth.session.id),
+        yield* AccountService.use((accountService) =>
+          accountService.requestDeleteAccount(auth.session.id),
         );
         return { success: true as const };
       }, adaptSignedInErrors),
@@ -25,8 +25,8 @@ export const AccountsApiGroupLive = HttpApiBuilder.group(Contract, "accounts", (
       "confirmDeleteAccount",
       Effect.fnUntraced(function* ({ payload }) {
         const auth = yield* CurrentSession;
-        const deleted = yield* AuthenticatedRouteService.use((authenticatedRouteService) =>
-          authenticatedRouteService.confirmDeleteAccount(auth.session.id, payload.token),
+        const deleted = yield* AccountService.use((accountService) =>
+          accountService.confirmDeleteAccount(auth.session.id, payload.token),
         );
         if (!deleted) {
           return yield* new HttpError(400, "Invalid or expired deletion token");
@@ -43,8 +43,8 @@ export const AccountsApiGroupLive = HttpApiBuilder.group(Contract, "accounts", (
       "myEmails",
       Effect.fnUntraced(function* () {
         const auth = yield* CurrentSession;
-        const rows = yield* AuthenticatedRouteService.use((authenticatedRouteService) =>
-          authenticatedRouteService.myEmails(auth.session.id),
+        const rows = yield* AccountService.use((accountService) =>
+          accountService.myEmails(auth.session.id),
         );
         return rows;
       }, adaptSignedInErrors),
@@ -53,8 +53,8 @@ export const AccountsApiGroupLive = HttpApiBuilder.group(Contract, "accounts", (
       "addMyEmail",
       Effect.fnUntraced(function* ({ payload }) {
         const auth = yield* CurrentSession;
-        const row = yield* AuthenticatedRouteService.use((authenticatedRouteService) =>
-          authenticatedRouteService.addMyEmail(auth.session.id, payload.email),
+        const row = yield* AccountService.use((accountService) =>
+          accountService.addMyEmail(auth.session.id, payload.email),
         );
         return row;
       }, adaptSignedInErrors),
@@ -63,8 +63,8 @@ export const AccountsApiGroupLive = HttpApiBuilder.group(Contract, "accounts", (
       "deleteMyEmail",
       Effect.fnUntraced(function* ({ params }) {
         const auth = yield* CurrentSession;
-        yield* AuthenticatedRouteService.use((authenticatedRouteService) =>
-          authenticatedRouteService.deleteMyEmail(auth.session.id, params.id),
+        yield* AccountService.use((accountService) =>
+          accountService.deleteMyEmail(auth.session.id, params.id),
         );
         return { success: true as const };
       }, adaptSignedInErrors),
@@ -73,8 +73,8 @@ export const AccountsApiGroupLive = HttpApiBuilder.group(Contract, "accounts", (
       "makePrimaryEmail",
       Effect.fnUntraced(function* ({ params }) {
         const auth = yield* CurrentSession;
-        const row = yield* AuthenticatedRouteService.use((authenticatedRouteService) =>
-          authenticatedRouteService.makePrimaryEmail(auth.session.id, params.id),
+        const row = yield* AccountService.use((accountService) =>
+          accountService.makePrimaryEmail(auth.session.id, params.id),
         );
         return row;
       }, adaptSignedInErrors),
@@ -83,8 +83,8 @@ export const AccountsApiGroupLive = HttpApiBuilder.group(Contract, "accounts", (
       "resendEmailVerification",
       Effect.fnUntraced(function* ({ params }) {
         const auth = yield* CurrentSession;
-        yield* AuthenticatedRouteService.use((authenticatedRouteService) =>
-          authenticatedRouteService.resendEmailVerification(auth.session.id, params.id),
+        yield* AccountService.use((accountService) =>
+          accountService.resendEmailVerification(auth.session.id, params.id),
         );
         return { success: true as const };
       }, adaptSignedInErrors),
@@ -96,12 +96,8 @@ export const AccountsApiGroupLive = HttpApiBuilder.group(Contract, "accounts", (
         if (auth.user.role !== "parent") {
           return yield* new HttpError(403, "Only parents can switch active student");
         }
-        yield* AuthenticatedRouteService.use((authenticatedRouteService) =>
-          authenticatedRouteService.switchActiveStudent(
-            auth.session.id,
-            auth.user.id,
-            payload.student_id,
-          ),
+        yield* AccountService.use((accountService) =>
+          accountService.switchActiveStudent(auth.session.id, auth.user.id, payload.student_id),
         );
         return { success: true as const };
       }, adaptSignedInErrors),

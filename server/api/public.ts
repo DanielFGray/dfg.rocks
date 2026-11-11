@@ -20,6 +20,7 @@ import {
 } from "../services/oauthService.js";
 import { GeolocationService } from "../services/geolocation.js";
 import { PublicRouteService } from "../services/publicRouteService.js";
+import { AccountService } from "../services/accountService.js";
 import { ContactService } from "../services/contactService.js";
 import { OAuthService } from "../services/oauthService.js";
 import { checkRateLimit, clientIdentifierFromHeaders } from "../rateLimit.js";
@@ -276,9 +277,7 @@ export function makePublicLayer() {
       .handle(
         "verifyEmail",
         Effect.fnUntraced(function* ({ payload }) {
-          yield* PublicRouteService.use((publicRouteService) =>
-            publicRouteService.verifyEmail(payload.token),
-          );
+          yield* AccountService.use((accountService) => accountService.verifyEmail(payload.token));
           return { success: true as const };
         }, adaptPublicHttpApiErrors),
       )

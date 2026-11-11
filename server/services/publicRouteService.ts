@@ -23,35 +23,6 @@ export class PublicRouteService extends Context.Service<PublicRouteService>()(
           .where("id", "=", invitationId);
 
       return {
-        verifyEmail: Effect.fn("verifyEmail")(function* (token: string) {
-          const secret = yield* db
-            .execute(
-              db
-                .selectFrom("app_private.user_email_secrets")
-                .select("user_email_id")
-                .where("verification_token", "=", token),
-            )
-            .pipe(
-              Effect.head,
-              Effect.catchTags({
-                NoSuchElementError: () =>
-                  new HttpError(400, "Invalid or expired verification link"),
-              }),
-            );
-          yield* db
-            .execute(
-              db.selectNoFrom((eb) =>
-                eb
-                  .fn<unknown>("app_public.verify_email", [
-                    sql`${secret.user_email_id}::uuid`,
-                    eb.val(token),
-                  ])
-                  .as("verify_email"),
-              ),
-            )
-            .pipe(catchPgErrors);
-        }),
-
         invitation: Effect.fn("invitation")(function* (invitationId: string, code: string) {
           const invitation = yield* db.execute(invitationById(invitationId)).pipe(
             Effect.head,
