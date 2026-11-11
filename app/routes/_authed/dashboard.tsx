@@ -22,7 +22,7 @@ import {
   SessionService,
   resolveEffectiveStudent,
 } from "../../../server/services/sessionService.js";
-import { AuthenticatedRouteService } from "../../../server/services/authenticatedRouteService.js";
+import { LessonService } from "../../../server/services/lessonService.js";
 import * as SharedSchemas from "../../../shared/schemas.js";
 import {
   serializeMessage,
@@ -58,16 +58,16 @@ const getDashboardPageData = createServerFn({ method: "GET" }).handler(() =>
               offset: 0,
             }),
           ),
-          todayLessons: AdminRouteService.use((adminRouteService) =>
-            adminRouteService.listLessons(session.session.id, {
+          todayLessons: LessonService.use((lessonService) =>
+            lessonService.listLessons(session.session.id, {
               limit: 50,
               offset: 0,
               from: today.from,
               to: today.to,
             }),
           ),
-          weekLessons: AdminRouteService.use((adminRouteService) =>
-            adminRouteService.listLessons(session.session.id, {
+          weekLessons: LessonService.use((lessonService) =>
+            lessonService.listLessons(session.session.id, {
               limit: 50,
               offset: 0,
               from: week.from,
@@ -102,8 +102,8 @@ const getDashboardPageData = createServerFn({ method: "GET" }).handler(() =>
           assignments: MaterialService.use((materialService) =>
             materialService.assignments(session.session.id, filterStudentId),
           ),
-          scheduledLessons: AuthenticatedRouteService.use((authenticatedRouteService) =>
-            authenticatedRouteService.myLessons(
+          scheduledLessons: LessonService.use((lessonService) =>
+            lessonService.myLessons(
               session.session.id,
               { status: "scheduled", limit: 5, offset: 0 },
               filterStudentId,

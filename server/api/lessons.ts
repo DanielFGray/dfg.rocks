@@ -4,7 +4,7 @@ import { Contract } from "../../shared/httpApi.js";
 import { CurrentSession } from "../../shared/api/guards.js";
 import { serializeLesson, serializeLessonNote } from "../../shared/responseMappers.js";
 import { HttpError } from "../pgErrors.js";
-import { AuthenticatedRouteService } from "../services/authenticatedRouteService.js";
+import { LessonService } from "../services/lessonService.js";
 import { GoogleCalendarService } from "../services/googleCalendarService.js";
 import { resolveEffectiveStudent } from "../services/sessionService.js";
 import { AdminRouteService } from "../services/adminRouteService.js";
@@ -18,8 +18,8 @@ export const LessonsApiGroupLive = HttpApiBuilder.group(Contract, "lessons", (ha
         const auth = yield* CurrentSession;
         const effective = resolveEffectiveStudent(auth);
         const filterStudentId = effective.isActing ? effective.studentId : undefined;
-        const rows = yield* AuthenticatedRouteService.use((authenticatedRouteService) =>
-          authenticatedRouteService.myLessons(
+        const rows = yield* LessonService.use((lessonService) =>
+          lessonService.myLessons(
             auth.session.id,
             {
               limit: query.limit ?? 50,
@@ -39,8 +39,8 @@ export const LessonsApiGroupLive = HttpApiBuilder.group(Contract, "lessons", (ha
       Effect.fnUntraced(function* ({ params }) {
         const auth = yield* CurrentSession;
         const effective = resolveEffectiveStudent(auth);
-        return yield* AuthenticatedRouteService.use((authenticatedRouteService) =>
-          authenticatedRouteService.myLessonCancellationPolicy({
+        return yield* LessonService.use((lessonService) =>
+          lessonService.myLessonCancellationPolicy({
             sessionId: auth.session.id,
             studentId: effective.studentId,
             lessonId: params.id,
@@ -53,8 +53,8 @@ export const LessonsApiGroupLive = HttpApiBuilder.group(Contract, "lessons", (ha
       Effect.fnUntraced(function* ({ params, payload }) {
         const auth = yield* CurrentSession;
         const effective = resolveEffectiveStudent(auth);
-        const lesson = yield* AuthenticatedRouteService.use((authenticatedRouteService) =>
-          authenticatedRouteService.cancelMyLesson({
+        const lesson = yield* LessonService.use((lessonService) =>
+          lessonService.cancelMyLesson({
             sessionId: auth.session.id,
             studentId: effective.studentId,
             lessonId: params.id,
@@ -69,8 +69,8 @@ export const LessonsApiGroupLive = HttpApiBuilder.group(Contract, "lessons", (ha
       Effect.fnUntraced(function* ({ params, payload }) {
         const auth = yield* CurrentSession;
         const effective = resolveEffectiveStudent(auth);
-        const lesson = yield* AuthenticatedRouteService.use((authenticatedRouteService) =>
-          authenticatedRouteService.rescheduleMyLesson({
+        const lesson = yield* LessonService.use((lessonService) =>
+          lessonService.rescheduleMyLesson({
             sessionId: auth.session.id,
             studentId: effective.studentId,
             lessonId: params.id,
@@ -86,8 +86,8 @@ export const LessonsApiGroupLive = HttpApiBuilder.group(Contract, "lessons", (ha
         const auth = yield* CurrentSession;
         const effective = resolveEffectiveStudent(auth);
         const filterStudentId = effective.isActing ? effective.studentId : undefined;
-        const rows = yield* AuthenticatedRouteService.use((authenticatedRouteService) =>
-          authenticatedRouteService.myLessonNotesList(
+        const rows = yield* LessonService.use((lessonService) =>
+          lessonService.myLessonNotesList(
             auth.session.id,
             {
               limit: query.limit ?? 50,
@@ -123,8 +123,8 @@ export const LessonsApiGroupLive = HttpApiBuilder.group(Contract, "lessons", (ha
         const auth = yield* CurrentSession;
         const effective = resolveEffectiveStudent(auth);
         const studentId = payload.student_id ?? effective.studentId;
-        const lesson = yield* AuthenticatedRouteService.use((authenticatedRouteService) =>
-          authenticatedRouteService.bookLesson({
+        const lesson = yield* LessonService.use((lessonService) =>
+          lessonService.bookLesson({
             sessionId: auth.session.id,
             userId: studentId,
             scheduledAt: payload.scheduled_at,
@@ -143,8 +143,8 @@ export const LessonsAdminApiGroupLive = HttpApiBuilder.group(Contract, "lessonsA
       "createLesson",
       Effect.fnUntraced(function* ({ payload }) {
         const auth = yield* CurrentSession;
-        const lesson = yield* AdminRouteService.use((adminRouteService) =>
-          adminRouteService.createLesson({
+        const lesson = yield* LessonService.use((lessonService) =>
+          lessonService.createLesson({
             sessionId: auth.session.id,
             studentId: payload.student_id,
             scheduledAt: payload.scheduled_at,
@@ -160,8 +160,8 @@ export const LessonsAdminApiGroupLive = HttpApiBuilder.group(Contract, "lessonsA
       "updateLesson",
       Effect.fnUntraced(function* ({ params, payload }) {
         const auth = yield* CurrentSession;
-        const lesson = yield* AdminRouteService.use((adminRouteService) =>
-          adminRouteService.updateLesson(auth.session.id, params.id, {
+        const lesson = yield* LessonService.use((lessonService) =>
+          lessonService.updateLesson(auth.session.id, params.id, {
             scheduledAt: payload.scheduled_at,
             durationMinutes: payload.duration_minutes,
             locationType: payload.location_type,
@@ -178,8 +178,8 @@ export const LessonsAdminApiGroupLive = HttpApiBuilder.group(Contract, "lessonsA
       Effect.fnUntraced(function* (context) {
         const auth = yield* CurrentSession;
         const { params } = context;
-        const lesson = yield* AdminRouteService.use((adminRouteService) =>
-          adminRouteService.deleteLesson(auth.session.id, params.id),
+        const lesson = yield* LessonService.use((lessonService) =>
+          lessonService.deleteLesson(auth.session.id, params.id),
         );
         if (!lesson) {
           return yield* new HttpError(404, "Lesson not found");
@@ -191,8 +191,8 @@ export const LessonsAdminApiGroupLive = HttpApiBuilder.group(Contract, "lessonsA
       "cancelLesson",
       Effect.fnUntraced(function* ({ params, payload }) {
         const auth = yield* CurrentSession;
-        const lesson = yield* AdminRouteService.use((adminRouteService) =>
-          adminRouteService.cancelLesson(auth.session.id, params.id, payload.reason ?? null),
+        const lesson = yield* LessonService.use((lessonService) =>
+          lessonService.cancelLesson(auth.session.id, params.id, payload.reason ?? null),
         );
         return serializeLesson(lesson);
       }, adaptAdminErrors),
@@ -201,8 +201,8 @@ export const LessonsAdminApiGroupLive = HttpApiBuilder.group(Contract, "lessonsA
       "completeLesson",
       Effect.fnUntraced(function* ({ params }) {
         const auth = yield* CurrentSession;
-        const lesson = yield* AdminRouteService.use((adminRouteService) =>
-          adminRouteService.completeLesson(auth.session.id, params.id),
+        const lesson = yield* LessonService.use((lessonService) =>
+          lessonService.completeLesson(auth.session.id, params.id),
         );
         return serializeLesson(lesson);
       }, adaptAdminErrors),
@@ -211,8 +211,8 @@ export const LessonsAdminApiGroupLive = HttpApiBuilder.group(Contract, "lessonsA
       "lessons",
       Effect.fnUntraced(function* ({ query }) {
         const auth = yield* CurrentSession;
-        const lessons = yield* AdminRouteService.use((adminRouteService) =>
-          adminRouteService.listLessons(auth.session.id, {
+        const lessons = yield* LessonService.use((lessonService) =>
+          lessonService.listLessons(auth.session.id, {
             limit: query.limit ?? 50,
             offset: query.offset ?? 0,
             studentId: query.student_id,
@@ -228,8 +228,8 @@ export const LessonsAdminApiGroupLive = HttpApiBuilder.group(Contract, "lessonsA
       "saveLessonNote",
       Effect.fnUntraced(function* ({ params, payload }) {
         const auth = yield* CurrentSession;
-        const note = yield* AdminRouteService.use((adminRouteService) =>
-          adminRouteService.saveLessonNote(auth.session.id, params.id, {
+        const note = yield* LessonService.use((lessonService) =>
+          lessonService.saveLessonNote(auth.session.id, params.id, {
             topicsCovered: payload.topics_covered ?? null,
             homework: payload.homework ?? null,
             progressObservations: payload.progress_observations ?? null,
@@ -246,8 +246,8 @@ export const LessonsAdminApiGroupLive = HttpApiBuilder.group(Contract, "lessonsA
       Effect.fnUntraced(function* (context) {
         const auth = yield* CurrentSession;
         const { params } = context;
-        const note = yield* AdminRouteService.use((adminRouteService) =>
-          adminRouteService.getLessonNote(auth.session.id, params.id),
+        const note = yield* LessonService.use((lessonService) =>
+          lessonService.getLessonNote(auth.session.id, params.id),
         );
         if (!note) {
           return yield* new HttpError(404, "Lesson note not found");
@@ -260,8 +260,8 @@ export const LessonsAdminApiGroupLive = HttpApiBuilder.group(Contract, "lessonsA
       Effect.fnUntraced(function* (context) {
         const auth = yield* CurrentSession;
         const { params } = context;
-        const note = yield* AdminRouteService.use((adminRouteService) =>
-          adminRouteService.publishLessonNote(auth.session.id, params.id),
+        const note = yield* LessonService.use((lessonService) =>
+          lessonService.publishLessonNote(auth.session.id, params.id),
         );
         if (!note) {
           return yield* new HttpError(404, "Lesson note not found");

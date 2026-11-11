@@ -19,6 +19,7 @@ import { NewLessonModal } from "../../components/lessons/NewLessonModal.js";
 import { LessonCard } from "../../components/lessons/LessonCard.js";
 import { runServerEffect } from "../../lib/serverEffect.js";
 import { AdminRouteService } from "../../../server/services/adminRouteService.js";
+import { LessonService } from "../../../server/services/lessonService.js";
 import {
   serializeLesson,
   serializeLessonNote,
@@ -31,8 +32,8 @@ const getLessonsPageData = createServerFn({ method: "GET" }).handler(() =>
     Effect.gen(function* () {
       const session = yield* requireAdminSession(getCookie("session"));
       const [lessons, students] = yield* Effect.all([
-        AdminRouteService.use((adminRouteService) =>
-          adminRouteService.listLessons(session.session.id, { limit: 50, offset: 0 }),
+        LessonService.use((lessonService) =>
+          lessonService.listLessons(session.session.id, { limit: 50, offset: 0 }),
         ),
         AdminRouteService.use((adminRouteService) =>
           adminRouteService.listStudents(session.session.id),
@@ -56,8 +57,8 @@ const getLessonNote = createServerFn({ method: "GET" })
     runServerEffect(
       Effect.gen(function* () {
         const session = yield* requireAdminSession(getCookie("session"));
-        const note = yield* AdminRouteService.use((adminRouteService) =>
-          adminRouteService.getLessonNote(session.session.id, data.lessonId),
+        const note = yield* LessonService.use((lessonService) =>
+          lessonService.getLessonNote(session.session.id, data.lessonId),
         );
         return serializeLessonNote(note);
       }),

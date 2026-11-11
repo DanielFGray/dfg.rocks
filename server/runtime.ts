@@ -31,7 +31,7 @@ import { makeHealthLayer } from "./api/health.js";
 import { makePublicLayer } from "./api/public.js";
 import { PgAuthDB, PgRootDB } from "./db.js";
 import { AdminRouteService } from "./services/adminRouteService.js";
-import { AuthenticatedRouteService } from "./services/authenticatedRouteService.js";
+import { LessonService } from "./services/lessonService.js";
 import { AuthRouteService } from "./services/authRouteService.js";
 import { AuthService } from "./services/authService.js";
 import { BackgroundWorker } from "./services/backgroundWorker.js";
@@ -95,7 +95,7 @@ const rateLimitLayer = Layer.unwrap(
 
 const lessonServicesLayer = Layer.mergeAll(
   AdminRouteService.layer,
-  AuthenticatedRouteService.layer,
+  LessonService.layer,
   RecurringScheduleService.layer,
 ).pipe(Layer.provideMerge(LessonPolicyService.layer));
 

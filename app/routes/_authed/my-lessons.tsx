@@ -13,7 +13,7 @@ import { Modal } from "../../components/ui/Modal.js";
 import { api } from "../../lib/api.js";
 import { getErrorMessage } from "../../lib/errors.js";
 import { runServerEffect } from "../../lib/serverEffect.js";
-import { AuthenticatedRouteService } from "../../../server/services/authenticatedRouteService.js";
+import { LessonService } from "../../../server/services/lessonService.js";
 import { serializeLesson, serializeLessonNote } from "../../../shared/responseMappers.js";
 import { formatDateTime } from "../../components/lessons/helpers.js";
 import { requireSession, resolveEffectiveStudent } from "../../lib/sessionGuards.server.js";
@@ -27,14 +27,18 @@ const getMyLessonsPageData = createServerFn({ method: "GET" }).handler(() =>
   runServerEffect(
     Effect.gen(function* () {
       const session = yield* requireSession(getCookie("session"));
-      const authSvc = yield* AuthenticatedRouteService;
+      const lessonService = yield* LessonService;
 
       const effective = resolveEffectiveStudent(session);
       const filterStudentId = effective.isActing ? effective.studentId : undefined;
 
       const [lessons, notes] = yield* Effect.all([
-        authSvc.myLessons(session.session.id, { limit: 50, offset: 0 }, filterStudentId),
-        authSvc.myLessonNotesList(session.session.id, { limit: 100, offset: 0 }, filterStudentId),
+        lessonService.myLessons(session.session.id, { limit: 50, offset: 0 }, filterStudentId),
+        lessonService.myLessonNotesList(
+          session.session.id,
+          { limit: 100, offset: 0 },
+          filterStudentId,
+        ),
       ]);
 
       return {
