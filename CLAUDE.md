@@ -6,7 +6,7 @@ Music lessons business site + student/admin portal. React + TanStack Start front
 
 ```bash
 bun run dev              # Start all services (app, typecheck, worker)
-bun run dev:app          # Vite + TanStack Start dev server (port 3000)
+bun run dev:app          # The dev process: Vite in middleware mode, API and job runner (port 3000)
 bun run typecheck        # tsc --noEmit -p tsconfig.app.json
 bun run db:up            # Start the shared ops cluster and write DB URLs to .env
 bun run db:setup         # db:up, then db:reset
@@ -40,23 +40,24 @@ effect-web-template and ask; do not invent a local one.
 
 ## Architecture
 
-### Single-process: TanStack Start + Effect HttpApi
+### Single process: an Effect layer graph
 
 ```
-TanStack Start (Vite)
-  ├── app/routes/          React pages (file-based routing, SSR)
-  └── app/routes/api.$.ts  Catch-all server route → Effect web handler
-        └── server/app.ts  Web handler over HttpApiLive (server/runtime.ts)
+server/main.ts (production) / server/dev.ts (development)
+  BunRuntime.runMain(Layer.launch(...))
+  └── server/shell/      Site: /api/* and /healthz → API; other paths → files, then TanStack Start
+        └── server/app.ts  makeApp: services, job runner, /api handler (HttpApiLive)
               ├── server/api/health.ts
               ├── server/api/public.ts
               ├── server/api/auth.ts
               ├── server/api/authenticated.ts
               ├── server/api/admin.ts
               ├── server/api/materialDownload.ts
-              └── server/api/testing.ts (non-production)
+              ├── server/api/testing.ts (non-production)
+              └── app/        TanStack Start pages; server functions use runServerEffect
 ```
 
-No separate API server process. Effect HttpApi runs in-process via TanStack Start's server route handlers. serverRuntime and the web handler build from one memo map, so server functions and /api share one set of services.
+The shell passes the application's services in TanStack Start's request context, and server functions run on them through `runServerEffect` (`app/lib/serverEffect.ts`). Production loads the application from the bundle. Development loads it through Vite's SSR runner and builds it again after an edit. After an edit to `server/dev.ts` or `server/shell/`, restart the dev process with Ctrl-C.
 
 ### Client: Typed Fetch API
 
@@ -165,31 +166,32 @@ Benign warning, no functionality impact.
 
 ## Key Files
 
-| File                                       | Purpose                                                |
-| ------------------------------------------ | ------------------------------------------------------ |
-| `shared/schemas.ts`                        | Response schemas (UserResponse, CourseResponse, etc.)  |
-| `app/lib/api.ts`                           | Typed fetch client (all endpoint wrappers)             |
-| `app/lib/types.ts`                         | Type aliases derived from shared schemas               |
-| `app/lib/hooks/useAuth.ts`                 | Auth hook (useQuery + isAdmin)                         |
-| `app/routes/__root.tsx`                    | Root layout (html, head, providers)                    |
-| `app/routes/_authed.tsx`                   | Auth guard layout route                                |
-| `app/routes/api.$.ts`                      | Catch-all route mounting the Effect web handler        |
-| `app/config.ts`                            | Site metadata (name, city, testimonials, etc.)         |
-| `server/app.ts`                            | Web handler over HttpApiLive; worker start and dispose |
-| `server/runtime.ts`                        | Application layer, serverRuntime, HttpApiLive          |
-| `server/db.ts`                             | Database, PgRootDB, PgAuthDB, withAuthContext          |
-| `server/api/health.ts`                     | GET /healthz (database and worker)                     |
-| `server/api/public.ts`                     | Public endpoints (contact, OAuth)                      |
-| `server/api/auth.ts`                       | Auth endpoints (login, logout, me, password)           |
-| `server/api/authenticated.ts`              | Authed endpoints (courses, messages, lessons)          |
-| `server/api/admin.ts`                      | Admin endpoints (CRUD, gcal, settings)                 |
-| `server/api/materialDownload.ts`           | Material file download                                 |
-| `server/api/testing.ts`                    | Test data seeding (non-production)                     |
-| `server/services/sessionService.ts`        | Session CRUD (PG)                                      |
-| `server/services/authService.ts`           | Login, password reset                                  |
-| `server/services/googleCalendarService.ts` | Google Calendar integration                            |
-| `server/pgErrors.ts`                       | HttpError class, PG errcode mapping                    |
-| `migrations/current/`                      | SQL schema (graphile-migrate)                          |
+| File                                       | Purpose                                               |
+| ------------------------------------------ | ----------------------------------------------------- |
+| `shared/schemas.ts`                        | Response schemas (UserResponse, CourseResponse, etc.) |
+| `app/lib/api.ts`                           | Typed fetch client (all endpoint wrappers)            |
+| `app/lib/types.ts`                         | Type aliases derived from shared schemas              |
+| `app/lib/hooks/useAuth.ts`                 | Auth hook (useQuery + isAdmin)                        |
+| `app/routes/__root.tsx`                    | Root layout (html, head, providers)                   |
+| `app/routes/_authed.tsx`                   | Auth guard layout route                               |
+| `app/config.ts`                            | Site metadata (name, city, testimonials, etc.)        |
+| `server/main.ts`, `server/dev.ts`          | Process entries (production, development)             |
+| `server/shell/`                            | Site: routing, static files, Vite                     |
+| `server/app.ts`                            | makeApp: services, job runner, /api handler           |
+| `server/runtime.ts`                        | Application layer, AppServices, HttpApiLive           |
+| `server/db.ts`                             | Database, PgRootDB, PgAuthDB, withAuthContext         |
+| `server/api/health.ts`                     | GET /healthz (database and worker)                    |
+| `server/api/public.ts`                     | Public endpoints (contact, OAuth)                     |
+| `server/api/auth.ts`                       | Auth endpoints (login, logout, me, password)          |
+| `server/api/authenticated.ts`              | Authed endpoints (courses, messages, lessons)         |
+| `server/api/admin.ts`                      | Admin endpoints (CRUD, gcal, settings)                |
+| `server/api/materialDownload.ts`           | Material file download                                |
+| `server/api/testing.ts`                    | Test data seeding (non-production)                    |
+| `server/services/sessionService.ts`        | Session CRUD (PG)                                     |
+| `server/services/authService.ts`           | Login, password reset                                 |
+| `server/services/googleCalendarService.ts` | Google Calendar integration                           |
+| `server/pgErrors.ts`                       | HttpError class, PG errcode mapping                   |
+| `migrations/current/`                      | SQL schema (graphile-migrate)                         |
 
 ## Rules
 
