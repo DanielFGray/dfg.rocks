@@ -16,7 +16,7 @@ import { Main } from "../../components/ui/Container.js";
 import { runServerEffect } from "../../lib/serverEffect.js";
 import { serializeCourse } from "../../../shared/responseMappers.js";
 import { requireSession, resolveEffectiveStudent } from "../../lib/sessionGuards.server.js";
-import { AuthenticatedRouteService } from "../../../server/services/authenticatedRouteService.js";
+import { CourseService } from "../../../server/services/courseService.js";
 
 type CoursesPageData = Course[];
 
@@ -26,8 +26,8 @@ const getCoursesPageData = createServerFn({ method: "GET" }).handler(() =>
       const session = yield* requireSession(getCookie("session"));
       const effective = resolveEffectiveStudent(session);
       const filterStudentId = effective.isActing ? effective.studentId : undefined;
-      const data = yield* AuthenticatedRouteService.use((authenticatedRouteService) =>
-        authenticatedRouteService.courses(session.session.id, filterStudentId),
+      const data = yield* CourseService.use((courseService) =>
+        courseService.courses(session.session.id, filterStudentId),
       );
       return data.map(serializeCourse) satisfies CoursesPageData;
     }),

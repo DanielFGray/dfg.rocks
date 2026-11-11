@@ -23,7 +23,7 @@ import { Input } from "../../components/ui/Input.js";
 import { runServerEffect } from "../../lib/serverEffect.js";
 import { normalizeStudents, serializeCourseDetail } from "../../../shared/responseMappers.js";
 import { requireSession } from "../../lib/sessionGuards.server.js";
-import { AuthenticatedRouteService } from "../../../server/services/authenticatedRouteService.js";
+import { CourseService } from "../../../server/services/courseService.js";
 import { AdminRouteService } from "../../../server/services/adminRouteService.js";
 
 type CourseDetailPageData = {
@@ -38,8 +38,8 @@ const getCourseDetailData = createServerFn({ method: "GET" })
     runServerEffect(
       Effect.gen(function* () {
         const session = yield* requireSession(getCookie("session"));
-        const course = yield* AuthenticatedRouteService.use((authenticatedRouteService) =>
-          authenticatedRouteService.courseById(session.session.id, data.courseId),
+        const course = yield* CourseService.use((courseService) =>
+          courseService.courseById(session.session.id, data.courseId),
         );
 
         if (session.user.role !== "admin") {
@@ -51,8 +51,8 @@ const getCourseDetailData = createServerFn({ method: "GET" })
         }
 
         const [enrolledStudents, allStudents] = yield* Effect.all([
-          AdminRouteService.use((adminRouteService) =>
-            adminRouteService.listCourseStudents(session.session.id, data.courseId),
+          CourseService.use((courseService) =>
+            courseService.listCourseStudents(session.session.id, data.courseId),
           ),
           AdminRouteService.use((adminRouteService) =>
             adminRouteService.listStudents(session.session.id),

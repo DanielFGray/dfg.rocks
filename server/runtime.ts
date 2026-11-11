@@ -48,6 +48,7 @@ import { RateLimitService } from "./rateLimit.js";
 import { RateLimiterValkey } from "./services/rateLimiter.js";
 import { RecurringScheduleService } from "./services/recurringScheduleService.js";
 import { RealtimeService } from "./services/realtimeService.js";
+import { CourseService } from "./services/courseService.js";
 import { FamilyService } from "./services/familyService.js";
 import { AccountService } from "./services/accountService.js";
 import { TestimonialService } from "./services/testimonialService.js";
@@ -115,6 +116,7 @@ const servicesLayer = Layer.mergeAll(
   TestimonialService.layer,
   AccountService.layer,
   FamilyService.layer,
+  CourseService.layer,
   StorageService.layer,
   TestimonialReminderService.layer,
   UserService.layer,

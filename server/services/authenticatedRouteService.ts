@@ -1,9 +1,6 @@
 import { Clock, Effect, Option, Context, Layer } from "effect";
-import * as S from "effect/Schema";
-import * as Struct from "effect/Struct";
 import { sql } from "kysely";
 import type { LessonStatus } from "../../shared/schemas.js";
-import { Module, Material } from "../../shared/schemas.js";
 import { withAuthContext, type Database } from "../db.js";
 import { HttpError } from "../pgErrors.js";
 import { GoogleCalendarService } from "./googleCalendarService.js";
@@ -11,13 +8,6 @@ import { settleSingleBookingCancellation, singleBookingObligation } from "./sing
 import { calculateDepositAmount } from "./billingCalculation.js";
 import { LessonPolicyService } from "./lessonPolicyService.js";
 import { resolveAssignedTrackIndex } from "./notationService.js";
-
-const CourseMaterial = Material.mapFields(
-  Struct.assign({
-    module_id: S.String,
-    sort_order: S.Number,
-  }),
-);
 
 const lessonColumns = [
   "id",
@@ -58,114 +48,6 @@ export class AuthenticatedRouteService extends Context.Service<AuthenticatedRout
   {
     make: Effect.sync(() => {
       return {
-        courses: Effect.fn("courses")(function* (sessionId: string, studentId?: string) {
-          return yield* withAuthContext(sessionId, (db) => {
-            let q = db
-              .selectFrom("app_public.courses")
-              .select(["id", "title", "description", "instrument"]);
-            if (studentId) {
-              q = q.where((eb) =>
-                eb("id", "in", (sq) =>
-                  sq
-                    .selectFrom("app_public.enrollments")
-                    .select("course_id")
-                    .where("student_id", "=", studentId),
-                ),
-              );
-            }
-            return db.execute(q);
-          });
-        }),
-
-        courseById: Effect.fn("courseById")(function* (sessionId: string, courseId: string) {
-          return yield* withAuthContext(
-            sessionId,
-            Effect.fnUntraced(function* (db) {
-              const rows = yield* db
-                .execute(
-                  db
-                    .with("course_data", (qb) =>
-                      qb
-                        .selectFrom("app_public.courses")
-                        .select(["id", "title", "description", "instrument"])
-                        .where("id", "=", courseId),
-                    )
-                    .with("mods", (qb) =>
-                      qb
-                        .selectFrom("app_public.modules")
-                        .select(["id", "course_id", "title", "content", "sort_order"])
-                        .where("course_id", "=", courseId)
-                        .orderBy("sort_order"),
-                    )
-                    .with("mod_mats", (qb) =>
-                      qb
-                        .selectFrom("app_public.module_materials as mm")
-                        .innerJoin("app_public.materials as mat", "mat.id", "mm.material_id")
-                        .innerJoin("app_public.modules as mod", "mod.id", "mm.module_id")
-                        .where("mod.course_id", "=", courseId)
-                        .select((eb) => [
-                          "mm.module_id",
-                          "mat.id",
-                          "mat.title",
-                          "mat.original_filename",
-                          "mat.mime_type",
-                          eb.cast("mat.file_size", "integer").as("file_size"),
-                          "mat.is_global",
-                          "mat.notation_tracks",
-                          "mm.sort_order",
-                        ])
-                        .orderBy("mm.sort_order"),
-                    )
-                    .selectFrom("course_data")
-                    .selectAll("course_data")
-                    .select((eb) => [
-                      eb.fn
-                        .coalesce(
-                          sql`(SELECT json_agg(row_to_json(mods.*)) FROM mods)`,
-                          sql`'[]'::json`,
-                        )
-                        .as("modules_json"),
-                      eb.fn
-                        .coalesce(
-                          sql`(SELECT json_agg(row_to_json(mod_mats.*)) FROM mod_mats)`,
-                          sql`'[]'::json`,
-                        )
-                        .as("materials_json"),
-                    ]),
-                )
-                .pipe(
-                  Effect.head,
-                  Effect.catchTags({
-                    NoSuchElementError: () => new HttpError(404, "Course not found"),
-                  }),
-                );
-
-              const modulesJson = yield* S.decodeUnknownEffect(S.Array(Module))(rows.modules_json);
-              const materialsJson = yield* S.decodeUnknownEffect(S.Array(CourseMaterial))(
-                rows.materials_json,
-              );
-
-              const matsByModule = new Map<string, S.Schema.Type<typeof CourseMaterial>[]>();
-              for (const mat of materialsJson) {
-                const list = matsByModule.get(mat.module_id) || [];
-                list.push(mat);
-                matsByModule.set(mat.module_id, list);
-              }
-
-              const {
-                modules_json: _modules_json,
-                materials_json: _materials_json,
-                ...course
-              } = rows;
-              const modulesWithMaterials = modulesJson.map((mod) => ({
-                ...mod,
-                materials: matsByModule.get(mod.id) || [],
-              }));
-
-              return { ...course, modules: modulesWithMaterials };
-            }),
-          );
-        }),
 
         library: Effect.fn("library")(function* (
           sessionId: string,

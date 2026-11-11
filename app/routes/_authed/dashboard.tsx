@@ -13,6 +13,7 @@ import { ParentOnboarding } from "../../components/dashboard/ParentOnboarding.js
 import { ParentDashboard } from "../../components/dashboard/ParentDashboard.js";
 import { runServerEffect } from "../../lib/serverEffect.js";
 import { AdminRouteService } from "../../../server/services/adminRouteService.js";
+import { CourseService } from "../../../server/services/courseService.js";
 import { TestimonialService } from "../../../server/services/testimonialService.js";
 import { TestimonialReminderService } from "../../../server/services/testimonialReminderService.js";
 import { SessionService, resolveEffectiveStudent } from "../../../server/services/sessionService.js";
@@ -68,8 +69,8 @@ const getDashboardPageData = createServerFn({ method: "GET" }).handler(() =>
               to: week.to,
             }),
           ),
-          courses: AdminRouteService.use((adminRouteService) =>
-            adminRouteService.listCourses(session.session.id),
+          courses: CourseService.use((courseService) =>
+            courseService.listCourses(session.session.id),
           ),
         });
         const adminMessages: ReturnType<typeof serializeMessage>[] = data.messages.map(serializeMessage);
@@ -104,8 +105,8 @@ const getDashboardPageData = createServerFn({ method: "GET" }).handler(() =>
               filterStudentId,
             ),
           ),
-          courses: AuthenticatedRouteService.use((authenticatedRouteService) =>
-            authenticatedRouteService.courses(session.session.id, filterStudentId),
+          courses: CourseService.use((courseService) =>
+            courseService.courses(session.session.id, filterStudentId),
           ),
           testimonial: TestimonialService.use((testimonialService) =>
             testimonialService.testimonial(session.session.id, session.user.id),

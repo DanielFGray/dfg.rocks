@@ -10,6 +10,7 @@ import { api } from "../../lib/api.js";
 import { getErrorMessage } from "../../lib/errors.js";
 import { runServerEffect } from "../../lib/serverEffect.js";
 import { AuthenticatedRouteService } from "../../../server/services/authenticatedRouteService.js";
+import { CourseService } from "../../../server/services/courseService.js";
 import type {
   CourseDetail,
   Material,
@@ -37,8 +38,8 @@ const getModuleEditPageData = createServerFn({ method: "GET" })
       Effect.gen(function* () {
         const session = yield* requireSession(getCookie("session"));
         const [course, allMaterials] = yield* Effect.all([
-          AuthenticatedRouteService.use((authenticatedRouteService) =>
-            authenticatedRouteService.courseById(session.session.id, data.courseId),
+          CourseService.use((courseService) =>
+            courseService.courseById(session.session.id, data.courseId),
           ),
           AuthenticatedRouteService.use((authenticatedRouteService) =>
             authenticatedRouteService.library(session.session.id, { limit: 1000, offset: 0 }),
