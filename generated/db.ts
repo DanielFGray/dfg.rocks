@@ -231,11 +231,11 @@ export interface AppPublicBills {
   /**
    * Last calendar day of the billing period.
    */
-  billing_period_end: Timestamp;
+  billing_period_end: string;
   /**
    * First calendar day of the billing period.
    */
-  billing_period_start: Timestamp;
+  billing_period_start: string;
   /**
    * When the bill was cancelled (before payment).
    */
@@ -252,7 +252,7 @@ export interface AppPublicBills {
   /**
    * Date by which the bill should be paid. Nullable for flexibility.
    */
-  due_date: Timestamp | null;
+  due_date: string | null;
   id: Generated<string>;
   /**
    * When the bill was issued to the family.
@@ -379,11 +379,11 @@ export interface AppPublicDiscounts {
   /**
    * First date this discount applies.
    */
-  effective_from: Timestamp;
+  effective_from: string;
   /**
    * Last date this discount applies. Null = ongoing.
    */
-  effective_until: Timestamp | null;
+  effective_until: string | null;
   id: Generated<string>;
   is_active: Generated<boolean>;
   label: string;
@@ -530,7 +530,7 @@ export interface AppPublicLessons {
   /**
    * Local calendar date of this recurring lesson occurrence.
    */
-  recurrence_date: Timestamp | null;
+  recurrence_date: string | null;
   /**
    * Standing schedule that generated this individual lesson occurrence.
    */
@@ -606,12 +606,12 @@ export interface AppPublicMonthlyBillingRuns {
    * The issued bill. Null if billing failed before bill creation.
    */
   bill_id: string | null;
-  billing_month: Timestamp;
+  billing_month: string;
   created_at: Generated<Timestamp>;
   /**
    * Snapshotted due date; always the 5th of the billing month.
    */
-  due_date: Timestamp;
+  due_date: string;
   error: string | null;
   id: Generated<string>;
   /**
@@ -632,7 +632,7 @@ export interface AppPublicMonthlyPayments {
   /**
    * First calendar day of the paid month.
    */
-  billing_month: Timestamp;
+  billing_month: string;
   created_at: Generated<Timestamp>;
   generated_at: Timestamp | null;
   generation_error: string | null;
@@ -708,13 +708,13 @@ export interface AppPublicRecurringSchedules {
    * ISO weekday, Monday = 1 through Sunday = 7.
    */
   day_of_week: number;
-  ends_on: Timestamp | null;
+  ends_on: string | null;
   id: Generated<string>;
   /**
    * Wall-clock lesson start time in the schedule timezone.
    */
   local_start_time: string;
-  starts_on: Timestamp;
+  starts_on: string;
   student_rate_id: string;
   timezone: Generated<string>;
   updated_at: Generated<Timestamp>;
@@ -776,8 +776,8 @@ export interface AppPublicStudentPayers {
 export interface AppPublicStudentRateHistory {
   billing_model: AppPublicBillingModel;
   created_at: Generated<Timestamp>;
-  effective_from: Timestamp;
-  effective_until: Timestamp | null;
+  effective_from: string;
+  effective_until: string | null;
   id: Generated<string>;
   lesson_duration_minutes: number;
   location_type: AppPublicLocationType;
@@ -816,8 +816,8 @@ export interface AppPublicStudentRates {
 export interface AppPublicTaxExemptions {
   created_at: Generated<Timestamp>;
   created_by: string;
-  effective_from: Timestamp;
-  effective_until: Timestamp | null;
+  effective_from: string;
+  effective_until: string | null;
   exemption_reason: string;
   id: Generated<string>;
   payer_id: string;
@@ -828,8 +828,8 @@ export interface AppPublicTaxRates {
   applies_to: Generated<string>;
   created_at: Generated<Timestamp>;
   created_by: string;
-  effective_from: Timestamp;
-  effective_until: Timestamp | null;
+  effective_from: string;
+  effective_until: string | null;
   id: Generated<string>;
   is_active: Generated<boolean>;
   jurisdiction: string;

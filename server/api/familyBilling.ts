@@ -30,26 +30,15 @@ const adaptFamilyBillingErrors = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
 const adaptPdfErrors = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
   adaptHttpApiErrors(effect, pdfErrorStatuses);
 
-// Serialize helpers
-function isDateLike(value: unknown): value is { toISOString(): string } {
-  return typeof value === "object" && value !== null && "toISOString" in value;
-}
-
-function serializeDateShort(value: unknown): string {
-  if (value === null || value === undefined) return "";
-  if (isDateLike(value)) return value.toISOString().slice(0, 10);
-  return String(value).slice(0, 10);
-}
-
 function serializeBill(bill: Selectable<AppPublicBills>): Bill {
   return {
     id: bill.id,
     payer_id: bill.payer_id,
     bill_number: bill.bill_number,
     status: bill.status,
-    billing_period_start: serializeDateShort(bill.billing_period_start),
-    billing_period_end: serializeDateShort(bill.billing_period_end),
-    due_date: bill.due_date ? serializeDateShort(bill.due_date) : null,
+    billing_period_start: bill.billing_period_start,
+    billing_period_end: bill.billing_period_end,
+    due_date: bill.due_date,
     subtotal_cents: bill.subtotal_cents,
     discount_cents: bill.discount_cents,
     tax_cents: bill.tax_cents,

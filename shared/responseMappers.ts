@@ -133,16 +133,13 @@ export function serializeLesson(lesson: {
   cancellation_fee_cents: number;
   remainder_due_cents: number;
   recurring_schedule_id?: string | null;
-  recurrence_date?: Date | string | null;
+  recurrence_date?: string | null;
   created_at: Date;
 }): Lesson {
   return S.decodeUnknownSync(S.toType(Schemas.Lesson))({
     ...lesson,
     recurring_schedule_id: lesson.recurring_schedule_id ?? null,
-    recurrence_date:
-      lesson.recurrence_date instanceof Date
-        ? lesson.recurrence_date.toISOString().slice(0, 10)
-        : (lesson.recurrence_date ?? null),
+    recurrence_date: lesson.recurrence_date ?? null,
   });
 }
 

@@ -29,7 +29,7 @@ const lessonColumns = [
   "cancellation_fee_cents",
   "remainder_due_cents",
   sql<string | null>`recurring_schedule_id`.as("recurring_schedule_id"),
-  sql<Date | string | null>`recurrence_date`.as("recurrence_date"),
+  "recurrence_date",
   "created_at",
 ] as const;
 const lessonNoteColumns = [

@@ -7,5 +7,6 @@
     "columns": {
       "app_public.practice_logs.status": "ColumnType<'practiced' | 'completed', 'practiced' | 'completed', 'practiced' | 'completed'>"
     }
-  }
+  },
+  "dateParser": "string"
 }

@@ -201,9 +201,9 @@ export class FamilyBillingService extends Context.Service<FamilyBillingService>(
             payerName: payer.name,
             billNumber: bill.value.bill_number,
             status: bill.value.status,
-            billingPeriodStart: String(bill.value.billing_period_start).slice(0, 10),
-            billingPeriodEnd: String(bill.value.billing_period_end).slice(0, 10),
-            dueDate: bill.value.due_date ? String(bill.value.due_date).slice(0, 10) : null,
+            billingPeriodStart: bill.value.billing_period_start,
+            billingPeriodEnd: bill.value.billing_period_end,
+            dueDate: bill.value.due_date,
             issuedAt: bill.value.issued_at
               ? new Date(bill.value.issued_at).toISOString().slice(0, 10)
               : null,

@@ -5,7 +5,7 @@ import { CurrentSession } from "../../shared/api/guards.js";
 import { HttpError } from "../pgErrors.js";
 import { BillingLedgerService } from "../services/billingLedgerService.js";
 import { adaptAdminErrors } from "../httpApiErrors.js";
-import { serializeBillResponse, serializeAdjustment, mapBillDetail } from "./billingResponses.js";
+import { serializeAdjustment, mapBillDetail } from "./billingResponses.js";
 
 export const BillsAdminApiGroupLive = HttpApiBuilder.group(Contract, "billsAdmin", (handlers) =>
   handlers
@@ -53,7 +53,7 @@ export const BillsAdminApiGroupLive = HttpApiBuilder.group(Contract, "billsAdmin
           billingLedgerService.billLineItems(auth.session.id, bill.id),
         );
         return {
-          ...serializeBillResponse(bill),
+          ...bill,
           line_items: lineItems,
           adjustments: [],
           credit_applications: [],

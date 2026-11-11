@@ -60,6 +60,9 @@ class RejectingDriver extends DummyDriver {
  * Result codecs for the shapes the response schemas expect. The driver decodes
  * `int8` as a bigint and `time` as a bigint of microseconds by default; counts
  * and ids fit in a number, and times are compared and shown as `HH:MM:SS`.
+ * The driver decodes `date` as its `YYYY-MM-DD` text, so a calendar day never
+ * moves with the server's time zone; `dateParser` in `.kysely-codegenrc.json`
+ * types those columns as `string` to match.
  * Parameters are unaffected: untyped parameters are sent as text.
  */
 export const pgTypes = PgTypes.makeRegistry();

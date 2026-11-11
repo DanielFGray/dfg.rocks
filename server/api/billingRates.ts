@@ -4,7 +4,7 @@ import { Contract } from "../../shared/httpApi.js";
 import { CurrentSession } from "../../shared/api/guards.js";
 import { BillingLedgerService } from "../services/billingLedgerService.js";
 import { adaptAdminErrors } from "../httpApiErrors.js";
-import { serializeDiscount, serializeTaxRate, serializeTaxExemption } from "./billingResponses.js";
+import { serializeDiscount, serializeTaxRate } from "./billingResponses.js";
 
 export const BillingRatesAdminApiGroupLive = HttpApiBuilder.group(
   Contract,
@@ -78,7 +78,7 @@ export const BillingRatesAdminApiGroupLive = HttpApiBuilder.group(
         "createTaxExemption",
         Effect.fnUntraced(function* ({ payload }) {
           const auth = yield* CurrentSession;
-          const result = yield* BillingLedgerService.use((billingLedgerService) =>
+          return yield* BillingLedgerService.use((billingLedgerService) =>
             billingLedgerService.createTaxExemption(auth.session.id, {
               payerId: payload.payer_id,
               taxRateId: payload.tax_rate_id,
@@ -87,7 +87,6 @@ export const BillingRatesAdminApiGroupLive = HttpApiBuilder.group(
               effectiveUntil: payload.effective_until,
             }),
           );
-          return serializeTaxExemption(result);
         }, adaptAdminErrors),
       ),
 );

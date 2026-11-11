@@ -5,7 +5,6 @@ import { Effect, Layer } from "effect";
 import pg from "pg";
 import { PgAuthDB, PgRootDB } from "../db.js";
 import { BillingLedgerService } from "../services/billingLedgerService.js";
-import { serializeBillResponse } from "../api/billingResponses.js";
 
 const billingLedgerTestLayer = Layer.mergeAll(
   BillingLedgerService.layer,
@@ -223,7 +222,7 @@ describe("Billing ledger foundation", () => {
           ],
         });
 
-        expect(serializeBillResponse(bill).due_date).toBe("2026-10-15");
+        expect(bill.due_date).toBe("2026-10-15");
       }),
     );
     effectIt.effect("records a payment with allocation", () =>

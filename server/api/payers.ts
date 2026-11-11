@@ -4,11 +4,7 @@ import { Contract } from "../../shared/httpApi.js";
 import { CurrentSession } from "../../shared/api/guards.js";
 import { BillingLedgerService } from "../services/billingLedgerService.js";
 import { adaptAdminErrors } from "../httpApiErrors.js";
-import {
-  serializeBillResponse,
-  serializeDiscount,
-  serializeTaxExemption,
-} from "./billingResponses.js";
+import { serializeDiscount } from "./billingResponses.js";
 
 export const PayersAdminApiGroupLive = HttpApiBuilder.group(Contract, "payersAdmin", (handlers) =>
   handlers
@@ -38,25 +34,18 @@ export const PayersAdminApiGroupLive = HttpApiBuilder.group(Contract, "payersAdm
       "billingPayer",
       Effect.fnUntraced(function* ({ params }) {
         const auth = yield* CurrentSession;
-        const detail = yield* BillingLedgerService.use((billingLedgerService) =>
+        return yield* BillingLedgerService.use((billingLedgerService) =>
           billingLedgerService.getPayerBillingDetail(auth.session.id, params.payerId),
         );
-        return {
-          ...detail,
-          bills: detail.bills.map(serializeBillResponse),
-          payments: detail.payments,
-          credits: detail.credits,
-        };
       }, adaptAdminErrors),
     )
     .handle(
       "billingPayerBills",
       Effect.fnUntraced(function* ({ params }) {
         const auth = yield* CurrentSession;
-        const bills = yield* BillingLedgerService.use((billingLedgerService) =>
+        return yield* BillingLedgerService.use((billingLedgerService) =>
           billingLedgerService.listPayerBills(auth.session.id, params.payerId),
         );
-        return bills.map(serializeBillResponse);
       }, adaptAdminErrors),
     )
     .handle(
@@ -93,10 +82,9 @@ export const PayersAdminApiGroupLive = HttpApiBuilder.group(Contract, "payersAdm
       "payerTaxExemptions",
       Effect.fnUntraced(function* ({ params }) {
         const auth = yield* CurrentSession;
-        const exemptions = yield* BillingLedgerService.use((billingLedgerService) =>
+        return yield* BillingLedgerService.use((billingLedgerService) =>
           billingLedgerService.listPayerTaxExemptions(auth.session.id, params.payerId),
         );
-        return exemptions.map(serializeTaxExemption);
       }, adaptAdminErrors),
     ),
 );

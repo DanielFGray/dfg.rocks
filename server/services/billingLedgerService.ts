@@ -389,11 +389,11 @@ export class BillingLedgerService extends Context.Service<BillingLedgerService>(
                   ...billBalanceColumns,
                 ])
                 .where("b.status", "in", ["issued", "paid"])
-                .where("b.billing_period_start", ">=", sql<Date>`${billingMonth}::date`)
+                .where("b.billing_period_start", ">=", sql<string>`${billingMonth}::date`)
                 .where(
                   "b.billing_period_start",
                   "<",
-                  sql<Date>`(${billingMonth}::date + interval '1 month')::date`,
+                  sql<string>`(${billingMonth}::date + interval '1 month')::date`,
                 )
                 .orderBy("l.scheduled_at", "asc"),
             ),
@@ -581,7 +581,7 @@ export class BillingLedgerService extends Context.Service<BillingLedgerService>(
                   adjustmentsCents: Number(bill.adjustments),
                   creditsAppliedCents: Number(bill.credits),
                   paidCents: Number(bill.payments),
-                  dueDate: bill.due_date ? String(bill.due_date).slice(0, 10) : null,
+                  dueDate: bill.due_date,
                   status: bill.status,
                 })),
               });

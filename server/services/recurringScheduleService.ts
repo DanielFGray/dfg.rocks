@@ -1,11 +1,7 @@
 import { Effect, Option, Context, Layer } from "effect";
 import type { ColumnType, Generated } from "kysely";
 import type { DB } from "../../generated/db.js";
-import type {
-  MonthlyPayment,
-  PaymentGenerationStatus,
-  RecurringSchedule,
-} from "../../shared/schemas.js";
+import type { PaymentGenerationStatus } from "../../shared/schemas.js";
 import { type Database, withAuthContext } from "../db.js";
 import { HttpError } from "../pgErrors.js";
 
@@ -81,45 +77,6 @@ const paymentColumns = [
   "generation_error",
   "generated_at",
 ] as const;
-
-function dateOnly(value: Date | string): string {
-  return value instanceof Date ? value.toISOString().slice(0, 10) : value;
-}
-
-export function serializeRecurringSchedule(row: {
-  id: string;
-  student_rate_id: string;
-  student_id: string;
-  day_of_week: number;
-  local_start_time: string;
-  timezone: string;
-  starts_on: Date | string;
-  ends_on: Date | string | null;
-  active: boolean;
-}): RecurringSchedule {
-  return {
-    ...row,
-    starts_on: dateOnly(row.starts_on),
-    ends_on: row.ends_on === null ? null : dateOnly(row.ends_on),
-  };
-}
-
-export function serializeMonthlyPayment(row: {
-  id: string;
-  student_id: string;
-  billing_month: Date | string;
-  amount_cents: number;
-  paid_at: Date;
-  notes: string | null;
-  generation_status: PaymentGenerationStatus;
-  generation_error: string | null;
-  generated_at: Date | null;
-}): MonthlyPayment {
-  return {
-    ...row,
-    billing_month: dateOnly(row.billing_month),
-  };
-}
 
 export function isIsoDate(value: string): boolean {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
