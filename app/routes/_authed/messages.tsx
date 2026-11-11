@@ -13,7 +13,7 @@ import { groupByPartner } from "../../components/messages/helpers.js";
 import { MessageThread } from "../../components/messages/MessageThread.js";
 import { ConversationList } from "../../components/messages/ConversationList.js";
 import { runServerEffect } from "../../lib/serverEffect.js";
-import { AuthenticatedRouteService } from "../../../server/services/authenticatedRouteService.js";
+import { MessageService } from "../../../server/services/messageService.js";
 import { AdminRouteService } from "../../../server/services/adminRouteService.js";
 import { serializeMessage, normalizeStudents } from "../../../shared/responseMappers.js";
 import { requireSession, resolveEffectiveStudent } from "../../lib/sessionGuards.server.js";
@@ -22,12 +22,12 @@ const getMessagesPageData = createServerFn({ method: "GET" }).handler(() =>
   runServerEffect(
     Effect.gen(function* () {
       const session = yield* requireSession(getCookie("session"));
-      const authSvc = yield* AuthenticatedRouteService;
+      const messageService = yield* MessageService;
 
       const effective = resolveEffectiveStudent(session);
       const filterStudentId = effective.isActing ? effective.studentId : undefined;
 
-      const messages = yield* authSvc.messages(
+      const messages = yield* messageService.messages(
         session.session.id,
         {
           limit: 50,
@@ -35,7 +35,8 @@ const getMessagesPageData = createServerFn({ method: "GET" }).handler(() =>
         },
         filterStudentId,
       );
-      const serializedMessages: ReturnType<typeof serializeMessage>[] = messages.map(serializeMessage);
+      const serializedMessages: ReturnType<typeof serializeMessage>[] =
+        messages.map(serializeMessage);
 
       let students: ReturnType<typeof normalizeStudents> | null = null;
       if (session.user.role === "admin") {
