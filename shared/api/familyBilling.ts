@@ -1,5 +1,6 @@
 import * as HttpApiEndpoint from "effect/http-api/HttpApiEndpoint";
 import * as HttpApiGroup from "effect/http-api/HttpApiGroup";
+import { Session } from "./guards.js";
 import { Schema as S } from "effect";
 import {
   FamilyBill,
@@ -77,4 +78,5 @@ export const familyBillingGroup = HttpApiGroup.make("familyBilling")
       params: params("id"),
     }),
   )
+  .middleware(Session)
   .prefix("/api/family");

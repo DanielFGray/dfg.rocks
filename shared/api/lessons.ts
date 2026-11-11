@@ -1,5 +1,6 @@
 import * as HttpApiEndpoint from "effect/http-api/HttpApiEndpoint";
 import * as HttpApiGroup from "effect/http-api/HttpApiGroup";
+import { Admin, Csrf, Session } from "./guards.js";
 import { Schema as S } from "effect";
 import {
   CancellationPolicySettings,
@@ -101,7 +102,7 @@ export const lessonsGroup = HttpApiGroup.make("lessons")
       params: params("id"),
       payload: CancelLessonPayload,
       success: Lesson,
-    }),
+    }).middleware(Csrf),
   )
   .add(
     HttpApiEndpoint.post("rescheduleMyLesson", "/my-lessons/:id/reschedule", {
@@ -109,7 +110,7 @@ export const lessonsGroup = HttpApiGroup.make("lessons")
       params: params("id"),
       payload: RescheduleLessonPayload,
       success: Lesson,
-    }),
+    }).middleware(Csrf),
   )
   .add(
     HttpApiEndpoint.get("myLessonNotesList", "/my-lesson-notes", {
@@ -132,6 +133,7 @@ export const lessonsGroup = HttpApiGroup.make("lessons")
       success: Lesson,
     }),
   )
+  .middleware(Session)
   .prefix("/api");
 
 export const lessonsAdminGroup = HttpApiGroup.make("lessonsAdmin")
@@ -227,4 +229,7 @@ export const lessonsAdminGroup = HttpApiGroup.make("lessonsAdmin")
       success: SuccessResponse,
     }),
   )
+  .middleware(Csrf)
+  .middleware(Admin)
+  .middleware(Session)
   .prefix("/api/admin");

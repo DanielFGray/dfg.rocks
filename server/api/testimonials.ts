@@ -1,15 +1,15 @@
 import * as HttpApiBuilder from "effect/http-api/HttpApiBuilder";
 import { Effect } from "effect";
 import { Contract } from "../../shared/httpApi.js";
+import { CurrentSession, type SignedIn } from "../../shared/api/guards.js";
 import { serializeTestimonial } from "../../shared/responseMappers.js";
 import { HttpError } from "../pgErrors.js";
 import { AuthenticatedRouteService } from "../services/authenticatedRouteService.js";
-import { requireSession, requireAdminSession, type Auth } from "./raw.js";
 import { AdminRouteService } from "../services/adminRouteService.js";
 import { TestimonialReminderService } from "../services/testimonialReminderService.js";
 import { adaptSignedInErrors, adaptAdminErrors } from "../httpApiErrors.js";
 
-const assertCanManageTestimonial = Effect.fnUntraced(function* (auth: Auth) {
+const assertCanManageTestimonial = Effect.fnUntraced(function* (auth: SignedIn) {
   if (auth.user.role === "admin") {
     return yield* new HttpError(403, "Admins cannot manage testimonials");
   }
@@ -19,8 +19,8 @@ export const TestimonialsApiGroupLive = HttpApiBuilder.group(Contract, "testimon
   handlers
     .handle(
       "upsertTestimonial",
-      Effect.fnUntraced(function* ({ request, payload }) {
-        const auth = yield* requireSession(request);
+      Effect.fnUntraced(function* ({ payload }) {
+        const auth = yield* CurrentSession;
         yield* assertCanManageTestimonial(auth);
         const testimonial = yield* AuthenticatedRouteService.use((authenticatedRouteService) =>
           authenticatedRouteService.upsertTestimonial(auth.session.id, auth.user.id, payload.body),
@@ -30,8 +30,8 @@ export const TestimonialsApiGroupLive = HttpApiBuilder.group(Contract, "testimon
     )
     .handle(
       "deleteTestimonial",
-      Effect.fnUntraced(function* ({ request }) {
-        const auth = yield* requireSession(request);
+      Effect.fnUntraced(function* () {
+        const auth = yield* CurrentSession;
         yield* assertCanManageTestimonial(auth);
         yield* AuthenticatedRouteService.use((authenticatedRouteService) =>
           authenticatedRouteService.deleteTestimonial(auth.session.id, auth.user.id),
@@ -48,8 +48,7 @@ export const TestimonialsAdminApiGroupLive = HttpApiBuilder.group(
     handlers
       .handle(
         "testimonialReminderInterval",
-        Effect.fnUntraced(function* (context) {
-          yield* requireAdminSession(context.request);
+        Effect.fnUntraced(function* () {
           return {
             interval_days: yield* TestimonialReminderService.use((testimonialReminderService) =>
               testimonialReminderService.getIntervalDays(),
@@ -59,8 +58,7 @@ export const TestimonialsAdminApiGroupLive = HttpApiBuilder.group(
       )
       .handle(
         "saveTestimonialReminderInterval",
-        Effect.fnUntraced(function* ({ request, payload }) {
-          yield* requireAdminSession(request);
+        Effect.fnUntraced(function* ({ payload }) {
           yield* TestimonialReminderService.use((testimonialReminderService) =>
             testimonialReminderService.setIntervalDays(payload.interval_days),
           );
@@ -75,8 +73,8 @@ export const TestimonialsAdminApiGroupLive = HttpApiBuilder.group(
       )
       .handle(
         "updateTestimonialApproval",
-        Effect.fnUntraced(function* ({ request, params, payload }) {
-          const auth = yield* requireAdminSession(request);
+        Effect.fnUntraced(function* ({ params, payload }) {
+          const auth = yield* CurrentSession;
           const testimonial = yield* AdminRouteService.use((adminRouteService) =>
             adminRouteService.updateTestimonialApproval(
               auth.session.id,

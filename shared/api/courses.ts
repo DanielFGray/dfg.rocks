@@ -1,5 +1,6 @@
 import * as HttpApiEndpoint from "effect/http-api/HttpApiEndpoint";
 import * as HttpApiGroup from "effect/http-api/HttpApiGroup";
+import { Admin, Csrf, Session } from "./guards.js";
 import { Schema as S } from "effect";
 import {
   Course,
@@ -53,6 +54,7 @@ export const coursesGroup = HttpApiGroup.make("courses")
       success: CourseDetail,
     }),
   )
+  .middleware(Session)
   .prefix("/api");
 
 export const coursesAdminGroup = HttpApiGroup.make("coursesAdmin")
@@ -129,4 +131,7 @@ export const coursesAdminGroup = HttpApiGroup.make("coursesAdmin")
       success: SuccessResponse,
     }),
   )
+  .middleware(Csrf)
+  .middleware(Admin)
+  .middleware(Session)
   .prefix("/api/admin");

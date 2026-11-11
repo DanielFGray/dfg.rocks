@@ -1,10 +1,10 @@
 import * as HttpApiBuilder from "effect/http-api/HttpApiBuilder";
 import { Effect } from "effect";
 import { Contract } from "../../shared/httpApi.js";
+import { CurrentSession } from "../../shared/api/guards.js";
 import { HttpError } from "../pgErrors.js";
 import { AuthenticatedRouteService } from "../services/authenticatedRouteService.js";
 import { resolveEffectiveStudent } from "../services/sessionService.js";
-import { requireSession, requireAdminSession } from "./raw.js";
 import { AdminRouteService } from "../services/adminRouteService.js";
 import { adaptSignedInErrors, adaptAdminErrors } from "../httpApiErrors.js";
 
@@ -12,8 +12,8 @@ export const CoursesApiGroupLive = HttpApiBuilder.group(Contract, "courses", (ha
   handlers
     .handle(
       "courses",
-      Effect.fnUntraced(function* ({ request }) {
-        const auth = yield* requireSession(request);
+      Effect.fnUntraced(function* () {
+        const auth = yield* CurrentSession;
         const effective = resolveEffectiveStudent(auth);
         const filterStudentId = effective.isActing ? effective.studentId : undefined;
         return yield* AuthenticatedRouteService.use((authenticatedRouteService) =>
@@ -23,8 +23,8 @@ export const CoursesApiGroupLive = HttpApiBuilder.group(Contract, "courses", (ha
     )
     .handle(
       "courseById",
-      Effect.fnUntraced(function* ({ request, params }) {
-        const auth = yield* requireSession(request);
+      Effect.fnUntraced(function* ({ params }) {
+        const auth = yield* CurrentSession;
         return yield* AuthenticatedRouteService.use((authenticatedRouteService) =>
           authenticatedRouteService.courseById(auth.session.id, params.id),
         );
@@ -36,8 +36,8 @@ export const CoursesAdminApiGroupLive = HttpApiBuilder.group(Contract, "coursesA
   handlers
     .handle(
       "courses",
-      Effect.fnUntraced(function* (context) {
-        const auth = yield* requireAdminSession(context.request);
+      Effect.fnUntraced(function* () {
+        const auth = yield* CurrentSession;
         return yield* AdminRouteService.use((adminRouteService) =>
           adminRouteService.listCourses(auth.session.id),
         );
@@ -46,7 +46,7 @@ export const CoursesAdminApiGroupLive = HttpApiBuilder.group(Contract, "coursesA
     .handle(
       "courseStudents",
       Effect.fnUntraced(function* (context) {
-        const auth = yield* requireAdminSession(context.request);
+        const auth = yield* CurrentSession;
         const { params } = context;
         const rows = yield* AdminRouteService.use((adminRouteService) =>
           adminRouteService.listCourseStudents(auth.session.id, params.id),
@@ -63,8 +63,8 @@ export const CoursesAdminApiGroupLive = HttpApiBuilder.group(Contract, "coursesA
     )
     .handle(
       "createCourse",
-      Effect.fnUntraced(function* ({ request, payload }) {
-        const auth = yield* requireAdminSession(request);
+      Effect.fnUntraced(function* ({ payload }) {
+        const auth = yield* CurrentSession;
         return yield* AdminRouteService.use((adminRouteService) =>
           adminRouteService.createCourse(auth.session.id, {
             title: payload.title,
@@ -76,8 +76,8 @@ export const CoursesAdminApiGroupLive = HttpApiBuilder.group(Contract, "coursesA
     )
     .handle(
       "updateCourse",
-      Effect.fnUntraced(function* ({ request, params, payload }) {
-        const auth = yield* requireAdminSession(request);
+      Effect.fnUntraced(function* ({ params, payload }) {
+        const auth = yield* CurrentSession;
         const updates: Record<string, string> = {};
         const title = payload.title;
         const description = payload.description;
@@ -97,7 +97,7 @@ export const CoursesAdminApiGroupLive = HttpApiBuilder.group(Contract, "coursesA
     .handle(
       "deleteCourse",
       Effect.fnUntraced(function* (context) {
-        const auth = yield* requireAdminSession(context.request);
+        const auth = yield* CurrentSession;
         const { params } = context;
         yield* AdminRouteService.use((adminRouteService) =>
           adminRouteService.deleteCourse(auth.session.id, params.id),
@@ -107,8 +107,8 @@ export const CoursesAdminApiGroupLive = HttpApiBuilder.group(Contract, "coursesA
     )
     .handle(
       "createModule",
-      Effect.fnUntraced(function* ({ request, params, payload }) {
-        const auth = yield* requireAdminSession(request);
+      Effect.fnUntraced(function* ({ params, payload }) {
+        const auth = yield* CurrentSession;
         return yield* AdminRouteService.use((adminRouteService) =>
           adminRouteService.createModule(auth.session.id, params.id, {
             title: payload.title,
@@ -119,8 +119,8 @@ export const CoursesAdminApiGroupLive = HttpApiBuilder.group(Contract, "coursesA
     )
     .handle(
       "updateModule",
-      Effect.fnUntraced(function* ({ request, params, payload }) {
-        const auth = yield* requireAdminSession(request);
+      Effect.fnUntraced(function* ({ params, payload }) {
+        const auth = yield* CurrentSession;
         return yield* AdminRouteService.use((adminRouteService) =>
           adminRouteService.updateModule(auth.session.id, params.id, payload),
         );
@@ -129,7 +129,7 @@ export const CoursesAdminApiGroupLive = HttpApiBuilder.group(Contract, "coursesA
     .handle(
       "deleteModule",
       Effect.fnUntraced(function* (context) {
-        const auth = yield* requireAdminSession(context.request);
+        const auth = yield* CurrentSession;
         const { params } = context;
         yield* AdminRouteService.use((adminRouteService) =>
           adminRouteService.deleteModule(auth.session.id, params.id),
@@ -139,8 +139,8 @@ export const CoursesAdminApiGroupLive = HttpApiBuilder.group(Contract, "coursesA
     )
     .handle(
       "enrollStudent",
-      Effect.fnUntraced(function* ({ request, params, payload }) {
-        const auth = yield* requireAdminSession(request);
+      Effect.fnUntraced(function* ({ params, payload }) {
+        const auth = yield* CurrentSession;
         yield* AdminRouteService.use((adminRouteService) =>
           adminRouteService.enrollStudent(auth.session.id, params.id, payload.course_id),
         );
@@ -150,7 +150,7 @@ export const CoursesAdminApiGroupLive = HttpApiBuilder.group(Contract, "coursesA
     .handle(
       "unenrollStudent",
       Effect.fnUntraced(function* (context) {
-        const auth = yield* requireAdminSession(context.request);
+        const auth = yield* CurrentSession;
         const { params } = context;
         yield* AdminRouteService.use((adminRouteService) =>
           adminRouteService.unenrollStudent(auth.session.id, params.id, params.courseId),

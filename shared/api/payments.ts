@@ -1,5 +1,6 @@
 import * as HttpApiEndpoint from "effect/http-api/HttpApiEndpoint";
 import * as HttpApiGroup from "effect/http-api/HttpApiGroup";
+import { Admin, Csrf, Session } from "./guards.js";
 import { Schema as S } from "effect";
 import { Payment, PaymentMethod, Refund } from "../schemas.js";
 import { params } from "./fields.js";
@@ -41,4 +42,7 @@ export const paymentsAdminGroup = HttpApiGroup.make("paymentsAdmin")
       success: Refund,
     }),
   )
+  .middleware(Csrf)
+  .middleware(Admin)
+  .middleware(Session)
   .prefix("/api/admin");

@@ -1,5 +1,6 @@
 import * as HttpApiEndpoint from "effect/http-api/HttpApiEndpoint";
 import * as HttpApiGroup from "effect/http-api/HttpApiGroup";
+import { Session } from "./guards.js";
 import { Schema as S } from "effect";
 import { Message, SuccessResponse } from "../schemas.js";
 import { params } from "./fields.js";
@@ -43,4 +44,5 @@ export const messagesGroup = HttpApiGroup.make("messages")
       success: SuccessResponse,
     }),
   )
+  .middleware(Session)
   .prefix("/api");

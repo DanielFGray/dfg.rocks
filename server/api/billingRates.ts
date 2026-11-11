@@ -1,9 +1,9 @@
 import * as HttpApiBuilder from "effect/http-api/HttpApiBuilder";
 import { Effect } from "effect";
 import { Contract } from "../../shared/httpApi.js";
+import { CurrentSession } from "../../shared/api/guards.js";
 import { BillingLedgerService } from "../services/billingLedgerService.js";
 import { adaptAdminErrors } from "../httpApiErrors.js";
-import { requireAdminSession } from "./raw.js";
 import { serializeDiscount, serializeTaxRate, serializeTaxExemption } from "./billingResponses.js";
 
 export const BillingRatesAdminApiGroupLive = HttpApiBuilder.group(
@@ -13,8 +13,8 @@ export const BillingRatesAdminApiGroupLive = HttpApiBuilder.group(
     handlers
       .handle(
         "createDiscount",
-        Effect.fnUntraced(function* ({ request, payload }) {
-          const auth = yield* requireAdminSession(request);
+        Effect.fnUntraced(function* ({ payload }) {
+          const auth = yield* CurrentSession;
           const result = yield* BillingLedgerService.use((billingLedgerService) =>
             billingLedgerService.createDiscount(auth.session.id, {
               payerId: payload.payer_id,
@@ -31,8 +31,8 @@ export const BillingRatesAdminApiGroupLive = HttpApiBuilder.group(
       )
       .handle(
         "updateDiscount",
-        Effect.fnUntraced(function* ({ request, params, payload }) {
-          const auth = yield* requireAdminSession(request);
+        Effect.fnUntraced(function* ({ params, payload }) {
+          const auth = yield* CurrentSession;
           const result = yield* BillingLedgerService.use((billingLedgerService) =>
             billingLedgerService.updateDiscount(auth.session.id, params.id, {
               label: payload.label,
@@ -49,8 +49,8 @@ export const BillingRatesAdminApiGroupLive = HttpApiBuilder.group(
       )
       .handle(
         "listTaxRates",
-        Effect.fnUntraced(function* ({ request }) {
-          const auth = yield* requireAdminSession(request);
+        Effect.fnUntraced(function* () {
+          const auth = yield* CurrentSession;
           const rates = yield* BillingLedgerService.use((billingLedgerService) =>
             billingLedgerService.listTaxRates(auth.session.id),
           );
@@ -59,8 +59,8 @@ export const BillingRatesAdminApiGroupLive = HttpApiBuilder.group(
       )
       .handle(
         "createTaxRate",
-        Effect.fnUntraced(function* ({ request, payload }) {
-          const auth = yield* requireAdminSession(request);
+        Effect.fnUntraced(function* ({ payload }) {
+          const auth = yield* CurrentSession;
           const result = yield* BillingLedgerService.use((billingLedgerService) =>
             billingLedgerService.createTaxRate(auth.session.id, {
               label: payload.label,
@@ -76,8 +76,8 @@ export const BillingRatesAdminApiGroupLive = HttpApiBuilder.group(
       )
       .handle(
         "createTaxExemption",
-        Effect.fnUntraced(function* ({ request, payload }) {
-          const auth = yield* requireAdminSession(request);
+        Effect.fnUntraced(function* ({ payload }) {
+          const auth = yield* CurrentSession;
           const result = yield* BillingLedgerService.use((billingLedgerService) =>
             billingLedgerService.createTaxExemption(auth.session.id, {
               payerId: payload.payer_id,

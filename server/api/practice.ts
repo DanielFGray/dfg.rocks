@@ -1,10 +1,10 @@
 import * as HttpApiBuilder from "effect/http-api/HttpApiBuilder";
 import { Effect } from "effect";
 import { Contract } from "../../shared/httpApi.js";
+import { CurrentSession } from "../../shared/api/guards.js";
 import { HttpError } from "../pgErrors.js";
 import { AuthenticatedRouteService } from "../services/authenticatedRouteService.js";
 import { resolveEffectiveStudent } from "../services/sessionService.js";
-import { requireSession, requireAdminSession } from "./raw.js";
 import { AdminRouteService } from "../services/adminRouteService.js";
 import { adaptSignedInErrors, adaptAdminErrors } from "../httpApiErrors.js";
 
@@ -12,8 +12,8 @@ export const PracticeApiGroupLive = HttpApiBuilder.group(Contract, "practice", (
   handlers
     .handle(
       "practiceLogs",
-      Effect.fnUntraced(function* ({ request, query }) {
-        const auth = yield* requireSession(request);
+      Effect.fnUntraced(function* ({ query }) {
+        const auth = yield* CurrentSession;
         const effective = resolveEffectiveStudent(auth);
         const filterStudentId = effective.isActing ? effective.studentId : undefined;
         const rows = yield* AuthenticatedRouteService.use((authenticatedRouteService) =>
@@ -31,8 +31,8 @@ export const PracticeApiGroupLive = HttpApiBuilder.group(Contract, "practice", (
     )
     .handle(
       "createPracticeLog",
-      Effect.fnUntraced(function* ({ request, payload }) {
-        const auth = yield* requireSession(request);
+      Effect.fnUntraced(function* ({ payload }) {
+        const auth = yield* CurrentSession;
         const effective = resolveEffectiveStudent(auth);
         const row = yield* AuthenticatedRouteService.use((authenticatedRouteService) =>
           authenticatedRouteService.createPracticeLog({
@@ -51,8 +51,8 @@ export const PracticeApiGroupLive = HttpApiBuilder.group(Contract, "practice", (
     )
     .handle(
       "ratePracticeLog",
-      Effect.fnUntraced(function* ({ request, payload }) {
-        const auth = yield* requireSession(request);
+      Effect.fnUntraced(function* ({ payload }) {
+        const auth = yield* CurrentSession;
         const effective = resolveEffectiveStudent(auth);
         const row = yield* AuthenticatedRouteService.use((authenticatedRouteService) =>
           authenticatedRouteService.ratePracticeLog(
@@ -77,8 +77,8 @@ export const PracticeAdminApiGroupLive = HttpApiBuilder.group(
     handlers
       .handle(
         "submissions",
-        Effect.fnUntraced(function* ({ request, query }) {
-          const auth = yield* requireAdminSession(request);
+        Effect.fnUntraced(function* ({ query }) {
+          const auth = yield* CurrentSession;
           const rows = yield* AdminRouteService.use((adminRouteService) =>
             adminRouteService.listSubmissions(
               auth.session.id,
@@ -94,8 +94,8 @@ export const PracticeAdminApiGroupLive = HttpApiBuilder.group(
       )
       .handle(
         "updateSubmission",
-        Effect.fnUntraced(function* ({ request, params, payload }) {
-          const auth = yield* requireAdminSession(request);
+        Effect.fnUntraced(function* ({ params, payload }) {
+          const auth = yield* CurrentSession;
           const row = yield* AdminRouteService.use((adminRouteService) =>
             adminRouteService.updateSubmissionRead(auth.session.id, params.id, payload.is_read),
           );

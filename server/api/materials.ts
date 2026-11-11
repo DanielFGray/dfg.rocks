@@ -2,6 +2,7 @@ import * as HttpApiBuilder from "effect/http-api/HttpApiBuilder";
 import * as HttpServerResponse from "effect/http/HttpServerResponse";
 import { Effect, Schema as S } from "effect";
 import { Contract } from "../../shared/httpApi.js";
+import { CurrentSession, type SignedIn } from "../../shared/api/guards.js";
 import {
   AssignedMaterial,
   Material,
@@ -11,17 +12,16 @@ import { adaptHttpApiErrors, adaptSignedInErrors, adaptAdminErrors } from "../ht
 import { HttpError } from "../pgErrors.js";
 import { AuthenticatedRouteService } from "../services/authenticatedRouteService.js";
 import { resolveEffectiveStudent } from "../services/sessionService.js";
-import { requireSession, requireAdminSession, type Auth } from "./raw.js";
 import { AdminRouteService } from "../services/adminRouteService.js";
 import { FileService } from "../services/fileService.js";
 
-const assertCanManageAssignments = Effect.fnUntraced(function* (auth: Auth) {
+const assertCanManageAssignments = Effect.fnUntraced(function* (auth: SignedIn) {
   if (auth.user.role !== "admin" && auth.user.role !== "teacher") {
     return yield* new HttpError(403, "Forbidden");
   }
 });
 
-const assertCanTrackOwnAssignments = Effect.fnUntraced(function* (auth: Auth) {
+const assertCanTrackOwnAssignments = Effect.fnUntraced(function* (auth: SignedIn) {
   if (auth.user.role !== "student" && auth.user.role !== "parent") {
     return yield* new HttpError(403, "Forbidden");
   }
@@ -36,8 +36,8 @@ export const MaterialsApiGroupLive = HttpApiBuilder.group(Contract, "materials",
   handlers
     .handle(
       "library",
-      Effect.fnUntraced(function* ({ request, query }) {
-        const auth = yield* requireSession(request);
+      Effect.fnUntraced(function* ({ query }) {
+        const auth = yield* CurrentSession;
         const rows = yield* AuthenticatedRouteService.use((authenticatedRouteService) =>
           authenticatedRouteService.library(auth.session.id, {
             limit: query.limit ?? 50,
@@ -49,8 +49,8 @@ export const MaterialsApiGroupLive = HttpApiBuilder.group(Contract, "materials",
     )
     .handle(
       "assignments",
-      Effect.fnUntraced(function* ({ request }) {
-        const auth = yield* requireSession(request);
+      Effect.fnUntraced(function* () {
+        const auth = yield* CurrentSession;
         const effective = resolveEffectiveStudent(auth);
         const filterStudentId = effective.isActing ? effective.studentId : undefined;
         const rows = yield* AuthenticatedRouteService.use((authenticatedRouteService) =>
@@ -61,8 +61,8 @@ export const MaterialsApiGroupLive = HttpApiBuilder.group(Contract, "materials",
     )
     .handle(
       "assignStudentMaterial",
-      Effect.fnUntraced(function* ({ request, params, payload }) {
-        const auth = yield* requireSession(request);
+      Effect.fnUntraced(function* ({ params, payload }) {
+        const auth = yield* CurrentSession;
         yield* assertCanManageAssignments(auth);
         yield* AuthenticatedRouteService.use((authenticatedRouteService) =>
           authenticatedRouteService.assignStudentMaterial({
@@ -77,8 +77,8 @@ export const MaterialsApiGroupLive = HttpApiBuilder.group(Contract, "materials",
     )
     .handle(
       "unassignStudentMaterial",
-      Effect.fnUntraced(function* ({ request, params }) {
-        const auth = yield* requireSession(request);
+      Effect.fnUntraced(function* ({ params }) {
+        const auth = yield* CurrentSession;
         yield* assertCanManageAssignments(auth);
         yield* AuthenticatedRouteService.use((authenticatedRouteService) =>
           authenticatedRouteService.unassignStudentMaterial(
@@ -92,8 +92,8 @@ export const MaterialsApiGroupLive = HttpApiBuilder.group(Contract, "materials",
     )
     .handle(
       "recordAssignmentPlayback",
-      Effect.fnUntraced(function* ({ request, params, payload }) {
-        const auth = yield* requireSession(request);
+      Effect.fnUntraced(function* ({ params, payload }) {
+        const auth = yield* CurrentSession;
         yield* assertCanTrackOwnAssignments(auth);
         const effective = resolveEffectiveStudent(auth);
         const row = yield* AuthenticatedRouteService.use((authenticatedRouteService) =>
@@ -112,8 +112,8 @@ export const MaterialsApiGroupLive = HttpApiBuilder.group(Contract, "materials",
     )
     .handle(
       "createAssignmentReview",
-      Effect.fnUntraced(function* ({ request, params, payload }) {
-        const auth = yield* requireSession(request);
+      Effect.fnUntraced(function* ({ params, payload }) {
+        const auth = yield* CurrentSession;
         yield* assertCanTrackOwnAssignments(auth);
         const effective = resolveEffectiveStudent(auth);
         const row = yield* AuthenticatedRouteService.use((authenticatedRouteService) =>
@@ -132,8 +132,8 @@ export const MaterialsApiGroupLive = HttpApiBuilder.group(Contract, "materials",
     )
     .handle(
       "assignmentNotes",
-      Effect.fnUntraced(function* ({ request, params }) {
-        const auth = yield* requireSession(request);
+      Effect.fnUntraced(function* ({ params }) {
+        const auth = yield* CurrentSession;
         const row = yield* AuthenticatedRouteService.use((authenticatedRouteService) =>
           authenticatedRouteService.assignmentNotes(auth.session.id, params.materialId),
         );
@@ -149,8 +149,8 @@ export const MaterialsApiGroupLive = HttpApiBuilder.group(Contract, "materials",
     )
     .handle(
       "upsertAssignmentNotes",
-      Effect.fnUntraced(function* ({ request, params, payload }) {
-        const auth = yield* requireSession(request);
+      Effect.fnUntraced(function* ({ params, payload }) {
+        const auth = yield* CurrentSession;
         const effective = resolveEffectiveStudent(auth);
         const row = yield* AuthenticatedRouteService.use((authenticatedRouteService) =>
           authenticatedRouteService.upsertAssignmentNotes({
@@ -170,7 +170,7 @@ export const MaterialsApiGroupLive = HttpApiBuilder.group(Contract, "materials",
     .handle(
       "materialDownload",
       Effect.fnUntraced(function* (context) {
-        const auth = yield* requireSession(context.request);
+        const auth = yield* CurrentSession;
         const { params } = context;
         const fileInfo = yield* FileService.use((fileService) =>
           fileService.download(params.id, auth.user.id, auth.session.id),
@@ -197,8 +197,8 @@ export const MaterialsAdminApiGroupLive = HttpApiBuilder.group(
     handlers
       .handle(
         "assignMaterial",
-        Effect.fnUntraced(function* ({ request, params, payload }) {
-          const auth = yield* requireAdminSession(request);
+        Effect.fnUntraced(function* ({ params, payload }) {
+          const auth = yield* CurrentSession;
           yield* AdminRouteService.use((adminRouteService) =>
             adminRouteService.assignMaterial({
               sessionId: auth.session.id,
@@ -213,7 +213,7 @@ export const MaterialsAdminApiGroupLive = HttpApiBuilder.group(
       .handle(
         "unassignMaterial",
         Effect.fnUntraced(function* (context) {
-          const auth = yield* requireAdminSession(context.request);
+          const auth = yield* CurrentSession;
           const { params } = context;
           yield* AdminRouteService.use((adminRouteService) =>
             adminRouteService.unassignMaterial(auth.session.id, params.id, params.materialId),
@@ -224,7 +224,7 @@ export const MaterialsAdminApiGroupLive = HttpApiBuilder.group(
       .handle(
         "deleteMaterial",
         Effect.fnUntraced(function* (context) {
-          const auth = yield* requireAdminSession(context.request);
+          const auth = yield* CurrentSession;
           const { params } = context;
           const row = yield* AdminRouteService.use((adminRouteService) =>
             adminRouteService.deleteMaterial(auth.session.id, params.id),
@@ -237,8 +237,8 @@ export const MaterialsAdminApiGroupLive = HttpApiBuilder.group(
       )
       .handle(
         "uploadMaterial",
-        Effect.fnUntraced(function* ({ request, payload }) {
-          const auth = yield* requireAdminSession(request);
+        Effect.fnUntraced(function* ({ payload }) {
+          const auth = yield* CurrentSession;
           return (yield* FileService.use((fileService) =>
             fileService.upload(
               payload.file,

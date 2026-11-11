@@ -1,5 +1,6 @@
 import * as HttpApiEndpoint from "effect/http-api/HttpApiEndpoint";
 import * as HttpApiGroup from "effect/http-api/HttpApiGroup";
+import { Admin, Csrf, Session } from "./guards.js";
 import { Schema as S } from "effect";
 import { MonthlyPayment, MonthlyPaymentStatus, RecurringSchedule } from "../schemas.js";
 import { params, BillingMonthQuery } from "./fields.js";
@@ -65,4 +66,7 @@ export const monthlyBillingAdminGroup = HttpApiGroup.make("monthlyBillingAdmin")
       success: MonthlyPayment,
     }),
   )
+  .middleware(Csrf)
+  .middleware(Admin)
+  .middleware(Session)
   .prefix("/api/admin");

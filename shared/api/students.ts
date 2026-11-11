@@ -1,5 +1,6 @@
 import * as HttpApiEndpoint from "effect/http-api/HttpApiEndpoint";
 import * as HttpApiGroup from "effect/http-api/HttpApiGroup";
+import { Admin, Csrf, Session, Staff } from "./guards.js";
 import { Schema as S } from "effect";
 import { BillingModel, LocationType, StudentDetail, StudentRate, User } from "../schemas.js";
 import { params } from "./fields.js";
@@ -32,6 +33,8 @@ export const studentsStaffGroup = HttpApiGroup.make("studentsStaff")
       success: StudentDetail,
     }),
   )
+  .middleware(Staff)
+  .middleware(Session)
   .prefix("/api/admin");
 
 export const studentsAdminGroup = HttpApiGroup.make("studentsAdmin")
@@ -50,4 +53,7 @@ export const studentsAdminGroup = HttpApiGroup.make("studentsAdmin")
       success: S.Array(StudentRate),
     }),
   )
+  .middleware(Csrf)
+  .middleware(Admin)
+  .middleware(Session)
   .prefix("/api/admin");

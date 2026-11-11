@@ -1,9 +1,9 @@
 import * as HttpApiBuilder from "effect/http-api/HttpApiBuilder";
 import { Effect } from "effect";
 import { Contract } from "../../shared/httpApi.js";
+import { CurrentSession } from "../../shared/api/guards.js";
 import { BillingLedgerService } from "../services/billingLedgerService.js";
 import { adaptAdminErrors } from "../httpApiErrors.js";
-import { requireAdminSession } from "./raw.js";
 import {
   serializeBillResponse,
   serializePaymentResponse,
@@ -16,8 +16,8 @@ export const PayersAdminApiGroupLive = HttpApiBuilder.group(Contract, "payersAdm
   handlers
     .handle(
       "billingPayers",
-      Effect.fnUntraced(function* ({ request }) {
-        const auth = yield* requireAdminSession(request);
+      Effect.fnUntraced(function* () {
+        const auth = yield* CurrentSession;
         const summaries = yield* BillingLedgerService.use((billingLedgerService) =>
           billingLedgerService.listPayers(auth.session.id),
         );
@@ -38,8 +38,8 @@ export const PayersAdminApiGroupLive = HttpApiBuilder.group(Contract, "payersAdm
     )
     .handle(
       "billingPayer",
-      Effect.fnUntraced(function* ({ request, params }) {
-        const auth = yield* requireAdminSession(request);
+      Effect.fnUntraced(function* ({ params }) {
+        const auth = yield* CurrentSession;
         const detail = yield* BillingLedgerService.use((billingLedgerService) =>
           billingLedgerService.getPayerBillingDetail(auth.session.id, params.payerId),
         );
@@ -53,8 +53,8 @@ export const PayersAdminApiGroupLive = HttpApiBuilder.group(Contract, "payersAdm
     )
     .handle(
       "billingPayerBills",
-      Effect.fnUntraced(function* ({ request, params }) {
-        const auth = yield* requireAdminSession(request);
+      Effect.fnUntraced(function* ({ params }) {
+        const auth = yield* CurrentSession;
         const bills = yield* BillingLedgerService.use((billingLedgerService) =>
           billingLedgerService.listPayerBills(auth.session.id, params.payerId),
         );
@@ -63,8 +63,8 @@ export const PayersAdminApiGroupLive = HttpApiBuilder.group(Contract, "payersAdm
     )
     .handle(
       "billingPayerPayments",
-      Effect.fnUntraced(function* ({ request, params }) {
-        const auth = yield* requireAdminSession(request);
+      Effect.fnUntraced(function* ({ params }) {
+        const auth = yield* CurrentSession;
         const payments = yield* BillingLedgerService.use((billingLedgerService) =>
           billingLedgerService.listPayerPayments(auth.session.id, params.payerId),
         );
@@ -73,8 +73,8 @@ export const PayersAdminApiGroupLive = HttpApiBuilder.group(Contract, "payersAdm
     )
     .handle(
       "billingPayerCredits",
-      Effect.fnUntraced(function* ({ request, params }) {
-        const auth = yield* requireAdminSession(request);
+      Effect.fnUntraced(function* ({ params }) {
+        const auth = yield* CurrentSession;
         const credits = yield* BillingLedgerService.use((billingLedgerService) =>
           billingLedgerService.listPayerCredits(auth.session.id, params.payerId),
         );
@@ -83,8 +83,8 @@ export const PayersAdminApiGroupLive = HttpApiBuilder.group(Contract, "payersAdm
     )
     .handle(
       "payerDiscounts",
-      Effect.fnUntraced(function* ({ request, params }) {
-        const auth = yield* requireAdminSession(request);
+      Effect.fnUntraced(function* ({ params }) {
+        const auth = yield* CurrentSession;
         const discounts = yield* BillingLedgerService.use((billingLedgerService) =>
           billingLedgerService.listPayerDiscounts(auth.session.id, params.payerId),
         );
@@ -93,8 +93,8 @@ export const PayersAdminApiGroupLive = HttpApiBuilder.group(Contract, "payersAdm
     )
     .handle(
       "payerTaxExemptions",
-      Effect.fnUntraced(function* ({ request, params }) {
-        const auth = yield* requireAdminSession(request);
+      Effect.fnUntraced(function* ({ params }) {
+        const auth = yield* CurrentSession;
         const exemptions = yield* BillingLedgerService.use((billingLedgerService) =>
           billingLedgerService.listPayerTaxExemptions(auth.session.id, params.payerId),
         );

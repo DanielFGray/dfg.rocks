@@ -1,5 +1,6 @@
 import * as HttpApiEndpoint from "effect/http-api/HttpApiEndpoint";
 import * as HttpApiGroup from "effect/http-api/HttpApiGroup";
+import { Admin, Csrf, Session } from "./guards.js";
 import { Schema as S } from "effect";
 import { Discount, TaxExemption, TaxRate } from "../schemas.js";
 import { params } from "./fields.js";
@@ -78,4 +79,7 @@ export const billingRatesAdminGroup = HttpApiGroup.make("billingRatesAdmin")
       success: TaxExemption,
     }),
   )
+  .middleware(Csrf)
+  .middleware(Admin)
+  .middleware(Session)
   .prefix("/api/admin");

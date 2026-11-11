@@ -1,5 +1,6 @@
 import * as HttpApiEndpoint from "effect/http-api/HttpApiEndpoint";
 import * as HttpApiGroup from "effect/http-api/HttpApiGroup";
+import { Admin, Csrf, Session } from "./guards.js";
 import { Schema as S } from "effect";
 import { CreditApplication, AdminCredit } from "../schemas.js";
 import { adminErrors } from "../httpApiErrors.js";
@@ -33,4 +34,7 @@ export const creditsAdminGroup = HttpApiGroup.make("creditsAdmin")
       success: CreditApplication,
     }),
   )
+  .middleware(Csrf)
+  .middleware(Admin)
+  .middleware(Session)
   .prefix("/api/admin");

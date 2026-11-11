@@ -1,5 +1,6 @@
 import * as HttpApiEndpoint from "effect/http-api/HttpApiEndpoint";
 import * as HttpApiGroup from "effect/http-api/HttpApiGroup";
+import { Csrf } from "./guards.js";
 import { Schema as S } from "effect";
 import { User, SuccessResponse } from "../schemas.js";
 import {
@@ -58,42 +59,47 @@ export const authGroup = HttpApiGroup.make("auth")
       error: authErrors,
       payload: LoginPayload,
       success: User,
-    }),
+    }).middleware(Csrf),
   )
   .add(
     HttpApiEndpoint.post("magicLink", "/magic-link", {
       error: authErrors,
       payload: MagicLinkPayload,
       success: SuccessResponse,
-    }),
+    }).middleware(Csrf),
   )
   .add(
     HttpApiEndpoint.post("verifyMagicLink", "/magic-link/verify", {
       error: authErrors,
       payload: VerifyMagicLinkPayload,
       success: User,
-    }),
+    }).middleware(Csrf),
   )
-  .add(HttpApiEndpoint.post("logout", "/logout", { error: authErrors, success: SuccessResponse }))
+  .add(
+    HttpApiEndpoint.post("logout", "/logout", {
+      error: authErrors,
+      success: SuccessResponse,
+    }).middleware(Csrf),
+  )
   .add(
     HttpApiEndpoint.post("forgotPassword", "/forgot-password", {
       error: authErrors,
       payload: MagicLinkPayload,
       success: SuccessResponse,
-    }),
+    }).middleware(Csrf),
   )
   .add(
     HttpApiEndpoint.post("resetPassword", "/reset-password", {
       error: authErrors,
       payload: ResetPasswordPayload,
       success: SuccessResponse,
-    }),
+    }).middleware(Csrf),
   )
   .add(HttpApiEndpoint.get("me", "/me", { error: authErrors, success: MeResponse }))
   .add(
     HttpApiEndpoint.post("resendVerification", "/resend-verification", {
       error: authErrors,
       success: SuccessResponse,
-    }),
+    }).middleware(Csrf),
   )
   .prefix("/api");

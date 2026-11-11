@@ -1,12 +1,12 @@
 import * as HttpApiBuilder from "effect/http-api/HttpApiBuilder";
 import { Effect } from "effect";
 import { Contract } from "../../shared/httpApi.js";
+import { CurrentSession } from "../../shared/api/guards.js";
 import { HttpError } from "../pgErrors.js";
 import { BillingLedgerService } from "../services/billingLedgerService.js";
 import { type Selectable } from "kysely";
 import { type AppPublicBillLineItems } from "../../generated/db.js";
 import { adaptAdminErrors } from "../httpApiErrors.js";
-import { requireAdminSession } from "./raw.js";
 import {
   serializeBillingDate,
   serializeBillResponse,
@@ -18,8 +18,8 @@ export const BillsAdminApiGroupLive = HttpApiBuilder.group(Contract, "billsAdmin
   handlers
     .handle(
       "lessonBills",
-      Effect.fnUntraced(function* ({ request, query }) {
-        const auth = yield* requireAdminSession(request);
+      Effect.fnUntraced(function* ({ query }) {
+        const auth = yield* CurrentSession;
         const bills = yield* BillingLedgerService.use((billingLedgerService) =>
           billingLedgerService.listLessonBills(auth.session.id, query.month),
         );
@@ -31,8 +31,8 @@ export const BillsAdminApiGroupLive = HttpApiBuilder.group(Contract, "billsAdmin
     )
     .handle(
       "createBill",
-      Effect.fnUntraced(function* ({ request, payload }) {
-        const auth = yield* requireAdminSession(request);
+      Effect.fnUntraced(function* ({ payload }) {
+        const auth = yield* CurrentSession;
         const bill = yield* BillingLedgerService.use((billingLedgerService) =>
           billingLedgerService.createBill(auth.session.id, {
             payerId: payload.payer_id,
@@ -76,8 +76,8 @@ export const BillsAdminApiGroupLive = HttpApiBuilder.group(Contract, "billsAdmin
     )
     .handle(
       "getBill",
-      Effect.fnUntraced(function* ({ request, params }) {
-        const auth = yield* requireAdminSession(request);
+      Effect.fnUntraced(function* ({ params }) {
+        const auth = yield* CurrentSession;
         const result = yield* BillingLedgerService.use((billingLedgerService) =>
           billingLedgerService.getBill(auth.session.id, params.id),
         );
@@ -89,8 +89,8 @@ export const BillsAdminApiGroupLive = HttpApiBuilder.group(Contract, "billsAdmin
     )
     .handle(
       "issueBill",
-      Effect.fnUntraced(function* ({ request, params }) {
-        const auth = yield* requireAdminSession(request);
+      Effect.fnUntraced(function* ({ params }) {
+        const auth = yield* CurrentSession;
         yield* BillingLedgerService.use((billingLedgerService) =>
           billingLedgerService.issueBill(auth.session.id, params.id),
         );
@@ -105,8 +105,8 @@ export const BillsAdminApiGroupLive = HttpApiBuilder.group(Contract, "billsAdmin
     )
     .handle(
       "cancelBill",
-      Effect.fnUntraced(function* ({ request, params }) {
-        const auth = yield* requireAdminSession(request);
+      Effect.fnUntraced(function* ({ params }) {
+        const auth = yield* CurrentSession;
         yield* BillingLedgerService.use((billingLedgerService) =>
           billingLedgerService.cancelBill(auth.session.id, params.id),
         );
@@ -121,8 +121,8 @@ export const BillsAdminApiGroupLive = HttpApiBuilder.group(Contract, "billsAdmin
     )
     .handle(
       "voidBill",
-      Effect.fnUntraced(function* ({ request, params, payload }) {
-        const auth = yield* requireAdminSession(request);
+      Effect.fnUntraced(function* ({ params, payload }) {
+        const auth = yield* CurrentSession;
         yield* BillingLedgerService.use((billingLedgerService) =>
           billingLedgerService.voidBill(auth.session.id, {
             billId: params.id,
@@ -140,8 +140,8 @@ export const BillsAdminApiGroupLive = HttpApiBuilder.group(Contract, "billsAdmin
     )
     .handle(
       "adjustBill",
-      Effect.fnUntraced(function* ({ request, params, payload }) {
-        const auth = yield* requireAdminSession(request);
+      Effect.fnUntraced(function* ({ params, payload }) {
+        const auth = yield* CurrentSession;
         const result = yield* BillingLedgerService.use((billingLedgerService) =>
           billingLedgerService.createAdjustment(auth.session.id, {
             billId: params.id,

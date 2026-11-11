@@ -1,5 +1,6 @@
 import * as HttpApiEndpoint from "effect/http-api/HttpApiEndpoint";
 import * as HttpApiGroup from "effect/http-api/HttpApiGroup";
+import { Admin, Csrf, Session } from "./guards.js";
 import * as HttpApiSchema from "effect/http-api/HttpApiSchema";
 import * as Multipart from "effect/http/Multipart";
 import { Schema as S } from "effect";
@@ -120,6 +121,7 @@ export const materialsGroup = HttpApiGroup.make("materials")
       params: params("id"),
     }),
   )
+  .middleware(Session)
   .prefix("/api");
 
 export const materialsAdminGroup = HttpApiGroup.make("materialsAdmin")
@@ -152,4 +154,7 @@ export const materialsAdminGroup = HttpApiGroup.make("materialsAdmin")
       success: Material,
     }),
   )
+  .middleware(Csrf)
+  .middleware(Admin)
+  .middleware(Session)
   .prefix("/api/admin");

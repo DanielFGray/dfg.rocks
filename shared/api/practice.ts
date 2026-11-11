@@ -1,5 +1,6 @@
 import * as HttpApiEndpoint from "effect/http-api/HttpApiEndpoint";
 import * as HttpApiGroup from "effect/http-api/HttpApiGroup";
+import { Admin, Csrf, Session } from "./guards.js";
 import { Schema as S } from "effect";
 import { PracticeLog, Submission, SuccessResponse } from "../schemas.js";
 import { params, PaginationQuery } from "./fields.js";
@@ -46,6 +47,7 @@ export const practiceGroup = HttpApiGroup.make("practice")
       success: PracticeLog,
     }),
   )
+  .middleware(Session)
   .prefix("/api");
 
 export const practiceAdminGroup = HttpApiGroup.make("practiceAdmin")
@@ -64,4 +66,7 @@ export const practiceAdminGroup = HttpApiGroup.make("practiceAdmin")
       success: SuccessResponse,
     }),
   )
+  .middleware(Csrf)
+  .middleware(Admin)
+  .middleware(Session)
   .prefix("/api/admin");

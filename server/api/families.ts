@@ -1,9 +1,9 @@
 import * as HttpApiBuilder from "effect/http-api/HttpApiBuilder";
 import { Effect, Config } from "effect";
 import { Contract } from "../../shared/httpApi.js";
+import { CurrentSession } from "../../shared/api/guards.js";
 import { HttpError } from "../pgErrors.js";
 import { AuthenticatedRouteService } from "../services/authenticatedRouteService.js";
-import { csrfCheck, requireSession, requireAdminSession } from "./raw.js";
 import { AdminRouteService } from "../services/adminRouteService.js";
 import { adaptSignedInErrors, adaptAdminErrors } from "../httpApiErrors.js";
 
@@ -11,8 +11,8 @@ export const FamiliesApiGroupLive = HttpApiBuilder.group(Contract, "families", (
   handlers
     .handle(
       "createChild",
-      Effect.fnUntraced(function* ({ request, payload }) {
-        const auth = yield* requireSession(request);
+      Effect.fnUntraced(function* ({ payload }) {
+        const auth = yield* CurrentSession;
         if (auth.user.role !== "parent") {
           return yield* new HttpError(403, "Only parents can create child accounts");
         }
@@ -23,8 +23,8 @@ export const FamiliesApiGroupLive = HttpApiBuilder.group(Contract, "families", (
     )
     .handle(
       "family",
-      Effect.fnUntraced(function* ({ request }) {
-        const auth = yield* requireSession(request);
+      Effect.fnUntraced(function* () {
+        const auth = yield* CurrentSession;
         return yield* AuthenticatedRouteService.use((authenticatedRouteService) =>
           authenticatedRouteService.family(auth.session.id, auth.user.id),
         );
@@ -32,9 +32,8 @@ export const FamiliesApiGroupLive = HttpApiBuilder.group(Contract, "families", (
     )
     .handle(
       "removeFamilyMember",
-      Effect.fnUntraced(function* ({ request, payload }) {
-        const auth = yield* requireSession(request);
-        yield* csrfCheck(request.headers);
+      Effect.fnUntraced(function* ({ payload }) {
+        const auth = yield* CurrentSession;
         yield* AuthenticatedRouteService.use((authenticatedRouteService) =>
           authenticatedRouteService.removeFamilyMember(
             auth.session.id,
@@ -47,9 +46,8 @@ export const FamiliesApiGroupLive = HttpApiBuilder.group(Contract, "families", (
     )
     .handle(
       "inviteFamilyMember",
-      Effect.fnUntraced(function* ({ request, payload }) {
-        const auth = yield* requireSession(request);
-        yield* csrfCheck(request.headers);
+      Effect.fnUntraced(function* ({ payload }) {
+        const auth = yield* CurrentSession;
         yield* AuthenticatedRouteService.use((authenticatedRouteService) =>
           authenticatedRouteService.inviteFamilyMember(
             auth.session.id,
@@ -62,9 +60,8 @@ export const FamiliesApiGroupLive = HttpApiBuilder.group(Contract, "families", (
     )
     .handle(
       "setChildEmail",
-      Effect.fnUntraced(function* ({ request, params, payload }) {
-        const auth = yield* requireSession(request);
-        yield* csrfCheck(request.headers);
+      Effect.fnUntraced(function* ({ params, payload }) {
+        const auth = yield* CurrentSession;
         if (auth.user.role !== "parent") {
           return yield* new HttpError(403, "Only parents can manage child accounts");
         }
@@ -81,9 +78,8 @@ export const FamiliesApiGroupLive = HttpApiBuilder.group(Contract, "families", (
     )
     .handle(
       "requestChildPasswordSet",
-      Effect.fnUntraced(function* ({ request, params }) {
-        const auth = yield* requireSession(request);
-        yield* csrfCheck(request.headers);
+      Effect.fnUntraced(function* ({ params }) {
+        const auth = yield* CurrentSession;
         if (auth.user.role !== "parent") {
           return yield* new HttpError(403, "Only parents can manage child accounts");
         }
@@ -98,9 +94,8 @@ export const FamiliesApiGroupLive = HttpApiBuilder.group(Contract, "families", (
     )
     .handle(
       "setChildPassword",
-      Effect.fnUntraced(function* ({ request, params, payload }) {
-        const auth = yield* requireSession(request);
-        yield* csrfCheck(request.headers);
+      Effect.fnUntraced(function* ({ params, payload }) {
+        const auth = yield* CurrentSession;
         yield* AuthenticatedRouteService.use((authenticatedRouteService) =>
           authenticatedRouteService.setChildPassword(
             auth.session.id,
@@ -121,8 +116,8 @@ export const FamiliesAdminApiGroupLive = HttpApiBuilder.group(
     handlers
       .handle(
         "createFamily",
-        Effect.fnUntraced(function* ({ request, payload }) {
-          const auth = yield* requireAdminSession(request);
+        Effect.fnUntraced(function* ({ payload }) {
+          const auth = yield* CurrentSession;
           const familyResult = yield* AdminRouteService.use((adminRouteService) =>
             adminRouteService.createFamily(auth.session.id, {
               slug: payload.slug,
@@ -141,8 +136,8 @@ export const FamiliesAdminApiGroupLive = HttpApiBuilder.group(
       )
       .handle(
         "families",
-        Effect.fnUntraced(function* (context) {
-          const auth = yield* requireAdminSession(context.request);
+        Effect.fnUntraced(function* () {
+          const auth = yield* CurrentSession;
           const rows = yield* AdminRouteService.use((adminRouteService) =>
             adminRouteService.listFamilies(auth.session.id),
           );
@@ -154,8 +149,8 @@ export const FamiliesAdminApiGroupLive = HttpApiBuilder.group(
       )
       .handle(
         "inviteFamily",
-        Effect.fnUntraced(function* ({ request, params, payload }) {
-          const auth = yield* requireAdminSession(request);
+        Effect.fnUntraced(function* ({ params, payload }) {
+          const auth = yield* CurrentSession;
           yield* AdminRouteService.use((adminRouteService) =>
             adminRouteService.inviteFamily(auth.session.id, params.familyId, {
               username: payload.username,
@@ -168,8 +163,8 @@ export const FamiliesAdminApiGroupLive = HttpApiBuilder.group(
       )
       .handle(
         "qrInvite",
-        Effect.fnUntraced(function* ({ request, params, payload }) {
-          const auth = yield* requireAdminSession(request);
+        Effect.fnUntraced(function* ({ params, payload }) {
+          const auth = yield* CurrentSession;
           let familyId = params.familyId;
           if (familyId === "new") {
             const name = payload.name;
@@ -203,7 +198,7 @@ export const FamiliesAdminApiGroupLive = HttpApiBuilder.group(
       .handle(
         "familyInvitations",
         Effect.fnUntraced(function* (context) {
-          const auth = yield* requireAdminSession(context.request);
+          const auth = yield* CurrentSession;
           const { params } = context;
           return (yield* AdminRouteService.use((adminRouteService) =>
             adminRouteService.listFamilyInvitations(auth.session.id, params.familyId),

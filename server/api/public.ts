@@ -22,7 +22,7 @@ import { GeolocationService } from "../services/geolocation.js";
 import { PublicRouteService } from "../services/publicRouteService.js";
 import { checkRateLimit, clientIdentifierFromHeaders } from "../rateLimit.js";
 import { UserService } from "../services/userService.js";
-import { csrfCheck, setSessionCookie } from "./raw.js";
+import { setSessionCookie } from "./raw.js";
 
 const publicErrorStatuses = [400, 403, 404, 409, 429, 500, 502, 503] as const;
 
@@ -60,7 +60,6 @@ export function makePublicLayer() {
       .handle(
         "contact",
         Effect.fnUntraced(function* ({ request, payload }) {
-          yield* csrfCheck(request.headers);
           if (payload.website) {
             return yield* new HttpError(400, "Invalid submission");
           }
@@ -276,8 +275,7 @@ export function makePublicLayer() {
 
       .handle(
         "verifyEmail",
-        Effect.fnUntraced(function* ({ request, payload }) {
-          yield* csrfCheck(request.headers);
+        Effect.fnUntraced(function* ({ payload }) {
           yield* PublicRouteService.use((publicRouteService) =>
             publicRouteService.verifyEmail(payload.token),
           );
@@ -297,7 +295,6 @@ export function makePublicLayer() {
       .handle(
         "acceptInvitation",
         Effect.fnUntraced(function* ({ request, params, payload }) {
-          yield* csrfCheck(request.headers);
           yield* checkRateLimit("accept-invite", request.headers);
           const session = yield* PublicRouteService.use((publicRouteService) =>
             publicRouteService.acceptInvitation({

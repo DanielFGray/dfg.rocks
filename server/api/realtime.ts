@@ -2,16 +2,16 @@ import * as HttpApiBuilder from "effect/http-api/HttpApiBuilder";
 import * as HttpServerResponse from "effect/http/HttpServerResponse";
 import { Effect, Schedule, Stream } from "effect";
 import { Contract } from "../../shared/httpApi.js";
+import { CurrentSession } from "../../shared/api/guards.js";
 import { RealtimeService } from "../services/realtimeService.js";
 import { resolveEffectiveStudent } from "../services/sessionService.js";
-import { requireSession } from "./raw.js";
 import { adaptSignedInErrors } from "../httpApiErrors.js";
 
 export const RealtimeApiGroupLive = HttpApiBuilder.group(Contract, "realtime", (handlers) =>
   handlers.handle(
     "events",
-    Effect.fnUntraced(function* ({ request }) {
-      const auth = yield* requireSession(request);
+    Effect.fnUntraced(function* () {
+      const auth = yield* CurrentSession;
       const effective = resolveEffectiveStudent(auth);
       const userId = auth.user.id;
       const listenerIds = effective.isActing ? [userId, effective.studentId] : [userId];

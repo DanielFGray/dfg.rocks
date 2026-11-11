@@ -1,5 +1,6 @@
 import * as HttpApiEndpoint from "effect/http-api/HttpApiEndpoint";
 import * as HttpApiGroup from "effect/http-api/HttpApiGroup";
+import { Csrf, Session } from "./guards.js";
 import { Schema as S } from "effect";
 import { UserEmail, SuccessResponse } from "../schemas.js";
 import { params } from "./fields.js";
@@ -22,14 +23,14 @@ export const accountsGroup = HttpApiGroup.make("accounts")
     HttpApiEndpoint.post("requestDeleteAccount", "/request-delete-account", {
       error: signedInErrors,
       success: SuccessResponse,
-    }),
+    }).middleware(Csrf),
   )
   .add(
     HttpApiEndpoint.post("confirmDeleteAccount", "/confirm-delete-account", {
       error: signedInErrors,
       payload: ConfirmDeleteAccountPayload,
       success: SuccessResponse,
-    }),
+    }).middleware(Csrf),
   )
   .add(
     HttpApiEndpoint.get("myEmails", "/me/emails", {
@@ -72,4 +73,5 @@ export const accountsGroup = HttpApiGroup.make("accounts")
       success: SuccessResponse,
     }),
   )
+  .middleware(Session)
   .prefix("/api");

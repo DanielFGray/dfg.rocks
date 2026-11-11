@@ -8,7 +8,7 @@ import { AuthService } from "../services/authService.js";
 import { AuthRouteService } from "../services/authRouteService.js";
 import { SessionService } from "../services/sessionService.js";
 import { UserService } from "../services/userService.js";
-import { csrfCheck, expireSessionCookie, setSessionCookie } from "./raw.js";
+import { expireSessionCookie, setSessionCookie } from "./raw.js";
 
 const authErrorStatuses = [400, 401, 404, 409, 423, 429, 500] as const;
 
@@ -26,7 +26,6 @@ export function makeAuthLayer() {
       .handle(
         "login",
         Effect.fnUntraced(function* ({ request, payload }) {
-          yield* csrfCheck(request.headers);
           yield* checkRateLimit("login", request.headers);
           const result = yield* AuthService.use((authService) => authService.login(payload));
           const { email } = yield* UserService.use((userService) =>
@@ -47,7 +46,6 @@ export function makeAuthLayer() {
       .handle(
         "magicLink",
         Effect.fnUntraced(function* ({ request, payload }) {
-          yield* csrfCheck(request.headers);
           yield* checkRateLimit("magic-link", request.headers);
           yield* AuthRouteService.use((authRouteService) =>
             authRouteService.generateMagicLink(payload.email),
@@ -57,8 +55,7 @@ export function makeAuthLayer() {
       )
       .handle(
         "verifyMagicLink",
-        Effect.fnUntraced(function* ({ request, payload }) {
-          yield* csrfCheck(request.headers);
+        Effect.fnUntraced(function* ({ payload }) {
           const session = yield* AuthRouteService.use((authRouteService) =>
             authRouteService.consumeMagicLink(payload.token),
           );
@@ -70,7 +67,6 @@ export function makeAuthLayer() {
       .handle(
         "logout",
         Effect.fnUntraced(function* ({ request }) {
-          yield* csrfCheck(request.headers);
           const token = request.cookies.session;
           const cookieId = token ? cookieIdFromToken(token) : undefined;
           yield* AuthService.use((authService) => authService.logout(cookieId));
@@ -82,7 +78,6 @@ export function makeAuthLayer() {
       .handle(
         "forgotPassword",
         Effect.fnUntraced(function* ({ request, payload }) {
-          yield* csrfCheck(request.headers);
           yield* checkRateLimit("forgot-password", request.headers);
           yield* AuthService.use((authService) => authService.forgotPassword(payload));
           return { success: true as const };
@@ -91,7 +86,6 @@ export function makeAuthLayer() {
       .handle(
         "resetPassword",
         Effect.fnUntraced(function* ({ request, payload }) {
-          yield* csrfCheck(request.headers);
           yield* checkRateLimit("reset-password", request.headers);
           const result = yield* AuthService.use((authService) =>
             authService.resetPassword(payload),
@@ -111,7 +105,6 @@ export function makeAuthLayer() {
       .handle(
         "resendVerification",
         Effect.fnUntraced(function* ({ request }) {
-          yield* csrfCheck(request.headers);
           const session = yield* SessionService.use((sessionService) =>
             sessionService.validateSessionToken(request.cookies.session),
           );

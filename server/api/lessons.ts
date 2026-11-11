@@ -1,12 +1,12 @@
 import * as HttpApiBuilder from "effect/http-api/HttpApiBuilder";
 import { Effect } from "effect";
 import { Contract } from "../../shared/httpApi.js";
+import { CurrentSession } from "../../shared/api/guards.js";
 import { serializeLesson, serializeLessonNote } from "../../shared/responseMappers.js";
 import { HttpError } from "../pgErrors.js";
 import { AuthenticatedRouteService } from "../services/authenticatedRouteService.js";
 import { GoogleCalendarService } from "../services/googleCalendarService.js";
 import { resolveEffectiveStudent } from "../services/sessionService.js";
-import { csrfCheck, requireSession, requireAdminSession } from "./raw.js";
 import { AdminRouteService } from "../services/adminRouteService.js";
 import { type LocationType } from "../../shared/schemas.js";
 import { adaptSignedInErrors, adaptAdminErrors } from "../httpApiErrors.js";
@@ -15,8 +15,8 @@ export const LessonsApiGroupLive = HttpApiBuilder.group(Contract, "lessons", (ha
   handlers
     .handle(
       "myLessons",
-      Effect.fnUntraced(function* ({ request, query }) {
-        const auth = yield* requireSession(request);
+      Effect.fnUntraced(function* ({ query }) {
+        const auth = yield* CurrentSession;
         const effective = resolveEffectiveStudent(auth);
         const filterStudentId = effective.isActing ? effective.studentId : undefined;
         const rows = yield* AuthenticatedRouteService.use((authenticatedRouteService) =>
@@ -37,8 +37,8 @@ export const LessonsApiGroupLive = HttpApiBuilder.group(Contract, "lessons", (ha
     )
     .handle(
       "myLessonCancellationPolicy",
-      Effect.fnUntraced(function* ({ request, params }) {
-        const auth = yield* requireSession(request);
+      Effect.fnUntraced(function* ({ params }) {
+        const auth = yield* CurrentSession;
         const effective = resolveEffectiveStudent(auth);
         return yield* AuthenticatedRouteService.use((authenticatedRouteService) =>
           authenticatedRouteService.myLessonCancellationPolicy({
@@ -51,9 +51,8 @@ export const LessonsApiGroupLive = HttpApiBuilder.group(Contract, "lessons", (ha
     )
     .handle(
       "cancelMyLesson",
-      Effect.fnUntraced(function* ({ request, params, payload }) {
-        const auth = yield* requireSession(request);
-        yield* csrfCheck(request.headers);
+      Effect.fnUntraced(function* ({ params, payload }) {
+        const auth = yield* CurrentSession;
         const effective = resolveEffectiveStudent(auth);
         const lesson = yield* AuthenticatedRouteService.use((authenticatedRouteService) =>
           authenticatedRouteService.cancelMyLesson({
@@ -68,9 +67,8 @@ export const LessonsApiGroupLive = HttpApiBuilder.group(Contract, "lessons", (ha
     )
     .handle(
       "rescheduleMyLesson",
-      Effect.fnUntraced(function* ({ request, params, payload }) {
-        const auth = yield* requireSession(request);
-        yield* csrfCheck(request.headers);
+      Effect.fnUntraced(function* ({ params, payload }) {
+        const auth = yield* CurrentSession;
         const effective = resolveEffectiveStudent(auth);
         const lesson = yield* AuthenticatedRouteService.use((authenticatedRouteService) =>
           authenticatedRouteService.rescheduleMyLesson({
@@ -85,8 +83,8 @@ export const LessonsApiGroupLive = HttpApiBuilder.group(Contract, "lessons", (ha
     )
     .handle(
       "myLessonNotesList",
-      Effect.fnUntraced(function* ({ request, query }) {
-        const auth = yield* requireSession(request);
+      Effect.fnUntraced(function* ({ query }) {
+        const auth = yield* CurrentSession;
         const effective = resolveEffectiveStudent(auth);
         const filterStudentId = effective.isActing ? effective.studentId : undefined;
         const rows = yield* AuthenticatedRouteService.use((authenticatedRouteService) =>
@@ -109,8 +107,7 @@ export const LessonsApiGroupLive = HttpApiBuilder.group(Contract, "lessons", (ha
     )
     .handle(
       "availableSlots",
-      Effect.fnUntraced(function* ({ request, query }) {
-        yield* requireSession(request);
+      Effect.fnUntraced(function* ({ query }) {
         if (!query.date) {
           return yield* new HttpError(400, "Missing date");
         }
@@ -125,8 +122,8 @@ export const LessonsApiGroupLive = HttpApiBuilder.group(Contract, "lessons", (ha
     )
     .handle(
       "bookLesson",
-      Effect.fnUntraced(function* ({ request, payload }) {
-        const auth = yield* requireSession(request);
+      Effect.fnUntraced(function* ({ payload }) {
+        const auth = yield* CurrentSession;
         const effective = resolveEffectiveStudent(auth);
         const studentId = payload.student_id ?? effective.studentId;
         const lesson = yield* AuthenticatedRouteService.use((authenticatedRouteService) =>
@@ -147,8 +144,8 @@ export const LessonsAdminApiGroupLive = HttpApiBuilder.group(Contract, "lessonsA
   handlers
     .handle(
       "createLesson",
-      Effect.fnUntraced(function* ({ request, payload }) {
-        const auth = yield* requireAdminSession(request);
+      Effect.fnUntraced(function* ({ payload }) {
+        const auth = yield* CurrentSession;
         const lesson = yield* AdminRouteService.use((adminRouteService) =>
           adminRouteService.createLesson({
             sessionId: auth.session.id,
@@ -164,8 +161,8 @@ export const LessonsAdminApiGroupLive = HttpApiBuilder.group(Contract, "lessonsA
     )
     .handle(
       "updateLesson",
-      Effect.fnUntraced(function* ({ request, params, payload }) {
-        const auth = yield* requireAdminSession(request);
+      Effect.fnUntraced(function* ({ params, payload }) {
+        const auth = yield* CurrentSession;
         const updates: Record<string, unknown> = {};
         const scheduledAt = payload.scheduled_at;
         const durationMinutes = payload.duration_minutes;
@@ -189,7 +186,7 @@ export const LessonsAdminApiGroupLive = HttpApiBuilder.group(Contract, "lessonsA
     .handle(
       "deleteLesson",
       Effect.fnUntraced(function* (context) {
-        const auth = yield* requireAdminSession(context.request);
+        const auth = yield* CurrentSession;
         const { params } = context;
         const lesson = yield* AdminRouteService.use((adminRouteService) =>
           adminRouteService.deleteLesson(auth.session.id, params.id),
@@ -202,8 +199,8 @@ export const LessonsAdminApiGroupLive = HttpApiBuilder.group(Contract, "lessonsA
     )
     .handle(
       "cancelLesson",
-      Effect.fnUntraced(function* ({ request, params, payload }) {
-        const auth = yield* requireAdminSession(request);
+      Effect.fnUntraced(function* ({ params, payload }) {
+        const auth = yield* CurrentSession;
         const lesson = yield* AdminRouteService.use((adminRouteService) =>
           adminRouteService.cancelLesson(auth.session.id, params.id, payload.reason ?? null),
         );
@@ -212,8 +209,8 @@ export const LessonsAdminApiGroupLive = HttpApiBuilder.group(Contract, "lessonsA
     )
     .handle(
       "completeLesson",
-      Effect.fnUntraced(function* ({ request, params }) {
-        const auth = yield* requireAdminSession(request);
+      Effect.fnUntraced(function* ({ params }) {
+        const auth = yield* CurrentSession;
         const lesson = yield* AdminRouteService.use((adminRouteService) =>
           adminRouteService.completeLesson(auth.session.id, params.id),
         );
@@ -222,8 +219,8 @@ export const LessonsAdminApiGroupLive = HttpApiBuilder.group(Contract, "lessonsA
     )
     .handle(
       "lessons",
-      Effect.fnUntraced(function* ({ request, query }) {
-        const auth = yield* requireAdminSession(request);
+      Effect.fnUntraced(function* ({ query }) {
+        const auth = yield* CurrentSession;
         const lessons = yield* AdminRouteService.use((adminRouteService) =>
           adminRouteService.listLessons(auth.session.id, {
             limit: query.limit ?? 50,
@@ -239,8 +236,8 @@ export const LessonsAdminApiGroupLive = HttpApiBuilder.group(Contract, "lessonsA
     )
     .handle(
       "saveLessonNote",
-      Effect.fnUntraced(function* ({ request, params, payload }) {
-        const auth = yield* requireAdminSession(request);
+      Effect.fnUntraced(function* ({ params, payload }) {
+        const auth = yield* CurrentSession;
         const note = yield* AdminRouteService.use((adminRouteService) =>
           adminRouteService.saveLessonNote(auth.session.id, params.id, {
             topicsCovered: payload.topics_covered ?? null,
@@ -257,7 +254,7 @@ export const LessonsAdminApiGroupLive = HttpApiBuilder.group(Contract, "lessonsA
     .handle(
       "lessonNote",
       Effect.fnUntraced(function* (context) {
-        const auth = yield* requireAdminSession(context.request);
+        const auth = yield* CurrentSession;
         const { params } = context;
         const note = yield* AdminRouteService.use((adminRouteService) =>
           adminRouteService.getLessonNote(auth.session.id, params.id),
@@ -271,7 +268,7 @@ export const LessonsAdminApiGroupLive = HttpApiBuilder.group(Contract, "lessonsA
     .handle(
       "publishLessonNote",
       Effect.fnUntraced(function* (context) {
-        const auth = yield* requireAdminSession(context.request);
+        const auth = yield* CurrentSession;
         const { params } = context;
         const note = yield* AdminRouteService.use((adminRouteService) =>
           adminRouteService.publishLessonNote(auth.session.id, params.id),
@@ -284,8 +281,7 @@ export const LessonsAdminApiGroupLive = HttpApiBuilder.group(Contract, "lessonsA
     )
     .handle(
       "workingHours",
-      Effect.fnUntraced(function* (context) {
-        yield* requireAdminSession(context.request);
+      Effect.fnUntraced(function* () {
         return yield* GoogleCalendarService.use((googleCalendarService) =>
           googleCalendarService.getWorkingHours(),
         );
@@ -293,8 +289,7 @@ export const LessonsAdminApiGroupLive = HttpApiBuilder.group(Contract, "lessonsA
     )
     .handle(
       "cancellationPolicySettings",
-      Effect.fnUntraced(function* ({ request }) {
-        yield* requireAdminSession(request);
+      Effect.fnUntraced(function* () {
         return yield* AdminRouteService.use((adminRouteService) =>
           adminRouteService.getCancellationPolicySettings(),
         );
@@ -302,8 +297,7 @@ export const LessonsAdminApiGroupLive = HttpApiBuilder.group(Contract, "lessonsA
     )
     .handle(
       "saveCancellationPolicySettings",
-      Effect.fnUntraced(function* ({ request, payload }) {
-        yield* requireAdminSession(request);
+      Effect.fnUntraced(function* ({ payload }) {
         return yield* AdminRouteService.use((adminRouteService) =>
           adminRouteService.saveCancellationPolicySettings(payload),
         );
@@ -311,8 +305,7 @@ export const LessonsAdminApiGroupLive = HttpApiBuilder.group(Contract, "lessonsA
     )
     .handle(
       "saveWorkingHours",
-      Effect.fnUntraced(function* ({ request, payload }) {
-        yield* requireAdminSession(request);
+      Effect.fnUntraced(function* ({ payload }) {
         yield* GoogleCalendarService.use((googleCalendarService) =>
           googleCalendarService.setWorkingHours(payload),
         );

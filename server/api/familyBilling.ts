@@ -2,6 +2,7 @@ import * as HttpApiBuilder from "effect/http-api/HttpApiBuilder";
 import * as HttpServerResponse from "effect/http/HttpServerResponse";
 import { Effect } from "effect";
 import { Contract } from "../../shared/httpApi.js";
+import { CurrentSession } from "../../shared/api/guards.js";
 import {
   FamilyBill,
   FamilyPayment,
@@ -12,8 +13,6 @@ import {
 import { adaptHttpApiErrors } from "../httpApiErrors.js";
 import { HttpError } from "../pgErrors.js";
 import { FamilyBillingService } from "../services/familyBillingService.js";
-import type { SessionResult } from "../services/sessionService.js";
-import { requireSession } from "./raw.js";
 import type { Selectable } from "kysely";
 import type {
   AppPublicBills,
@@ -24,8 +23,6 @@ import type {
   AppPublicCreditApplications,
   AppPublicPaymentAllocations,
 } from "../../generated/db.js";
-
-type Auth = NonNullable<SessionResult>;
 
 const familyBillingErrorStatuses = [400, 401, 403, 404, 500] as const;
 const pdfErrorStatuses = [401, 403, 404, 500] as const;
@@ -119,8 +116,8 @@ export function makeFamilyBillingLayer() {
     handlers
       .handle(
         "overview",
-        Effect.fnUntraced(function* ({ request }) {
-          const auth: Auth = yield* requireSession(request);
+        Effect.fnUntraced(function* () {
+          const auth = yield* CurrentSession;
           if (auth.user.role === "teacher") {
             return yield* new HttpError(403, "Forbidden");
           }
@@ -138,8 +135,8 @@ export function makeFamilyBillingLayer() {
       )
       .handle(
         "bills",
-        Effect.fnUntraced(function* ({ request }) {
-          const auth: Auth = yield* requireSession(request);
+        Effect.fnUntraced(function* () {
+          const auth = yield* CurrentSession;
           if (auth.user.role === "teacher") {
             return yield* new HttpError(403, "Forbidden");
           }
@@ -151,8 +148,8 @@ export function makeFamilyBillingLayer() {
       )
       .handle(
         "billDetail",
-        Effect.fnUntraced(function* ({ request, params }) {
-          const auth: Auth = yield* requireSession(request);
+        Effect.fnUntraced(function* ({ params }) {
+          const auth = yield* CurrentSession;
           if (auth.user.role === "teacher") {
             return yield* new HttpError(403, "Forbidden");
           }
@@ -185,8 +182,8 @@ export function makeFamilyBillingLayer() {
       )
       .handle(
         "payments",
-        Effect.fnUntraced(function* ({ request }) {
-          const auth: Auth = yield* requireSession(request);
+        Effect.fnUntraced(function* () {
+          const auth = yield* CurrentSession;
           if (auth.user.role === "teacher") {
             return yield* new HttpError(403, "Forbidden");
           }
@@ -198,8 +195,8 @@ export function makeFamilyBillingLayer() {
       )
       .handle(
         "paymentDetail",
-        Effect.fnUntraced(function* ({ request, params }) {
-          const auth: Auth = yield* requireSession(request);
+        Effect.fnUntraced(function* ({ params }) {
+          const auth = yield* CurrentSession;
           if (auth.user.role === "teacher") {
             return yield* new HttpError(403, "Forbidden");
           }
@@ -219,8 +216,8 @@ export function makeFamilyBillingLayer() {
       )
       .handle(
         "credits",
-        Effect.fnUntraced(function* ({ request }) {
-          const auth: Auth = yield* requireSession(request);
+        Effect.fnUntraced(function* () {
+          const auth = yield* CurrentSession;
           if (auth.user.role === "teacher") {
             return yield* new HttpError(403, "Forbidden");
           }
@@ -232,8 +229,8 @@ export function makeFamilyBillingLayer() {
       )
       .handle(
         "billPdf",
-        Effect.fnUntraced(function* ({ request, params }) {
-          const auth: Auth = yield* requireSession(request);
+        Effect.fnUntraced(function* ({ params }) {
+          const auth = yield* CurrentSession;
           if (auth.user.role === "teacher") {
             return yield* new HttpError(403, "Forbidden");
           }
@@ -252,8 +249,8 @@ export function makeFamilyBillingLayer() {
       )
       .handle(
         "paymentReceipt",
-        Effect.fnUntraced(function* ({ request, params }) {
-          const auth: Auth = yield* requireSession(request);
+        Effect.fnUntraced(function* ({ params }) {
+          const auth = yield* CurrentSession;
           if (auth.user.role === "teacher") {
             return yield* new HttpError(403, "Forbidden");
           }

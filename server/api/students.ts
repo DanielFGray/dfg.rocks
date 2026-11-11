@@ -1,8 +1,7 @@
 import * as HttpApiBuilder from "effect/http-api/HttpApiBuilder";
 import { Effect } from "effect";
 import { Contract } from "../../shared/httpApi.js";
-import { HttpError } from "../pgErrors.js";
-import { requireSession, requireAdminSession } from "./raw.js";
+import { CurrentSession } from "../../shared/api/guards.js";
 import { AdminRouteService } from "../services/adminRouteService.js";
 import { adaptAdminErrors } from "../httpApiErrors.js";
 
@@ -13,11 +12,8 @@ export const StudentsStaffApiGroupLive = HttpApiBuilder.group(
     handlers
       .handle(
         "students",
-        Effect.fnUntraced(function* ({ request }) {
-          const auth = yield* requireSession(request);
-          if (auth.user.role !== "admin" && auth.user.role !== "teacher") {
-            return yield* new HttpError(403, "Forbidden");
-          }
+        Effect.fnUntraced(function* () {
+          const auth = yield* CurrentSession;
           const rows = yield* AdminRouteService.use((adminRouteService) =>
             adminRouteService.listStudents(auth.session.id),
           );
@@ -32,10 +28,7 @@ export const StudentsStaffApiGroupLive = HttpApiBuilder.group(
       .handle(
         "student",
         Effect.fnUntraced(function* (context) {
-          const auth = yield* requireSession(context.request);
-          if (auth.user.role !== "admin" && auth.user.role !== "teacher") {
-            return yield* new HttpError(403, "Forbidden");
-          }
+          const auth = yield* CurrentSession;
           const { params } = context;
           const raw = yield* AdminRouteService.use((adminRouteService) =>
             adminRouteService.getStudent(auth.session.id, params.id),
@@ -57,8 +50,8 @@ export const StudentsAdminApiGroupLive = HttpApiBuilder.group(
     handlers
       .handle(
         "saveStudentRate",
-        Effect.fnUntraced(function* ({ request, payload }) {
-          const auth = yield* requireAdminSession(request);
+        Effect.fnUntraced(function* ({ payload }) {
+          const auth = yield* CurrentSession;
           const rate = yield* AdminRouteService.use((adminRouteService) =>
             adminRouteService.saveStudentRate({
               sessionId: auth.session.id,
@@ -78,8 +71,8 @@ export const StudentsAdminApiGroupLive = HttpApiBuilder.group(
       )
       .handle(
         "studentRates",
-        Effect.fnUntraced(function* ({ request, params, query }) {
-          const auth = yield* requireAdminSession(request);
+        Effect.fnUntraced(function* ({ params, query }) {
+          const auth = yield* CurrentSession;
           return (yield* AdminRouteService.use((adminRouteService) =>
             adminRouteService.listStudentRates(
               auth.session.id,

@@ -1,5 +1,6 @@
 import * as HttpApiEndpoint from "effect/http-api/HttpApiEndpoint";
 import * as HttpApiGroup from "effect/http-api/HttpApiGroup";
+import { Csrf } from "./guards.js";
 import * as HttpApiSchema from "effect/http-api/HttpApiSchema";
 import { Schema as S } from "effect";
 import { FamilyInviteRole, User, SuccessResponse } from "../schemas.js";
@@ -83,7 +84,7 @@ export const publicGroup = HttpApiGroup.make("public")
       error: publicErrors,
       payload: ContactPayload,
       success: SuccessResponse,
-    }),
+    }).middleware(Csrf),
   )
   .add(HttpApiEndpoint.get("oauthGoogle", "/oauth/google", { error: publicErrors }))
   .add(
@@ -101,7 +102,7 @@ export const publicGroup = HttpApiGroup.make("public")
       error: publicErrors,
       payload: TokenPayload,
       success: SuccessResponse,
-    }),
+    }).middleware(Csrf),
   )
   .add(
     HttpApiEndpoint.get("invitation", "/invitation/:id", {
@@ -117,6 +118,6 @@ export const publicGroup = HttpApiGroup.make("public")
       params: params("id"),
       payload: AcceptInvitationPayload,
       success: User,
-    }),
+    }).middleware(Csrf),
   )
   .prefix("/api");

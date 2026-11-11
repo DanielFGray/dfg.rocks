@@ -1,9 +1,9 @@
 import * as HttpApiBuilder from "effect/http-api/HttpApiBuilder";
 import { Effect } from "effect";
 import { Contract } from "../../shared/httpApi.js";
+import { CurrentSession } from "../../shared/api/guards.js";
 import { BillingLedgerService } from "../services/billingLedgerService.js";
 import { adaptAdminErrors } from "../httpApiErrors.js";
-import { requireAdminSession } from "./raw.js";
 import { serializePaymentResponse, serializeRefund } from "./billingResponses.js";
 
 export const PaymentsAdminApiGroupLive = HttpApiBuilder.group(
@@ -13,8 +13,8 @@ export const PaymentsAdminApiGroupLive = HttpApiBuilder.group(
     handlers
       .handle(
         "recordPayment",
-        Effect.fnUntraced(function* ({ request, payload }) {
-          const auth = yield* requireAdminSession(request);
+        Effect.fnUntraced(function* ({ payload }) {
+          const auth = yield* CurrentSession;
           const result = yield* BillingLedgerService.use((billingLedgerService) =>
             billingLedgerService.recordPayment(auth.session.id, {
               payerId: payload.payer_id,
@@ -36,8 +36,8 @@ export const PaymentsAdminApiGroupLive = HttpApiBuilder.group(
       )
       .handle(
         "refundPayment",
-        Effect.fnUntraced(function* ({ request, params, payload }) {
-          const auth = yield* requireAdminSession(request);
+        Effect.fnUntraced(function* ({ params, payload }) {
+          const auth = yield* CurrentSession;
           const result = yield* BillingLedgerService.use((billingLedgerService) =>
             billingLedgerService.processRefund(auth.session.id, {
               paymentId: params.id,

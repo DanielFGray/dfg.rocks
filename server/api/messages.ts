@@ -1,17 +1,17 @@
 import * as HttpApiBuilder from "effect/http-api/HttpApiBuilder";
 import { Effect } from "effect";
 import { Contract } from "../../shared/httpApi.js";
+import { CurrentSession } from "../../shared/api/guards.js";
 import { AuthenticatedRouteService } from "../services/authenticatedRouteService.js";
 import { resolveEffectiveStudent } from "../services/sessionService.js";
-import { requireSession } from "./raw.js";
 import { adaptSignedInErrors } from "../httpApiErrors.js";
 
 export const MessagesApiGroupLive = HttpApiBuilder.group(Contract, "messages", (handlers) =>
   handlers
     .handle(
       "messages",
-      Effect.fnUntraced(function* ({ request, query }) {
-        const auth = yield* requireSession(request);
+      Effect.fnUntraced(function* ({ query }) {
+        const auth = yield* CurrentSession;
         const effective = resolveEffectiveStudent(auth);
         const filterStudentId = effective.isActing ? effective.studentId : undefined;
         const rows = yield* AuthenticatedRouteService.use((authenticatedRouteService) =>
@@ -33,8 +33,8 @@ export const MessagesApiGroupLive = HttpApiBuilder.group(Contract, "messages", (
     )
     .handle(
       "createMessage",
-      Effect.fnUntraced(function* ({ request, payload }) {
-        const auth = yield* requireSession(request);
+      Effect.fnUntraced(function* ({ payload }) {
+        const auth = yield* CurrentSession;
         const effective = resolveEffectiveStudent(auth);
         const row = yield* AuthenticatedRouteService.use((authenticatedRouteService) =>
           authenticatedRouteService.createMessage({
@@ -52,8 +52,8 @@ export const MessagesApiGroupLive = HttpApiBuilder.group(Contract, "messages", (
     )
     .handle(
       "markMessageRead",
-      Effect.fnUntraced(function* ({ request, params }) {
-        const auth = yield* requireSession(request);
+      Effect.fnUntraced(function* ({ params }) {
+        const auth = yield* CurrentSession;
         yield* AuthenticatedRouteService.use((authenticatedRouteService) =>
           authenticatedRouteService.markMessageRead(auth.session.id, params.id),
         );

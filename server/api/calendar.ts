@@ -5,17 +5,15 @@ import { Contract } from "../../shared/httpApi.js";
 import { GoogleCalendarService } from "../services/googleCalendarService.js";
 import { AdminRouteService } from "../services/adminRouteService.js";
 import { adaptAdminErrors } from "../httpApiErrors.js";
-import { requireAdminSession } from "./raw.js";
 
-export const CalendarAdminApiGroupLive = HttpApiBuilder.group(
+export const CalendarConnectAdminApiGroupLive = HttpApiBuilder.group(
   Contract,
-  "calendarAdmin",
+  "calendarConnectAdmin",
   (handlers) =>
     handlers
       .handle(
         "gcalConnect",
-        Effect.fnUntraced(function* (context) {
-          yield* requireAdminSession(context.request, { csrf: false });
+        Effect.fnUntraced(function* () {
           const rootUrl = yield* Config.String("VITE_ROOT_URL");
           const authorization = yield* GoogleCalendarService.use((googleCalendarService) =>
             googleCalendarService.createAuthorizationRequest(rootUrl),
@@ -33,7 +31,6 @@ export const CalendarAdminApiGroupLive = HttpApiBuilder.group(
       .handle(
         "gcalCallback",
         Effect.fnUntraced(function* ({ request, query }) {
-          yield* requireAdminSession(request, { csrf: false });
           const rootUrl = yield* Config.String("VITE_ROOT_URL");
           const authCookieName = GoogleCalendarService.getAuthCookieName();
           const cookieOptions = yield* GoogleCalendarService.getAuthCookieOptions(rootUrl);
@@ -70,11 +67,17 @@ export const CalendarAdminApiGroupLive = HttpApiBuilder.group(
           );
           return response;
         }, adaptAdminErrors),
-      )
+      ),
+);
+
+export const CalendarAdminApiGroupLive = HttpApiBuilder.group(
+  Contract,
+  "calendarAdmin",
+  (handlers) =>
+    handlers
       .handle(
         "gcalStatus",
-        Effect.fnUntraced(function* (context) {
-          yield* requireAdminSession(context.request);
+        Effect.fnUntraced(function* () {
           const status = yield* AdminRouteService.use((adminRouteService) =>
             adminRouteService.getGoogleCalendarStatus(),
           );
@@ -86,8 +89,7 @@ export const CalendarAdminApiGroupLive = HttpApiBuilder.group(
       )
       .handle(
         "gcalDisconnect",
-        Effect.fnUntraced(function* (context) {
-          yield* requireAdminSession(context.request);
+        Effect.fnUntraced(function* () {
           yield* AdminRouteService.use((adminRouteService) =>
             adminRouteService.disconnectGoogleCalendar(),
           );

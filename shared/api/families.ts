@@ -1,5 +1,6 @@
 import * as HttpApiEndpoint from "effect/http-api/HttpApiEndpoint";
 import * as HttpApiGroup from "effect/http-api/HttpApiGroup";
+import { Admin, Csrf, Session } from "./guards.js";
 import { Schema as S } from "effect";
 import {
   CreateChildPayload,
@@ -103,14 +104,14 @@ export const familiesGroup = HttpApiGroup.make("families")
       error: signedInErrors,
       payload: RemoveMemberPayload,
       success: SuccessResponse,
-    }),
+    }).middleware(Csrf),
   )
   .add(
     HttpApiEndpoint.post("inviteFamilyMember", "/family/invite", {
       error: signedInErrors,
       payload: InviteFamilyMemberPayload,
       success: SuccessResponse,
-    }),
+    }).middleware(Csrf),
   )
   .add(
     HttpApiEndpoint.post("setChildEmail", "/family/child/:childId/email", {
@@ -118,14 +119,14 @@ export const familiesGroup = HttpApiGroup.make("families")
       params: params("childId"),
       payload: SetChildEmailPayload,
       success: SuccessResponse,
-    }),
+    }).middleware(Csrf),
   )
   .add(
     HttpApiEndpoint.post("requestChildPasswordSet", "/family/child/:childId/request-password-set", {
       error: signedInErrors,
       params: params("childId"),
       success: ChildPasswordResetTokenResponse,
-    }),
+    }).middleware(Csrf),
   )
   .add(
     HttpApiEndpoint.post("setChildPassword", "/family/child/:childId/set-password", {
@@ -133,8 +134,9 @@ export const familiesGroup = HttpApiGroup.make("families")
       params: params("childId"),
       payload: SetChildPasswordPayload,
       success: SuccessResponse,
-    }),
+    }).middleware(Csrf),
   )
+  .middleware(Session)
   .prefix("/api");
 
 export const familiesAdminGroup = HttpApiGroup.make("familiesAdmin")
@@ -174,4 +176,7 @@ export const familiesAdminGroup = HttpApiGroup.make("familiesAdmin")
       success: S.Array(FamilyInvitation),
     }),
   )
+  .middleware(Csrf)
+  .middleware(Admin)
+  .middleware(Session)
   .prefix("/api/admin");

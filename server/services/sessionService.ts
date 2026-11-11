@@ -4,6 +4,7 @@ import * as S from "effect/Schema";
 import { sql } from "kysely";
 import { UserRole } from "../../shared/schemas.js";
 import { PgRootDB } from "../db.js";
+import type { SignedIn } from "../../shared/api/guards.js";
 
 export const SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 30; // 30 days
 
@@ -50,21 +51,7 @@ function buildToken() {
   };
 }
 
-export type SessionUser = {
-  id: string;
-  username: string;
-  name: string;
-  role: UserRole;
-};
-
-export type SessionInfo = {
-  id: string;
-  cookie_id: string;
-  user_id: string;
-  active_student_id: string | null;
-};
-
-export type SessionResult = { user: SessionUser; session: SessionInfo } | null;
+export type SessionResult = SignedIn | null;
 
 export type EffectiveStudentContext = {
   studentId: string;

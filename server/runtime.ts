@@ -17,7 +17,8 @@ import { AccountsApiGroupLive } from "./api/accounts.js";
 import { TestimonialsApiGroupLive, TestimonialsAdminApiGroupLive } from "./api/testimonials.js";
 import { FamiliesApiGroupLive, FamiliesAdminApiGroupLive } from "./api/families.js";
 import { RealtimeApiGroupLive } from "./api/realtime.js";
-import { CalendarAdminApiGroupLive } from "./api/calendar.js";
+import { CalendarConnectAdminApiGroupLive, CalendarAdminApiGroupLive } from "./api/calendar.js";
+import { GuardsLive } from "./api/guards.js";
 import { StudentsStaffApiGroupLive, StudentsAdminApiGroupLive } from "./api/students.js";
 import { MonthlyBillingAdminApiGroupLive } from "./api/monthlyBilling.js";
 import { PayersAdminApiGroupLive } from "./api/payers.js";
@@ -136,6 +137,7 @@ const GroupHandlersLive = Layer.mergeAll(
   FamiliesApiGroupLive,
   FamiliesAdminApiGroupLive,
   RealtimeApiGroupLive,
+  CalendarConnectAdminApiGroupLive,
   CalendarAdminApiGroupLive,
   StudentsStaffApiGroupLive,
   StudentsAdminApiGroupLive,
@@ -148,7 +150,10 @@ const GroupHandlersLive = Layer.mergeAll(
   makeFamilyBillingLayer(),
 );
 
-const ApiLive = HttpApiBuilder.layer(Contract).pipe(Layer.provide(GroupHandlersLive));
+const ApiLive = HttpApiBuilder.layer(Contract).pipe(
+  Layer.provide(GroupHandlersLive),
+  Layer.provide(GuardsLive),
+);
 
 /** The testing routes are imported only outside production, so the production bundle never loads them. */
 const TestingMountLive = Layer.unwrap(
