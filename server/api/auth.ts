@@ -5,7 +5,6 @@ import { Contract } from "../../shared/httpApi.js";
 import { adaptHttpApiErrors } from "../httpApiErrors.js";
 import { checkRateLimit } from "../rateLimit.js";
 import { AuthService } from "../services/authService.js";
-import { AuthRouteService } from "../services/authRouteService.js";
 import { SessionService } from "../services/sessionService.js";
 import { UserService } from "../services/userService.js";
 import { expireSessionCookie, setSessionCookie } from "./raw.js";
@@ -47,17 +46,15 @@ export function makeAuthLayer() {
         "magicLink",
         Effect.fnUntraced(function* ({ request, payload }) {
           yield* checkRateLimit("magic-link", request.headers);
-          yield* AuthRouteService.use((authRouteService) =>
-            authRouteService.generateMagicLink(payload.email),
-          );
+          yield* AuthService.use((authService) => authService.generateMagicLink(payload.email));
           return { success: true as const };
         }, adaptAuthHttpApiErrors),
       )
       .handle(
         "verifyMagicLink",
         Effect.fnUntraced(function* ({ payload }) {
-          const session = yield* AuthRouteService.use((authRouteService) =>
-            authRouteService.consumeMagicLink(payload.token),
+          const session = yield* AuthService.use((authService) =>
+            authService.consumeMagicLink(payload.token),
           );
           let response = HttpServerResponse.jsonUnsafe(session.response);
           response = yield* setSessionCookie(response, session.token, session.expiresAt);
@@ -98,9 +95,9 @@ export function makeAuthLayer() {
         }, adaptAuthHttpApiErrors),
       )
       .handle("me", ({ request }) =>
-        AuthRouteService.use((authRouteService) =>
-          authRouteService.currentUser(request.cookies.session),
-        ).pipe(adaptAuthHttpApiErrors),
+        AuthService.use((authService) => authService.currentUser(request.cookies.session)).pipe(
+          adaptAuthHttpApiErrors,
+        ),
       )
       .handle(
         "resendVerification",
@@ -111,8 +108,8 @@ export function makeAuthLayer() {
           if (!session) {
             return { success: true as const };
           }
-          yield* AuthRouteService.use((authRouteService) =>
-            authRouteService.resendVerification(session.session.id, session.user.id),
+          yield* AuthService.use((authService) =>
+            authService.resendVerification(session.session.id, session.user.id),
           );
           return { success: true as const };
         }, adaptAuthHttpApiErrors),

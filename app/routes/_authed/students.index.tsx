@@ -9,7 +9,7 @@ import { api } from "../../lib/api.js";
 import { requiredValidator, emailValidator } from "../../lib/validators.js";
 import { fieldError } from "../../lib/form.js";
 import { runServerEffect } from "../../lib/serverEffect.js";
-import { AdminRouteService } from "../../../server/services/adminRouteService.js";
+import { StudentService } from "../../../server/services/studentService.js";
 import { FamilyService } from "../../../server/services/familyService.js";
 import { normalizeStudents, serializeFamily } from "../../../shared/responseMappers.js";
 import { requireAdminSession } from "../../lib/sessionGuards.server.js";
@@ -34,9 +34,7 @@ const getStudentsPageData = createServerFn({ method: "GET" }).handler(() =>
     Effect.gen(function* () {
       const session = yield* requireAdminSession(getCookie("session"));
       const [students, families] = yield* Effect.all([
-        AdminRouteService.use((adminRouteService) =>
-          adminRouteService.listStudents(session.session.id),
-        ),
+        StudentService.use((studentService) => studentService.listStudents(session.session.id)),
         FamilyService.use((familyService) => familyService.listFamilies(session.session.id)),
       ]);
       return {
@@ -280,8 +278,12 @@ function StudentsPage() {
         onClose={() => setQrOpen(false)}
         families={[...families]}
         onSuccess={() => {
-          void queryClient.invalidateQueries({ queryKey: ["admin", "students"] });
-          void queryClient.invalidateQueries({ queryKey: ["admin", "families"] });
+          void queryClient.invalidateQueries({
+            queryKey: ["admin", "students"],
+          });
+          void queryClient.invalidateQueries({
+            queryKey: ["admin", "families"],
+          });
           void router.invalidate();
         }}
       />

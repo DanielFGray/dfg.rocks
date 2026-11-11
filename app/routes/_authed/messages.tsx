@@ -14,7 +14,7 @@ import { MessageThread } from "../../components/messages/MessageThread.js";
 import { ConversationList } from "../../components/messages/ConversationList.js";
 import { runServerEffect } from "../../lib/serverEffect.js";
 import { MessageService } from "../../../server/services/messageService.js";
-import { AdminRouteService } from "../../../server/services/adminRouteService.js";
+import { StudentService } from "../../../server/services/studentService.js";
 import { serializeMessage, normalizeStudents } from "../../../shared/responseMappers.js";
 import { requireSession, resolveEffectiveStudent } from "../../lib/sessionGuards.server.js";
 
@@ -40,8 +40,8 @@ const getMessagesPageData = createServerFn({ method: "GET" }).handler(() =>
 
       let students: ReturnType<typeof normalizeStudents> | null = null;
       if (session.user.role === "admin") {
-        const adminSvc = yield* AdminRouteService;
-        students = normalizeStudents(yield* adminSvc.listStudents(session.session.id));
+        const studentSvc = yield* StudentService;
+        students = normalizeStudents(yield* studentSvc.listStudents(session.session.id));
       }
 
       return {

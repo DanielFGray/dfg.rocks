@@ -3,7 +3,6 @@ import * as HttpServerResponse from "effect/http/HttpServerResponse";
 import { Effect, Config } from "effect";
 import { Contract } from "../../shared/httpApi.js";
 import { GoogleCalendarService } from "../services/googleCalendarService.js";
-import { AdminRouteService } from "../services/adminRouteService.js";
 import { adaptAdminErrors } from "../httpApiErrors.js";
 
 export const CalendarConnectAdminApiGroupLive = HttpApiBuilder.group(
@@ -78,8 +77,8 @@ export const CalendarAdminApiGroupLive = HttpApiBuilder.group(
       .handle(
         "gcalStatus",
         Effect.fnUntraced(function* () {
-          const status = yield* AdminRouteService.use((adminRouteService) =>
-            adminRouteService.getGoogleCalendarStatus(),
+          const status = yield* GoogleCalendarService.use((googleCalendarService) =>
+            googleCalendarService.getGoogleCalendarStatus(),
           );
           return {
             connected: status.connected,
@@ -90,8 +89,8 @@ export const CalendarAdminApiGroupLive = HttpApiBuilder.group(
       .handle(
         "gcalDisconnect",
         Effect.fnUntraced(function* () {
-          yield* AdminRouteService.use((adminRouteService) =>
-            adminRouteService.disconnectGoogleCalendar(),
+          yield* GoogleCalendarService.use((googleCalendarService) =>
+            googleCalendarService.disconnectGoogleCalendar(),
           );
           return { success: true as const };
         }, adaptAdminErrors),

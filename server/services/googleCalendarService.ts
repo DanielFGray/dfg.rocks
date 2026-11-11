@@ -345,6 +345,30 @@ export class GoogleCalendarService extends Context.Service<GoogleCalendarService
       });
 
       return {
+        getGoogleCalendarStatus: Effect.fn("getGoogleCalendarStatus")(function* () {
+          const rows = yield* rootDb.execute(
+            rootDb
+              .selectFrom("app_private.admin_settings")
+              .select(["key", "value"])
+              .where("key", "in", ["gcal_refresh_token", "gcal_calendar_id"]),
+          );
+          const token = rows.find((r) => r.key === "gcal_refresh_token");
+          const calendar = rows.find((r) => r.key === "gcal_calendar_id");
+          return { connected: !!token, calendar_id: calendar?.value ?? null };
+        }),
+        disconnectGoogleCalendar: Effect.fn("disconnectGoogleCalendar")(function* () {
+          yield* rootDb.execute(
+            rootDb
+              .deleteFrom("app_private.admin_settings")
+              .where("key", "in", [
+                "gcal_refresh_token",
+                "gcal_access_token",
+                "gcal_access_token_expires_at",
+                "gcal_calendar_id",
+                "gcal_sync_token",
+              ]),
+          );
+        }),
         handleCallback: Effect.fnUntraced(function* (
           rootUrl: string,
           code: string,

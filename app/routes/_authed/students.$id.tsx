@@ -12,7 +12,7 @@ import { fieldError } from "../../lib/form.js";
 import type { AssignedMaterial, Course, Material, StudentDetail } from "../../../shared/schemas.js";
 import { findNotationTrack, formatNotationTrackLabel } from "../../../shared/notationTracks.js";
 import { runServerEffect } from "../../lib/serverEffect.js";
-import { AdminRouteService } from "../../../server/services/adminRouteService.js";
+import { StudentService } from "../../../server/services/studentService.js";
 import { MaterialService } from "../../../server/services/materialService.js";
 import { CourseService } from "../../../server/services/courseService.js";
 import {
@@ -42,8 +42,8 @@ const getStudentDetailPageData = createServerFn({ method: "GET" })
       Effect.gen(function* () {
         const session = yield* requireAdminSession(getCookie("session"));
         const [student, allCourses, allMaterials] = yield* Effect.all([
-          AdminRouteService.use((adminRouteService) =>
-            adminRouteService.getStudent(session.session.id, data.studentId),
+          StudentService.use((studentService) =>
+            studentService.getStudent(session.session.id, data.studentId),
           ),
           CourseService.use((courseService) => courseService.listCourses(session.session.id)),
           MaterialService.use((materialService) =>

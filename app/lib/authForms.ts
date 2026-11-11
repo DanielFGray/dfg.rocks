@@ -4,7 +4,6 @@ import { setCookie } from "@tanstack/react-start/server";
 import { Effect, Schema as S } from "effect";
 import { runServerEffect } from "./serverEffect.js";
 import { AuthService } from "../../server/services/authService.js";
-import { AuthRouteService } from "../../server/services/authRouteService.js";
 import { FamilyService } from "../../server/services/familyService.js";
 import { UserService } from "../../server/services/userService.js";
 import { normalizeLoginRedirect } from "./loginRedirect.js";
@@ -86,7 +85,7 @@ export const requestMagicLink = createServerFn({ method: "POST" })
   })
   .handler(async ({ data }) => {
     await runServerEffect(
-      AuthRouteService.use((authRouteService) => authRouteService.generateMagicLink(data.email)),
+      AuthService.use((authService) => authService.generateMagicLink(data.email)),
     );
     throw redirect({
       to: "/login",
@@ -127,7 +126,10 @@ export const resetPassword = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const result = await runServerEffect(
       AuthService.use((authService) =>
-        authService.resetPassword({ token: data.token, password: data.password }),
+        authService.resetPassword({
+          token: data.token,
+          password: data.password,
+        }),
       ),
     ).catch((error) => {
       throw redirect({

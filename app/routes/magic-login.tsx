@@ -4,7 +4,7 @@ import { setCookie } from "@tanstack/react-start/server";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { consumeLoginRedirect, normalizeLoginRedirect } from "../lib/loginRedirect.js";
 import { runServerEffect } from "../lib/serverEffect.js";
-import { AuthRouteService } from "../../server/services/authRouteService.js";
+import { AuthService } from "../../server/services/authService.js";
 
 const SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 30;
 
@@ -16,12 +16,16 @@ const verifyMagicLogin = createServerFn({ method: "GET" })
   .handler(async ({ data }) => {
     const token = data.token;
     if (!token) {
-      return { status: "missing-token" as const, error: null, redirect: data.redirect };
+      return {
+        status: "missing-token" as const,
+        error: null,
+        redirect: data.redirect,
+      };
     }
 
     try {
       const session = await runServerEffect(
-        AuthRouteService.use((authRouteService) => authRouteService.consumeMagicLink(token)),
+        AuthService.use((authService) => authService.consumeMagicLink(token)),
       );
       setCookie("session", session.token, {
         httpOnly: true,
@@ -31,7 +35,11 @@ const verifyMagicLogin = createServerFn({ method: "GET" })
         path: "/",
         expires: session.expiresAt,
       });
-      return { status: "verified" as const, error: null, redirect: data.redirect };
+      return {
+        status: "verified" as const,
+        error: null,
+        redirect: data.redirect,
+      };
     } catch (error) {
       return {
         status: "error" as const,
@@ -47,7 +55,10 @@ export const Route = createFileRoute("/magic-login")({
     token: typeof search.token === "string" ? search.token : undefined,
     redirect: normalizeLoginRedirect(search.redirect),
   }),
-  loaderDeps: ({ search }) => ({ token: search.token, redirect: search.redirect }),
+  loaderDeps: ({ search }) => ({
+    token: search.token,
+    redirect: search.redirect,
+  }),
   loader: ({ deps }) => verifyMagicLogin({ data: deps }),
   component: MagicLoginPage,
 });

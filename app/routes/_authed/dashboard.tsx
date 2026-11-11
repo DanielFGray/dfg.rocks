@@ -12,7 +12,7 @@ import { StudentDashboard } from "../../components/dashboard/StudentDashboard.js
 import { ParentOnboarding } from "../../components/dashboard/ParentOnboarding.js";
 import { ParentDashboard } from "../../components/dashboard/ParentDashboard.js";
 import { runServerEffect } from "../../lib/serverEffect.js";
-import { AdminRouteService } from "../../../server/services/adminRouteService.js";
+import { StudentService } from "../../../server/services/studentService.js";
 import { MessageService } from "../../../server/services/messageService.js";
 import { MaterialService } from "../../../server/services/materialService.js";
 import { CourseService } from "../../../server/services/courseService.js";
@@ -49,8 +49,8 @@ const getDashboardPageData = createServerFn({ method: "GET" }).handler(() =>
         const today = todayRange();
         const week = weekRange();
         const data = yield* Effect.all({
-          students: AdminRouteService.use((adminRouteService) =>
-            adminRouteService.listStudents(session.session.id),
+          students: StudentService.use((studentService) =>
+            studentService.listStudents(session.session.id),
           ),
           messages: MessageService.use((messageService) =>
             messageService.messages(session.session.id, {

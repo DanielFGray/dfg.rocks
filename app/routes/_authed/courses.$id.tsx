@@ -24,7 +24,7 @@ import { runServerEffect } from "../../lib/serverEffect.js";
 import { normalizeStudents, serializeCourseDetail } from "../../../shared/responseMappers.js";
 import { requireSession } from "../../lib/sessionGuards.server.js";
 import { CourseService } from "../../../server/services/courseService.js";
-import { AdminRouteService } from "../../../server/services/adminRouteService.js";
+import { StudentService } from "../../../server/services/studentService.js";
 
 type CourseDetailPageData = {
   course: CourseDetail & { modules: readonly ModuleWithMaterials[] };
@@ -54,9 +54,7 @@ const getCourseDetailData = createServerFn({ method: "GET" })
           CourseService.use((courseService) =>
             courseService.listCourseStudents(session.session.id, data.courseId),
           ),
-          AdminRouteService.use((adminRouteService) =>
-            adminRouteService.listStudents(session.session.id),
-          ),
+          StudentService.use((studentService) => studentService.listStudents(session.session.id)),
         ]);
 
         return {

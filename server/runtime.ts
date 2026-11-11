@@ -30,9 +30,7 @@ import { makeFamilyBillingLayer } from "./api/familyBilling.js";
 import { makeHealthLayer } from "./api/health.js";
 import { makePublicLayer } from "./api/public.js";
 import { PgAuthDB, PgRootDB } from "./db.js";
-import { AdminRouteService } from "./services/adminRouteService.js";
 import { LessonService } from "./services/lessonService.js";
-import { AuthRouteService } from "./services/authRouteService.js";
 import { AuthService } from "./services/authService.js";
 import { BackgroundWorker } from "./services/backgroundWorker.js";
 import { BillingLedgerService } from "./services/billingLedgerService.js";
@@ -59,6 +57,7 @@ import { SessionService } from "./services/sessionService.js";
 import { StorageService } from "./services/storageService.js";
 import { TestimonialReminderService } from "./services/testimonialReminderService.js";
 import { UserService } from "./services/userService.js";
+import { StudentService } from "./services/studentService.js";
 
 const infrastructureLayer = Layer.mergeAll(
   NodeHttpPlatform.layer,
@@ -94,7 +93,6 @@ const rateLimitLayer = Layer.unwrap(
 );
 
 const lessonServicesLayer = Layer.mergeAll(
-  AdminRouteService.layer,
   LessonService.layer,
   RecurringScheduleService.layer,
 ).pipe(Layer.provideMerge(LessonPolicyService.layer));
@@ -109,7 +107,6 @@ const servicesLayer = Layer.mergeAll(
   SessionService.layer,
   lessonServicesLayer,
   AuthService.layer,
-  AuthRouteService.layer,
   billingServicesLayer,
   rateLimitLayer,
   FileService.layer,
@@ -126,6 +123,7 @@ const servicesLayer = Layer.mergeAll(
   StorageService.layer,
   TestimonialReminderService.layer,
   UserService.layer,
+  StudentService.layer,
 ).pipe(Layer.provideMerge(infrastructureLayer));
 
 /** The services every request and server function uses, without the job runner. */

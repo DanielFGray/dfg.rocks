@@ -2,7 +2,7 @@ import * as HttpApiBuilder from "effect/http-api/HttpApiBuilder";
 import { Effect } from "effect";
 import { Contract } from "../../shared/httpApi.js";
 import { CurrentSession } from "../../shared/api/guards.js";
-import { AdminRouteService } from "../services/adminRouteService.js";
+import { StudentService } from "../services/studentService.js";
 import { adaptAdminErrors } from "../httpApiErrors.js";
 
 export const StudentsStaffApiGroupLive = HttpApiBuilder.group(
@@ -14,8 +14,8 @@ export const StudentsStaffApiGroupLive = HttpApiBuilder.group(
         "students",
         Effect.fnUntraced(function* () {
           const auth = yield* CurrentSession;
-          const rows = yield* AdminRouteService.use((adminRouteService) =>
-            adminRouteService.listStudents(auth.session.id),
+          const rows = yield* StudentService.use((studentService) =>
+            studentService.listStudents(auth.session.id),
           );
           return rows.map((row) => ({
             ...row,
@@ -30,8 +30,8 @@ export const StudentsStaffApiGroupLive = HttpApiBuilder.group(
         Effect.fnUntraced(function* (context) {
           const auth = yield* CurrentSession;
           const { params } = context;
-          const raw = yield* AdminRouteService.use((adminRouteService) =>
-            adminRouteService.getStudent(auth.session.id, params.id),
+          const raw = yield* StudentService.use((studentService) =>
+            studentService.getStudent(auth.session.id, params.id),
           );
           return {
             ...raw,
@@ -52,8 +52,8 @@ export const StudentsAdminApiGroupLive = HttpApiBuilder.group(
         "saveStudentRate",
         Effect.fnUntraced(function* ({ payload }) {
           const auth = yield* CurrentSession;
-          const rate = yield* AdminRouteService.use((adminRouteService) =>
-            adminRouteService.saveStudentRate({
+          const rate = yield* StudentService.use((studentService) =>
+            studentService.saveStudentRate({
               sessionId: auth.session.id,
               studentId: payload.student_id,
               rateCents: payload.rate_cents,
@@ -70,12 +70,8 @@ export const StudentsAdminApiGroupLive = HttpApiBuilder.group(
         "studentRates",
         Effect.fnUntraced(function* ({ params, query }) {
           const auth = yield* CurrentSession;
-          return yield* AdminRouteService.use((adminRouteService) =>
-            adminRouteService.listStudentRates(
-              auth.session.id,
-              params.studentId,
-              query.location_type,
-            ),
+          return yield* StudentService.use((studentService) =>
+            studentService.listStudentRates(auth.session.id, params.studentId, query.location_type),
           );
         }, adaptAdminErrors),
       ),

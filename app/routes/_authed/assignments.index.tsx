@@ -18,7 +18,7 @@ import {
 import { categorize, categoryColor, categoryLabel } from "../../components/library/helpers.js";
 import { runServerEffect } from "../../lib/serverEffect.js";
 import { MaterialService } from "../../../server/services/materialService.js";
-import { AdminRouteService } from "../../../server/services/adminRouteService.js";
+import { StudentService } from "../../../server/services/studentService.js";
 import { SessionService } from "../../../server/services/sessionService.js";
 import { getCookie } from "@tanstack/react-start/server";
 import { serializeMaterial, normalizeStudents } from "../../../shared/responseMappers.js";
@@ -48,10 +48,13 @@ const getAssignmentsPageData = createServerFn({ method: "GET" }).handler(() =>
       const materialService = yield* MaterialService;
 
       if (session.user.role === "admin" || session.user.role === "teacher") {
-        const adminSvc = yield* AdminRouteService;
+        const studentSvc = yield* StudentService;
         const [studentsResult, libraryResult] = yield* Effect.all([
-          adminSvc.listStudents(session.session.id),
-          materialService.library(session.session.id, { limit: 1000, offset: 0 }),
+          studentSvc.listStudents(session.session.id),
+          materialService.library(session.session.id, {
+            limit: 1000,
+            offset: 0,
+          }),
         ]);
 
         return {
@@ -319,7 +322,10 @@ function StaffAssignmentsPage() {
         }),
       ),
     onSettled: () => {
-      void queryClient.invalidateQueries({ queryKey: ["assignments"], exact: false });
+      void queryClient.invalidateQueries({
+        queryKey: ["assignments"],
+        exact: false,
+      });
       void queryClient.invalidateQueries({ queryKey: ["admin", "students"] });
       void router.invalidate();
     },
@@ -333,7 +339,10 @@ function StaffAssignmentsPage() {
         }),
       ),
     onSettled: () => {
-      void queryClient.invalidateQueries({ queryKey: ["assignments"], exact: false });
+      void queryClient.invalidateQueries({
+        queryKey: ["assignments"],
+        exact: false,
+      });
       void queryClient.invalidateQueries({ queryKey: ["admin", "students"] });
       void router.invalidate();
     },

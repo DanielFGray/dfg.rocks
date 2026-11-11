@@ -1230,13 +1230,13 @@ describe("DFG Portal API", () => {
           cookieIdFromToken(parentCookie),
         ]),
       );
-      const [{ testRuntime }, { AuthRouteService }] = yield* Effect.promise(() =>
-        Promise.all([import("./apiHandler.js"), import("../services/authRouteService.js")]),
+      const [{ testRuntime }, { AuthService }] = yield* Effect.promise(() =>
+        Promise.all([import("./apiHandler.js"), import("../services/authService.js")]),
       );
       const directMe = yield* Effect.promise(() =>
         testRuntime.runPromise(
-          AuthRouteService.use((authRouteService) =>
-            authRouteService.me(sessionResult.rows[0].id, parentId, childId),
+          AuthService.use((authService) =>
+            authService.me(sessionResult.rows[0].id, parentId, childId),
           ),
         ),
       );

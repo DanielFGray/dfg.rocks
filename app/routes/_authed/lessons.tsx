@@ -18,7 +18,7 @@ import { EditLessonModal } from "../../components/lessons/EditLessonModal.js";
 import { NewLessonModal } from "../../components/lessons/NewLessonModal.js";
 import { LessonCard } from "../../components/lessons/LessonCard.js";
 import { runServerEffect } from "../../lib/serverEffect.js";
-import { AdminRouteService } from "../../../server/services/adminRouteService.js";
+import { StudentService } from "../../../server/services/studentService.js";
 import { LessonService } from "../../../server/services/lessonService.js";
 import {
   serializeLesson,
@@ -33,11 +33,12 @@ const getLessonsPageData = createServerFn({ method: "GET" }).handler(() =>
       const session = yield* requireAdminSession(getCookie("session"));
       const [lessons, students] = yield* Effect.all([
         LessonService.use((lessonService) =>
-          lessonService.listLessons(session.session.id, { limit: 50, offset: 0 }),
+          lessonService.listLessons(session.session.id, {
+            limit: 50,
+            offset: 0,
+          }),
         ),
-        AdminRouteService.use((adminRouteService) =>
-          adminRouteService.listStudents(session.session.id),
-        ),
+        StudentService.use((studentService) => studentService.listStudents(session.session.id)),
       ]);
 
       return {
@@ -176,7 +177,9 @@ function LessonsPage() {
       );
       if (params.publish) {
         const pubData = await Effect.runPromise(
-          api.lessonsAdmin.publishLessonNote({ params: { id: params.lessonId } }),
+          api.lessonsAdmin.publishLessonNote({
+            params: { id: params.lessonId },
+          }),
         );
         return { ...data, ...pubData };
       }

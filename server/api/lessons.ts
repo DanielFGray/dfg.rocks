@@ -7,7 +7,7 @@ import { HttpError } from "../pgErrors.js";
 import { LessonService } from "../services/lessonService.js";
 import { GoogleCalendarService } from "../services/googleCalendarService.js";
 import { resolveEffectiveStudent } from "../services/sessionService.js";
-import { AdminRouteService } from "../services/adminRouteService.js";
+import { LessonPolicyService } from "../services/lessonPolicyService.js";
 import { adaptSignedInErrors, adaptAdminErrors } from "../httpApiErrors.js";
 
 export const LessonsApiGroupLive = HttpApiBuilder.group(Contract, "lessons", (handlers) =>
@@ -280,16 +280,16 @@ export const LessonsAdminApiGroupLive = HttpApiBuilder.group(Contract, "lessonsA
     .handle(
       "cancellationPolicySettings",
       Effect.fnUntraced(function* () {
-        return yield* AdminRouteService.use((adminRouteService) =>
-          adminRouteService.getCancellationPolicySettings(),
+        return yield* LessonPolicyService.use((lessonPolicyService) =>
+          lessonPolicyService.getSettings(),
         );
       }, adaptAdminErrors),
     )
     .handle(
       "saveCancellationPolicySettings",
       Effect.fnUntraced(function* ({ payload }) {
-        return yield* AdminRouteService.use((adminRouteService) =>
-          adminRouteService.saveCancellationPolicySettings(payload),
+        return yield* LessonPolicyService.use((lessonPolicyService) =>
+          lessonPolicyService.saveSettings(payload),
         );
       }, adaptAdminErrors),
     )
