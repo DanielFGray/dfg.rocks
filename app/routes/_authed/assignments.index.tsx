@@ -17,7 +17,7 @@ import {
 } from "../../components/assignments/StudentAssignmentDetail.js";
 import { categorize, categoryColor, categoryLabel } from "../../components/library/helpers.js";
 import { runServerEffect } from "../../lib/serverEffect.js";
-import { AuthenticatedRouteService } from "../../../server/services/authenticatedRouteService.js";
+import { MaterialService } from "../../../server/services/materialService.js";
 import { AdminRouteService } from "../../../server/services/adminRouteService.js";
 import { SessionService } from "../../../server/services/sessionService.js";
 import { getCookie } from "@tanstack/react-start/server";
@@ -45,13 +45,13 @@ const getAssignmentsPageData = createServerFn({ method: "GET" }).handler(() =>
           : null;
       const filterStudentId = effectiveStudentId ?? undefined;
 
-      const authSvc = yield* AuthenticatedRouteService;
+      const materialService = yield* MaterialService;
 
       if (session.user.role === "admin" || session.user.role === "teacher") {
         const adminSvc = yield* AdminRouteService;
         const [studentsResult, libraryResult] = yield* Effect.all([
           adminSvc.listStudents(session.session.id),
-          authSvc.library(session.session.id, { limit: 1000, offset: 0 }),
+          materialService.library(session.session.id, { limit: 1000, offset: 0 }),
         ]);
 
         return {
@@ -75,7 +75,7 @@ const getAssignmentsPageData = createServerFn({ method: "GET" }).handler(() =>
         };
       }
 
-      const assignments = yield* authSvc.assignments(session.session.id, filterStudentId);
+      const assignments = yield* materialService.assignments(session.session.id, filterStudentId);
 
       return {
         kind: "student" as const,

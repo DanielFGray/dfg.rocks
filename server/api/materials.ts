@@ -10,9 +10,8 @@ import {
 } from "../../shared/schemas.js";
 import { adaptHttpApiErrors, adaptSignedInErrors, adaptAdminErrors } from "../httpApiErrors.js";
 import { HttpError } from "../pgErrors.js";
-import { AuthenticatedRouteService } from "../services/authenticatedRouteService.js";
+import { MaterialService } from "../services/materialService.js";
 import { resolveEffectiveStudent } from "../services/sessionService.js";
-import { AdminRouteService } from "../services/adminRouteService.js";
 import { FileService } from "../services/fileService.js";
 
 const assertCanManageAssignments = Effect.fnUntraced(function* (auth: SignedIn) {
@@ -38,8 +37,8 @@ export const MaterialsApiGroupLive = HttpApiBuilder.group(Contract, "materials",
       "library",
       Effect.fnUntraced(function* ({ query }) {
         const auth = yield* CurrentSession;
-        const rows = yield* AuthenticatedRouteService.use((authenticatedRouteService) =>
-          authenticatedRouteService.library(auth.session.id, {
+        const rows = yield* MaterialService.use((materialService) =>
+          materialService.library(auth.session.id, {
             limit: query.limit ?? 50,
             offset: query.offset ?? 0,
           }),
@@ -53,8 +52,8 @@ export const MaterialsApiGroupLive = HttpApiBuilder.group(Contract, "materials",
         const auth = yield* CurrentSession;
         const effective = resolveEffectiveStudent(auth);
         const filterStudentId = effective.isActing ? effective.studentId : undefined;
-        const rows = yield* AuthenticatedRouteService.use((authenticatedRouteService) =>
-          authenticatedRouteService.assignments(auth.session.id, filterStudentId),
+        const rows = yield* MaterialService.use((materialService) =>
+          materialService.assignments(auth.session.id, filterStudentId),
         );
         return yield* S.decodeUnknownEffect(S.Array(AssignedMaterial))(rows);
       }, adaptSignedInErrors),
@@ -64,8 +63,8 @@ export const MaterialsApiGroupLive = HttpApiBuilder.group(Contract, "materials",
       Effect.fnUntraced(function* ({ params, payload }) {
         const auth = yield* CurrentSession;
         yield* assertCanManageAssignments(auth);
-        yield* AuthenticatedRouteService.use((authenticatedRouteService) =>
-          authenticatedRouteService.assignStudentMaterial({
+        yield* MaterialService.use((materialService) =>
+          materialService.assignStudentMaterial({
             sessionId: auth.session.id,
             studentId: params.studentId,
             materialId: payload.material_id,
@@ -80,8 +79,8 @@ export const MaterialsApiGroupLive = HttpApiBuilder.group(Contract, "materials",
       Effect.fnUntraced(function* ({ params }) {
         const auth = yield* CurrentSession;
         yield* assertCanManageAssignments(auth);
-        yield* AuthenticatedRouteService.use((authenticatedRouteService) =>
-          authenticatedRouteService.unassignStudentMaterial(
+        yield* MaterialService.use((materialService) =>
+          materialService.unassignStudentMaterial(
             auth.session.id,
             params.studentId,
             params.materialId,
@@ -96,8 +95,8 @@ export const MaterialsApiGroupLive = HttpApiBuilder.group(Contract, "materials",
         const auth = yield* CurrentSession;
         yield* assertCanTrackOwnAssignments(auth);
         const effective = resolveEffectiveStudent(auth);
-        const row = yield* AuthenticatedRouteService.use((authenticatedRouteService) =>
-          authenticatedRouteService.recordAssignmentPlayback({
+        const row = yield* MaterialService.use((materialService) =>
+          materialService.recordAssignmentPlayback({
             sessionId: auth.session.id,
             studentId: effective.studentId,
             materialId: params.materialId,
@@ -113,8 +112,8 @@ export const MaterialsApiGroupLive = HttpApiBuilder.group(Contract, "materials",
         const auth = yield* CurrentSession;
         yield* assertCanTrackOwnAssignments(auth);
         const effective = resolveEffectiveStudent(auth);
-        const row = yield* AuthenticatedRouteService.use((authenticatedRouteService) =>
-          authenticatedRouteService.createAssignmentReview({
+        const row = yield* MaterialService.use((materialService) =>
+          materialService.createAssignmentReview({
             sessionId: auth.session.id,
             studentId: effective.studentId,
             materialId: params.materialId,
@@ -128,8 +127,8 @@ export const MaterialsApiGroupLive = HttpApiBuilder.group(Contract, "materials",
       "assignmentNotes",
       Effect.fnUntraced(function* ({ params }) {
         const auth = yield* CurrentSession;
-        const row = yield* AuthenticatedRouteService.use((authenticatedRouteService) =>
-          authenticatedRouteService.assignmentNotes(auth.session.id, params.materialId),
+        const row = yield* MaterialService.use((materialService) =>
+          materialService.assignmentNotes(auth.session.id, params.materialId),
         );
         if (!row) {
           return null;
@@ -142,8 +141,8 @@ export const MaterialsApiGroupLive = HttpApiBuilder.group(Contract, "materials",
       Effect.fnUntraced(function* ({ params, payload }) {
         const auth = yield* CurrentSession;
         const effective = resolveEffectiveStudent(auth);
-        const row = yield* AuthenticatedRouteService.use((authenticatedRouteService) =>
-          authenticatedRouteService.upsertAssignmentNotes({
+        const row = yield* MaterialService.use((materialService) =>
+          materialService.upsertAssignmentNotes({
             sessionId: auth.session.id,
             studentId: effective.studentId,
             materialId: params.materialId,
@@ -185,8 +184,8 @@ export const MaterialsAdminApiGroupLive = HttpApiBuilder.group(
         "assignMaterial",
         Effect.fnUntraced(function* ({ params, payload }) {
           const auth = yield* CurrentSession;
-          yield* AdminRouteService.use((adminRouteService) =>
-            adminRouteService.assignMaterial({
+          yield* MaterialService.use((materialService) =>
+            materialService.assignMaterial({
               sessionId: auth.session.id,
               studentId: params.id,
               materialId: payload.material_id,
@@ -201,8 +200,8 @@ export const MaterialsAdminApiGroupLive = HttpApiBuilder.group(
         Effect.fnUntraced(function* (context) {
           const auth = yield* CurrentSession;
           const { params } = context;
-          yield* AdminRouteService.use((adminRouteService) =>
-            adminRouteService.unassignMaterial(auth.session.id, params.id, params.materialId),
+          yield* MaterialService.use((materialService) =>
+            materialService.unassignMaterial(auth.session.id, params.id, params.materialId),
           );
           return { success: true as const };
         }, adaptAdminErrors),
@@ -212,8 +211,8 @@ export const MaterialsAdminApiGroupLive = HttpApiBuilder.group(
         Effect.fnUntraced(function* (context) {
           const auth = yield* CurrentSession;
           const { params } = context;
-          const row = yield* AdminRouteService.use((adminRouteService) =>
-            adminRouteService.deleteMaterial(auth.session.id, params.id),
+          const row = yield* MaterialService.use((materialService) =>
+            materialService.deleteMaterial(auth.session.id, params.id),
           );
           if (!row) {
             return yield* new HttpError(404, "Material not found");

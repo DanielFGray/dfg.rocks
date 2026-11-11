@@ -3,7 +3,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
 import { getCookie } from "@tanstack/react-start/server";
 import { runServerEffect } from "../../lib/serverEffect.js";
-import { AuthenticatedRouteService } from "../../../server/services/authenticatedRouteService.js";
+import { MaterialService } from "../../../server/services/materialService.js";
 import { serializeMaterial } from "../../../shared/responseMappers.js";
 import { requireSession } from "../../lib/sessionGuards.server.js";
 import {
@@ -18,8 +18,8 @@ const getAssignmentPageData = createServerFn({ method: "GET" }).handler(() =>
   runServerEffect(
     Effect.gen(function* () {
       const session = yield* requireSession(getCookie("session"));
-      const authSvc = yield* AuthenticatedRouteService;
-      const assignments = yield* authSvc.assignments(session.session.id);
+      const materialService = yield* MaterialService;
+      const assignments = yield* materialService.assignments(session.session.id);
       return assignments.map(serializeMaterial);
     }),
   ),

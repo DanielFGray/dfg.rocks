@@ -8,7 +8,6 @@ import { catchPgErrors, HttpError } from "../pgErrors.js";
 import { GoogleCalendarService } from "./googleCalendarService.js";
 import { settleSingleBookingCancellation, singleBookingObligation } from "./singleBookingBills.js";
 import { LessonPolicyService } from "./lessonPolicyService.js";
-import { resolveAssignedTrackIndex } from "./notationService.js";
 const lessonColumns = [
   "id",
   "student_id",
@@ -196,63 +195,6 @@ export class AdminRouteService extends Context.Service<AdminRouteService>()("Adm
           enrolled_courses: enrolledCourses,
           assigned_materials: assignedMaterials,
         };
-      }),
-
-      assignMaterial: Effect.fn("assignMaterial")(function* (values: {
-        sessionId: string;
-        studentId: string;
-        materialId: string;
-        assignedTrackIndex: number | string | null | undefined;
-      }) {
-        const resolvedTrackIndex = yield* resolveAssignedTrackIndex(
-          values.sessionId,
-          values.materialId,
-          values.assignedTrackIndex,
-        );
-        yield* withAuthContext(values.sessionId, (db) =>
-          db.execute(
-            db
-              .insertInto("app_public.student_materials")
-              .values({
-                student_id: values.studentId,
-                material_id: values.materialId,
-                assigned_track_index: resolvedTrackIndex,
-              })
-              .onConflict((oc) =>
-                oc.columns(["student_id", "material_id"]).doUpdateSet({
-                  assigned_track_index: resolvedTrackIndex,
-                }),
-              ),
-          ),
-        );
-      }),
-
-      unassignMaterial: Effect.fn("unassignMaterial")(function* (
-        sessionId: string,
-        studentId: string,
-        materialId: string,
-      ) {
-        yield* withAuthContext(sessionId, (db) =>
-          db.execute(
-            db
-              .deleteFrom("app_public.student_materials")
-              .where("student_id", "=", studentId)
-              .where("material_id", "=", materialId),
-          ),
-        );
-      }),
-
-      deleteMaterial: Effect.fn("deleteMaterial")(function* (sessionId: string, id: string) {
-        return yield* withAuthContext(sessionId, (db) =>
-          db
-            .execute(db.deleteFrom("app_public.materials").where("id", "=", id).returning("id"))
-            .pipe(
-              Effect.head,
-              Effect.catchTags({
-                NoSuchElementError: () => new HttpError(404, "Material not found"),
-              }),
-            ),
-        );
       }),
 
       createLesson: Effect.fn("createLesson")(function* (values: {

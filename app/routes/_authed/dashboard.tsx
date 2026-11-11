@@ -13,6 +13,7 @@ import { ParentOnboarding } from "../../components/dashboard/ParentOnboarding.js
 import { ParentDashboard } from "../../components/dashboard/ParentDashboard.js";
 import { runServerEffect } from "../../lib/serverEffect.js";
 import { AdminRouteService } from "../../../server/services/adminRouteService.js";
+import { MaterialService } from "../../../server/services/materialService.js";
 import { CourseService } from "../../../server/services/courseService.js";
 import { TestimonialService } from "../../../server/services/testimonialService.js";
 import { TestimonialReminderService } from "../../../server/services/testimonialReminderService.js";
@@ -95,8 +96,8 @@ const getDashboardPageData = createServerFn({ method: "GET" }).handler(() =>
               filterStudentId,
             ),
           ),
-          assignments: AuthenticatedRouteService.use((authenticatedRouteService) =>
-            authenticatedRouteService.assignments(session.session.id, filterStudentId),
+          assignments: MaterialService.use((materialService) =>
+            materialService.assignments(session.session.id, filterStudentId),
           ),
           scheduledLessons: AuthenticatedRouteService.use((authenticatedRouteService) =>
             authenticatedRouteService.myLessons(

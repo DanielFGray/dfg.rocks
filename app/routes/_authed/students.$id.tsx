@@ -13,8 +13,8 @@ import type { AssignedMaterial, Course, Material, StudentDetail } from "../../..
 import { findNotationTrack, formatNotationTrackLabel } from "../../../shared/notationTracks.js";
 import { runServerEffect } from "../../lib/serverEffect.js";
 import { AdminRouteService } from "../../../server/services/adminRouteService.js";
+import { MaterialService } from "../../../server/services/materialService.js";
 import { CourseService } from "../../../server/services/courseService.js";
-import { AuthenticatedRouteService } from "../../../server/services/authenticatedRouteService.js";
 import {
   serializeCourse,
   serializeLibraryMaterial,
@@ -46,8 +46,8 @@ const getStudentDetailPageData = createServerFn({ method: "GET" })
             adminRouteService.getStudent(session.session.id, data.studentId),
           ),
           CourseService.use((courseService) => courseService.listCourses(session.session.id)),
-          AuthenticatedRouteService.use((authenticatedRouteService) =>
-            authenticatedRouteService.library(session.session.id, {
+          MaterialService.use((materialService) =>
+            materialService.library(session.session.id, {
               limit: 1000,
               offset: 0,
             }),
