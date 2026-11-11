@@ -9,7 +9,6 @@ import { Config, Effect, Option } from "effect";
 import * as Redacted from "effect/Redacted";
 import { sql } from "kysely";
 import { PgRootDB } from "../server/db.js";
-import { serverRuntime } from "../server/runtime.js";
 
 const seedAdmin = Effect.gen(function* () {
   const username = yield* Config.NonEmptyString("ADMIN_USERNAME");
@@ -57,7 +56,7 @@ const seedAdmin = Effect.gen(function* () {
   yield* Effect.log(`Created admin user '${username}' (${email})`);
 });
 
-serverRuntime.runPromise(seedAdmin).catch((e) => {
+Effect.runPromise(seedAdmin.pipe(Effect.provide(PgRootDB.Live))).catch((e) => {
   console.error("seed-admin failed:", e);
   process.exit(1);
 });

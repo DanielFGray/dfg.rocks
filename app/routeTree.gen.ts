@@ -14,7 +14,6 @@ import { Route as AuthedRouteImport } from './routes/_authed'
 import { Route as AcceptInviteRouteImport } from './routes/accept-invite'
 import { Route as ConfirmDeleteAccountRouteImport } from './routes/confirm-delete-account'
 import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
-import { Route as HealthzRouteImport } from './routes/healthz'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as MagicLoginRouteImport } from './routes/magic-login'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
@@ -31,7 +30,6 @@ import { Route as AuthedMessagesRouteImport } from './routes/_authed/messages'
 import { Route as AuthedMyLessonsRouteImport } from './routes/_authed/my-lessons'
 import { Route as AuthedSettingsRouteImport } from './routes/_authed/settings'
 import { Route as AuthedSubmissionsRouteImport } from './routes/_authed/submissions'
-import { Route as ApiSplatRouteImport } from './routes/api.$'
 import { Route as AuthedAssignmentsIndexRouteImport } from './routes/_authed/assignments.index'
 import { Route as AuthedAssignmentsMaterialIdRouteImport } from './routes/_authed/assignments.$materialId'
 import { Route as AuthedBillingIndexRouteImport } from './routes/_authed/billing.index'
@@ -71,11 +69,6 @@ const ConfirmDeleteAccountRoute = ConfirmDeleteAccountRouteImport.update({
 const ForgotPasswordRoute = ForgotPasswordRouteImport.update({
   id: '/forgot-password',
   path: '/forgot-password',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const HealthzRoute = HealthzRouteImport.update({
-  id: '/healthz',
-  path: '/healthz',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LoginRoute = LoginRouteImport.update({
@@ -157,11 +150,6 @@ const AuthedSubmissionsRoute = AuthedSubmissionsRouteImport.update({
   id: '/submissions',
   path: '/submissions',
   getParentRoute: () => AuthedRoute,
-} as any)
-const ApiSplatRoute = ApiSplatRouteImport.update({
-  id: '/api/$',
-  path: '/api/$',
-  getParentRoute: () => rootRouteImport,
 } as any)
 const AuthedAssignmentsIndexRoute = AuthedAssignmentsIndexRouteImport.update({
   id: '/',
@@ -257,7 +245,6 @@ export interface FileRoutesByFullPath {
   '/accept-invite': typeof AcceptInviteRoute
   '/confirm-delete-account': typeof ConfirmDeleteAccountRoute
   '/forgot-password': typeof ForgotPasswordRoute
-  '/healthz': typeof HealthzRoute
   '/login': typeof LoginRoute
   '/magic-login': typeof MagicLoginRoute
   '/reset-password': typeof ResetPasswordRoute
@@ -274,7 +261,6 @@ export interface FileRoutesByFullPath {
   '/my-lessons': typeof AuthedMyLessonsRoute
   '/settings': typeof AuthedSettingsRoute
   '/submissions': typeof AuthedSubmissionsRoute
-  '/api/$': typeof ApiSplatRoute
   '/assignments/$materialId': typeof AuthedAssignmentsMaterialIdRoute
   '/billing/monthly': typeof AuthedBillingMonthlyRoute
   '/courses/$id': typeof AuthedCoursesIdRoute
@@ -297,7 +283,6 @@ export interface FileRoutesByTo {
   '/accept-invite': typeof AcceptInviteRoute
   '/confirm-delete-account': typeof ConfirmDeleteAccountRoute
   '/forgot-password': typeof ForgotPasswordRoute
-  '/healthz': typeof HealthzRoute
   '/login': typeof LoginRoute
   '/magic-login': typeof MagicLoginRoute
   '/reset-password': typeof ResetPasswordRoute
@@ -312,7 +297,6 @@ export interface FileRoutesByTo {
   '/my-lessons': typeof AuthedMyLessonsRoute
   '/settings': typeof AuthedSettingsRoute
   '/submissions': typeof AuthedSubmissionsRoute
-  '/api/$': typeof ApiSplatRoute
   '/assignments/$materialId': typeof AuthedAssignmentsMaterialIdRoute
   '/billing/monthly': typeof AuthedBillingMonthlyRoute
   '/courses/$id': typeof AuthedCoursesIdRoute
@@ -336,7 +320,6 @@ export interface FileRoutesById {
   '/accept-invite': typeof AcceptInviteRoute
   '/confirm-delete-account': typeof ConfirmDeleteAccountRoute
   '/forgot-password': typeof ForgotPasswordRoute
-  '/healthz': typeof HealthzRoute
   '/login': typeof LoginRoute
   '/magic-login': typeof MagicLoginRoute
   '/reset-password': typeof ResetPasswordRoute
@@ -353,7 +336,6 @@ export interface FileRoutesById {
   '/_authed/my-lessons': typeof AuthedMyLessonsRoute
   '/_authed/settings': typeof AuthedSettingsRoute
   '/_authed/submissions': typeof AuthedSubmissionsRoute
-  '/api/$': typeof ApiSplatRoute
   '/_authed/assignments/$materialId': typeof AuthedAssignmentsMaterialIdRoute
   '/_authed/billing/monthly': typeof AuthedBillingMonthlyRoute
   '/_authed/courses/$id': typeof AuthedCoursesIdRoute
@@ -378,7 +360,6 @@ export interface FileRouteTypes {
     | '/accept-invite'
     | '/confirm-delete-account'
     | '/forgot-password'
-    | '/healthz'
     | '/login'
     | '/magic-login'
     | '/reset-password'
@@ -395,7 +376,6 @@ export interface FileRouteTypes {
     | '/my-lessons'
     | '/settings'
     | '/submissions'
-    | '/api/$'
     | '/assignments/$materialId'
     | '/billing/monthly'
     | '/courses/$id'
@@ -418,7 +398,6 @@ export interface FileRouteTypes {
     | '/accept-invite'
     | '/confirm-delete-account'
     | '/forgot-password'
-    | '/healthz'
     | '/login'
     | '/magic-login'
     | '/reset-password'
@@ -433,7 +412,6 @@ export interface FileRouteTypes {
     | '/my-lessons'
     | '/settings'
     | '/submissions'
-    | '/api/$'
     | '/assignments/$materialId'
     | '/billing/monthly'
     | '/courses/$id'
@@ -456,7 +434,6 @@ export interface FileRouteTypes {
     | '/accept-invite'
     | '/confirm-delete-account'
     | '/forgot-password'
-    | '/healthz'
     | '/login'
     | '/magic-login'
     | '/reset-password'
@@ -473,7 +450,6 @@ export interface FileRouteTypes {
     | '/_authed/my-lessons'
     | '/_authed/settings'
     | '/_authed/submissions'
-    | '/api/$'
     | '/_authed/assignments/$materialId'
     | '/_authed/billing/monthly'
     | '/_authed/courses/$id'
@@ -498,12 +474,10 @@ export interface RootRouteChildren {
   AcceptInviteRoute: typeof AcceptInviteRoute
   ConfirmDeleteAccountRoute: typeof ConfirmDeleteAccountRoute
   ForgotPasswordRoute: typeof ForgotPasswordRoute
-  HealthzRoute: typeof HealthzRoute
   LoginRoute: typeof LoginRoute
   MagicLoginRoute: typeof MagicLoginRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
   VerifyEmailRoute: typeof VerifyEmailRoute
-  ApiSplatRoute: typeof ApiSplatRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -541,13 +515,6 @@ declare module '@tanstack/react-router' {
       path: '/forgot-password'
       fullPath: '/forgot-password'
       preLoaderRoute: typeof ForgotPasswordRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/healthz': {
-      id: '/healthz'
-      path: '/healthz'
-      fullPath: '/healthz'
-      preLoaderRoute: typeof HealthzRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/login': {
@@ -661,13 +628,6 @@ declare module '@tanstack/react-router' {
       fullPath: '/submissions'
       preLoaderRoute: typeof AuthedSubmissionsRouteImport
       parentRoute: typeof AuthedRoute
-    }
-    '/api/$': {
-      id: '/api/$'
-      path: '/api/$'
-      fullPath: '/api/$'
-      preLoaderRoute: typeof ApiSplatRouteImport
-      parentRoute: typeof rootRouteImport
     }
     '/_authed/assignments/': {
       id: '/_authed/assignments/'
@@ -907,12 +867,10 @@ const rootRouteChildren: RootRouteChildren = {
   AcceptInviteRoute: AcceptInviteRoute,
   ConfirmDeleteAccountRoute: ConfirmDeleteAccountRoute,
   ForgotPasswordRoute: ForgotPasswordRoute,
-  HealthzRoute: HealthzRoute,
   LoginRoute: LoginRoute,
   MagicLoginRoute: MagicLoginRoute,
   ResetPasswordRoute: ResetPasswordRoute,
   VerifyEmailRoute: VerifyEmailRoute,
-  ApiSplatRoute: ApiSplatRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

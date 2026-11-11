@@ -20,7 +20,7 @@ resetTestDatabase();
 const build = spawnSync("bun", ["run", "build"], { env: childEnv, stdio: "inherit" });
 if (build.status !== 0) process.exit(build.status ?? 1);
 
-const server = spawn("bun", ["serve.ts"], { env: childEnv, stdio: "inherit" });
+const server = spawn("bun", ["server/main.ts"], { env: childEnv, stdio: "inherit" });
 
 for (const signal of ["SIGINT", "SIGTERM"] as const) {
   process.once(signal, () => server.kill(signal));

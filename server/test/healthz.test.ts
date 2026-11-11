@@ -18,7 +18,7 @@ import { healthApi, makeHealthLayer } from "../api/health.js";
 // reaches only `unsafe`, so the stub answers that one call. The worker stub reports only `failed`.
 function healthHandler(unsafe: (...args: never[]) => unknown, workerFailed = false) {
   const database = new Database({ unsafe } as unknown as SqlClient.SqlClient);
-  const worker = { start: () => Effect.void, failed: Effect.succeed(workerFailed) };
+  const worker = { failed: Effect.succeed(workerFailed) };
   const layer = HttpApiBuilder.layer(healthApi).pipe(
     Layer.provide(makeHealthLayer()),
     Layer.provide(

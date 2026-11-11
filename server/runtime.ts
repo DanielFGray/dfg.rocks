@@ -1,4 +1,4 @@
-import { Config, Effect, Layer, ManagedRuntime } from "effect";
+import { Config, Effect, Layer } from "effect";
 import * as HttpApi from "effect/http-api/HttpApi";
 import * as HttpApiBuilder from "effect/http-api/HttpApiBuilder";
 import * as Etag from "effect/http/Etag";
@@ -88,7 +88,6 @@ const servicesLayer = Layer.mergeAll(
   lessonServicesLayer,
   AuthService.layer,
   AuthRouteService.layer,
-  BackgroundWorker.Live,
   billingServicesLayer,
   rateLimitLayer,
   FileService.layer,
@@ -99,18 +98,11 @@ const servicesLayer = Layer.mergeAll(
   UserService.layer,
 ).pipe(Layer.provideMerge(infrastructureLayer));
 
+/** The services every request and server function uses, without the job runner. */
 export const applicationLayer = servicesLayer;
 
-/**
- * Server functions run on serverRuntime, and the /api handler in app.ts builds HttpApiLive. Both
- * build from this memo map, so each service, pool and job runner exists once per process.
- */
-export const memoMap = Layer.makeMemoMapUnsafe();
-
-/** The services every request and server function can use. */
-export type AppServices = Layer.Success<typeof applicationLayer>;
-
-export const serverRuntime = ManagedRuntime.make(applicationLayer, { memoMap });
+/** The services of the server process: the application services and the job runner. */
+export type AppServices = Layer.Success<typeof applicationLayer> | BackgroundWorker;
 
 const ServerApi = HttpApi.make("dfg")
   .add(healthGroup)
@@ -142,7 +134,5 @@ const TestingMountLive = Layer.unwrap(
   }),
 );
 
-/** Every /api route, with the application services merged in so handlers find them per request. */
-export const HttpApiLive = Layer.mergeAll(ApiLive, TestingMountLive).pipe(
-  Layer.provideMerge(applicationLayer),
-);
+/** Every /api route. Handlers find the services they use per request. */
+export const HttpApiLive = Layer.mergeAll(ApiLive, TestingMountLive);

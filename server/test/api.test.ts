@@ -140,7 +140,7 @@ describe("DFG Portal API", () => {
       adminResult.rows[0].id,
     ]);
 
-    const { handleApiRequest } = await import("../app.js");
+    const { handleApiRequest } = await import("./apiHandler.js");
 
     const httpClient = HttpClient.make((request, url, _signal, _fiber) =>
       Effect.tryPromise({
@@ -1230,11 +1230,11 @@ describe("DFG Portal API", () => {
           cookieIdFromToken(parentCookie),
         ]),
       );
-      const [{ serverRuntime }, { AuthRouteService }] = yield* Effect.promise(() =>
-        Promise.all([import("../runtime.js"), import("../services/authRouteService.js")]),
+      const [{ testRuntime }, { AuthRouteService }] = yield* Effect.promise(() =>
+        Promise.all([import("./apiHandler.js"), import("../services/authRouteService.js")]),
       );
       const directMe = yield* Effect.promise(() =>
-        serverRuntime.runPromise(
+        testRuntime.runPromise(
           AuthRouteService.use((authRouteService) =>
             authRouteService.me(sessionResult.rows[0].id, parentId, childId),
           ),
@@ -1364,7 +1364,7 @@ describe("DFG Portal API", () => {
     "delivers a change to the signed-in user it concerns over /api/events",
     () =>
       Effect.gen(function* () {
-        const { handleApiRequest } = yield* Effect.promise(() => import("../app.js"));
+        const { handleApiRequest } = yield* Effect.promise(() => import("./apiHandler.js"));
         const res = yield* Effect.promise(() =>
           handleApiRequest(
             new Request(`${TEST_ROOT_URL}/api/events`, {

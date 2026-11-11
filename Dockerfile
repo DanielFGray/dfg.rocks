@@ -16,7 +16,9 @@ RUN bun run build
 FROM base AS runtime
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
-COPY package.json .gmrc.cjs serve.ts ./
+COPY package.json .gmrc.cjs ./
+COPY server/main.ts ./server/
+COPY server/shell ./server/shell
 COPY migrations ./migrations
 COPY worker ./worker
 

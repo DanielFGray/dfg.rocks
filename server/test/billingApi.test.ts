@@ -138,7 +138,7 @@ describe("Admin Billing API", () => {
     // anyone here, so only the admin select policy shows their ledger.
     otherPayerId = await createUser("billing_other_student", "Billing Other Student", "student");
 
-    const { handleApiRequest } = await import("../app.js");
+    const { handleApiRequest } = await import("./apiHandler.js");
 
     const httpClient = HttpClient.make((request, url, _signal, _fiber) =>
       Effect.tryPromise({

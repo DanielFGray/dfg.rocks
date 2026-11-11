@@ -5,11 +5,11 @@
   "scripts": {
     "predev": "bun run db:up",
     "dev": "mprocs 'bun dev:app' 'bun typecheck:watch' 'bun test:unit' 'bun test:e2e'",
-    "dev:app": "bun --env-file=.env -b vite dev",
+    "dev:app": "bun --env-file=.env server/dev.ts",
     "typecheck": "tsc --noEmit",
     "typecheck:watch": "tsc --noEmit --watch",
     "build": "NODE_ENV=production bun --env-file=.env -b vite build",
-    "start": "NODE_ENV=production bun serve.ts",
+    "start": "NODE_ENV=production bun server/main.ts",
     "preview": "bun -b vite preview",
     "gm": "bun --env-file=.env -b graphile-migrate",
     "db:up": "ops dev db up",
