@@ -41,7 +41,6 @@ import { FamilyBillingService } from "./services/familyBillingService.js";
 import { GeolocationService } from "./services/geolocation.js";
 import { GoogleCalendarService } from "./services/googleCalendarService.js";
 import { LessonPolicyService } from "./services/lessonPolicyService.js";
-import { PublicRouteService } from "./services/publicRouteService.js";
 import { ContactService } from "./services/contactService.js";
 import { OAuthService } from "./services/oauthService.js";
 import { PdfService } from "./services/pdfService.js";
@@ -49,6 +48,7 @@ import { RateLimitService } from "./rateLimit.js";
 import { RateLimiterValkey } from "./services/rateLimiter.js";
 import { RecurringScheduleService } from "./services/recurringScheduleService.js";
 import { RealtimeService } from "./services/realtimeService.js";
+import { FamilyService } from "./services/familyService.js";
 import { AccountService } from "./services/accountService.js";
 import { TestimonialService } from "./services/testimonialService.js";
 import { SessionService } from "./services/sessionService.js";
@@ -110,11 +110,11 @@ const servicesLayer = Layer.mergeAll(
   rateLimitLayer,
   FileService.layer,
   GeolocationService.layer,
-  PublicRouteService.layer,
   ContactService.layer,
   OAuthService.layer,
   TestimonialService.layer,
   AccountService.layer,
+  FamilyService.layer,
   StorageService.layer,
   TestimonialReminderService.layer,
   UserService.layer,

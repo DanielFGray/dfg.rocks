@@ -10,6 +10,7 @@ import { requiredValidator, emailValidator } from "../../lib/validators.js";
 import { fieldError } from "../../lib/form.js";
 import { runServerEffect } from "../../lib/serverEffect.js";
 import { AdminRouteService } from "../../../server/services/adminRouteService.js";
+import { FamilyService } from "../../../server/services/familyService.js";
 import { normalizeStudents, serializeFamily } from "../../../shared/responseMappers.js";
 import { requireAdminSession } from "../../lib/sessionGuards.server.js";
 import { FamilyInviteRole, type Family } from "../../../shared/schemas.js";
@@ -36,9 +37,7 @@ const getStudentsPageData = createServerFn({ method: "GET" }).handler(() =>
         AdminRouteService.use((adminRouteService) =>
           adminRouteService.listStudents(session.session.id),
         ),
-        AdminRouteService.use((adminRouteService) =>
-          adminRouteService.listFamilies(session.session.id),
-        ),
+        FamilyService.use((familyService) => familyService.listFamilies(session.session.id)),
       ]);
       return {
         students: normalizeStudents(students),

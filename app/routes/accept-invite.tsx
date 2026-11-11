@@ -10,7 +10,7 @@ import { Input } from "../components/ui/Input.js";
 import { acceptInvitation } from "../lib/authForms.js";
 import { InviteSearch } from "../../shared/schemas.js";
 import { runServerEffect } from "../lib/serverEffect.js";
-import { PublicRouteService } from "../../server/services/publicRouteService.js";
+import { FamilyService } from "../../server/services/familyService.js";
 
 const getInvitationPageData = createServerFn({ method: "GET" })
   .validator((data: unknown) => S.decodeUnknownSync(InviteSearch)(data))
@@ -22,9 +22,7 @@ const getInvitationPageData = createServerFn({ method: "GET" })
 
     try {
       const invitation = await runServerEffect(
-        PublicRouteService.use((publicRouteService) =>
-          publicRouteService.invitation(id, data.code ?? ""),
-        ),
+        FamilyService.use((familyService) => familyService.invitation(id, data.code ?? "")),
       );
       return { invitation, error: null };
     } catch (error) {

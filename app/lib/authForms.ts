@@ -5,7 +5,7 @@ import { Effect, Schema as S } from "effect";
 import { runServerEffect } from "./serverEffect.js";
 import { AuthService } from "../../server/services/authService.js";
 import { AuthRouteService } from "../../server/services/authRouteService.js";
-import { PublicRouteService } from "../../server/services/publicRouteService.js";
+import { FamilyService } from "../../server/services/familyService.js";
 import { UserService } from "../../server/services/userService.js";
 import { normalizeLoginRedirect } from "./loginRedirect.js";
 
@@ -165,8 +165,8 @@ export const acceptInvitation = createServerFn({ method: "POST" })
   })
   .handler(async ({ data }) => {
     const session = await runServerEffect(
-      PublicRouteService.use((publicRouteService) =>
-        publicRouteService.acceptInvitation({
+      FamilyService.use((familyService) =>
+        familyService.acceptInvitation({
           invitationId: data.id,
           code: data.code,
           username: data.username,

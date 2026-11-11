@@ -19,7 +19,7 @@ import {
   verifyAppleIdToken,
 } from "../services/oauthService.js";
 import { GeolocationService } from "../services/geolocation.js";
-import { PublicRouteService } from "../services/publicRouteService.js";
+import { FamilyService } from "../services/familyService.js";
 import { AccountService } from "../services/accountService.js";
 import { ContactService } from "../services/contactService.js";
 import { OAuthService } from "../services/oauthService.js";
@@ -285,8 +285,8 @@ export function makePublicLayer() {
       .handle(
         "invitation",
         Effect.fnUntraced(function* ({ params, query }) {
-          return yield* PublicRouteService.use((publicRouteService) =>
-            publicRouteService.invitation(params.id, query.code ?? ""),
+          return yield* FamilyService.use((familyService) =>
+            familyService.invitation(params.id, query.code ?? ""),
           );
         }, adaptPublicHttpApiErrors),
       )
@@ -295,8 +295,8 @@ export function makePublicLayer() {
         "acceptInvitation",
         Effect.fnUntraced(function* ({ request, params, payload }) {
           yield* checkRateLimit("accept-invite", request.headers);
-          const session = yield* PublicRouteService.use((publicRouteService) =>
-            publicRouteService.acceptInvitation({
+          const session = yield* FamilyService.use((familyService) =>
+            familyService.acceptInvitation({
               invitationId: params.id,
               code: payload.code,
               username: payload.username,
