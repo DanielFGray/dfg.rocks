@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "predev": "bun run db:up",
-    "dev": "mprocs 'bun worker' 'bun dev:app' 'bun typecheck:watch' 'bun test:unit' 'bun test:e2e'",
+    "dev": "mprocs 'bun dev:app' 'bun typecheck:watch' 'bun test:unit' 'bun test:e2e'",
     "dev:app": "bun --env-file=.env -b vite dev",
     "typecheck": "tsc --noEmit",
     "typecheck:watch": "tsc --noEmit --watch",
@@ -20,7 +20,6 @@
     "db:setup": "run-s db:up db:reset",
     "env:init": "bun scripts/generateEnvFile.ts",
     "init": "NOCONFIRM=1 run-s env:init db:setup",
-    "worker": "bun --env-file=.env worker/main.ts",
     "lint": "oxlint .",
     "test": "run-s typecheck lint test:unit test:worker test:bun test:e2e",
     "test:unit": "vitest run",

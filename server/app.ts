@@ -8,7 +8,8 @@ export function handleApiRequest(request: Request): Promise<Response> {
   return web.handler(request);
 }
 
-// Starts the in-process job runner. The production entry calls this once, after the HTTP server listens.
+// Starts the in-process job runner. serve.ts and the dev server (scripts/devJobRunnerPlugin.ts) call
+// this once, after the HTTP server listens.
 export async function startWorker(workerDirectory: string): Promise<void> {
   await serverRuntime.runPromise(BackgroundWorker.use((worker) => worker.start(workerDirectory)));
 }
