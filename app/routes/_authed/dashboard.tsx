@@ -13,6 +13,7 @@ import { ParentOnboarding } from "../../components/dashboard/ParentOnboarding.js
 import { ParentDashboard } from "../../components/dashboard/ParentDashboard.js";
 import { runServerEffect } from "../../lib/serverEffect.js";
 import { AdminRouteService } from "../../../server/services/adminRouteService.js";
+import { TestimonialService } from "../../../server/services/testimonialService.js";
 import { TestimonialReminderService } from "../../../server/services/testimonialReminderService.js";
 import { SessionService, resolveEffectiveStudent } from "../../../server/services/sessionService.js";
 import { AuthenticatedRouteService } from "../../../server/services/authenticatedRouteService.js";
@@ -106,8 +107,8 @@ const getDashboardPageData = createServerFn({ method: "GET" }).handler(() =>
           courses: AuthenticatedRouteService.use((authenticatedRouteService) =>
             authenticatedRouteService.courses(session.session.id, filterStudentId),
           ),
-          testimonial: AuthenticatedRouteService.use((authenticatedRouteService) =>
-            authenticatedRouteService.testimonial(session.session.id, session.user.id),
+          testimonial: TestimonialService.use((testimonialService) =>
+            testimonialService.testimonial(session.session.id, session.user.id),
           ),
         }),
         TestimonialReminderService.use((testimonialReminderService) =>

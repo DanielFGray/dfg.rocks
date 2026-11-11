@@ -19,14 +19,14 @@ import { Textarea } from "../components/ui/Textarea.js";
 
 import { createServerFn } from "@tanstack/react-start";
 import { runServerEffect } from "../lib/serverEffect.js";
-import { PublicRouteService } from "../../server/services/publicRouteService.js";
+import { TestimonialService } from "../../server/services/testimonialService.js";
 import { ContactService } from "../../server/services/contactService.js";
 
 const [logoBefore, logoAfter] = site.logo.split(site.logoDot);
 
 export const getHomePageData = createServerFn({ method: "GET" }).handler(() =>
   runServerEffect(
-    PublicRouteService.use((publicRouteService) => publicRouteService.homePageData()),
+    TestimonialService.use((testimonialService) => testimonialService.homePageData()),
   ),
 );
 

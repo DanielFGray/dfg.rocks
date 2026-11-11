@@ -1204,63 +1204,6 @@ export class AdminRouteService extends Context.Service<AdminRouteService>()("Adm
             ]),
         );
       }),
-
-      listTestimonials: Effect.fn("listTestimonials")(function* (sessionId: string) {
-        return yield* withAuthContext(sessionId, (db) =>
-          db.execute(
-            db
-              .selectFrom("app_public.testimonials as t")
-              .innerJoin("app_public.users as u", "u.id", "t.user_id")
-              .select([
-                "t.id",
-                "t.user_id",
-                "t.body",
-                "t.is_approved",
-                "t.created_at",
-                "t.updated_at",
-                "u.username",
-                "u.name",
-                "u.role",
-              ])
-              .where("u.role", "!=", "admin")
-              .orderBy("t.is_approved", "asc")
-              .orderBy("t.updated_at", "desc"),
-          ),
-        );
-      }),
-
-      updateTestimonialApproval: Effect.fn("updateTestimonialApproval")(function* (
-        sessionId: string,
-        testimonialId: string,
-        isApproved: boolean,
-      ) {
-        return yield* withAuthContext(sessionId, (db) =>
-          db
-            .execute(
-              db
-                .with("updated", (qb) =>
-                  qb
-                    .updateTable("app_public.testimonials")
-                    .set({ is_approved: isApproved })
-                    .where("id", "=", testimonialId)
-                    .returning(["id", "user_id", "is_approved"]),
-                )
-                .selectFrom("updated")
-                .innerJoin("app_public.users as u", "u.id", "updated.user_id")
-                .select(["updated.id", "updated.user_id", "updated.is_approved", "u.role"]),
-            )
-            .pipe(
-              Effect.head,
-              Effect.option,
-              Effect.flatMap(
-                Option.match({
-                  onNone: () => new HttpError(404, "Testimonial not found"),
-                  onSome: Effect.succeed,
-                }),
-              ),
-            ),
-        );
-      }),
     };
   }),
 }) {

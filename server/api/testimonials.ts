@@ -4,8 +4,7 @@ import { Contract } from "../../shared/httpApi.js";
 import { CurrentSession, type SignedIn } from "../../shared/api/guards.js";
 import { serializeTestimonial } from "../../shared/responseMappers.js";
 import { HttpError } from "../pgErrors.js";
-import { AuthenticatedRouteService } from "../services/authenticatedRouteService.js";
-import { AdminRouteService } from "../services/adminRouteService.js";
+import { TestimonialService } from "../services/testimonialService.js";
 import { TestimonialReminderService } from "../services/testimonialReminderService.js";
 import { adaptSignedInErrors, adaptAdminErrors } from "../httpApiErrors.js";
 
@@ -22,8 +21,8 @@ export const TestimonialsApiGroupLive = HttpApiBuilder.group(Contract, "testimon
       Effect.fnUntraced(function* ({ payload }) {
         const auth = yield* CurrentSession;
         yield* assertCanManageTestimonial(auth);
-        const testimonial = yield* AuthenticatedRouteService.use((authenticatedRouteService) =>
-          authenticatedRouteService.upsertTestimonial(auth.session.id, auth.user.id, payload.body),
+        const testimonial = yield* TestimonialService.use((testimonialService) =>
+          testimonialService.upsertTestimonial(auth.session.id, auth.user.id, payload.body),
         );
         return serializeTestimonial(testimonial);
       }, adaptSignedInErrors),
@@ -33,8 +32,8 @@ export const TestimonialsApiGroupLive = HttpApiBuilder.group(Contract, "testimon
       Effect.fnUntraced(function* () {
         const auth = yield* CurrentSession;
         yield* assertCanManageTestimonial(auth);
-        yield* AuthenticatedRouteService.use((authenticatedRouteService) =>
-          authenticatedRouteService.deleteTestimonial(auth.session.id, auth.user.id),
+        yield* TestimonialService.use((testimonialService) =>
+          testimonialService.deleteTestimonial(auth.session.id, auth.user.id),
         );
         return { success: true as const };
       }, adaptSignedInErrors),
@@ -75,8 +74,8 @@ export const TestimonialsAdminApiGroupLive = HttpApiBuilder.group(
         "updateTestimonialApproval",
         Effect.fnUntraced(function* ({ params, payload }) {
           const auth = yield* CurrentSession;
-          const testimonial = yield* AdminRouteService.use((adminRouteService) =>
-            adminRouteService.updateTestimonialApproval(
+          const testimonial = yield* TestimonialService.use((testimonialService) =>
+            testimonialService.updateTestimonialApproval(
               auth.session.id,
               params.id,
               payload.is_approved,

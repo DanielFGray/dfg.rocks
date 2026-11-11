@@ -12,7 +12,6 @@ import { calculateDepositAmount } from "./billingCalculation.js";
 import { LessonPolicyService } from "./lessonPolicyService.js";
 import { resolveAssignedTrackIndex } from "./notationService.js";
 import { SessionService } from "./sessionService.js";
-import { TestimonialReminderService } from "./testimonialReminderService.js";
 
 const CourseMaterial = Material.mapFields(
   Struct.assign({
@@ -53,27 +52,6 @@ function assertAssignedMaterial(db: Database, materialId: string) {
         NoSuchElementError: () => new HttpError(404, "Assignment not found"),
       }),
     );
-}
-
-function testimonialSelect(db: Database, userId: string) {
-  return db.execute(
-    db
-      .selectFrom("app_public.testimonials as t")
-      .innerJoin("app_public.users as u", "u.id", "t.user_id")
-      .select([
-        "t.id",
-        "t.user_id",
-        "t.body",
-        "t.is_approved",
-        "t.created_at",
-        "t.updated_at",
-        "u.username",
-        "u.name",
-        "u.role",
-      ])
-      .where("t.user_id", "=", userId)
-      .limit(1),
-  );
 }
 
 export class AuthenticatedRouteService extends Context.Service<AuthenticatedRouteService>()(
@@ -983,75 +961,6 @@ export class AuthenticatedRouteService extends Context.Service<AuthenticatedRout
                 ),
               );
             }),
-          );
-        }),
-
-        testimonial: Effect.fn("testimonial")(function* (sessionId: string, userId: string) {
-          return yield* withAuthContext(sessionId, (db) =>
-            testimonialSelect(db, userId).pipe(
-              Effect.head,
-              Effect.option,
-              Effect.map(Option.getOrNull),
-            ),
-          );
-        }),
-
-        upsertTestimonial: Effect.fn("upsertTestimonial")(function* (
-          sessionId: string,
-          userId: string,
-          body: string,
-        ) {
-          const row = yield* withAuthContext(
-            sessionId,
-            Effect.fnUntraced(function* (db) {
-              yield* db.execute(
-                db
-                  .insertInto("app_public.testimonials")
-                  .values({ body })
-                  .onConflict((oc) =>
-                    oc.column("user_id").doUpdateSet({
-                      body,
-                    }),
-                  ),
-              );
-              return yield* testimonialSelect(db, userId).pipe(
-                Effect.head,
-                Effect.catchTags({
-                  NoSuchElementError: () => new HttpError(500, "Failed to save testimonial"),
-                }),
-              );
-            }),
-          );
-          yield* TestimonialReminderService.use((testimonialReminderService) =>
-            testimonialReminderService.clearReminderState(userId),
-          );
-          return row;
-        }),
-
-        deleteTestimonial: Effect.fn("deleteTestimonial")(function* (
-          sessionId: string,
-          userId: string,
-        ) {
-          yield* withAuthContext(
-            sessionId,
-            Effect.fnUntraced(function* (db) {
-              return yield* db
-                .execute(
-                  db
-                    .deleteFrom("app_public.testimonials")
-                    .where("user_id", "=", userId)
-                    .returning(["id"]),
-                )
-                .pipe(
-                  Effect.head,
-                  Effect.catchTags({
-                    NoSuchElementError: () => new HttpError(404, "Testimonial not found"),
-                  }),
-                );
-            }),
-          );
-          yield* TestimonialReminderService.use((testimonialReminderService) =>
-            testimonialReminderService.scheduleNextReminder(userId),
           );
         }),
 

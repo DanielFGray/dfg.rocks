@@ -8,6 +8,7 @@ import { DeleteAccountSection } from "../../components/settings/DeleteAccountSec
 import { TestimonialEditor } from "../../components/testimonials/TestimonialEditor.js";
 import { runServerEffect } from "../../lib/serverEffect.js";
 import { AdminRouteService } from "../../../server/services/adminRouteService.js";
+import { TestimonialService } from "../../../server/services/testimonialService.js";
 import { AuthenticatedRouteService } from "../../../server/services/authenticatedRouteService.js";
 import { GoogleCalendarService } from "../../../server/services/googleCalendarService.js";
 import { TestimonialReminderService } from "../../../server/services/testimonialReminderService.js";
@@ -26,8 +27,8 @@ const getSettingsPageData = createServerFn({ method: "GET" }).handler(() =>
       if (session.user.role !== "admin") {
         const [emails, testimonial] = yield* Effect.all([
           emailsEffect,
-          AuthenticatedRouteService.use((authenticatedRouteService) =>
-            authenticatedRouteService.testimonial(session.session.id, session.user.id),
+          TestimonialService.use((testimonialService) =>
+            testimonialService.testimonial(session.session.id, session.user.id),
           ),
         ]);
 
@@ -51,8 +52,8 @@ const getSettingsPageData = createServerFn({ method: "GET" }).handler(() =>
           TestimonialReminderService.use((testimonialReminderService) =>
             testimonialReminderService.getIntervalDays(),
           ),
-          AdminRouteService.use((adminRouteService) =>
-            adminRouteService.listTestimonials(session.session.id),
+          TestimonialService.use((testimonialService) =>
+            testimonialService.listTestimonials(session.session.id),
           ),
         ],
       );

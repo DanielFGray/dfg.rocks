@@ -1,6 +1,5 @@
 import { Effect, Schema as S, Context, Layer } from "effect";
 import { sql } from "kysely";
-import { serializeTestimonial } from "../../shared/responseMappers.js";
 import { FamilyInviteRole, type Testimonial } from "../../shared/schemas.js";
 import { PgRootDB } from "../db.js";
 import { catchPgErrors, HttpError } from "../pgErrors.js";
@@ -24,33 +23,6 @@ export class PublicRouteService extends Context.Service<PublicRouteService>()(
           .where("id", "=", invitationId);
 
       return {
-        homePageData: Effect.fn("homePageData")(function* () {
-          const rows = yield* db.execute(
-            db
-              .selectFrom("app_public.testimonials as t")
-              .innerJoin("app_public.users as u", "u.id", "t.user_id")
-              .select([
-                "t.id",
-                "t.user_id",
-                "t.body",
-                "t.is_approved",
-                "t.created_at",
-                "t.updated_at",
-                "u.username",
-                "u.name",
-                "u.role",
-              ])
-              .where("u.role", "!=", "admin")
-              .where("t.is_approved", "=", true)
-              .orderBy("t.updated_at", "desc")
-              .limit(6),
-          );
-
-          return {
-            testimonials: rows.map(serializeTestimonial),
-          } satisfies HomePageData;
-        }),
-
         verifyEmail: Effect.fn("verifyEmail")(function* (token: string) {
           const secret = yield* db
             .execute(
