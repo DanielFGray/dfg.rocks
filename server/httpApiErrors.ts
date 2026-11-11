@@ -177,3 +177,11 @@ export function adaptHttpApiErrors<A, E, R, const Allowed extends AllowedHttpApi
     );
   });
 }
+
+/** Maps a signed-in endpoint's failures to the statuses of `signedInErrors`. */
+export const adaptSignedInErrors = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
+  adaptHttpApiErrors(effect, [400, 401, 403, 404, 409, 500, 502, 503] as const);
+
+/** Maps an admin endpoint's failures to the statuses of `adminErrors`. */
+export const adaptAdminErrors = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
+  adaptHttpApiErrors(effect, [400, 401, 403, 404, 409, 413, 500, 502, 503] as const);

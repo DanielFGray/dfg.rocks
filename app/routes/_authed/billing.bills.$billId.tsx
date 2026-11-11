@@ -18,7 +18,7 @@ function BillDetailPage() {
 
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ["admin", "billing", "bill", billId],
-    queryFn: () => Effect.runPromise(api.admin.getBill({ params: { id: billId } })),
+    queryFn: () => Effect.runPromise(api.billsAdmin.getBill({ params: { id: billId } })),
     enabled: isAdmin,
   });
 

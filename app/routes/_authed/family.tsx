@@ -32,12 +32,12 @@ function FamilyPage() {
 
   const { data, isLoading } = useQuery({
     queryKey: ["family"],
-    queryFn: () => Effect.runPromise(api.authenticated.family()),
+    queryFn: () => Effect.runPromise(api.families.family()),
   });
 
   const removeMutation = useMutation({
     mutationFn: (userId: string) =>
-      Effect.runPromise(api.authenticated.removeFamilyMember({ payload: { user_id: userId } })),
+      Effect.runPromise(api.families.removeFamilyMember({ payload: { user_id: userId } })),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["family"] });
     },
@@ -45,7 +45,7 @@ function FamilyPage() {
 
   const inviteMutation = useMutation({
     mutationFn: (email: string) =>
-      Effect.runPromise(api.authenticated.inviteFamilyMember({ payload: { email } })),
+      Effect.runPromise(api.families.inviteFamilyMember({ payload: { email } })),
     onSuccess: () => {
       setInviteEmail("");
       setInviteError(null);
@@ -58,9 +58,7 @@ function FamilyPage() {
 
   const setChildEmailMutation = useMutation({
     mutationFn: ({ childId, email }: { childId: string; email: string }) =>
-      Effect.runPromise(
-        api.authenticated.setChildEmail({ params: { childId }, payload: { email } }),
-      ),
+      Effect.runPromise(api.families.setChildEmail({ params: { childId }, payload: { email } })),
     onSuccess: () => {
       setChildEmail("");
       setEditingEmailFor(null);
@@ -74,7 +72,7 @@ function FamilyPage() {
 
   const requestPasswordTokenMutation = useMutation({
     mutationFn: (childId: string) =>
-      Effect.runPromise(api.authenticated.requestChildPasswordSet({ params: { childId } })),
+      Effect.runPromise(api.families.requestChildPasswordSet({ params: { childId } })),
     onSuccess: (data) => {
       setPasswordToken(data.token);
       setPasswordTokenFor(null);
@@ -92,7 +90,7 @@ function FamilyPage() {
       password: string;
     }) =>
       Effect.runPromise(
-        api.authenticated.setChildPassword({
+        api.families.setChildPassword({
           params: { childId },
           payload: { token, password },
         }),

@@ -87,7 +87,8 @@ function LibraryPage() {
   }, [loaderMaterials]);
 
   const deleteMutation = useMutation({
-    mutationFn: (id: string) => Effect.runPromise(api.admin.deleteMaterial({ params: { id } })),
+    mutationFn: (id: string) =>
+      Effect.runPromise(api.materialsAdmin.deleteMaterial({ params: { id } })),
     onSuccess: (_, id) => {
       setDeleteTarget(null);
       setPendingCreated((current) => current.filter((item) => item.id !== id));
@@ -105,7 +106,7 @@ function LibraryPage() {
     formData.append("file", file);
     formData.append("title", title);
     formData.append("is_global", "true");
-    return Effect.runPromise(api.admin.uploadMaterial({ payload: formData }));
+    return Effect.runPromise(api.materialsAdmin.uploadMaterial({ payload: formData }));
   };
 
   const handleUploadComplete = (uploadedMaterials: Material[], hadErrors: boolean) => {

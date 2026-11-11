@@ -235,7 +235,7 @@ function BillActions({
   const [voidOpen, setVoidOpen] = useState(false);
 
   const issue = useMutation({
-    mutationFn: () => Effect.runPromise(api.admin.issueBill({ params: { id: bill.id } })),
+    mutationFn: () => Effect.runPromise(api.billsAdmin.issueBill({ params: { id: bill.id } })),
     onSuccess: onRefresh,
   });
 
@@ -295,7 +295,7 @@ function VoidBillModal({
 
   const save = useMutation({
     mutationFn: () =>
-      Effect.runPromise(api.admin.voidBill({ params: { id: billId }, payload: { reason } })),
+      Effect.runPromise(api.billsAdmin.voidBill({ params: { id: billId }, payload: { reason } })),
     onSuccess: () => {
       onSaved();
       onClose();
@@ -359,7 +359,7 @@ function CreateBillModal({
   const save = useMutation({
     mutationFn: () =>
       Effect.runPromise(
-        api.admin.createBill({
+        api.billsAdmin.createBill({
           payload: {
             payer_id: payerId,
             billing_period_start: periodStart,
@@ -549,7 +549,7 @@ function RecordPaymentModal({
   const save = useMutation({
     mutationFn: () =>
       Effect.runPromise(
-        api.admin.recordPayment({
+        api.paymentsAdmin.recordPayment({
           payload: {
             payer_id: payerId,
             amount_cents: Math.round(Number(amount) * 100),
@@ -764,7 +764,7 @@ function IssueCreditModal({
   const save = useMutation({
     mutationFn: () =>
       Effect.runPromise(
-        api.admin.createCredit({
+        api.creditsAdmin.createCredit({
           payload: {
             payer_id: payerId,
             amount_cents: Math.round(Number(amount) * 100),
@@ -857,7 +857,7 @@ function ApplyCreditModal({
   const save = useMutation({
     mutationFn: () =>
       Effect.runPromise(
-        api.admin.applyCredit({
+        api.creditsAdmin.applyCredit({
           payload: {
             credit_id: creditId,
             bill_id: billId,
@@ -946,7 +946,7 @@ function DiscountsSection({ payerId }: { payerId: string }) {
     refetch,
   } = useQuery({
     queryKey: ["admin", "billing", "discounts", payerId],
-    queryFn: () => Effect.runPromise(api.admin.payerDiscounts({ params: { payerId } })),
+    queryFn: () => Effect.runPromise(api.payersAdmin.payerDiscounts({ params: { payerId } })),
   });
   const [createOpen, setCreateOpen] = useState(false);
 
@@ -1014,7 +1014,7 @@ function DiscountCard({
   const toggleActive = useMutation({
     mutationFn: () =>
       Effect.runPromise(
-        api.admin.updateDiscount({
+        api.billingRatesAdmin.updateDiscount({
           params: { id: discount.id },
           payload: { is_active: !discount.is_active },
         }),
@@ -1115,11 +1115,11 @@ function DiscountFormModal({
       };
       if (discount) {
         return Effect.runPromise(
-          api.admin.updateDiscount({ params: { id: discount.id }, payload }),
+          api.billingRatesAdmin.updateDiscount({ params: { id: discount.id }, payload }),
         );
       }
       return Effect.runPromise(
-        api.admin.createDiscount({
+        api.billingRatesAdmin.createDiscount({
           // @ts-expect-error - spread type inference
           payload: { ...payload, payer_id: payerId },
         }),
@@ -1233,12 +1233,12 @@ function TaxSection({ payerId }: { payerId: string }) {
     refetch: refetchEx,
   } = useQuery({
     queryKey: ["admin", "billing", "tax-exemptions", payerId],
-    queryFn: () => Effect.runPromise(api.admin.payerTaxExemptions({ params: { payerId } })),
+    queryFn: () => Effect.runPromise(api.payersAdmin.payerTaxExemptions({ params: { payerId } })),
   });
 
   const { data: taxRates } = useQuery({
     queryKey: ["admin", "billing", "tax-rates"],
-    queryFn: () => Effect.runPromise(api.admin.listTaxRates()),
+    queryFn: () => Effect.runPromise(api.billingRatesAdmin.listTaxRates()),
   });
 
   const [createOpen, setCreateOpen] = useState(false);
@@ -1359,7 +1359,7 @@ function TaxExemptionFormModal({
   const save = useMutation({
     mutationFn: () =>
       Effect.runPromise(
-        api.admin.createTaxExemption({
+        api.billingRatesAdmin.createTaxExemption({
           payload: {
             payer_id: payerId,
             tax_rate_id: taxRateId,
@@ -1461,7 +1461,7 @@ function BillDetailModal({
 }) {
   const { data, isLoading, error } = useQuery({
     queryKey: ["admin", "billing", "bill", billId],
-    queryFn: () => Effect.runPromise(api.admin.getBill({ params: { id: billId } })),
+    queryFn: () => Effect.runPromise(api.billsAdmin.getBill({ params: { id: billId } })),
     enabled: open,
   });
 
@@ -1704,7 +1704,7 @@ function AdjustBillSection({ billId, onSaved }: { billId: string; onSaved: () =>
   const save = useMutation({
     mutationFn: () =>
       Effect.runPromise(
-        api.admin.adjustBill({
+        api.billsAdmin.adjustBill({
           params: { id: billId },
           payload: {
             amount_cents: Math.round(Number(amount) * 100),
@@ -1769,7 +1769,7 @@ function BillActionsPanel({
   const [voidOpen, setVoidOpen] = useState(false);
 
   const issue = useMutation({
-    mutationFn: () => Effect.runPromise(api.admin.issueBill({ params: { id: bill.id } })),
+    mutationFn: () => Effect.runPromise(api.billsAdmin.issueBill({ params: { id: bill.id } })),
     onSuccess: () => {
       onRefresh();
       onClose();
@@ -1777,7 +1777,7 @@ function BillActionsPanel({
   });
 
   const cancel = useMutation({
-    mutationFn: () => Effect.runPromise(api.admin.cancelBill({ params: { id: bill.id } })),
+    mutationFn: () => Effect.runPromise(api.billsAdmin.cancelBill({ params: { id: bill.id } })),
     onSuccess: () => {
       onRefresh();
       onClose();

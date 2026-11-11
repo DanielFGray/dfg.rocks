@@ -93,7 +93,7 @@ function StudentsPage() {
       invitedRole: FamilyInviteRole;
     }) =>
       Effect.runPromise(
-        api.admin.inviteFamily({
+        api.familiesAdmin.inviteFamily({
           params: { familyId },
           payload: { email, invited_role: invitedRole },
         }),
@@ -107,7 +107,7 @@ function StudentsPage() {
 
   const createFamilyMutation = useMutation({
     mutationFn: (payload: { slug: string; name: string }) =>
-      Effect.runPromise(api.admin.createFamily({ payload })),
+      Effect.runPromise(api.familiesAdmin.createFamily({ payload })),
     onSettled: () => {
       setCreateFamilyOpen(false);
       void queryClient.invalidateQueries({ queryKey: ["admin", "families"] });

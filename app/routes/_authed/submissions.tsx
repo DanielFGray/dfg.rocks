@@ -66,7 +66,7 @@ function SubmissionsPage() {
   const toggleRead = useMutation({
     mutationFn: (s: Submission) =>
       Effect.runPromise(
-        api.admin.updateSubmission({
+        api.practiceAdmin.updateSubmission({
           params: { id: s.id },
           payload: { is_read: !s.is_read },
         }),

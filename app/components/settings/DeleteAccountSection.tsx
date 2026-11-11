@@ -11,7 +11,7 @@ export function DeleteAccountSection({ onRefresh }: { onRefresh: () => Promise<v
   const [successMessage, setSuccessMessage] = useState(false);
 
   const requestDeleteMutation = useMutation({
-    mutationFn: () => Effect.runPromise(api.authenticated.requestDeleteAccount()),
+    mutationFn: () => Effect.runPromise(api.accounts.requestDeleteAccount()),
     onSuccess: () => {
       setSuccessMessage(true);
       onRefresh();

@@ -18,7 +18,7 @@ function PayerBillingPage() {
 
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ["admin", "billing", "payer", payerId],
-    queryFn: () => Effect.runPromise(api.admin.billingPayer({ params: { payerId } })),
+    queryFn: () => Effect.runPromise(api.payersAdmin.billingPayer({ params: { payerId } })),
     enabled: isAdmin,
   });
 

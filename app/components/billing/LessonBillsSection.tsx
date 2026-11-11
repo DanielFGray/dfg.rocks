@@ -19,14 +19,15 @@ export function LessonBillsSection({ month }: { month: string }) {
 
   const bills = useQuery({
     queryKey: ["admin", "lesson-bills", month],
-    queryFn: () => Effect.runPromise(api.admin.lessonBills({ query: { month: `${month}-01` } })),
+    queryFn: () =>
+      Effect.runPromise(api.billsAdmin.lessonBills({ query: { month: `${month}-01` } })),
     enabled: month !== "",
   });
 
   const recordCash = useMutation({
     mutationFn: (bill: LessonBill) =>
       Effect.runPromise(
-        api.admin.recordPayment({
+        api.paymentsAdmin.recordPayment({
           payload: {
             payer_id: bill.payer_id,
             amount_cents: bill.outstanding_cents,

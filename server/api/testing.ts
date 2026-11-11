@@ -17,20 +17,95 @@ import {
 } from "../../shared/httpApiErrors.js";
 import { adaptHttpApiErrors } from "../httpApiErrors.js";
 import { TestingService } from "../services/testingService.js";
-import { normalizeToResponse, setSessionCookie } from "./raw.js";
 import {
-  TestingLoginQuery,
-  TestingTestimonialReminderQuery,
-  SeedCoursePayload,
-  SeedMaterialPayload,
-  TestingAssignMaterialQuery,
-  TestingEnrollQuery,
-  TestingSeedFamilyQuery,
-  TestingSeedFamilyMembershipQuery,
-  TestingSeedInvitationQuery,
-  TestingSeedDeleteAccountQuery,
-  TestingSeedLessonQuery,
-} from "../../shared/httpApi.js";
+  BooleanFromString,
+  FamilyInviteRole,
+  LessonStatus,
+  LocationType,
+} from "../../shared/schemas.js";
+import { normalizeToResponse, setSessionCookie } from "./raw.js";
+
+const TestingLoginQuery = S.Struct({
+  username: S.optional(S.String),
+  password: S.optional(S.String),
+  role: S.optional(
+    S.Union([S.Literal("admin"), S.Literal("teacher"), S.Literal("student"), S.Literal("parent")]),
+  ),
+  name: S.optional(S.String),
+  email: S.optional(S.String),
+});
+
+const TestingTestimonialReminderQuery = S.Struct({
+  username: S.String,
+  prompt_enabled: S.optional(BooleanFromString),
+  next_prompt_at: S.optional(S.String),
+});
+
+const SeedCoursePayload = S.Struct({
+  title: S.String,
+  instrument: S.String,
+  description: S.optional(S.String),
+  modules: S.optional(
+    S.Array(
+      S.Struct({
+        title: S.String,
+        sort_order: S.optional(S.Number),
+      }),
+    ),
+  ),
+});
+
+const SeedMaterialPayload = S.Struct({
+  title: S.String,
+  original_filename: S.optional(S.String),
+  mime_type: S.optional(S.String),
+  file_size: S.optional(S.Number),
+  is_global: S.optional(S.Boolean),
+  source_file_path: S.optional(S.String),
+});
+
+const TestingAssignMaterialQuery = S.Struct({
+  username: S.String,
+  material_title: S.String,
+  assigned_track_index: S.optional(S.String),
+});
+
+const TestingEnrollQuery = S.Struct({
+  username: S.String,
+  course_title: S.String,
+});
+
+const TestingSeedFamilyQuery = S.Struct({
+  slug: S.optional(S.String),
+  name: S.optional(S.String),
+  owner_username: S.optional(S.String),
+});
+
+const TestingSeedFamilyMembershipQuery = S.Struct({
+  username: S.String,
+  family_slug: S.String,
+  is_owner: S.optional(BooleanFromString),
+  is_billing_contact: S.optional(BooleanFromString),
+});
+
+const TestingSeedInvitationQuery = S.Struct({
+  email: S.String,
+  family_slug: S.optional(S.String),
+  invited_role: S.optional(FamilyInviteRole),
+  expires_at: S.optional(S.String),
+});
+
+const TestingSeedDeleteAccountQuery = S.Struct({
+  username: S.String,
+});
+
+const TestingSeedLessonQuery = S.Struct({
+  username: S.String,
+  scheduled_at: S.optional(S.String),
+  duration_minutes: S.optional(S.NumberFromString),
+  location_type: S.optional(LocationType),
+  status: S.optional(LessonStatus),
+});
 
 const testingErrors = [
   BadRequestErrorSchema,

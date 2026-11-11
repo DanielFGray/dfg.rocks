@@ -22,7 +22,7 @@ function BillingPage() {
     error,
   } = useQuery({
     queryKey: ["admin", "billing", "payers"],
-    queryFn: () => Effect.runPromise(api.admin.billingPayers()),
+    queryFn: () => Effect.runPromise(api.payersAdmin.billingPayers()),
     enabled: isAdmin,
   });
 

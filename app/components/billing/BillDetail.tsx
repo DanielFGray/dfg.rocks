@@ -25,12 +25,12 @@ export function BillDetailView({
   const [adjustOpen, setAdjustOpen] = useState(false);
 
   const issue = useMutation({
-    mutationFn: () => Effect.runPromise(api.admin.issueBill({ params: { id: bill.id } })),
+    mutationFn: () => Effect.runPromise(api.billsAdmin.issueBill({ params: { id: bill.id } })),
     onSuccess: onRefresh,
   });
 
   const cancel = useMutation({
-    mutationFn: () => Effect.runPromise(api.admin.cancelBill({ params: { id: bill.id } })),
+    mutationFn: () => Effect.runPromise(api.billsAdmin.cancelBill({ params: { id: bill.id } })),
     onSuccess: onRefresh,
   });
 
@@ -345,7 +345,7 @@ function AdjustmentForm({ billId, onSaved }: { billId: string; onSaved: () => vo
   const save = useMutation({
     mutationFn: () =>
       Effect.runPromise(
-        api.admin.adjustBill({
+        api.billsAdmin.adjustBill({
           params: { id: billId },
           payload: {
             amount_cents: Math.round(Number(amount) * 100),
@@ -417,7 +417,7 @@ function AdjustModal({
   const save = useMutation({
     mutationFn: () =>
       Effect.runPromise(
-        api.admin.adjustBill({
+        api.billsAdmin.adjustBill({
           params: { id: billId },
           payload: {
             amount_cents: Math.round(Number(amount) * 100),
@@ -493,7 +493,7 @@ function VoidModal({
 
   const save = useMutation({
     mutationFn: () =>
-      Effect.runPromise(api.admin.voidBill({ params: { id: billId }, payload: { reason } })),
+      Effect.runPromise(api.billsAdmin.voidBill({ params: { id: billId }, payload: { reason } })),
     onSuccess: () => {
       onSaved();
       onClose();

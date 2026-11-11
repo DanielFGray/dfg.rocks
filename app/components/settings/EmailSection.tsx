@@ -20,24 +20,23 @@ export function EmailSection({
 
   const addEmailMutation = useMutation({
     mutationFn: (email: string) =>
-      Effect.runPromise(api.authenticated.addMyEmail({ payload: { email } })),
+      Effect.runPromise(api.accounts.addMyEmail({ payload: { email } })),
     onSuccess: onRefresh,
   });
 
   const makePrimaryMutation = useMutation({
     mutationFn: (id: string) =>
-      Effect.runPromise(api.authenticated.makePrimaryEmail({ params: { id } })),
+      Effect.runPromise(api.accounts.makePrimaryEmail({ params: { id } })),
     onSuccess: onRefresh,
   });
 
   const resendVerificationMutation = useMutation({
     mutationFn: (id: string) =>
-      Effect.runPromise(api.authenticated.resendEmailVerification({ params: { id } })),
+      Effect.runPromise(api.accounts.resendEmailVerification({ params: { id } })),
   });
 
   const deleteEmailMutation = useMutation({
-    mutationFn: (id: string) =>
-      Effect.runPromise(api.authenticated.deleteMyEmail({ params: { id } })),
+    mutationFn: (id: string) => Effect.runPromise(api.accounts.deleteMyEmail({ params: { id } })),
     onSuccess: onRefresh,
   });
 

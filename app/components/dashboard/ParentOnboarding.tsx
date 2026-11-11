@@ -16,7 +16,7 @@ export function ParentOnboarding({ isFirstStudent, onSuccess }: Props) {
 
   const mutation = useMutation({
     mutationFn: (name: string) =>
-      Effect.runPromise(api.authenticated.createChild({ payload: { name } })),
+      Effect.runPromise(api.families.createChild({ payload: { name } })),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["auth", "user"] });
       onSuccess?.();

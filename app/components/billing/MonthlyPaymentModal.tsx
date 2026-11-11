@@ -45,7 +45,7 @@ export function MonthlyPaymentModal({
   const save = useMutation({
     mutationFn: () =>
       Effect.runPromise(
-        api.admin.recordMonthlyPayment({
+        api.monthlyBillingAdmin.recordMonthlyPayment({
           params: { studentId },
           payload: {
             billing_month: `${billingMonth}-01`,

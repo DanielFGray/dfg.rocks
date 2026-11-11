@@ -102,7 +102,7 @@ function StudentDetailPage() {
   const enrollMutation = useMutation({
     mutationFn: (courseId: string) =>
       Effect.runPromise(
-        api.admin.enrollStudent({
+        api.coursesAdmin.enrollStudent({
           params: { id },
           payload: { course_id: courseId },
         }),
@@ -113,7 +113,7 @@ function StudentDetailPage() {
   const unenrollMutation = useMutation({
     mutationFn: (courseId: string) =>
       Effect.runPromise(
-        api.admin.unenrollStudent({
+        api.coursesAdmin.unenrollStudent({
           params: { id, courseId },
         }),
       ),
@@ -129,7 +129,7 @@ function StudentDetailPage() {
       assignedTrackIndex: number | null;
     }) =>
       Effect.runPromise(
-        api.admin.assignMaterial({
+        api.materialsAdmin.assignMaterial({
           params: { id },
           payload: {
             material_id: materialId,
@@ -143,7 +143,7 @@ function StudentDetailPage() {
   const unassignMutation = useMutation({
     mutationFn: (materialId: string) =>
       Effect.runPromise(
-        api.admin.unassignMaterial({
+        api.materialsAdmin.unassignMaterial({
           params: { id, materialId },
         }),
       ),

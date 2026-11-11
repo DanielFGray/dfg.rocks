@@ -29,12 +29,12 @@ export function TestimonialEditor({
 
   const saveMutation = useMutation({
     mutationFn: (nextBody: string) =>
-      Effect.runPromise(api.authenticated.upsertTestimonial({ payload: { body: nextBody } })),
+      Effect.runPromise(api.testimonials.upsertTestimonial({ payload: { body: nextBody } })),
     onSuccess: onRefresh,
   });
 
   const deleteMutation = useMutation({
-    mutationFn: () => Effect.runPromise(api.authenticated.deleteTestimonial()),
+    mutationFn: () => Effect.runPromise(api.testimonials.deleteTestimonial()),
     onSuccess: async () => {
       setBody("");
       await onRefresh();

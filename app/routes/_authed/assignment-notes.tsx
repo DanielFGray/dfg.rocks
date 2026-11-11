@@ -23,13 +23,13 @@ export function AssignmentNotesPanel({ materialId }: { materialId: string }) {
 
   const { data: note } = useQuery({
     queryKey: ["assignment-note", materialId],
-    queryFn: () => Effect.runPromise(api.authenticated.assignmentNotes({ params: { materialId } })),
+    queryFn: () => Effect.runPromise(api.materials.assignmentNotes({ params: { materialId } })),
   });
 
   const upsertMutation = useMutation({
     mutationFn: (body: string) =>
       Effect.runPromise(
-        api.authenticated.upsertAssignmentNotes({
+        api.materials.upsertAssignmentNotes({
           params: { materialId },
           payload: { body },
         }),

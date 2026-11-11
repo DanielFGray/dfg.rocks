@@ -69,22 +69,22 @@ export function invalidateStudentQueries(queryClient: QueryClient, studentId?: s
 
 export const adminStudentsQuery = queryOptions({
   queryKey: ["admin", "students"],
-  queryFn: () => Effect.runPromise(api.admin.students()),
+  queryFn: () => Effect.runPromise(api.studentsStaff.students()),
 });
 
 export const adminCoursesQuery = queryOptions({
   queryKey: ["admin", "courses"],
-  queryFn: () => Effect.runPromise(api.admin.courses()),
+  queryFn: () => Effect.runPromise(api.coursesAdmin.courses()),
 });
 
 export const adminFamiliesQuery = queryOptions({
   queryKey: ["admin", "families"],
-  queryFn: () => Effect.runPromise(api.admin.families()),
+  queryFn: () => Effect.runPromise(api.familiesAdmin.families()),
 });
 
 export const adminLessonsQuery = queryOptions({
   queryKey: ["admin-lessons"],
-  queryFn: () => Effect.runPromise(api.admin.lessons({ query: {} })),
+  queryFn: () => Effect.runPromise(api.lessonsAdmin.lessons({ query: {} })),
 });
 
 export const adminTodayLessonsQuery = (instant?: Date) => {
@@ -95,7 +95,7 @@ export const adminTodayLessonsQuery = (instant?: Date) => {
     queryKey: ["admin", "lessons", "today", from, to],
     queryFn: () =>
       Effect.runPromise(
-        api.admin.lessons({
+        api.lessonsAdmin.lessons({
           query: { from, to },
         }),
       ),
@@ -108,103 +108,103 @@ export const adminWeekLessonsQuery = (instant?: Date) => {
   const to = range.to.toISOString();
   return queryOptions({
     queryKey: ["admin", "lessons", "week", from, to],
-    queryFn: () => Effect.runPromise(api.admin.lessons({ query: { from, to } })),
+    queryFn: () => Effect.runPromise(api.lessonsAdmin.lessons({ query: { from, to } })),
   });
 };
 
 export const adminSubmissionsQuery = queryOptions({
   queryKey: ["admin", "submissions"],
-  queryFn: () => Effect.runPromise(api.admin.submissions({ query: {} })),
+  queryFn: () => Effect.runPromise(api.practiceAdmin.submissions({ query: {} })),
 });
 
 export const courseStudentsQuery = (id: string) =>
   queryOptions({
     queryKey: ["admin", "courses", id, "students"],
-    queryFn: () => Effect.runPromise(api.admin.courseStudents({ params: { id } })),
+    queryFn: () => Effect.runPromise(api.coursesAdmin.courseStudents({ params: { id } })),
   });
 
 export const studentDetailQuery = (id: string) =>
   queryOptions({
     queryKey: ["admin", "students", id],
-    queryFn: () => Effect.runPromise(api.admin.student({ params: { id } })),
+    queryFn: () => Effect.runPromise(api.studentsStaff.student({ params: { id } })),
   });
 
 // ---- Shared / student queries ----
 
 export const libraryQuery = queryOptions({
   queryKey: ["library"],
-  queryFn: () => Effect.runPromise(api.authenticated.library({ query: {} })),
+  queryFn: () => Effect.runPromise(api.materials.library({ query: {} })),
 });
 
 export function messagesQuery(studentId?: string) {
   return queryOptions({
     queryKey: ["messages", studentId],
-    queryFn: () => Effect.runPromise(api.authenticated.messages({ query: {} })),
+    queryFn: () => Effect.runPromise(api.messages.messages({ query: {} })),
   });
 }
 
 export function assignmentsQuery(studentId?: string) {
   return queryOptions({
     queryKey: ["assignments", studentId],
-    queryFn: () => Effect.runPromise(api.authenticated.assignments()),
+    queryFn: () => Effect.runPromise(api.materials.assignments()),
   });
 }
 
 export function practiceLogsQuery(studentId?: string) {
   return queryOptions({
     queryKey: ["practice-logs", studentId],
-    queryFn: () => Effect.runPromise(api.authenticated.practiceLogs({ query: {} })),
+    queryFn: () => Effect.runPromise(api.practice.practiceLogs({ query: {} })),
   });
 }
 
 export function coursesQuery(studentId?: string) {
   return queryOptions({
     queryKey: ["courses", studentId],
-    queryFn: () => Effect.runPromise(api.authenticated.courses()),
+    queryFn: () => Effect.runPromise(api.courses.courses()),
   });
 }
 
 export const courseDetailQuery = (id: string) =>
   queryOptions({
     queryKey: ["courses", id],
-    queryFn: () => Effect.runPromise(api.authenticated.courseById({ params: { id } })),
+    queryFn: () => Effect.runPromise(api.courses.courseById({ params: { id } })),
   });
 
 export function scheduledLessonsQuery(studentId?: string) {
   return queryOptions({
     queryKey: ["my-lessons", "scheduled", studentId],
     queryFn: () =>
-      Effect.runPromise(api.authenticated.myLessons({ query: { status: "scheduled", limit: 5 } })),
+      Effect.runPromise(api.lessons.myLessons({ query: { status: "scheduled", limit: 5 } })),
   });
 }
 
 export function myLessonsQuery(studentId?: string) {
   return queryOptions({
     queryKey: ["my-lessons", studentId],
-    queryFn: () => Effect.runPromise(api.authenticated.myLessons({ query: {} })),
+    queryFn: () => Effect.runPromise(api.lessons.myLessons({ query: {} })),
   });
 }
 
 export function myLessonNotesQuery(studentId?: string) {
   return queryOptions({
     queryKey: ["my-lesson-notes", studentId],
-    queryFn: () => Effect.runPromise(api.authenticated.myLessonNotesList({ query: { limit: 100 } })),
+    queryFn: () => Effect.runPromise(api.lessons.myLessonNotesList({ query: { limit: 100 } })),
   });
 }
 
 export const myEmailsQuery = queryOptions({
   queryKey: ["my-emails"],
-  queryFn: () => Effect.runPromise(api.authenticated.myEmails()),
+  queryFn: () => Effect.runPromise(api.accounts.myEmails()),
 });
 
 export const gcalStatusQuery = queryOptions({
   queryKey: ["gcal-status"],
-  queryFn: () => Effect.runPromise(api.admin.gcalStatus()),
+  queryFn: () => Effect.runPromise(api.calendarAdmin.gcalStatus()),
 });
 
 export const workingHoursQuery = queryOptions({
   queryKey: ["working-hours"],
-  queryFn: () => Effect.runPromise(api.admin.workingHours()),
+  queryFn: () => Effect.runPromise(api.lessonsAdmin.workingHours()),
 });
 
 export const availableSlotsQuery = (date: string, studentId?: string) =>
@@ -212,7 +212,7 @@ export const availableSlotsQuery = (date: string, studentId?: string) =>
     queryKey: ["available-slots", date, studentId],
     queryFn: () =>
       Effect.runPromise(
-        api.authenticated.availableSlots({ query: { date, days: 7, duration: 60 } }),
+        api.lessons.availableSlots({ query: { date, days: 7, duration: 60 } }),
       ),
   });
 
@@ -221,7 +221,7 @@ export function useSwitchActiveStudent() {
   return useMutation({
     mutationFn: (studentId: string) =>
       Effect.runPromise(
-        api.authenticated.switchActiveStudent({
+        api.accounts.switchActiveStudent({
           payload: { student_id: studentId },
         }),
       ),

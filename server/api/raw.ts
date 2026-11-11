@@ -1,9 +1,9 @@
 import * as Cookies from "effect/http/Cookies";
 import * as HttpServerRequest from "effect/http/HttpServerRequest";
 import * as HttpServerResponse from "effect/http/HttpServerResponse";
-import { Config, Effect, Schema as S } from "effect";
+import { Config, Effect } from "effect";
 import { HttpError } from "../pgErrors.js";
-import { SessionService } from "../services/sessionService.js";
+import { SessionService, type SessionResult } from "../services/sessionService.js";
 
 export type RawRequest = HttpServerRequest.HttpServerRequest;
 
@@ -18,11 +18,25 @@ export const requireSession = Effect.fnUntraced(function* (request: RawRequest) 
   return session;
 });
 
-export function params<const Name extends string>(...names: readonly Name[]) {
-  return S.Struct(
-    Object.fromEntries(names.map((name) => [name, S.String])) as Record<Name, typeof S.String>,
-  );
-}
+/** A signed-in request: its session and user. */
+export type Auth = NonNullable<SessionResult>;
+
+/** The session of an admin, or 401 / 403; then the CSRF header unless `csrf` is false. */
+export const requireAdminSession = Effect.fnUntraced(function* (
+  request: RawRequest,
+  options: {
+    csrf?: boolean;
+  } = {},
+) {
+  const result = yield* requireSession(request);
+  if (result.user.role !== "admin") {
+    return yield* new HttpError(403, "Forbidden");
+  }
+  if (options.csrf !== false) {
+    yield* csrfCheck(request.headers);
+  }
+  return result;
+});
 
 const defaultCookieOptions = Effect.gen(function* () {
   return {

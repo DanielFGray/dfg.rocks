@@ -110,7 +110,7 @@ function LessonsPage() {
       scheduled_at: string;
       duration_minutes: number;
       location_type: LocationType;
-    }) => Effect.runPromise(api.admin.createLesson({ payload })),
+    }) => Effect.runPromise(api.lessonsAdmin.createLesson({ payload })),
     onSettled: () => {
       setFormOpen(false);
       void router.invalidate();
@@ -118,7 +118,8 @@ function LessonsPage() {
   });
 
   const completeLessonMutation = useMutation({
-    mutationFn: (id: string) => Effect.runPromise(api.admin.completeLesson({ params: { id } })),
+    mutationFn: (id: string) =>
+      Effect.runPromise(api.lessonsAdmin.completeLesson({ params: { id } })),
     onSettled: () => {
       void router.invalidate();
     },
@@ -126,7 +127,7 @@ function LessonsPage() {
 
   const cancelLessonMutation = useMutation({
     mutationFn: (id: string) =>
-      Effect.runPromise(api.admin.cancelLesson({ params: { id }, payload: {} })),
+      Effect.runPromise(api.lessonsAdmin.cancelLesson({ params: { id }, payload: {} })),
     onSettled: () => {
       void router.invalidate();
     },
@@ -135,7 +136,7 @@ function LessonsPage() {
   const updateLessonMutation = useMutation({
     mutationFn: (params: { id: string; payload: Record<string, unknown> }) =>
       Effect.runPromise(
-        api.admin.updateLesson({
+        api.lessonsAdmin.updateLesson({
           params: { id: params.id },
           payload: params.payload,
         }),
@@ -147,7 +148,8 @@ function LessonsPage() {
   });
 
   const deleteLessonMutation = useMutation({
-    mutationFn: (id: string) => Effect.runPromise(api.admin.deleteLesson({ params: { id } })),
+    mutationFn: (id: string) =>
+      Effect.runPromise(api.lessonsAdmin.deleteLesson({ params: { id } })),
     onSettled: () => {
       setDeleteTarget(null);
       void router.invalidate();
@@ -167,14 +169,14 @@ function LessonsPage() {
       publish: boolean;
     }) => {
       const data = await Effect.runPromise(
-        api.admin.saveLessonNote({
+        api.lessonsAdmin.saveLessonNote({
           params: { id: params.lessonId },
           payload: params.payload,
         }),
       );
       if (params.publish) {
         const pubData = await Effect.runPromise(
-          api.admin.publishLessonNote({ params: { id: params.lessonId } }),
+          api.lessonsAdmin.publishLessonNote({ params: { id: params.lessonId } }),
         );
         return { ...data, ...pubData };
       }

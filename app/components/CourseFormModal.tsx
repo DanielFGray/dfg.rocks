@@ -37,7 +37,7 @@ type CourseFormModalProps = {
 export function CourseFormModal({ open, onClose, course, onSuccess }: CourseFormModalProps) {
   const createMutation = useMutation({
     mutationFn: (payload: { title: string; instrument: string; description?: string }) =>
-      Effect.runPromise(api.admin.createCourse({ payload })),
+      Effect.runPromise(api.coursesAdmin.createCourse({ payload })),
   });
 
   const updateMutation = useMutation({
@@ -49,7 +49,7 @@ export function CourseFormModal({ open, onClose, course, onSuccess }: CourseForm
       title: string;
       instrument: string;
       description?: string;
-    }) => Effect.runPromise(api.admin.updateCourse({ params: { id }, payload })),
+    }) => Effect.runPromise(api.coursesAdmin.updateCourse({ params: { id }, payload })),
   });
 
   const form = useForm({

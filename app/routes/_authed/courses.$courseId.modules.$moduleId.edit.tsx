@@ -97,7 +97,7 @@ function ModuleEditPage() {
   const saveMutation = useMutation({
     mutationFn: (doc: RichTextDocument | null) =>
       Effect.runPromise(
-        api.admin.updateModule({
+        api.coursesAdmin.updateModule({
           params: { id: moduleId },
           payload: { title, content: doc },
         }),

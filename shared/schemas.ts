@@ -937,3 +937,6 @@ export const CreateChildResponse = S.Struct({
 });
 
 export type CreateChildResponse = S.Schema.Type<typeof CreateChildResponse>;
+
+/** The body of a write that returns no data. */
+export const SuccessResponse = S.Struct({ success: S.Literal(true) });

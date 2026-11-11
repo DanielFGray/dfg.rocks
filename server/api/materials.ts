@@ -1,0 +1,253 @@
+import * as HttpApiBuilder from "effect/http-api/HttpApiBuilder";
+import * as HttpServerResponse from "effect/http/HttpServerResponse";
+import { Effect, Schema as S } from "effect";
+import { Contract } from "../../shared/httpApi.js";
+import {
+  AssignedMaterial,
+  Material,
+  type Material as MaterialResponse,
+} from "../../shared/schemas.js";
+import { adaptHttpApiErrors, adaptSignedInErrors, adaptAdminErrors } from "../httpApiErrors.js";
+import { HttpError } from "../pgErrors.js";
+import { AuthenticatedRouteService } from "../services/authenticatedRouteService.js";
+import { resolveEffectiveStudent } from "../services/sessionService.js";
+import { requireSession, requireAdminSession, type Auth } from "./raw.js";
+import { AdminRouteService } from "../services/adminRouteService.js";
+import { FileService } from "../services/fileService.js";
+
+const assertCanManageAssignments = Effect.fnUntraced(function* (auth: Auth) {
+  if (auth.user.role !== "admin" && auth.user.role !== "teacher") {
+    return yield* new HttpError(403, "Forbidden");
+  }
+});
+
+const assertCanTrackOwnAssignments = Effect.fnUntraced(function* (auth: Auth) {
+  if (auth.user.role !== "student" && auth.user.role !== "parent") {
+    return yield* new HttpError(403, "Forbidden");
+  }
+});
+
+const materialDownloadErrorStatuses = [401, 403, 404, 500] as const;
+
+const adaptMaterialDownloadErrors = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
+  adaptHttpApiErrors(effect, materialDownloadErrorStatuses);
+
+export const MaterialsApiGroupLive = HttpApiBuilder.group(Contract, "materials", (handlers) =>
+  handlers
+    .handle(
+      "library",
+      Effect.fnUntraced(function* ({ request, query }) {
+        const auth = yield* requireSession(request);
+        const rows = yield* AuthenticatedRouteService.use((authenticatedRouteService) =>
+          authenticatedRouteService.library(auth.session.id, {
+            limit: query.limit ?? 50,
+            offset: query.offset ?? 0,
+          }),
+        );
+        return yield* S.decodeUnknownEffect(S.Array(Material))(rows);
+      }, adaptSignedInErrors),
+    )
+    .handle(
+      "assignments",
+      Effect.fnUntraced(function* ({ request }) {
+        const auth = yield* requireSession(request);
+        const effective = resolveEffectiveStudent(auth);
+        const filterStudentId = effective.isActing ? effective.studentId : undefined;
+        const rows = yield* AuthenticatedRouteService.use((authenticatedRouteService) =>
+          authenticatedRouteService.assignments(auth.session.id, filterStudentId),
+        );
+        return yield* S.decodeUnknownEffect(S.Array(AssignedMaterial))(rows);
+      }, adaptSignedInErrors),
+    )
+    .handle(
+      "assignStudentMaterial",
+      Effect.fnUntraced(function* ({ request, params, payload }) {
+        const auth = yield* requireSession(request);
+        yield* assertCanManageAssignments(auth);
+        yield* AuthenticatedRouteService.use((authenticatedRouteService) =>
+          authenticatedRouteService.assignStudentMaterial({
+            sessionId: auth.session.id,
+            studentId: params.studentId,
+            materialId: payload.material_id,
+            assignedTrackIndex: payload.assigned_track_index,
+          }),
+        );
+        return { success: true as const };
+      }, adaptSignedInErrors),
+    )
+    .handle(
+      "unassignStudentMaterial",
+      Effect.fnUntraced(function* ({ request, params }) {
+        const auth = yield* requireSession(request);
+        yield* assertCanManageAssignments(auth);
+        yield* AuthenticatedRouteService.use((authenticatedRouteService) =>
+          authenticatedRouteService.unassignStudentMaterial(
+            auth.session.id,
+            params.studentId,
+            params.materialId,
+          ),
+        );
+        return { success: true as const };
+      }, adaptSignedInErrors),
+    )
+    .handle(
+      "recordAssignmentPlayback",
+      Effect.fnUntraced(function* ({ request, params, payload }) {
+        const auth = yield* requireSession(request);
+        yield* assertCanTrackOwnAssignments(auth);
+        const effective = resolveEffectiveStudent(auth);
+        const row = yield* AuthenticatedRouteService.use((authenticatedRouteService) =>
+          authenticatedRouteService.recordAssignmentPlayback({
+            sessionId: auth.session.id,
+            studentId: effective.studentId,
+            materialId: params.materialId,
+            seconds: payload.seconds,
+          }),
+        );
+        return {
+          ...row,
+          updated_at: row.updated_at.toISOString(),
+        };
+      }, adaptSignedInErrors),
+    )
+    .handle(
+      "createAssignmentReview",
+      Effect.fnUntraced(function* ({ request, params, payload }) {
+        const auth = yield* requireSession(request);
+        yield* assertCanTrackOwnAssignments(auth);
+        const effective = resolveEffectiveStudent(auth);
+        const row = yield* AuthenticatedRouteService.use((authenticatedRouteService) =>
+          authenticatedRouteService.createAssignmentReview({
+            sessionId: auth.session.id,
+            studentId: effective.studentId,
+            materialId: params.materialId,
+            stars: payload.stars,
+          }),
+        );
+        return {
+          ...row,
+          created_at: row.created_at.toISOString(),
+        };
+      }, adaptSignedInErrors),
+    )
+    .handle(
+      "assignmentNotes",
+      Effect.fnUntraced(function* ({ request, params }) {
+        const auth = yield* requireSession(request);
+        const row = yield* AuthenticatedRouteService.use((authenticatedRouteService) =>
+          authenticatedRouteService.assignmentNotes(auth.session.id, params.materialId),
+        );
+        if (!row) {
+          return null;
+        }
+        return {
+          ...row,
+          created_at: row.created_at.toISOString(),
+          updated_at: row.updated_at.toISOString(),
+        };
+      }, adaptSignedInErrors),
+    )
+    .handle(
+      "upsertAssignmentNotes",
+      Effect.fnUntraced(function* ({ request, params, payload }) {
+        const auth = yield* requireSession(request);
+        const effective = resolveEffectiveStudent(auth);
+        const row = yield* AuthenticatedRouteService.use((authenticatedRouteService) =>
+          authenticatedRouteService.upsertAssignmentNotes({
+            sessionId: auth.session.id,
+            studentId: effective.studentId,
+            materialId: params.materialId,
+            body: payload.body,
+          }),
+        );
+        return {
+          ...row,
+          created_at: row.created_at.toISOString(),
+          updated_at: row.updated_at.toISOString(),
+        };
+      }, adaptSignedInErrors),
+    )
+    .handle(
+      "materialDownload",
+      Effect.fnUntraced(function* (context) {
+        const auth = yield* requireSession(context.request);
+        const { params } = context;
+        const fileInfo = yield* FileService.use((fileService) =>
+          fileService.download(params.id, auth.user.id, auth.session.id),
+        );
+        return HttpServerResponse.fromWeb(
+          new Response(fileInfo.stream as unknown as BodyInit, {
+            headers: {
+              "content-type": fileInfo.mimeType,
+              "content-disposition":
+                fileInfo.mimeType === "application/pdf"
+                  ? `inline; filename="${encodeURIComponent(fileInfo.filename)}"`
+                  : `attachment; filename="${encodeURIComponent(fileInfo.filename)}"`,
+            },
+          }),
+        );
+      }, adaptMaterialDownloadErrors),
+    ),
+);
+
+export const MaterialsAdminApiGroupLive = HttpApiBuilder.group(
+  Contract,
+  "materialsAdmin",
+  (handlers) =>
+    handlers
+      .handle(
+        "assignMaterial",
+        Effect.fnUntraced(function* ({ request, params, payload }) {
+          const auth = yield* requireAdminSession(request);
+          yield* AdminRouteService.use((adminRouteService) =>
+            adminRouteService.assignMaterial({
+              sessionId: auth.session.id,
+              studentId: params.id,
+              materialId: payload.material_id,
+              assignedTrackIndex: payload.assigned_track_index,
+            }),
+          );
+          return { success: true as const };
+        }, adaptAdminErrors),
+      )
+      .handle(
+        "unassignMaterial",
+        Effect.fnUntraced(function* (context) {
+          const auth = yield* requireAdminSession(context.request);
+          const { params } = context;
+          yield* AdminRouteService.use((adminRouteService) =>
+            adminRouteService.unassignMaterial(auth.session.id, params.id, params.materialId),
+          );
+          return { success: true as const };
+        }, adaptAdminErrors),
+      )
+      .handle(
+        "deleteMaterial",
+        Effect.fnUntraced(function* (context) {
+          const auth = yield* requireAdminSession(context.request);
+          const { params } = context;
+          const row = yield* AdminRouteService.use((adminRouteService) =>
+            adminRouteService.deleteMaterial(auth.session.id, params.id),
+          );
+          if (!row) {
+            return yield* new HttpError(404, "Material not found");
+          }
+          return { success: true as const };
+        }, adaptAdminErrors),
+      )
+      .handle(
+        "uploadMaterial",
+        Effect.fnUntraced(function* ({ request, payload }) {
+          const auth = yield* requireAdminSession(request);
+          return (yield* FileService.use((fileService) =>
+            fileService.upload(
+              payload.file,
+              payload.title,
+              payload.is_global,
+              auth.user.id,
+              auth.session.id,
+            ),
+          )) as MaterialResponse;
+        }, adaptAdminErrors),
+      ),
+);

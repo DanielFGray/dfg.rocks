@@ -145,7 +145,7 @@ function BookLessonPage() {
   const bookMutation = useMutation({
     mutationFn: (slot: { start: string; end: string }) =>
       Effect.runPromise(
-        api.authenticated.bookLesson({
+        api.lessons.bookLesson({
           payload: {
             scheduled_at: slot.start,
             duration_minutes: 60,

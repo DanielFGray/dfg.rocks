@@ -37,7 +37,7 @@ export function AttachMaterialModal({
     formData.append("file", file);
     formData.append("title", title);
     formData.append("is_global", "true");
-    return Effect.runPromise(api.admin.uploadMaterial({ payload: formData }));
+    return Effect.runPromise(api.materialsAdmin.uploadMaterial({ payload: formData }));
   };
 
   const handleAttachMaterial = (materialId: string) => {

@@ -311,7 +311,7 @@ function StaffAssignmentsPage() {
       assignedTrackIndex: number | null;
     }) =>
       Effect.runPromise(
-        api.authenticated.assignStudentMaterial({
+        api.materials.assignStudentMaterial({
           params: { studentId },
           payload: {
             material_id: materialId,
@@ -329,7 +329,7 @@ function StaffAssignmentsPage() {
   const unassignMutation = useMutation({
     mutationFn: async ({ studentId, materialId }: { studentId: string; materialId: string }) =>
       Effect.runPromise(
-        api.authenticated.unassignStudentMaterial({
+        api.materials.unassignStudentMaterial({
           params: { studentId, materialId },
         }),
       ),

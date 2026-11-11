@@ -70,7 +70,7 @@ export function AdminSection({
 
   const policyQuery = useQuery({
     queryKey: ["admin", "cancellation-policy"],
-    queryFn: () => Effect.runPromise(api.admin.cancellationPolicySettings()),
+    queryFn: () => Effect.runPromise(api.lessonsAdmin.cancellationPolicySettings()),
   });
 
   useEffect(() => {
@@ -82,14 +82,14 @@ export function AdminSection({
   }, [policyQuery.data, policyInitialized]);
 
   const disconnectMutation = useMutation({
-    mutationFn: () => Effect.runPromise(api.admin.gcalDisconnect()),
+    mutationFn: () => Effect.runPromise(api.calendarAdmin.gcalDisconnect()),
     onSuccess: onRefresh,
   });
 
   const saveHoursMutation = useMutation({
     mutationFn: (hours: WorkingHoursMap) =>
       Effect.runPromise(
-        api.admin.saveWorkingHours({
+        api.lessonsAdmin.saveWorkingHours({
           payload: {
             0: hours["0"] ?? null,
             1: hours["1"] ?? null,
@@ -107,7 +107,7 @@ export function AdminSection({
   const saveReminderIntervalMutation = useMutation({
     mutationFn: (nextIntervalDays: number) =>
       Effect.runPromise(
-        api.admin.saveTestimonialReminderInterval({
+        api.testimonialsAdmin.saveTestimonialReminderInterval({
           payload: { interval_days: nextIntervalDays },
         }),
       ),
@@ -116,7 +116,7 @@ export function AdminSection({
   const reviewTestimonialMutation = useMutation({
     mutationFn: ({ testimonialId, isApproved }: { testimonialId: string; isApproved: boolean }) =>
       Effect.runPromise(
-        api.admin.updateTestimonialApproval({
+        api.testimonialsAdmin.updateTestimonialApproval({
           params: { id: testimonialId },
           payload: { is_approved: isApproved },
         }),
@@ -128,7 +128,7 @@ export function AdminSection({
     mutationFn: (payload: {
       cancellation_window_hours: number;
       late_cancel_charge_percent: number;
-    }) => Effect.runPromise(api.admin.saveCancellationPolicySettings({ payload })),
+    }) => Effect.runPromise(api.lessonsAdmin.saveCancellationPolicySettings({ payload })),
     onSuccess: onRefresh,
   });
 

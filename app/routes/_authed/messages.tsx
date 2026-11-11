@@ -175,7 +175,7 @@ function MessagesPage() {
   // ---- Mutations ----
   const sendMessageMutation = useMutation({
     mutationFn: (payload: { recipient_id?: string; body: string }) =>
-      Effect.runPromise(api.authenticated.createMessage({ payload })),
+      Effect.runPromise(api.messages.createMessage({ payload })),
     onSettled: () => {
       void router.invalidate();
     },
@@ -184,7 +184,7 @@ function MessagesPage() {
   const markReadMutation = useMutation({
     mutationFn: (id: string) =>
       Effect.runPromise(
-        api.authenticated.markMessageRead({
+        api.messages.markMessageRead({
           params: { id },
           payload: { is_read: true },
         }),

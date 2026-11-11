@@ -7,12 +7,26 @@ import * as NodeFileSystem from "@effect/platform-node/NodeFileSystem";
 import * as NodeHttpPlatform from "@effect/platform-node/NodeHttpPlatform";
 import * as NodePath from "@effect/platform-node/NodePath";
 import { Contract } from "../shared/httpApi.js";
-import { makeAdminLayer } from "./api/admin.js";
 import { makeAuthLayer } from "./api/auth.js";
+import { CoursesApiGroupLive, CoursesAdminApiGroupLive } from "./api/courses.js";
+import { MaterialsApiGroupLive, MaterialsAdminApiGroupLive } from "./api/materials.js";
+import { PracticeApiGroupLive, PracticeAdminApiGroupLive } from "./api/practice.js";
+import { MessagesApiGroupLive } from "./api/messages.js";
+import { LessonsApiGroupLive, LessonsAdminApiGroupLive } from "./api/lessons.js";
+import { AccountsApiGroupLive } from "./api/accounts.js";
+import { TestimonialsApiGroupLive, TestimonialsAdminApiGroupLive } from "./api/testimonials.js";
+import { FamiliesApiGroupLive, FamiliesAdminApiGroupLive } from "./api/families.js";
+import { RealtimeApiGroupLive } from "./api/realtime.js";
+import { CalendarAdminApiGroupLive } from "./api/calendar.js";
+import { StudentsStaffApiGroupLive, StudentsAdminApiGroupLive } from "./api/students.js";
+import { MonthlyBillingAdminApiGroupLive } from "./api/monthlyBilling.js";
+import { PayersAdminApiGroupLive } from "./api/payers.js";
+import { BillsAdminApiGroupLive } from "./api/bills.js";
+import { PaymentsAdminApiGroupLive } from "./api/payments.js";
+import { CreditsAdminApiGroupLive } from "./api/credits.js";
+import { BillingRatesAdminApiGroupLive } from "./api/billingRates.js";
 import { makeFamilyBillingLayer } from "./api/familyBilling.js";
-import { makeAuthenticatedLayer } from "./api/authenticated.js";
 import { makeHealthLayer } from "./api/health.js";
-import { makeMaterialDownloadLayer } from "./api/materialDownload.js";
 import { makePublicLayer } from "./api/public.js";
 import { PgAuthDB, PgRootDB } from "./db.js";
 import { AdminRouteService } from "./services/adminRouteService.js";
@@ -107,9 +121,30 @@ const GroupHandlersLive = Layer.mergeAll(
   makeHealthLayer(),
   makePublicLayer(),
   makeAuthLayer(),
-  makeAuthenticatedLayer(),
-  makeAdminLayer(),
-  makeMaterialDownloadLayer(),
+  CoursesApiGroupLive,
+  CoursesAdminApiGroupLive,
+  MaterialsApiGroupLive,
+  MaterialsAdminApiGroupLive,
+  PracticeApiGroupLive,
+  PracticeAdminApiGroupLive,
+  MessagesApiGroupLive,
+  LessonsApiGroupLive,
+  LessonsAdminApiGroupLive,
+  AccountsApiGroupLive,
+  TestimonialsApiGroupLive,
+  TestimonialsAdminApiGroupLive,
+  FamiliesApiGroupLive,
+  FamiliesAdminApiGroupLive,
+  RealtimeApiGroupLive,
+  CalendarAdminApiGroupLive,
+  StudentsStaffApiGroupLive,
+  StudentsAdminApiGroupLive,
+  MonthlyBillingAdminApiGroupLive,
+  PayersAdminApiGroupLive,
+  BillsAdminApiGroupLive,
+  PaymentsAdminApiGroupLive,
+  CreditsAdminApiGroupLive,
+  BillingRatesAdminApiGroupLive,
   makeFamilyBillingLayer(),
 );
 

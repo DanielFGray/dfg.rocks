@@ -24,7 +24,9 @@ function MonthlyPaymentsPage() {
   const status = useQuery({
     queryKey: ["admin", "monthly-payment-status", month],
     queryFn: () =>
-      Effect.runPromise(api.admin.monthlyPaymentStatus({ query: { month: `${month}-01` } })),
+      Effect.runPromise(
+        api.monthlyBillingAdmin.monthlyPaymentStatus({ query: { month: `${month}-01` } }),
+      ),
     enabled: month !== "",
   });
 

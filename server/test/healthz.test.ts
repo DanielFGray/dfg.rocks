@@ -13,7 +13,7 @@ import { ConnectionError, SqlError } from "effect/sql/SqlError";
 import { Database, PgAuthDB } from "../db.js";
 import { BackgroundWorker } from "../services/backgroundWorker.js";
 import * as HttpApi from "effect/http-api/HttpApi";
-import { healthGroup } from "../../shared/httpApi.js";
+import { healthGroup } from "../../shared/api/health.js";
 import { makeHealthLayer } from "../api/health.js";
 
 // Serves /healthz through the real HttpApi layer. The database is a stub client: `Database.execute`

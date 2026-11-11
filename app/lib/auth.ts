@@ -2,7 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { getCookie } from "@tanstack/react-start/server";
 import { runServerEffect } from "./serverEffect.js";
 import { AuthRouteService } from "../../server/services/authRouteService.js";
-import type { MeResponse } from "../../shared/httpApi.js";
+import type { MeResponse } from "../../shared/api/auth.js";
 
 export type AuthUser = {
   id: string;

@@ -158,7 +158,7 @@ export function StudentAssignmentDetail({
   const playbackMutation = useMutation({
     mutationFn: (seconds: number) =>
       Effect.runPromise(
-        api.authenticated.recordAssignmentPlayback({
+        api.materials.recordAssignmentPlayback({
           params: { materialId: material.id },
           payload: { seconds },
         }),
@@ -175,7 +175,7 @@ export function StudentAssignmentDetail({
   const reviewMutation = useMutation({
     mutationFn: (stars: number) =>
       Effect.runPromise(
-        api.authenticated.createAssignmentReview({
+        api.materials.createAssignmentReview({
           params: { materialId: material.id },
           payload: { stars },
         }),
@@ -193,7 +193,7 @@ export function StudentAssignmentDetail({
   const createLogMutation = useMutation({
     mutationFn: (durationMinutes: number) =>
       Effect.runPromise(
-        api.authenticated.createPracticeLog({
+        api.practice.createPracticeLog({
           payload: {
             material_id: material.id,
             duration_minutes: durationMinutes,
@@ -210,7 +210,7 @@ export function StudentAssignmentDetail({
   const rateLogMutation = useMutation({
     mutationFn: (rating: number) =>
       Effect.runPromise(
-        api.authenticated.ratePracticeLog({
+        api.practice.ratePracticeLog({
           payload: { material_id: material.id, rating },
         }),
       ),
@@ -235,7 +235,7 @@ export function StudentAssignmentDetail({
   const { data: practiceLogs = [] } = useQuery({
     queryKey: ["practice-logs", material.id],
     queryFn: () =>
-      Effect.runPromise(api.authenticated.practiceLogs({ query: { material_id: material.id } })),
+      Effect.runPromise(api.practice.practiceLogs({ query: { material_id: material.id } })),
   });
 
   const listenedSeconds = progress?.listened_seconds ?? 0;

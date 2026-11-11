@@ -108,7 +108,7 @@ function CourseDetailPage() {
   // ---- Mutations ----
   const createModuleMutation = useMutation({
     mutationFn: (payload: { title: string }) =>
-      Effect.runPromise(api.admin.createModule({ params: { id }, payload })),
+      Effect.runPromise(api.coursesAdmin.createModule({ params: { id }, payload })),
     onSuccess: (data) => {
       navigate({
         to: "/courses/$courseId/modules/$moduleId/edit",
@@ -119,14 +119,14 @@ function CourseDetailPage() {
 
   const deleteModuleMutation = useMutation({
     mutationFn: (moduleId: string) =>
-      Effect.runPromise(api.admin.deleteModule({ params: { id: moduleId } })),
+      Effect.runPromise(api.coursesAdmin.deleteModule({ params: { id: moduleId } })),
     onSettled: () => void router.invalidate(),
   });
 
   const enrollStudentMutation = useMutation({
     mutationFn: (studentId: string) =>
       Effect.runPromise(
-        api.admin.enrollStudent({
+        api.coursesAdmin.enrollStudent({
           params: { id: studentId },
           payload: { course_id: id },
         }),
@@ -137,7 +137,7 @@ function CourseDetailPage() {
   const unenrollStudentMutation = useMutation({
     mutationFn: (studentId: string) =>
       Effect.runPromise(
-        api.admin.unenrollStudent({
+        api.coursesAdmin.unenrollStudent({
           params: { id: studentId, courseId: id },
         }),
       ),

@@ -150,3 +150,28 @@ export const HttpApiErrorSchemas = [
   BadGatewayErrorSchema,
   ServiceUnavailableErrorSchema,
 ] as const;
+
+/** The errors an endpoint for signed-in users can answer. */
+export const signedInErrors = [
+  BadRequestErrorSchema,
+  UnauthorizedErrorSchema,
+  ForbiddenErrorSchema,
+  NotFoundErrorSchema,
+  ConflictErrorSchema,
+  InternalServerErrorSchema,
+  BadGatewayErrorSchema,
+  ServiceUnavailableErrorSchema,
+] as const;
+
+/** The errors an admin endpoint can answer: the signed-in errors and 413 for uploads. */
+export const adminErrors = [
+  BadRequestErrorSchema,
+  UnauthorizedErrorSchema,
+  ForbiddenErrorSchema,
+  NotFoundErrorSchema,
+  ConflictErrorSchema,
+  PayloadTooLargeErrorSchema,
+  InternalServerErrorSchema,
+  BadGatewayErrorSchema,
+  ServiceUnavailableErrorSchema,
+] as const;

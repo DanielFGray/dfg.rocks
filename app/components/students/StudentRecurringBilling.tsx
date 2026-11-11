@@ -91,15 +91,18 @@ function ErrorMessage({ error }: { error: unknown }) {
 export function StudentRecurringBilling({ studentId }: { studentId: string }) {
   const rates = useQuery({
     queryKey: ["admin", "student-rates", studentId],
-    queryFn: () => Effect.runPromise(api.admin.studentRates({ params: { studentId }, query: {} })),
+    queryFn: () =>
+      Effect.runPromise(api.studentsAdmin.studentRates({ params: { studentId }, query: {} })),
   });
   const schedules = useQuery({
     queryKey: ["admin", "recurring-schedules", studentId],
-    queryFn: () => Effect.runPromise(api.admin.recurringSchedules({ params: { studentId } })),
+    queryFn: () =>
+      Effect.runPromise(api.monthlyBillingAdmin.recurringSchedules({ params: { studentId } })),
   });
   const payments = useQuery({
     queryKey: ["admin", "monthly-payments", studentId],
-    queryFn: () => Effect.runPromise(api.admin.monthlyPayments({ params: { studentId } })),
+    queryFn: () =>
+      Effect.runPromise(api.monthlyBillingAdmin.monthlyPayments({ params: { studentId } })),
   });
 
   const [rateOpen, setRateOpen] = useState(false);
@@ -399,7 +402,7 @@ function RateModal({
   const save = useMutation({
     mutationFn: () =>
       Effect.runPromise(
-        api.admin.saveStudentRate({
+        api.studentsAdmin.saveStudentRate({
           payload: {
             student_id: studentId,
             rate_cents: Math.round(Number(amount) * 100),
@@ -516,7 +519,7 @@ function ScheduleModal({
   const save = useMutation({
     mutationFn: () =>
       Effect.runPromise(
-        api.admin.saveRecurringSchedule({
+        api.monthlyBillingAdmin.saveRecurringSchedule({
           params: { studentId },
           payload: {
             ...(schedule ? { id: schedule.id } : {}),

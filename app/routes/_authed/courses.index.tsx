@@ -57,7 +57,8 @@ export function AdminCourses({ courses }: { courses: readonly Course[] }) {
   const [deleteTarget, setDeleteTarget] = useState<Course | null>(null);
 
   const deleteCourseMutation = useMutation({
-    mutationFn: (id: string) => Effect.runPromise(api.admin.deleteCourse({ params: { id } })),
+    mutationFn: (id: string) =>
+      Effect.runPromise(api.coursesAdmin.deleteCourse({ params: { id } })),
     onSettled: () => {
       void router.invalidate();
     },

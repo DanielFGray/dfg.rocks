@@ -1,6 +1,7 @@
 import * as HttpApiBuilder from "effect/http-api/HttpApiBuilder";
 import { Config, Effect } from "effect";
-import { Contract, HealthUnavailableError } from "../../shared/httpApi.js";
+import { HealthUnavailableError } from "../../shared/api/health.js";
+import { Contract } from "../../shared/httpApi.js";
 import { PgAuthDB } from "../db.js";
 import { BackgroundWorker } from "../services/backgroundWorker.js";
 
