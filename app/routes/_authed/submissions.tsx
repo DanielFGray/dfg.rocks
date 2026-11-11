@@ -8,7 +8,7 @@ import { requireSession } from "../../lib/sessionGuards.server.js";
 import { api } from "../../lib/api.js";
 import type { Submission } from "../../../shared/schemas.js";
 import { runServerEffect } from "../../lib/serverEffect.js";
-import { AdminRouteService } from "../../../server/services/adminRouteService.js";
+import { PracticeService } from "../../../server/services/practiceService.js";
 import { HttpError } from "../../../server/pgErrors.js";
 import { Button } from "../../components/ui/Button.js";
 import { EmptyState } from "../../components/ui/EmptyState.js";
@@ -25,8 +25,8 @@ const getSubmissionsPageData = createServerFn({ method: "GET" }).handler(() =>
       if (session.user.role !== "admin") {
         throw new HttpError(403, "Forbidden");
       }
-      return (yield* AdminRouteService.use((adminRouteService) =>
-        adminRouteService.listSubmissions(session.session.id, 5000, 0),
+      return (yield* PracticeService.use((practiceService) =>
+        practiceService.listSubmissions(session.session.id, 5000, 0),
       )) satisfies ReadonlyArray<Submission>;
     }),
   ),

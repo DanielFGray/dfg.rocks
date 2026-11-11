@@ -3,9 +3,8 @@ import { Effect } from "effect";
 import { Contract } from "../../shared/httpApi.js";
 import { CurrentSession } from "../../shared/api/guards.js";
 import { HttpError } from "../pgErrors.js";
-import { AuthenticatedRouteService } from "../services/authenticatedRouteService.js";
+import { PracticeService } from "../services/practiceService.js";
 import { resolveEffectiveStudent } from "../services/sessionService.js";
-import { AdminRouteService } from "../services/adminRouteService.js";
 import { adaptSignedInErrors, adaptAdminErrors } from "../httpApiErrors.js";
 
 export const PracticeApiGroupLive = HttpApiBuilder.group(Contract, "practice", (handlers) =>
@@ -16,12 +15,8 @@ export const PracticeApiGroupLive = HttpApiBuilder.group(Contract, "practice", (
         const auth = yield* CurrentSession;
         const effective = resolveEffectiveStudent(auth);
         const filterStudentId = effective.isActing ? effective.studentId : undefined;
-        const rows = yield* AuthenticatedRouteService.use((authenticatedRouteService) =>
-          authenticatedRouteService.practiceLogs(
-            auth.session.id,
-            query.material_id,
-            filterStudentId,
-          ),
+        const rows = yield* PracticeService.use((practiceService) =>
+          practiceService.practiceLogs(auth.session.id, query.material_id, filterStudentId),
         );
         return rows;
       }, adaptSignedInErrors),
@@ -31,8 +26,8 @@ export const PracticeApiGroupLive = HttpApiBuilder.group(Contract, "practice", (
       Effect.fnUntraced(function* ({ payload }) {
         const auth = yield* CurrentSession;
         const effective = resolveEffectiveStudent(auth);
-        const row = yield* AuthenticatedRouteService.use((authenticatedRouteService) =>
-          authenticatedRouteService.createPracticeLog({
+        const row = yield* PracticeService.use((practiceService) =>
+          practiceService.createPracticeLog({
             sessionId: auth.session.id,
             studentId: effective.studentId,
             materialId: payload.material_id,
@@ -48,8 +43,8 @@ export const PracticeApiGroupLive = HttpApiBuilder.group(Contract, "practice", (
       Effect.fnUntraced(function* ({ payload }) {
         const auth = yield* CurrentSession;
         const effective = resolveEffectiveStudent(auth);
-        const row = yield* AuthenticatedRouteService.use((authenticatedRouteService) =>
-          authenticatedRouteService.ratePracticeLog(
+        const row = yield* PracticeService.use((practiceService) =>
+          practiceService.ratePracticeLog(
             auth.session.id,
             effective.studentId,
             payload.material_id,
@@ -70,12 +65,8 @@ export const PracticeAdminApiGroupLive = HttpApiBuilder.group(
         "submissions",
         Effect.fnUntraced(function* ({ query }) {
           const auth = yield* CurrentSession;
-          const rows = yield* AdminRouteService.use((adminRouteService) =>
-            adminRouteService.listSubmissions(
-              auth.session.id,
-              query.limit ?? 50,
-              query.offset ?? 0,
-            ),
+          const rows = yield* PracticeService.use((practiceService) =>
+            practiceService.listSubmissions(auth.session.id, query.limit ?? 50, query.offset ?? 0),
           );
           return rows;
         }, adaptAdminErrors),
@@ -84,8 +75,8 @@ export const PracticeAdminApiGroupLive = HttpApiBuilder.group(
         "updateSubmission",
         Effect.fnUntraced(function* ({ params, payload }) {
           const auth = yield* CurrentSession;
-          const row = yield* AdminRouteService.use((adminRouteService) =>
-            adminRouteService.updateSubmissionRead(auth.session.id, params.id, payload.is_read),
+          const row = yield* PracticeService.use((practiceService) =>
+            practiceService.updateSubmissionRead(auth.session.id, params.id, payload.is_read),
           );
           if (!row) {
             return yield* new HttpError(404, "Submission not found");

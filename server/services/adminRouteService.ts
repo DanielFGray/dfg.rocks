@@ -44,46 +44,6 @@ export class AdminRouteService extends Context.Service<AdminRouteService>()("Adm
     const lessonPolicy = yield* LessonPolicyService;
 
     return {
-      listSubmissions: Effect.fn("listSubmissions")(function* (
-        sessionId: string,
-        limit: number,
-        offset: number,
-      ) {
-        return yield* withAuthContext(sessionId, (db) =>
-          db.execute(
-            db
-              .selectFrom("app_public.contact_submissions")
-              .selectAll()
-              .orderBy("created_at", "desc")
-              .limit(limit)
-              .offset(offset),
-          ),
-        );
-      }),
-
-      updateSubmissionRead: Effect.fn("updateSubmissionRead")(function* (
-        sessionId: string,
-        id: string,
-        isRead: boolean,
-      ) {
-        return yield* withAuthContext(sessionId, (db) =>
-          db
-            .execute(
-              db
-                .updateTable("app_public.contact_submissions")
-                .set({ is_read: isRead })
-                .where("id", "=", id)
-                .returning(["id"]),
-            )
-            .pipe(
-              Effect.head,
-              Effect.catchTags({
-                NoSuchElementError: () => new HttpError(404, "Contact submission not found"),
-              }),
-            ),
-        );
-      }),
-
       listStudents: Effect.fn("listStudents")(function* (sessionId: string) {
         return yield* withAuthContext(sessionId, (db) =>
           db.execute(
