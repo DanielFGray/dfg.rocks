@@ -42,6 +42,8 @@ import { GeolocationService } from "./services/geolocation.js";
 import { GoogleCalendarService } from "./services/googleCalendarService.js";
 import { LessonPolicyService } from "./services/lessonPolicyService.js";
 import { PublicRouteService } from "./services/publicRouteService.js";
+import { ContactService } from "./services/contactService.js";
+import { OAuthService } from "./services/oauthService.js";
 import { PdfService } from "./services/pdfService.js";
 import { RateLimitService } from "./rateLimit.js";
 import { RateLimiterValkey } from "./services/rateLimiter.js";
@@ -107,6 +109,8 @@ const servicesLayer = Layer.mergeAll(
   FileService.layer,
   GeolocationService.layer,
   PublicRouteService.layer,
+  ContactService.layer,
+  OAuthService.layer,
   StorageService.layer,
   TestimonialReminderService.layer,
   UserService.layer,

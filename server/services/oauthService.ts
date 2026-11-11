@@ -6,10 +6,52 @@ import {
   generateCodeVerifier,
   generateState,
 } from "arctic";
-import { Config, Duration, Effect, Redacted } from "effect";
+import { Config, Context, Duration, Effect, Layer, Redacted } from "effect";
 import * as S from "effect/Schema";
 import { createRemoteJWKSet, jwtVerify } from "jose";
-import { HttpError } from "../pgErrors.js";
+import { catchPgErrors, HttpError } from "../pgErrors.js";
+import { sql } from "kysely";
+import { type UserRow } from "./userService.js";
+import { PgRootDB } from "../db.js";
+
+/** Accounts that sign in through an OAuth provider. */
+export class OAuthService extends Context.Service<OAuthService>()("OAuthService", {
+  make: Effect.gen(function* () {
+    const rootDb = yield* PgRootDB;
+    return {
+      linkOrRegisterOAuthUser: Effect.fn("linkOrRegisterOAuthUser")(function* (values: {
+        service: "google" | "apple";
+        identifier: string;
+        profile: unknown;
+        tokens: unknown;
+      }) {
+        return yield* rootDb
+          .execute(
+            rootDb
+              .selectFrom(
+                sql<UserRow>`app_private.link_or_register_user(
+            null,
+            ${values.service},
+            ${values.identifier},
+            ${JSON.stringify(values.profile)}::json,
+            ${JSON.stringify(values.tokens)}::json
+          )`.as("u"),
+              )
+              .selectAll(),
+          )
+          .pipe(
+            catchPgErrors,
+            Effect.head,
+            Effect.catchTags({
+              NoSuchElementError: () => new HttpError(500, "Failed to link account"),
+            }),
+          );
+      }),
+    };
+  }),
+}) {
+  static readonly layer = Layer.effect(this, this.make);
+}
 
 const oauthScopeByProvider = {
   google: ["openid", "email", "profile"],

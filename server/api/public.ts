@@ -20,6 +20,8 @@ import {
 } from "../services/oauthService.js";
 import { GeolocationService } from "../services/geolocation.js";
 import { PublicRouteService } from "../services/publicRouteService.js";
+import { ContactService } from "../services/contactService.js";
+import { OAuthService } from "../services/oauthService.js";
 import { checkRateLimit, clientIdentifierFromHeaders } from "../rateLimit.js";
 import { UserService } from "../services/userService.js";
 import { setSessionCookie } from "./raw.js";
@@ -77,8 +79,8 @@ export function makePublicLayer() {
                 "Sorry, I only accept lesson inquiries from the Houston / Galveston area in Texas. If you're outside Texas, I hope you find a great teacher near you!",
               );
             }
-            yield* PublicRouteService.use((publicRouteService) =>
-              publicRouteService.submitContact(payload, {
+            yield* ContactService.use((contactService) =>
+              contactService.submitContact(payload, {
                 ip,
                 country: loc?.country ?? "",
                 region: loc?.region ?? "",
@@ -86,9 +88,7 @@ export function makePublicLayer() {
               }),
             );
           } else {
-            yield* PublicRouteService.use((publicRouteService) =>
-              publicRouteService.submitContact(payload),
-            );
+            yield* ContactService.use((contactService) => contactService.submitContact(payload));
           }
           return { success: true as const };
         }, adaptPublicHttpApiErrors),
@@ -152,8 +152,8 @@ export function makePublicLayer() {
           const codeVerifier = oauthState.codeVerifier;
           const tokens = yield* exchangeGoogleCode(rootUrl, code, codeVerifier);
           const userInfo = yield* fetchGoogleUserInfo(tokens.accessToken());
-          const user = yield* PublicRouteService.use((publicRouteService) =>
-            publicRouteService.linkOrRegisterOAuthUser({
+          const user = yield* OAuthService.use((oauthService) =>
+            oauthService.linkOrRegisterOAuthUser({
               service: "google",
               identifier: userInfo.sub,
               profile: userInfo,
@@ -244,8 +244,8 @@ export function makePublicLayer() {
             email: typeof claims.email === "string" ? claims.email : user?.email,
             name: [firstName, lastName].filter(Boolean).join(" ").trim() || undefined,
           };
-          const linkedUser = yield* PublicRouteService.use((publicRouteService) =>
-            publicRouteService.linkOrRegisterOAuthUser({
+          const linkedUser = yield* OAuthService.use((oauthService) =>
+            oauthService.linkOrRegisterOAuthUser({
               service: "apple",
               identifier: sub,
               profile,

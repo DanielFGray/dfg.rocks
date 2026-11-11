@@ -20,6 +20,7 @@ import { Textarea } from "../components/ui/Textarea.js";
 import { createServerFn } from "@tanstack/react-start";
 import { runServerEffect } from "../lib/serverEffect.js";
 import { PublicRouteService } from "../../server/services/publicRouteService.js";
+import { ContactService } from "../../server/services/contactService.js";
 
 const [logoBefore, logoAfter] = site.logo.split(site.logoDot);
 
@@ -51,8 +52,8 @@ export const submitContact = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     if (data.website) throw new Error("Invalid submission");
     await runServerEffect(
-      PublicRouteService.use((publicRouteService) =>
-        publicRouteService.submitContact({
+      ContactService.use((contactService) =>
+        contactService.submitContact({
           name: data.name,
           email: data.email,
           phone: data.phone,

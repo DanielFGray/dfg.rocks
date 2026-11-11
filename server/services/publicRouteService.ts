@@ -1,8 +1,8 @@
-import { Config, Effect, Schema as S, Context, Layer } from "effect";
+import { Effect, Schema as S, Context, Layer } from "effect";
 import { sql } from "kysely";
 import { serializeTestimonial } from "../../shared/responseMappers.js";
 import { FamilyInviteRole, type Testimonial } from "../../shared/schemas.js";
-import { addJob, PgRootDB } from "../db.js";
+import { PgRootDB } from "../db.js";
 import { catchPgErrors, HttpError } from "../pgErrors.js";
 import type { UserRow } from "./userService.js";
 import { UserService } from "./userService.js";
@@ -16,7 +16,6 @@ export class PublicRouteService extends Context.Service<PublicRouteService>()(
   {
     make: Effect.gen(function* () {
       const db = yield* PgRootDB;
-      const adminEmail = yield* Config.NonEmptyString("ADMIN_EMAIL");
 
       const invitationById = (invitationId: string) =>
         db
@@ -50,87 +49,6 @@ export class PublicRouteService extends Context.Service<PublicRouteService>()(
           return {
             testimonials: rows.map(serializeTestimonial),
           } satisfies HomePageData;
-        }),
-
-        submitContact: Effect.fn("submitContact")(function* (
-          values: {
-            name: string;
-            email: string;
-            phone?: string;
-            instrument: string;
-            format: string;
-            message?: string;
-          },
-          geo?: {
-            ip: string;
-            country: string;
-            region: string;
-            city: string;
-          },
-        ) {
-          // One transaction: the submission and its notification email exist together or not at all.
-          yield* db.withTransaction(
-            Effect.gen(function* () {
-              yield* db.execute(
-                db.insertInto("app_public.contact_submissions").values({
-                  name: values.name,
-                  email: values.email,
-                  phone: values.phone ?? null,
-                  instrument: values.instrument,
-                  format: values.format,
-                  message: values.message ?? "",
-                  ip_address: geo?.ip ?? null,
-                  location_country: geo?.country || null,
-                  location_region: geo?.region || null,
-                  location_city: geo?.city || null,
-                }),
-              );
-              yield* addJob(db, "send_email", {
-                options: {
-                  to: adminEmail,
-                  subject: `New contact: ${values.name} (${values.instrument})`,
-                },
-                template: "contact_submission.mjml",
-                variables: {
-                  name: values.name,
-                  email: values.email,
-                  phone: values.phone ?? "",
-                  instrument: values.instrument,
-                  format: values.format,
-                  message: values.message ?? "",
-                },
-              });
-            }),
-          );
-        }),
-
-        linkOrRegisterOAuthUser: Effect.fn("linkOrRegisterOAuthUser")(function* (values: {
-          service: "google" | "apple";
-          identifier: string;
-          profile: unknown;
-          tokens: unknown;
-        }) {
-          return yield* db
-            .execute(
-              db
-                .selectFrom(
-                  sql<UserRow>`app_private.link_or_register_user(
-            null,
-            ${values.service},
-            ${values.identifier},
-            ${JSON.stringify(values.profile)}::json,
-            ${JSON.stringify(values.tokens)}::json
-          )`.as("u"),
-                )
-                .selectAll(),
-            )
-            .pipe(
-              catchPgErrors,
-              Effect.head,
-              Effect.catchTags({
-                NoSuchElementError: () => new HttpError(500, "Failed to link account"),
-              }),
-            );
         }),
 
         verifyEmail: Effect.fn("verifyEmail")(function* (token: string) {
