@@ -1,2 +1,4 @@
 ruleDirs:
-  - /home/dan/build/effect-web-template/rules
+  - rules
+testConfigs:
+  - testDir: rule-tests

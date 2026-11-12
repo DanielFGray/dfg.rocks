@@ -20,7 +20,7 @@
     "db:setup": "run-s db:up db:reset",
     "env:init": "bun scripts/generateEnvFile.ts",
     "init": "NOCONFIRM=1 run-s env:init db:setup",
-    "lint": "ast-grep scan server worker shared app/lib --globs 'server/**' --globs 'worker/**' --globs 'shared/**' --globs 'app/lib/*.server.ts' --globs 'app/lib/serverEffect.ts' && oxlint .",
+    "lint": "ast-grep scan server worker shared app/lib --globs 'server/**' --globs 'worker/**' --globs 'shared/**' --globs 'app/lib/*.server.ts' --globs 'app/lib/serverEffect.ts' && ast-grep test && oxlint .",
     "test": "run-s typecheck lint test:unit test:worker test:bun test:e2e",
     "test:unit": "vitest run",
     "test:worker": "bun test worker/test/bills.test.js worker/test/contracts.test.js",
@@ -98,5 +98,9 @@
   "patchedDependencies": {
     "@coderline/alphatab@1.9.0-alpha.1785": "patches/@coderline%2Falphatab@1.9.0-alpha.1785.patch"
   },
-  "projectName": "DFG Music Lessons"
+  "projectName": "DFG Music Lessons",
+  "templateCopies": [
+    "rules",
+    "rule-tests"
+  ]
 }
