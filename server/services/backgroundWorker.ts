@@ -85,6 +85,13 @@ const startRunner = Effect.fnUntraced(function* (
         noHandleSignals: true,
         crontabFile: path.join(workerDirectory, "crontab"),
         taskList: { ...loaded.tasks, ...registered },
+        // With the default delay (-1), graphile does not wait for the row
+        // update that marks a job done or failed, and a graceful shutdown
+        // can end the pool before it is sent. The job then stays locked
+        // and runs again when the lock expires (4 hours), so a sent
+        // email is sent twice. With a batch delay, the shutdown waits for
+        // the pending updates; 0 sends each one on the next tick.
+        preset: { worker: { completeJobBatchDelay: 0, failJobBatchDelay: 0 } },
       }),
     ),
     stopRunner(runningRef),
