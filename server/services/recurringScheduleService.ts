@@ -2,7 +2,8 @@ import { Effect, Option, Context, Layer } from "effect";
 import type { ColumnType, Generated } from "kysely";
 import type { DB } from "../../generated/db.js";
 import type { PaymentGenerationStatus } from "../../shared/schemas.js";
-import { type Database, withAuthContext } from "../db.js";
+import { type Database } from "../db.js";
+import { RequestDatabase } from "../requestDatabase.js";
 import { HttpError } from "../pgErrors.js";
 
 type Timestamp = ColumnType<Date, Date | string, Date | string>;
@@ -116,11 +117,8 @@ export class RecurringScheduleService extends Context.Service<RecurringScheduleS
   "RecurringScheduleService",
   {
     make: Effect.succeed({
-      listSchedules: Effect.fn("listRecurringSchedulesForStudent")(function* (
-        sessionId: string,
-        studentId: string,
-      ) {
-        return yield* withAuthContext(sessionId, (baseDb) => {
+      listSchedules: Effect.fn("listRecurringSchedulesForStudent")(function* (studentId: string) {
+        return yield* RequestDatabase.use((baseDb) => {
           const db = baseDb as unknown as Database<RecurringDB>;
           return db.execute(
             db
@@ -135,12 +133,11 @@ export class RecurringScheduleService extends Context.Service<RecurringScheduleS
       }),
 
       saveSchedule: Effect.fn("saveRecurringScheduleForStudent")(function* (values: {
-        sessionId: string;
         studentId: string;
         id?: string;
         schedule: Omit<SaveRecurringScheduleInput, "id">;
       }) {
-        const { sessionId, studentId } = values;
+        const { studentId } = values;
         const input: SaveRecurringScheduleInput = {
           ...values.schedule,
           id: values.id,
@@ -149,8 +146,7 @@ export class RecurringScheduleService extends Context.Service<RecurringScheduleS
         if (validationErrors.length > 0) {
           return yield* new HttpError(400, validationErrors.join("; "));
         }
-        return yield* withAuthContext(
-          sessionId,
+        return yield* RequestDatabase.use(
           Effect.fnUntraced(function* (baseDb) {
             const db = baseDb as unknown as Database<RecurringDB>;
             const rate = yield* db
@@ -224,11 +220,8 @@ export class RecurringScheduleService extends Context.Service<RecurringScheduleS
         );
       }),
 
-      listPayments: Effect.fn("listMonthlyPaymentsForStudent")(function* (
-        sessionId: string,
-        studentId: string,
-      ) {
-        return yield* withAuthContext(sessionId, (baseDb) => {
+      listPayments: Effect.fn("listMonthlyPaymentsForStudent")(function* (studentId: string) {
+        return yield* RequestDatabase.use((baseDb) => {
           const db = baseDb as unknown as Database<RecurringDB>;
           return db.execute(
             db
@@ -240,14 +233,11 @@ export class RecurringScheduleService extends Context.Service<RecurringScheduleS
         });
       }),
 
-      listMonth: Effect.fn("listMonthlyPaymentStatus")(function* (
-        sessionId: string,
-        billingMonth: string,
-      ) {
+      listMonth: Effect.fn("listMonthlyPaymentStatus")(function* (billingMonth: string) {
         if (!isFirstOfMonth(billingMonth)) {
           return yield* new HttpError(400, "month must be the first day of a month (YYYY-MM-01)");
         }
-        const rows = yield* withAuthContext(sessionId, (baseDb) => {
+        const rows = yield* RequestDatabase.use((baseDb) => {
           const db = baseDb as unknown as Database<RecurringDB>;
           return db.execute(
             db
@@ -302,11 +292,8 @@ export class RecurringScheduleService extends Context.Service<RecurringScheduleS
       }),
 
       recordPayment: Effect.fn("recordMonthlyPayment")(function* (
-        values: {
-          sessionId: string;
-        } & RecordMonthlyPaymentInput,
+        input: RecordMonthlyPaymentInput,
       ) {
-        const { sessionId, ...input } = values;
         if (!isFirstOfMonth(input.billingMonth)) {
           return yield* new HttpError(
             400,
@@ -320,8 +307,7 @@ export class RecurringScheduleService extends Context.Service<RecurringScheduleS
           return yield* new HttpError(400, "paid_at must be a valid timestamp");
         }
 
-        return yield* withAuthContext(
-          sessionId,
+        return yield* RequestDatabase.use(
           Effect.fnUntraced(function* (baseDb) {
             const db = baseDb as unknown as Database<RecurringDB>;
             const eligible = yield* db

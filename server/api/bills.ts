@@ -1,5 +1,6 @@
 import * as HttpApiBuilder from "effect/http-api/HttpApiBuilder";
 import { Effect } from "effect";
+import { withAuthContext } from "../requestDatabase.js";
 import { Contract } from "../../shared/httpApi.js";
 import { CurrentSession } from "../../shared/api/guards.js";
 import { HttpError } from "../pgErrors.js";
@@ -14,7 +15,7 @@ export const BillsAdminApiGroupLive = HttpApiBuilder.group(Contract, "billsAdmin
       Effect.fnUntraced(function* ({ query }) {
         const auth = yield* CurrentSession;
         const bills = yield* BillingLedgerService.use((billingLedgerService) =>
-          billingLedgerService.listLessonBills(auth.session.id, query.month),
+          billingLedgerService.listLessonBills(query.month).pipe(withAuthContext(auth.session.id)),
         );
         return bills;
       }, adaptAdminErrors),
@@ -23,41 +24,43 @@ export const BillsAdminApiGroupLive = HttpApiBuilder.group(Contract, "billsAdmin
       "createBill",
       Effect.fnUntraced(function* ({ payload }) {
         const auth = yield* CurrentSession;
-        const bill = yield* BillingLedgerService.use((billingLedgerService) =>
-          billingLedgerService.createBill(auth.session.id, {
-            payerId: payload.payer_id,
-            billingPeriodStart: payload.billing_period_start,
-            billingPeriodEnd: payload.billing_period_end,
-            dueDate: payload.due_date,
-            lineItems: payload.line_items.map(
-              (li: {
-                student_id: string;
-                line_type: "lesson" | "single_booking" | "fee" | "adjustment" | "credit";
-                description: string;
-                quantity: number;
-                unit_price_cents: number;
-                amount_cents: number;
-              }) => ({
-                studentId: li.student_id,
-                lineType: li.line_type,
-                description: li.description,
-                quantity: li.quantity,
-                unitPriceCents: li.unit_price_cents,
-                amountCents: li.amount_cents,
-              }),
-            ),
-            notes: payload.notes,
-          }),
-        );
-        const lineItems = yield* BillingLedgerService.use((billingLedgerService) =>
-          billingLedgerService.billLineItems(auth.session.id, bill.id),
-        );
-        return {
-          ...bill,
-          line_items: lineItems,
-          adjustments: [],
-          credit_applications: [],
-        };
+        return yield* Effect.gen(function* () {
+          const bill = yield* BillingLedgerService.use((billingLedgerService) =>
+            billingLedgerService.createBill({
+              payerId: payload.payer_id,
+              billingPeriodStart: payload.billing_period_start,
+              billingPeriodEnd: payload.billing_period_end,
+              dueDate: payload.due_date,
+              lineItems: payload.line_items.map(
+                (li: {
+                  student_id: string;
+                  line_type: "lesson" | "single_booking" | "fee" | "adjustment" | "credit";
+                  description: string;
+                  quantity: number;
+                  unit_price_cents: number;
+                  amount_cents: number;
+                }) => ({
+                  studentId: li.student_id,
+                  lineType: li.line_type,
+                  description: li.description,
+                  quantity: li.quantity,
+                  unitPriceCents: li.unit_price_cents,
+                  amountCents: li.amount_cents,
+                }),
+              ),
+              notes: payload.notes,
+            }),
+          );
+          const lineItems = yield* BillingLedgerService.use((billingLedgerService) =>
+            billingLedgerService.billLineItems(bill.id),
+          );
+          return {
+            ...bill,
+            line_items: lineItems,
+            adjustments: [],
+            credit_applications: [],
+          };
+        }).pipe(withAuthContext(auth.session.id));
       }, adaptAdminErrors),
     )
     .handle(
@@ -65,7 +68,7 @@ export const BillsAdminApiGroupLive = HttpApiBuilder.group(Contract, "billsAdmin
       Effect.fnUntraced(function* ({ params }) {
         const auth = yield* CurrentSession;
         const result = yield* BillingLedgerService.use((billingLedgerService) =>
-          billingLedgerService.getBill(auth.session.id, params.id),
+          billingLedgerService.getBill(params.id).pipe(withAuthContext(auth.session.id)),
         );
         if (!result) {
           return yield* new HttpError(404, "Bill not found");
@@ -77,51 +80,57 @@ export const BillsAdminApiGroupLive = HttpApiBuilder.group(Contract, "billsAdmin
       "issueBill",
       Effect.fnUntraced(function* ({ params }) {
         const auth = yield* CurrentSession;
-        yield* BillingLedgerService.use((billingLedgerService) =>
-          billingLedgerService.issueBill(auth.session.id, params.id),
-        );
-        const result = yield* BillingLedgerService.use((billingLedgerService) =>
-          billingLedgerService.getBill(auth.session.id, params.id),
-        );
-        if (!result) {
-          return yield* new HttpError(404, "Bill not found");
-        }
-        return mapBillDetail(result, result);
+        return yield* Effect.gen(function* () {
+          yield* BillingLedgerService.use((billingLedgerService) =>
+            billingLedgerService.issueBill(params.id),
+          );
+          const result = yield* BillingLedgerService.use((billingLedgerService) =>
+            billingLedgerService.getBill(params.id),
+          );
+          if (!result) {
+            return yield* new HttpError(404, "Bill not found");
+          }
+          return mapBillDetail(result, result);
+        }).pipe(withAuthContext(auth.session.id));
       }, adaptAdminErrors),
     )
     .handle(
       "cancelBill",
       Effect.fnUntraced(function* ({ params }) {
         const auth = yield* CurrentSession;
-        yield* BillingLedgerService.use((billingLedgerService) =>
-          billingLedgerService.cancelBill(auth.session.id, params.id),
-        );
-        const result = yield* BillingLedgerService.use((billingLedgerService) =>
-          billingLedgerService.getBill(auth.session.id, params.id),
-        );
-        if (!result) {
-          return yield* new HttpError(404, "Bill not found");
-        }
-        return mapBillDetail(result, result);
+        return yield* Effect.gen(function* () {
+          yield* BillingLedgerService.use((billingLedgerService) =>
+            billingLedgerService.cancelBill(params.id),
+          );
+          const result = yield* BillingLedgerService.use((billingLedgerService) =>
+            billingLedgerService.getBill(params.id),
+          );
+          if (!result) {
+            return yield* new HttpError(404, "Bill not found");
+          }
+          return mapBillDetail(result, result);
+        }).pipe(withAuthContext(auth.session.id));
       }, adaptAdminErrors),
     )
     .handle(
       "voidBill",
       Effect.fnUntraced(function* ({ params, payload }) {
         const auth = yield* CurrentSession;
-        yield* BillingLedgerService.use((billingLedgerService) =>
-          billingLedgerService.voidBill(auth.session.id, {
-            billId: params.id,
-            reason: payload.reason,
-          }),
-        );
-        const result = yield* BillingLedgerService.use((billingLedgerService) =>
-          billingLedgerService.getBill(auth.session.id, params.id),
-        );
-        if (!result) {
-          return yield* new HttpError(404, "Bill not found");
-        }
-        return mapBillDetail(result, result);
+        return yield* Effect.gen(function* () {
+          yield* BillingLedgerService.use((billingLedgerService) =>
+            billingLedgerService.voidBill({
+              billId: params.id,
+              reason: payload.reason,
+            }),
+          );
+          const result = yield* BillingLedgerService.use((billingLedgerService) =>
+            billingLedgerService.getBill(params.id),
+          );
+          if (!result) {
+            return yield* new HttpError(404, "Bill not found");
+          }
+          return mapBillDetail(result, result);
+        }).pipe(withAuthContext(auth.session.id));
       }, adaptAdminErrors),
     )
     .handle(
@@ -129,11 +138,13 @@ export const BillsAdminApiGroupLive = HttpApiBuilder.group(Contract, "billsAdmin
       Effect.fnUntraced(function* ({ params, payload }) {
         const auth = yield* CurrentSession;
         const result = yield* BillingLedgerService.use((billingLedgerService) =>
-          billingLedgerService.createAdjustment(auth.session.id, {
-            billId: params.id,
-            amountCents: payload.amount_cents,
-            reason: payload.reason,
-          }),
+          billingLedgerService
+            .createAdjustment({
+              billId: params.id,
+              amountCents: payload.amount_cents,
+              reason: payload.reason,
+            })
+            .pipe(withAuthContext(auth.session.id)),
         );
         return serializeAdjustment(result);
       }, adaptAdminErrors),

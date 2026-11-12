@@ -1,5 +1,6 @@
 import * as HttpApiBuilder from "effect/http-api/HttpApiBuilder";
 import { Effect } from "effect";
+import { withAuthContext } from "../requestDatabase.js";
 import { Contract } from "../../shared/httpApi.js";
 import { CurrentSession } from "../../shared/api/guards.js";
 import { BillingLedgerService } from "../services/billingLedgerService.js";
@@ -16,15 +17,17 @@ export const BillingRatesAdminApiGroupLive = HttpApiBuilder.group(
         Effect.fnUntraced(function* ({ payload }) {
           const auth = yield* CurrentSession;
           const result = yield* BillingLedgerService.use((billingLedgerService) =>
-            billingLedgerService.createDiscount(auth.session.id, {
-              payerId: payload.payer_id,
-              label: payload.label,
-              discountType: payload.discount_type,
-              discountValue: payload.discount_value,
-              appliesTo: payload.applies_to,
-              effectiveFrom: payload.effective_from,
-              effectiveUntil: payload.effective_until,
-            }),
+            billingLedgerService
+              .createDiscount({
+                payerId: payload.payer_id,
+                label: payload.label,
+                discountType: payload.discount_type,
+                discountValue: payload.discount_value,
+                appliesTo: payload.applies_to,
+                effectiveFrom: payload.effective_from,
+                effectiveUntil: payload.effective_until,
+              })
+              .pipe(withAuthContext(auth.session.id)),
           );
           return serializeDiscount(result);
         }, adaptAdminErrors),
@@ -34,15 +37,17 @@ export const BillingRatesAdminApiGroupLive = HttpApiBuilder.group(
         Effect.fnUntraced(function* ({ params, payload }) {
           const auth = yield* CurrentSession;
           const result = yield* BillingLedgerService.use((billingLedgerService) =>
-            billingLedgerService.updateDiscount(auth.session.id, params.id, {
-              label: payload.label,
-              discountType: payload.discount_type,
-              discountValue: payload.discount_value,
-              appliesTo: payload.applies_to,
-              effectiveFrom: payload.effective_from,
-              effectiveUntil: payload.effective_until,
-              isActive: payload.is_active,
-            }),
+            billingLedgerService
+              .updateDiscount(params.id, {
+                label: payload.label,
+                discountType: payload.discount_type,
+                discountValue: payload.discount_value,
+                appliesTo: payload.applies_to,
+                effectiveFrom: payload.effective_from,
+                effectiveUntil: payload.effective_until,
+                isActive: payload.is_active,
+              })
+              .pipe(withAuthContext(auth.session.id)),
           );
           return serializeDiscount(result);
         }, adaptAdminErrors),
@@ -52,7 +57,7 @@ export const BillingRatesAdminApiGroupLive = HttpApiBuilder.group(
         Effect.fnUntraced(function* () {
           const auth = yield* CurrentSession;
           const rates = yield* BillingLedgerService.use((billingLedgerService) =>
-            billingLedgerService.listTaxRates(auth.session.id),
+            billingLedgerService.listTaxRates().pipe(withAuthContext(auth.session.id)),
           );
           return rates.map(serializeTaxRate);
         }, adaptAdminErrors),
@@ -62,14 +67,16 @@ export const BillingRatesAdminApiGroupLive = HttpApiBuilder.group(
         Effect.fnUntraced(function* ({ payload }) {
           const auth = yield* CurrentSession;
           const result = yield* BillingLedgerService.use((billingLedgerService) =>
-            billingLedgerService.createTaxRate(auth.session.id, {
-              label: payload.label,
-              jurisdiction: payload.jurisdiction,
-              ratePercent: payload.rate_percent,
-              appliesTo: payload.applies_to,
-              effectiveFrom: payload.effective_from,
-              effectiveUntil: payload.effective_until,
-            }),
+            billingLedgerService
+              .createTaxRate({
+                label: payload.label,
+                jurisdiction: payload.jurisdiction,
+                ratePercent: payload.rate_percent,
+                appliesTo: payload.applies_to,
+                effectiveFrom: payload.effective_from,
+                effectiveUntil: payload.effective_until,
+              })
+              .pipe(withAuthContext(auth.session.id)),
           );
           return serializeTaxRate(result);
         }, adaptAdminErrors),
@@ -79,13 +86,15 @@ export const BillingRatesAdminApiGroupLive = HttpApiBuilder.group(
         Effect.fnUntraced(function* ({ payload }) {
           const auth = yield* CurrentSession;
           return yield* BillingLedgerService.use((billingLedgerService) =>
-            billingLedgerService.createTaxExemption(auth.session.id, {
-              payerId: payload.payer_id,
-              taxRateId: payload.tax_rate_id,
-              exemptionReason: payload.exemption_reason,
-              effectiveFrom: payload.effective_from,
-              effectiveUntil: payload.effective_until,
-            }),
+            billingLedgerService
+              .createTaxExemption({
+                payerId: payload.payer_id,
+                taxRateId: payload.tax_rate_id,
+                exemptionReason: payload.exemption_reason,
+                effectiveFrom: payload.effective_from,
+                effectiveUntil: payload.effective_until,
+              })
+              .pipe(withAuthContext(auth.session.id)),
           );
         }, adaptAdminErrors),
       ),

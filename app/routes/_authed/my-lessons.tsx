@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Effect } from "effect";
+import { withAuthContext } from "../../../server/requestDatabase.js";
 import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { useMutation } from "@tanstack/react-query";
 import { createServerFn } from "@tanstack/react-start";
@@ -33,13 +34,9 @@ const getMyLessonsPageData = createServerFn({ method: "GET" }).handler(() =>
       const filterStudentId = effective.isActing ? effective.studentId : undefined;
 
       const [lessons, notes] = yield* Effect.all([
-        lessonService.myLessons(session.session.id, { limit: 50, offset: 0 }, filterStudentId),
-        lessonService.myLessonNotesList(
-          session.session.id,
-          { limit: 100, offset: 0 },
-          filterStudentId,
-        ),
-      ]);
+        lessonService.myLessons({ limit: 50, offset: 0 }, filterStudentId),
+        lessonService.myLessonNotesList({ limit: 100, offset: 0 }, filterStudentId),
+      ]).pipe(withAuthContext(session.session.id));
 
       return {
         lessons: lessons.map(serializeLesson),

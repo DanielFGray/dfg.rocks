@@ -2,6 +2,9 @@ import { createServerFn } from "@tanstack/react-start";
 import { getCookie } from "@tanstack/react-start/server";
 import { runServerEffect } from "./serverEffect.js";
 import { AuthService } from "../../server/services/authService.js";
+import { Effect } from "effect";
+import { SessionService } from "../../server/services/sessionService.js";
+import { withAuthContext } from "../../server/requestDatabase.js";
 import type { MeResponse } from "../../shared/api/auth.js";
 
 export type AuthUser = {
@@ -41,7 +44,23 @@ function toPlainAuthState(state: AuthState): AuthState {
 
 export const getAuthUser = createServerFn({ method: "GET" }).handler(async () => {
   const state = await runServerEffect(
-    AuthService.use((authService) => authService.currentUser(getCookie("session"))),
+    Effect.gen(function* () {
+      const session = yield* SessionService.use((service) =>
+        service.validateSessionToken(getCookie("session")),
+      );
+      if (!session) {
+        return {
+          user: null,
+          isParent: false,
+          familyStudents: [],
+          activeStudentId: null,
+          activeStudent: null,
+        };
+      }
+      return yield* AuthService.use((service) =>
+        service.me(session.session.id, session.user.id, session.session.active_student_id),
+      ).pipe(withAuthContext(session.session.id));
+    }),
   );
   return JSON.stringify(toPlainAuthState(state));
 });

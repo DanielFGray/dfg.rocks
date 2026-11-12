@@ -1,5 +1,6 @@
 import * as HttpApiBuilder from "effect/http-api/HttpApiBuilder";
 import { Effect } from "effect";
+import { withAuthContext } from "../requestDatabase.js";
 import { Contract } from "../../shared/httpApi.js";
 import { CurrentSession } from "../../shared/api/guards.js";
 import { StudentService } from "../services/studentService.js";
@@ -15,7 +16,7 @@ export const StudentsStaffApiGroupLive = HttpApiBuilder.group(
         Effect.fnUntraced(function* () {
           const auth = yield* CurrentSession;
           const rows = yield* StudentService.use((studentService) =>
-            studentService.listStudents(auth.session.id),
+            studentService.listStudents().pipe(withAuthContext(auth.session.id)),
           );
           return rows.map((row) => ({
             ...row,
@@ -31,7 +32,7 @@ export const StudentsStaffApiGroupLive = HttpApiBuilder.group(
           const auth = yield* CurrentSession;
           const { params } = context;
           const raw = yield* StudentService.use((studentService) =>
-            studentService.getStudent(auth.session.id, params.id),
+            studentService.getStudent(params.id).pipe(withAuthContext(auth.session.id)),
           );
           return {
             ...raw,
@@ -53,15 +54,16 @@ export const StudentsAdminApiGroupLive = HttpApiBuilder.group(
         Effect.fnUntraced(function* ({ payload }) {
           const auth = yield* CurrentSession;
           const rate = yield* StudentService.use((studentService) =>
-            studentService.saveStudentRate({
-              sessionId: auth.session.id,
-              studentId: payload.student_id,
-              rateCents: payload.rate_cents,
-              lessonDurationMinutes: payload.lesson_duration_minutes,
-              locationType: payload.location_type,
-              billingModel: payload.billing_model,
-              notes: payload.notes ?? null,
-            }),
+            studentService
+              .saveStudentRate({
+                studentId: payload.student_id,
+                rateCents: payload.rate_cents,
+                lessonDurationMinutes: payload.lesson_duration_minutes,
+                locationType: payload.location_type,
+                billingModel: payload.billing_model,
+                notes: payload.notes ?? null,
+              })
+              .pipe(withAuthContext(auth.session.id)),
           );
           return rate;
         }, adaptAdminErrors),
@@ -71,7 +73,9 @@ export const StudentsAdminApiGroupLive = HttpApiBuilder.group(
         Effect.fnUntraced(function* ({ params, query }) {
           const auth = yield* CurrentSession;
           return yield* StudentService.use((studentService) =>
-            studentService.listStudentRates(auth.session.id, params.studentId, query.location_type),
+            studentService
+              .listStudentRates(params.studentId, query.location_type)
+              .pipe(withAuthContext(auth.session.id)),
           );
         }, adaptAdminErrors),
       ),

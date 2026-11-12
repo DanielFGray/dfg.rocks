@@ -1,6 +1,7 @@
 import * as HttpApiBuilder from "effect/http-api/HttpApiBuilder";
 import * as HttpServerResponse from "effect/http/HttpServerResponse";
 import { Effect } from "effect";
+import { withAuthContext } from "../requestDatabase.js";
 import { Contract } from "../../shared/httpApi.js";
 import { CurrentSession } from "../../shared/api/guards.js";
 import {
@@ -102,7 +103,7 @@ export function makeFamilyBillingLayer() {
             return yield* new HttpError(403, "Forbidden");
           }
           const raw = yield* FamilyBillingService.use((familyBillingService) =>
-            familyBillingService.overview(auth.session.id),
+            familyBillingService.overview().pipe(withAuthContext(auth.session.id)),
           );
           return {
             ...raw,
@@ -121,7 +122,7 @@ export function makeFamilyBillingLayer() {
             return yield* new HttpError(403, "Forbidden");
           }
           const bills = yield* FamilyBillingService.use((familyBillingService) =>
-            familyBillingService.bills(auth.session.id),
+            familyBillingService.bills().pipe(withAuthContext(auth.session.id)),
           );
           return bills.map(serializeFamilyBill);
         }, adaptFamilyBillingErrors),
@@ -134,7 +135,7 @@ export function makeFamilyBillingLayer() {
             return yield* new HttpError(403, "Forbidden");
           }
           const result = yield* FamilyBillingService.use((familyBillingService) =>
-            familyBillingService.billDetail(auth.session.id, params.id),
+            familyBillingService.billDetail(params.id).pipe(withAuthContext(auth.session.id)),
           );
           result.lineItems = result.lineItems ?? [];
           result.adjustments = result.adjustments ?? [];
@@ -160,7 +161,7 @@ export function makeFamilyBillingLayer() {
             return yield* new HttpError(403, "Forbidden");
           }
           const payments = yield* FamilyBillingService.use((familyBillingService) =>
-            familyBillingService.payments(auth.session.id),
+            familyBillingService.payments().pipe(withAuthContext(auth.session.id)),
           );
           return payments.map(serializeFamilyPayment);
         }, adaptFamilyBillingErrors),
@@ -173,7 +174,7 @@ export function makeFamilyBillingLayer() {
             return yield* new HttpError(403, "Forbidden");
           }
           const result = yield* FamilyBillingService.use((familyBillingService) =>
-            familyBillingService.paymentDetail(auth.session.id, params.id),
+            familyBillingService.paymentDetail(params.id).pipe(withAuthContext(auth.session.id)),
           );
           return {
             ...serializeFamilyPayment(result),
@@ -189,7 +190,7 @@ export function makeFamilyBillingLayer() {
             return yield* new HttpError(403, "Forbidden");
           }
           const credits = yield* FamilyBillingService.use((familyBillingService) =>
-            familyBillingService.credits(auth.session.id),
+            familyBillingService.credits().pipe(withAuthContext(auth.session.id)),
           );
           return credits.map(serializeCredit);
         }, adaptFamilyBillingErrors),
@@ -202,7 +203,7 @@ export function makeFamilyBillingLayer() {
             return yield* new HttpError(403, "Forbidden");
           }
           const buffer = yield* FamilyBillingService.use((familyBillingService) =>
-            familyBillingService.billPdf(auth.session.id, params.id),
+            familyBillingService.billPdf(params.id).pipe(withAuthContext(auth.session.id)),
           );
           return HttpServerResponse.fromWeb(
             new Response(new Uint8Array(buffer), {
@@ -222,7 +223,7 @@ export function makeFamilyBillingLayer() {
             return yield* new HttpError(403, "Forbidden");
           }
           const buffer = yield* FamilyBillingService.use((familyBillingService) =>
-            familyBillingService.paymentReceipt(auth.session.id, params.id),
+            familyBillingService.paymentReceipt(params.id).pipe(withAuthContext(auth.session.id)),
           );
           return HttpServerResponse.fromWeb(
             new Response(new Uint8Array(buffer), {

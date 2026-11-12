@@ -421,12 +421,14 @@ export class GoogleCalendarService extends Context.Service<GoogleCalendarService
         listEvents: listEventsEffect,
 
         createEvent: Effect.fnUntraced(function* (params: {
+          id: string;
           summary: string;
           description?: string;
           start: string;
           end: string;
         }) {
           const body = {
+            id: params.id,
             summary: params.summary,
             description: params.description,
             start: { dateTime: params.start },
@@ -435,7 +437,15 @@ export class GoogleCalendarService extends Context.Service<GoogleCalendarService
           const res = yield* gcalFetchEffect(`/calendars/${encodeURIComponent(calId)}/events`, {
             method: "POST",
             body,
-          });
+          }).pipe(
+            Effect.catchTag("HttpError", (error) =>
+              error.status === 409
+                ? gcalFetchEffect(
+                    `/calendars/${encodeURIComponent(calId)}/events/${encodeURIComponent(params.id)}`,
+                  )
+                : Effect.fail(error),
+            ),
+          );
           const json = yield* res.json.pipe(
             Effect.catch(() => new HttpError(502, "Google Calendar event response was invalid")),
           );
@@ -444,6 +454,9 @@ export class GoogleCalendarService extends Context.Service<GoogleCalendarService
               SchemaError: () => new HttpError(502, "Google Calendar event response was invalid"),
             }),
           );
+          if (event.id !== params.id) {
+            return yield* new HttpError(502, "Google returned an unexpected event ID");
+          }
           return event.id;
         }),
 
@@ -451,6 +464,10 @@ export class GoogleCalendarService extends Context.Service<GoogleCalendarService
           yield* gcalFetchEffect(
             `/calendars/${encodeURIComponent(calId)}/events/${encodeURIComponent(eventId)}`,
             { method: "DELETE" },
+          ).pipe(
+            Effect.catchTag("HttpError", (error) =>
+              error.status === 404 || error.status === 410 ? Effect.void : Effect.fail(error),
+            ),
           );
         }),
 

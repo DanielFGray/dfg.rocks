@@ -5,6 +5,7 @@ import { Effect, Layer } from "effect";
 import pg from "pg";
 import { PgAuthDB, PgRootDB } from "../db.js";
 import { BillingLedgerService } from "../services/billingLedgerService.js";
+import { withAuthContext } from "../requestDatabase.js";
 
 const billingLedgerTestLayer = Layer.mergeAll(
   BillingLedgerService.layer,
@@ -141,24 +142,67 @@ describe("Billing ledger foundation", () => {
   // ======================================================================
 
   it.layer(billingLedgerTestLayer)("Effect-native ledger service coverage", (effectIt) => {
+    effectIt.effect("rolls back composed service calls when the caller fails", () =>
+      Effect.gen(function* () {
+        const svc = yield* BillingLedgerService;
+        const db = yield* PgRootDB;
+        const result = yield* Effect.gen(function* () {
+          const bill = yield* svc.createBill({
+            payerId,
+            billingPeriodStart: "2026-08-01",
+            billingPeriodEnd: "2026-08-31",
+            lineItems: [
+              {
+                studentId,
+                lineType: "lesson",
+                description: "Caller rollback",
+                quantity: 1,
+                unitPriceCents: 4500,
+                amountCents: 4500,
+              },
+            ],
+          });
+          const issued = yield* svc.issueBill(bill.id);
+          expect(issued.status).toBe("issued");
+          return yield* Effect.fail({ billId: bill.id });
+        }).pipe(withAuthContext(adminSessionId), Effect.flip);
+        if (!("billId" in result)) {
+          return yield* Effect.fail(result);
+        }
+        const bills = yield* db.execute(
+          db.selectFrom("app_public.bills").select("id").where("id", "=", result.billId),
+        );
+        const audit = yield* db.execute(
+          db
+            .selectFrom("app_public.financial_audit_events")
+            .selectAll()
+            .where("record_id", "=", result.billId),
+        );
+        expect(bills).toEqual([]);
+        expect(audit).toEqual([]);
+      }),
+    );
+
     effectIt.effect("creates a bill with line items and issues it", () =>
       Effect.gen(function* () {
         const svc = yield* BillingLedgerService;
-        const bill = yield* svc.createBill(adminSessionId, {
-          payerId,
-          billingPeriodStart: "2026-08-01",
-          billingPeriodEnd: "2026-08-31",
-          lineItems: [
-            {
-              studentId,
-              lineType: "lesson",
-              description: "Weekly lessons x4",
-              quantity: 4,
-              unitPriceCents: 4500,
-              amountCents: 18000,
-            },
-          ],
-        });
+        const bill = yield* svc
+          .createBill({
+            payerId,
+            billingPeriodStart: "2026-08-01",
+            billingPeriodEnd: "2026-08-31",
+            lineItems: [
+              {
+                studentId,
+                lineType: "lesson",
+                description: "Weekly lessons x4",
+                quantity: 4,
+                unitPriceCents: 4500,
+                amountCents: 18000,
+              },
+            ],
+          })
+          .pipe(withAuthContext(adminSessionId));
 
         expect(bill.status).toBe("draft");
         expect(bill.payer_id).toBe(payerId);
@@ -166,12 +210,12 @@ describe("Billing ledger foundation", () => {
         expect(bill.subtotal_cents).toBe(18000);
         expect(bill.total_cents).toBe(18000);
 
-        const loaded = yield* svc.getBill(adminSessionId, bill.id);
+        const loaded = yield* svc.getBill(bill.id).pipe(withAuthContext(adminSessionId));
         expect(loaded).not.toBeNull();
         expect(loaded!.lineItems).toHaveLength(1);
         expect(loaded!.lineItems[0].student_id).toBe(studentId);
 
-        const issued = yield* svc.issueBill(adminSessionId, bill.id);
+        const issued = yield* svc.issueBill(bill.id).pipe(withAuthContext(adminSessionId));
         expect(issued.status).toBe("issued");
         expect(issued.issued_at).not.toBeNull();
       }),
@@ -180,24 +224,28 @@ describe("Billing ledger foundation", () => {
     effectIt.effect("prevents issuing an already-issued bill", () =>
       Effect.gen(function* () {
         const svc = yield* BillingLedgerService;
-        const bill = yield* svc.createBill(adminSessionId, {
-          payerId,
-          billingPeriodStart: "2026-09-01",
-          billingPeriodEnd: "2026-09-30",
-          lineItems: [
-            {
-              studentId,
-              lineType: "lesson",
-              description: "Weekly lessons x4",
-              quantity: 4,
-              unitPriceCents: 4500,
-              amountCents: 18000,
-            },
-          ],
-        });
-        yield* svc.issueBill(adminSessionId, bill.id);
+        const bill = yield* svc
+          .createBill({
+            payerId,
+            billingPeriodStart: "2026-09-01",
+            billingPeriodEnd: "2026-09-30",
+            lineItems: [
+              {
+                studentId,
+                lineType: "lesson",
+                description: "Weekly lessons x4",
+                quantity: 4,
+                unitPriceCents: 4500,
+                amountCents: 18000,
+              },
+            ],
+          })
+          .pipe(withAuthContext(adminSessionId));
+        yield* svc.issueBill(bill.id).pipe(withAuthContext(adminSessionId));
 
-        const result = yield* Effect.result(svc.issueBill(adminSessionId, bill.id));
+        const result = yield* Effect.result(
+          svc.issueBill(bill.id).pipe(withAuthContext(adminSessionId)),
+        );
         expect(result._tag).toBe("Failure");
       }),
     );
@@ -205,22 +253,24 @@ describe("Billing ledger foundation", () => {
     effectIt.effect("bill stores due_date correctly", () =>
       Effect.gen(function* () {
         const svc = yield* BillingLedgerService;
-        const bill = yield* svc.createBill(adminSessionId, {
-          payerId,
-          billingPeriodStart: "2026-10-01",
-          billingPeriodEnd: "2026-10-31",
-          dueDate: "2026-10-15",
-          lineItems: [
-            {
-              studentId,
-              lineType: "lesson",
-              description: "Weekly lessons x4",
-              quantity: 4,
-              unitPriceCents: 4500,
-              amountCents: 18000,
-            },
-          ],
-        });
+        const bill = yield* svc
+          .createBill({
+            payerId,
+            billingPeriodStart: "2026-10-01",
+            billingPeriodEnd: "2026-10-31",
+            dueDate: "2026-10-15",
+            lineItems: [
+              {
+                studentId,
+                lineType: "lesson",
+                description: "Weekly lessons x4",
+                quantity: 4,
+                unitPriceCents: 4500,
+                amountCents: 18000,
+              },
+            ],
+          })
+          .pipe(withAuthContext(adminSessionId));
 
         expect(bill.due_date).toBe("2026-10-15");
       }),
@@ -228,35 +278,39 @@ describe("Billing ledger foundation", () => {
     effectIt.effect("records a payment with allocation", () =>
       Effect.gen(function* () {
         const svc = yield* BillingLedgerService;
-        const bill = yield* svc.createBill(adminSessionId, {
-          payerId,
-          billingPeriodStart: "2026-11-01",
-          billingPeriodEnd: "2026-11-30",
-          lineItems: [
-            {
-              studentId,
-              lineType: "lesson",
-              description: "Monthly lessons",
-              quantity: 4,
-              unitPriceCents: 4500,
-              amountCents: 18000,
-            },
-          ],
-        });
-        yield* svc.issueBill(adminSessionId, bill.id);
-        const payment = yield* svc.recordPayment(adminSessionId, {
-          payerId,
-          amountCents: 18000,
-          method: "check",
-          reference: "1001",
-          notes: "July payment",
-          allocations: [{ billId: bill.id, amountCents: 18000 }],
-        });
+        const bill = yield* svc
+          .createBill({
+            payerId,
+            billingPeriodStart: "2026-11-01",
+            billingPeriodEnd: "2026-11-30",
+            lineItems: [
+              {
+                studentId,
+                lineType: "lesson",
+                description: "Monthly lessons",
+                quantity: 4,
+                unitPriceCents: 4500,
+                amountCents: 18000,
+              },
+            ],
+          })
+          .pipe(withAuthContext(adminSessionId));
+        yield* svc.issueBill(bill.id).pipe(withAuthContext(adminSessionId));
+        const payment = yield* svc
+          .recordPayment({
+            payerId,
+            amountCents: 18000,
+            method: "check",
+            reference: "1001",
+            notes: "July payment",
+            allocations: [{ billId: bill.id, amountCents: 18000 }],
+          })
+          .pipe(withAuthContext(adminSessionId));
 
         expect(payment.amount_cents).toBe(18000);
         expect(payment.method).toBe("check");
         expect(payment.reference).toBe("1001");
-        const balance = yield* svc.getPayerBalance(adminSessionId, payerId);
+        const balance = yield* svc.getPayerBalance(payerId).pipe(withAuthContext(adminSessionId));
         expect(balance.creditBalanceCents).toBe(0);
         expect(balance.outstandingCents).toBeGreaterThanOrEqual(0);
       }),
@@ -266,28 +320,32 @@ describe("Billing ledger foundation", () => {
       Effect.gen(function* () {
         const svc = yield* BillingLedgerService;
         const db = yield* PgRootDB;
-        const bill = yield* svc.createBill(adminSessionId, {
-          payerId: creditPayerId,
-          billingPeriodStart: "2027-01-01",
-          billingPeriodEnd: "2027-01-31",
-          lineItems: [
-            {
-              studentId,
-              lineType: "lesson",
-              description: "January lesson",
-              quantity: 1,
-              unitPriceCents: 5000,
-              amountCents: 5000,
-            },
-          ],
-        });
-        yield* svc.issueBill(adminSessionId, bill.id);
-        const payment = yield* svc.recordPayment(adminSessionId, {
-          payerId: creditPayerId,
-          amountCents: 7000,
-          method: "cash",
-          allocations: [],
-        });
+        const bill = yield* svc
+          .createBill({
+            payerId: creditPayerId,
+            billingPeriodStart: "2027-01-01",
+            billingPeriodEnd: "2027-01-31",
+            lineItems: [
+              {
+                studentId,
+                lineType: "lesson",
+                description: "January lesson",
+                quantity: 1,
+                unitPriceCents: 5000,
+                amountCents: 5000,
+              },
+            ],
+          })
+          .pipe(withAuthContext(adminSessionId));
+        yield* svc.issueBill(bill.id).pipe(withAuthContext(adminSessionId));
+        const payment = yield* svc
+          .recordPayment({
+            payerId: creditPayerId,
+            amountCents: 7000,
+            method: "cash",
+            allocations: [],
+          })
+          .pipe(withAuthContext(adminSessionId));
         const credit = yield* db
           .execute(
             db
@@ -300,7 +358,9 @@ describe("Billing ledger foundation", () => {
           amount_cents: 2000,
           source_payment_id: payment.id,
         });
-        const balance = yield* svc.getPayerBalance(adminSessionId, creditPayerId);
+        const balance = yield* svc
+          .getPayerBalance(creditPayerId)
+          .pipe(withAuthContext(adminSessionId));
         expect(balance.creditBalanceCents).toBe(2000);
       }),
     );
@@ -309,28 +369,32 @@ describe("Billing ledger foundation", () => {
       Effect.gen(function* () {
         const svc = yield* BillingLedgerService;
         const db = yield* PgRootDB;
-        const bill = yield* svc.createBill(adminSessionId, {
-          payerId: allocationPayerId,
-          billingPeriodStart: "2026-12-01",
-          billingPeriodEnd: "2026-12-31",
-          lineItems: [
-            {
-              studentId,
-              lineType: "lesson",
-              description: "Monthly lessons",
-              quantity: 4,
-              unitPriceCents: 4500,
-              amountCents: 18000,
-            },
-          ],
-        });
-        yield* svc.issueBill(adminSessionId, bill.id);
-        const payment = yield* svc.recordPayment(adminSessionId, {
-          payerId: allocationPayerId,
-          amountCents: 18000,
-          method: "cash",
-          allocations: [{ billId: bill.id, amountCents: 5000 }],
-        });
+        const bill = yield* svc
+          .createBill({
+            payerId: allocationPayerId,
+            billingPeriodStart: "2026-12-01",
+            billingPeriodEnd: "2026-12-31",
+            lineItems: [
+              {
+                studentId,
+                lineType: "lesson",
+                description: "Monthly lessons",
+                quantity: 4,
+                unitPriceCents: 4500,
+                amountCents: 18000,
+              },
+            ],
+          })
+          .pipe(withAuthContext(adminSessionId));
+        yield* svc.issueBill(bill.id).pipe(withAuthContext(adminSessionId));
+        const payment = yield* svc
+          .recordPayment({
+            payerId: allocationPayerId,
+            amountCents: 18000,
+            method: "cash",
+            allocations: [{ billId: bill.id, amountCents: 5000 }],
+          })
+          .pipe(withAuthContext(adminSessionId));
         const allocations = yield* db.execute(
           db
             .selectFrom("app_public.payment_allocations")
@@ -344,29 +408,33 @@ describe("Billing ledger foundation", () => {
     effectIt.effect("prevents cross-payer allocation", () =>
       Effect.gen(function* () {
         const svc = yield* BillingLedgerService;
-        const bill = yield* svc.createBill(adminSessionId, {
-          payerId,
-          billingPeriodStart: "2026-12-01",
-          billingPeriodEnd: "2026-12-31",
-          lineItems: [
-            {
-              studentId,
-              lineType: "lesson",
-              description: "Monthly lessons",
-              quantity: 4,
-              unitPriceCents: 4500,
-              amountCents: 18000,
-            },
-          ],
-        });
-        yield* svc.issueBill(adminSessionId, bill.id);
+        const bill = yield* svc
+          .createBill({
+            payerId,
+            billingPeriodStart: "2026-12-01",
+            billingPeriodEnd: "2026-12-31",
+            lineItems: [
+              {
+                studentId,
+                lineType: "lesson",
+                description: "Monthly lessons",
+                quantity: 4,
+                unitPriceCents: 4500,
+                amountCents: 18000,
+              },
+            ],
+          })
+          .pipe(withAuthContext(adminSessionId));
+        yield* svc.issueBill(bill.id).pipe(withAuthContext(adminSessionId));
         const error = yield* Effect.flip(
-          svc.recordPayment(adminSessionId, {
-            payerId: otherPayerId,
-            amountCents: 18000,
-            method: "cash",
-            allocations: [{ billId: bill.id, amountCents: 18000 }],
-          }),
+          svc
+            .recordPayment({
+              payerId: otherPayerId,
+              amountCents: 18000,
+              method: "cash",
+              allocations: [{ billId: bill.id, amountCents: 18000 }],
+            })
+            .pipe(withAuthContext(adminSessionId)),
         );
         expect(error.message).toBe("Cannot allocate across different payers");
       }),
@@ -376,21 +444,23 @@ describe("Billing ledger foundation", () => {
       Effect.gen(function* () {
         const svc = yield* BillingLedgerService;
         const db = yield* PgRootDB;
-        const bill = yield* svc.createBill(adminSessionId, {
-          payerId,
-          billingPeriodStart: "2026-12-01",
-          billingPeriodEnd: "2026-12-31",
-          lineItems: [
-            {
-              studentId,
-              lineType: "lesson",
-              description: "Monthly lessons",
-              quantity: 4,
-              unitPriceCents: 4500,
-              amountCents: 18000,
-            },
-          ],
-        });
+        const bill = yield* svc
+          .createBill({
+            payerId,
+            billingPeriodStart: "2026-12-01",
+            billingPeriodEnd: "2026-12-31",
+            lineItems: [
+              {
+                studentId,
+                lineType: "lesson",
+                description: "Monthly lessons",
+                quantity: 4,
+                unitPriceCents: 4500,
+                amountCents: 18000,
+              },
+            ],
+          })
+          .pipe(withAuthContext(adminSessionId));
         const credit = yield* db
           .execute(
             db
@@ -404,12 +474,14 @@ describe("Billing ledger foundation", () => {
               .returning("id"),
           )
           .pipe(Effect.head);
-        yield* svc.issueBill(adminSessionId, bill.id);
-        const application = yield* svc.applyCredit(adminSessionId, {
-          creditId: credit.id,
-          billId: bill.id,
-          amountCents: 3000,
-        });
+        yield* svc.issueBill(bill.id).pipe(withAuthContext(adminSessionId));
+        const application = yield* svc
+          .applyCredit({
+            creditId: credit.id,
+            billId: bill.id,
+            amountCents: 3000,
+          })
+          .pipe(withAuthContext(adminSessionId));
         expect(application.bill_id).toBe(bill.id);
         expect(application.amount_cents).toBe(3000);
       }),
@@ -419,21 +491,23 @@ describe("Billing ledger foundation", () => {
       Effect.gen(function* () {
         const svc = yield* BillingLedgerService;
         const db = yield* PgRootDB;
-        const bill = yield* svc.createBill(adminSessionId, {
-          payerId,
-          billingPeriodStart: "2026-12-01",
-          billingPeriodEnd: "2026-12-31",
-          lineItems: [
-            {
-              studentId,
-              lineType: "lesson",
-              description: "Monthly lessons",
-              quantity: 4,
-              unitPriceCents: 4500,
-              amountCents: 18000,
-            },
-          ],
-        });
+        const bill = yield* svc
+          .createBill({
+            payerId,
+            billingPeriodStart: "2026-12-01",
+            billingPeriodEnd: "2026-12-31",
+            lineItems: [
+              {
+                studentId,
+                lineType: "lesson",
+                description: "Monthly lessons",
+                quantity: 4,
+                unitPriceCents: 4500,
+                amountCents: 18000,
+              },
+            ],
+          })
+          .pipe(withAuthContext(adminSessionId));
         const credit = yield* db
           .execute(
             db
@@ -448,11 +522,13 @@ describe("Billing ledger foundation", () => {
           )
           .pipe(Effect.head);
         const result = yield* Effect.result(
-          svc.applyCredit(adminSessionId, {
-            creditId: credit.id,
-            billId: bill.id,
-            amountCents: 5000,
-          }),
+          svc
+            .applyCredit({
+              creditId: credit.id,
+              billId: bill.id,
+              amountCents: 5000,
+            })
+            .pipe(withAuthContext(adminSessionId)),
         );
         expect(result._tag).toBe("Failure");
       }),
@@ -461,27 +537,31 @@ describe("Billing ledger foundation", () => {
     effectIt.effect("creates an adjustment on an issued bill", () =>
       Effect.gen(function* () {
         const svc = yield* BillingLedgerService;
-        const bill = yield* svc.createBill(adminSessionId, {
-          payerId,
-          billingPeriodStart: "2026-12-01",
-          billingPeriodEnd: "2026-12-31",
-          lineItems: [
-            {
-              studentId,
-              lineType: "lesson",
-              description: "Monthly lessons",
-              quantity: 4,
-              unitPriceCents: 4500,
-              amountCents: 18000,
-            },
-          ],
-        });
-        yield* svc.issueBill(adminSessionId, bill.id);
-        const adjustment = yield* svc.createAdjustment(adminSessionId, {
-          billId: bill.id,
-          amountCents: -5000,
-          reason: "Late discount",
-        });
+        const bill = yield* svc
+          .createBill({
+            payerId,
+            billingPeriodStart: "2026-12-01",
+            billingPeriodEnd: "2026-12-31",
+            lineItems: [
+              {
+                studentId,
+                lineType: "lesson",
+                description: "Monthly lessons",
+                quantity: 4,
+                unitPriceCents: 4500,
+                amountCents: 18000,
+              },
+            ],
+          })
+          .pipe(withAuthContext(adminSessionId));
+        yield* svc.issueBill(bill.id).pipe(withAuthContext(adminSessionId));
+        const adjustment = yield* svc
+          .createAdjustment({
+            billId: bill.id,
+            amountCents: -5000,
+            reason: "Late discount",
+          })
+          .pipe(withAuthContext(adminSessionId));
         expect(adjustment).toMatchObject({
           bill_id: bill.id,
           amount_cents: -5000,
@@ -493,27 +573,31 @@ describe("Billing ledger foundation", () => {
     effectIt.effect("prevents adjustment on draft bill", () =>
       Effect.gen(function* () {
         const svc = yield* BillingLedgerService;
-        const bill = yield* svc.createBill(adminSessionId, {
-          payerId,
-          billingPeriodStart: "2026-12-01",
-          billingPeriodEnd: "2026-12-31",
-          lineItems: [
-            {
-              studentId,
-              lineType: "lesson",
-              description: "Monthly lessons",
-              quantity: 4,
-              unitPriceCents: 4500,
-              amountCents: 18000,
-            },
-          ],
-        });
+        const bill = yield* svc
+          .createBill({
+            payerId,
+            billingPeriodStart: "2026-12-01",
+            billingPeriodEnd: "2026-12-31",
+            lineItems: [
+              {
+                studentId,
+                lineType: "lesson",
+                description: "Monthly lessons",
+                quantity: 4,
+                unitPriceCents: 4500,
+                amountCents: 18000,
+              },
+            ],
+          })
+          .pipe(withAuthContext(adminSessionId));
         const result = yield* Effect.result(
-          svc.createAdjustment(adminSessionId, {
-            billId: bill.id,
-            amountCents: -5000,
-            reason: "Late discount",
-          }),
+          svc
+            .createAdjustment({
+              billId: bill.id,
+              amountCents: -5000,
+              reason: "Late discount",
+            })
+            .pipe(withAuthContext(adminSessionId)),
         );
         expect(result._tag).toBe("Failure");
       }),
@@ -522,43 +606,51 @@ describe("Billing ledger foundation", () => {
     effectIt.effect("processes a refund and rejects excess refund", () =>
       Effect.gen(function* () {
         const svc = yield* BillingLedgerService;
-        const bill = yield* svc.createBill(adminSessionId, {
-          payerId,
-          billingPeriodStart: "2026-12-01",
-          billingPeriodEnd: "2026-12-31",
-          lineItems: [
-            {
-              studentId,
-              lineType: "lesson",
-              description: "Monthly lessons",
-              quantity: 4,
-              unitPriceCents: 4500,
-              amountCents: 18000,
-            },
-          ],
-        });
-        yield* svc.issueBill(adminSessionId, bill.id);
-        const payment = yield* svc.recordPayment(adminSessionId, {
-          payerId,
-          amountCents: 10000,
-          method: "cash",
-          allocations: [{ billId: bill.id, amountCents: 10000 }],
-        });
-        const refund = yield* svc.processRefund(adminSessionId, {
-          paymentId: payment.id,
-          amountCents: 10000,
-          reason: "Full refund",
-        });
+        const bill = yield* svc
+          .createBill({
+            payerId,
+            billingPeriodStart: "2026-12-01",
+            billingPeriodEnd: "2026-12-31",
+            lineItems: [
+              {
+                studentId,
+                lineType: "lesson",
+                description: "Monthly lessons",
+                quantity: 4,
+                unitPriceCents: 4500,
+                amountCents: 18000,
+              },
+            ],
+          })
+          .pipe(withAuthContext(adminSessionId));
+        yield* svc.issueBill(bill.id).pipe(withAuthContext(adminSessionId));
+        const payment = yield* svc
+          .recordPayment({
+            payerId,
+            amountCents: 10000,
+            method: "cash",
+            allocations: [{ billId: bill.id, amountCents: 10000 }],
+          })
+          .pipe(withAuthContext(adminSessionId));
+        const refund = yield* svc
+          .processRefund({
+            paymentId: payment.id,
+            amountCents: 10000,
+            reason: "Full refund",
+          })
+          .pipe(withAuthContext(adminSessionId));
         expect(refund).toMatchObject({
           payment_id: payment.id,
           amount_cents: 10000,
         });
         const result = yield* Effect.result(
-          svc.processRefund(adminSessionId, {
-            paymentId: payment.id,
-            amountCents: 1,
-            reason: "Excess",
-          }),
+          svc
+            .processRefund({
+              paymentId: payment.id,
+              amountCents: 1,
+              reason: "Excess",
+            })
+            .pipe(withAuthContext(adminSessionId)),
         );
         expect(result._tag).toBe("Failure");
       }),
@@ -567,26 +659,30 @@ describe("Billing ledger foundation", () => {
     effectIt.effect("calculates payer balance and enforces billing RLS", () =>
       Effect.gen(function* () {
         const svc = yield* BillingLedgerService;
-        const balance = yield* svc.getPayerBalance(parentSessionId, payerId);
+        const balance = yield* svc.getPayerBalance(payerId).pipe(withAuthContext(parentSessionId));
         expect(balance.outstandingCents).toBeGreaterThanOrEqual(0);
         expect(balance.creditBalanceCents).toBeGreaterThanOrEqual(0);
-        expect(Array.isArray(yield* svc.listPayerBills(teacherSessionId, payerId))).toBe(true);
+        expect(
+          Array.isArray(yield* svc.listPayerBills(payerId).pipe(withAuthContext(teacherSessionId))),
+        ).toBe(true);
         const result = yield* Effect.result(
-          svc.createBill(teacherSessionId, {
-            payerId,
-            billingPeriodStart: "2026-12-01",
-            billingPeriodEnd: "2026-12-31",
-            lineItems: [
-              {
-                studentId,
-                lineType: "lesson",
-                description: "Should be blocked",
-                quantity: 1,
-                unitPriceCents: 4500,
-                amountCents: 4500,
-              },
-            ],
-          }),
+          svc
+            .createBill({
+              payerId,
+              billingPeriodStart: "2026-12-01",
+              billingPeriodEnd: "2026-12-31",
+              lineItems: [
+                {
+                  studentId,
+                  lineType: "lesson",
+                  description: "Should be blocked",
+                  quantity: 1,
+                  unitPriceCents: 4500,
+                  amountCents: 4500,
+                },
+              ],
+            })
+            .pipe(withAuthContext(teacherSessionId)),
         );
         expect(result._tag).toBe("Failure");
       }),
@@ -596,22 +692,24 @@ describe("Billing ledger foundation", () => {
       Effect.gen(function* () {
         const svc = yield* BillingLedgerService;
         const db = yield* PgRootDB;
-        const bill = yield* svc.createBill(adminSessionId, {
-          payerId,
-          billingPeriodStart: "2026-12-01",
-          billingPeriodEnd: "2026-12-31",
-          lineItems: [
-            {
-              studentId,
-              lineType: "lesson",
-              description: "Monthly lessons",
-              quantity: 4,
-              unitPriceCents: 4500,
-              amountCents: 18000,
-            },
-          ],
-        });
-        yield* svc.issueBill(adminSessionId, bill.id);
+        const bill = yield* svc
+          .createBill({
+            payerId,
+            billingPeriodStart: "2026-12-01",
+            billingPeriodEnd: "2026-12-31",
+            lineItems: [
+              {
+                studentId,
+                lineType: "lesson",
+                description: "Monthly lessons",
+                quantity: 4,
+                unitPriceCents: 4500,
+                amountCents: 18000,
+              },
+            ],
+          })
+          .pipe(withAuthContext(adminSessionId));
+        yield* svc.issueBill(bill.id).pipe(withAuthContext(adminSessionId));
         const result = yield* Effect.result(
           db.execute(
             db
@@ -627,36 +725,40 @@ describe("Billing ledger foundation", () => {
     effectIt.effect("bill numbers are sequential and never reused", () =>
       Effect.gen(function* () {
         const svc = yield* BillingLedgerService;
-        const first = yield* svc.createBill(adminSessionId, {
-          payerId,
-          billingPeriodStart: "2026-07-01",
-          billingPeriodEnd: "2026-07-31",
-          lineItems: [
-            {
-              studentId,
-              lineType: "lesson",
-              description: "July",
-              quantity: 1,
-              unitPriceCents: 18000,
-              amountCents: 18000,
-            },
-          ],
-        });
-        const second = yield* svc.createBill(adminSessionId, {
-          payerId,
-          billingPeriodStart: "2026-08-01",
-          billingPeriodEnd: "2026-08-31",
-          lineItems: [
-            {
-              studentId,
-              lineType: "lesson",
-              description: "August",
-              quantity: 1,
-              unitPriceCents: 18000,
-              amountCents: 18000,
-            },
-          ],
-        });
+        const first = yield* svc
+          .createBill({
+            payerId,
+            billingPeriodStart: "2026-07-01",
+            billingPeriodEnd: "2026-07-31",
+            lineItems: [
+              {
+                studentId,
+                lineType: "lesson",
+                description: "July",
+                quantity: 1,
+                unitPriceCents: 18000,
+                amountCents: 18000,
+              },
+            ],
+          })
+          .pipe(withAuthContext(adminSessionId));
+        const second = yield* svc
+          .createBill({
+            payerId,
+            billingPeriodStart: "2026-08-01",
+            billingPeriodEnd: "2026-08-31",
+            lineItems: [
+              {
+                studentId,
+                lineType: "lesson",
+                description: "August",
+                quantity: 1,
+                unitPriceCents: 18000,
+                amountCents: 18000,
+              },
+            ],
+          })
+          .pipe(withAuthContext(adminSessionId));
         expect(second.bill_number).toBeGreaterThan(first.bill_number);
       }),
     );

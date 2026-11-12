@@ -1,4 +1,5 @@
 import { Effect } from "effect";
+import { withAuthContext } from "../../../server/requestDatabase.js";
 import * as S from "effect/Schema";
 import { useState } from "react";
 import { createFileRoute, Link, useNavigate, useRouter } from "@tanstack/react-router";
@@ -38,30 +39,30 @@ const getCourseDetailData = createServerFn({ method: "GET" })
     runServerEffect(
       Effect.gen(function* () {
         const session = yield* requireSession(getCookie("session"));
-        const course = yield* CourseService.use((courseService) =>
-          courseService.courseById(session.session.id, data.courseId),
-        );
+        return yield* Effect.gen(function* () {
+          const course = yield* CourseService.use((courseService) =>
+            courseService.courseById(data.courseId),
+          );
 
-        if (session.user.role !== "admin") {
+          if (session.user.role !== "admin") {
+            return {
+              course: serializeCourseDetail(course),
+              enrolledStudents: [],
+              allStudents: [],
+            } satisfies CourseDetailPageData;
+          }
+
+          const [enrolledStudents, allStudents] = yield* Effect.all([
+            CourseService.use((courseService) => courseService.listCourseStudents(data.courseId)),
+            StudentService.use((studentService) => studentService.listStudents()),
+          ]);
+
           return {
             course: serializeCourseDetail(course),
-            enrolledStudents: [],
-            allStudents: [],
+            enrolledStudents: normalizeStudents(enrolledStudents),
+            allStudents: normalizeStudents(allStudents),
           } satisfies CourseDetailPageData;
-        }
-
-        const [enrolledStudents, allStudents] = yield* Effect.all([
-          CourseService.use((courseService) =>
-            courseService.listCourseStudents(session.session.id, data.courseId),
-          ),
-          StudentService.use((studentService) => studentService.listStudents(session.session.id)),
-        ]);
-
-        return {
-          course: serializeCourseDetail(course),
-          enrolledStudents: normalizeStudents(enrolledStudents),
-          allStudents: normalizeStudents(allStudents),
-        } satisfies CourseDetailPageData;
+        }).pipe(withAuthContext(session.session.id));
       }),
     ),
   );

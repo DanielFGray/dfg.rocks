@@ -1,4 +1,5 @@
 import { Effect } from "effect";
+import { withAuthContext } from "../../../server/requestDatabase.js";
 import { useState } from "react";
 import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { useMutation } from "@tanstack/react-query";
@@ -26,7 +27,7 @@ const getSubmissionsPageData = createServerFn({ method: "GET" }).handler(() =>
         throw new HttpError(403, "Forbidden");
       }
       return (yield* PracticeService.use((practiceService) =>
-        practiceService.listSubmissions(session.session.id, 5000, 0),
+        practiceService.listSubmissions(5000, 0).pipe(withAuthContext(session.session.id)),
       )) satisfies ReadonlyArray<Submission>;
     }),
   ),

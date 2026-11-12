@@ -9,8 +9,12 @@ export default async (inPayload, { withPgClient, logger }) => {
   const studentId = payload.studentId;
   const billingMonth = payload.billingMonth;
 
-  if (typeof studentId !== "string" || studentId.length === 0 ||
-      typeof billingMonth !== "string" || billingMonth.length === 0) {
+  if (
+    typeof studentId !== "string" ||
+    studentId.length === 0 ||
+    typeof billingMonth !== "string" ||
+    billingMonth.length === 0
+  ) {
     throw new Error("lessons__generate_prepaid_period requires studentId and billingMonth");
   }
 
@@ -20,12 +24,12 @@ export default async (inPayload, { withPgClient, logger }) => {
       await pgClient.query("begin");
       try {
         const { rows: paymentRows } = await pgClient.query(
-            `select id, student_id, billing_month, generation_status
+          `select id, student_id, billing_month, generation_status
                from app_public.monthly_payments
               where student_id = $1 and billing_month = $2::date
               for update`,
-            [studentId, billingMonth],
-          );
+          [studentId, billingMonth],
+        );
         /** @type {{ id: string, student_id: string, billing_month: string, generation_status?: string } | null} */
         const payment = paymentRows[0] ?? null;
         if (payment?.generation_status === "generated") {
@@ -134,18 +138,6 @@ export default async (inPayload, { withPgClient, logger }) => {
           );
 
           generatedCount += lessons.length;
-          for (const lesson of lessons) {
-            await pgClient.query(
-              `select graphile_worker.add_job(
-                 'gcal__ensure_lesson_event',
-                 json_build_object('lessonId', $1::uuid),
-                 queue_name := 'gcal',
-                 job_key := 'gcal__ensure_lesson_event:' || $1::text,
-                 job_key_mode := 'replace'
-               )`,
-              [lesson.id],
-            );
-          }
         }
 
         if (payment) {
@@ -165,7 +157,7 @@ export default async (inPayload, { withPgClient, logger }) => {
     });
 
     logger.info(
-      `lessons__generate_prepaid_period: ${studentId} ${billingMonth}, queued ${generatedCount} lessons`,
+      `lessons__generate_prepaid_period: ${studentId} ${billingMonth}, generated ${generatedCount} lessons`,
     );
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

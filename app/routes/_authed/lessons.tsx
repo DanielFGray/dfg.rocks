@@ -1,4 +1,5 @@
 import { Effect } from "effect";
+import { withAuthContext } from "../../../server/requestDatabase.js";
 import * as S from "effect/Schema";
 import { useState } from "react";
 import { createFileRoute, useRouter } from "@tanstack/react-router";
@@ -33,13 +34,13 @@ const getLessonsPageData = createServerFn({ method: "GET" }).handler(() =>
       const session = yield* requireAdminSession(getCookie("session"));
       const [lessons, students] = yield* Effect.all([
         LessonService.use((lessonService) =>
-          lessonService.listLessons(session.session.id, {
+          lessonService.listLessons({
             limit: 50,
             offset: 0,
           }),
         ),
-        StudentService.use((studentService) => studentService.listStudents(session.session.id)),
-      ]);
+        StudentService.use((studentService) => studentService.listStudents()),
+      ]).pipe(withAuthContext(session.session.id));
 
       return {
         lessons: lessons.map(serializeLesson),
@@ -59,7 +60,7 @@ const getLessonNote = createServerFn({ method: "GET" })
       Effect.gen(function* () {
         const session = yield* requireAdminSession(getCookie("session"));
         const note = yield* LessonService.use((lessonService) =>
-          lessonService.getLessonNote(session.session.id, data.lessonId),
+          lessonService.getLessonNote(data.lessonId).pipe(withAuthContext(session.session.id)),
         );
         return serializeLessonNote(note);
       }),

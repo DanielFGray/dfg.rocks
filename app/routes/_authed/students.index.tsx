@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
 import { Effect, Schema as S } from "effect";
+import { withAuthContext } from "../../../server/requestDatabase.js";
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { createServerFn } from "@tanstack/react-start";
@@ -34,9 +35,9 @@ const getStudentsPageData = createServerFn({ method: "GET" }).handler(() =>
     Effect.gen(function* () {
       const session = yield* requireAdminSession(getCookie("session"));
       const [students, families] = yield* Effect.all([
-        StudentService.use((studentService) => studentService.listStudents(session.session.id)),
-        FamilyService.use((familyService) => familyService.listFamilies(session.session.id)),
-      ]);
+        StudentService.use((studentService) => studentService.listStudents()),
+        FamilyService.use((familyService) => familyService.listFamilies()),
+      ]).pipe(withAuthContext(session.session.id));
       return {
         students: normalizeStudents(students),
         families: families.map(serializeFamily),

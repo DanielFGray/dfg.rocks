@@ -1,5 +1,6 @@
 import * as HttpApiBuilder from "effect/http-api/HttpApiBuilder";
 import { Effect } from "effect";
+import { withAuthContext } from "../requestDatabase.js";
 import { Contract } from "../../shared/httpApi.js";
 import { CurrentSession } from "../../shared/api/guards.js";
 import { HttpError } from "../pgErrors.js";
@@ -16,7 +17,9 @@ export const PracticeApiGroupLive = HttpApiBuilder.group(Contract, "practice", (
         const effective = resolveEffectiveStudent(auth);
         const filterStudentId = effective.isActing ? effective.studentId : undefined;
         const rows = yield* PracticeService.use((practiceService) =>
-          practiceService.practiceLogs(auth.session.id, query.material_id, filterStudentId),
+          practiceService
+            .practiceLogs(query.material_id, filterStudentId)
+            .pipe(withAuthContext(auth.session.id)),
         );
         return rows;
       }, adaptSignedInErrors),
@@ -27,13 +30,14 @@ export const PracticeApiGroupLive = HttpApiBuilder.group(Contract, "practice", (
         const auth = yield* CurrentSession;
         const effective = resolveEffectiveStudent(auth);
         const row = yield* PracticeService.use((practiceService) =>
-          practiceService.createPracticeLog({
-            sessionId: auth.session.id,
-            studentId: effective.studentId,
-            materialId: payload.material_id,
-            rating: payload.rating,
-            durationMinutes: payload.duration_minutes,
-          }),
+          practiceService
+            .createPracticeLog({
+              studentId: effective.studentId,
+              materialId: payload.material_id,
+              rating: payload.rating,
+              durationMinutes: payload.duration_minutes,
+            })
+            .pipe(withAuthContext(auth.session.id)),
         );
         return row;
       }, adaptSignedInErrors),
@@ -44,12 +48,9 @@ export const PracticeApiGroupLive = HttpApiBuilder.group(Contract, "practice", (
         const auth = yield* CurrentSession;
         const effective = resolveEffectiveStudent(auth);
         const row = yield* PracticeService.use((practiceService) =>
-          practiceService.ratePracticeLog(
-            auth.session.id,
-            effective.studentId,
-            payload.material_id,
-            payload.rating,
-          ),
+          practiceService
+            .ratePracticeLog(effective.studentId, payload.material_id, payload.rating)
+            .pipe(withAuthContext(auth.session.id)),
         );
         return row;
       }, adaptSignedInErrors),
@@ -66,7 +67,9 @@ export const PracticeAdminApiGroupLive = HttpApiBuilder.group(
         Effect.fnUntraced(function* ({ query }) {
           const auth = yield* CurrentSession;
           const rows = yield* PracticeService.use((practiceService) =>
-            practiceService.listSubmissions(auth.session.id, query.limit ?? 50, query.offset ?? 0),
+            practiceService
+              .listSubmissions(query.limit ?? 50, query.offset ?? 0)
+              .pipe(withAuthContext(auth.session.id)),
           );
           return rows;
         }, adaptAdminErrors),
@@ -76,7 +79,9 @@ export const PracticeAdminApiGroupLive = HttpApiBuilder.group(
         Effect.fnUntraced(function* ({ params, payload }) {
           const auth = yield* CurrentSession;
           const row = yield* PracticeService.use((practiceService) =>
-            practiceService.updateSubmissionRead(auth.session.id, params.id, payload.is_read),
+            practiceService
+              .updateSubmissionRead(params.id, payload.is_read)
+              .pipe(withAuthContext(auth.session.id)),
           );
           if (!row) {
             return yield* new HttpError(404, "Submission not found");

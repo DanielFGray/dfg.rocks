@@ -2,10 +2,9 @@
 import { describe, expect, test } from "bun:test";
 import { Glob } from "bun";
 import { basename } from "node:path";
+import { effectTasks } from "../../server/services/backgroundWorker.ts";
 
-// graphile-worker runs a job only when a file in worker/tasks carries its name; a
-// job with no file stays queued forever without an error. The queue sites live in
-// SQL and server TypeScript, so this guard scans their source.
+// Every queued job needs a task file or an Effect handler registered by the runner.
 
 const root = new URL("../../", import.meta.url).pathname;
 
@@ -19,15 +18,20 @@ const names = (pattern) => files(pattern).map((f) => basename(f).replace(/\.\w+$
 const read = (path) => Bun.file(root + path).text();
 
 describe("worker contracts", () => {
-  test("every queued job name has a file in worker/tasks", async () => {
+  test("every queued job name has a registered handler", async () => {
     const queueCall = /add_job["']?[,(\s[]*(?:eb\.val\()?["'](\w+)["']/g;
     const queued = new Set();
-    for (const path of [...files("migrations/committed/*.sql"), ...files("server/**/*.ts")]) {
+    for (const path of [
+      ...files("migrations/committed/*.sql"),
+      ...files("migrations/current/*.sql"),
+      ...files("server/**/*.ts"),
+      ...files("worker/tasks/*.js"),
+    ]) {
       for (const [, name] of (await read(path)).matchAll(queueCall)) queued.add(name);
     }
     expect(queued.size).toBeGreaterThan(0);
 
-    const tasks = new Set(names("worker/tasks/*.js"));
+    const tasks = new Set([...names("worker/tasks/*.js"), ...Object.keys(effectTasks(""))]);
     expect([...queued].filter((name) => !tasks.has(name))).toEqual([]);
   });
 

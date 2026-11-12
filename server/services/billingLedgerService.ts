@@ -1,6 +1,7 @@
 import { Effect, Option, Context, Layer } from "effect";
 import { sql } from "kysely";
-import { type Database, withAuthContext } from "../db.js";
+import { type Database } from "../db.js";
+import { RequestDatabase } from "../requestDatabase.js";
 import { catchPgErrors, HttpError } from "../pgErrors.js";
 import { allocatePayment } from "./billingCalculation.js";
 import { isFirstOfMonth } from "./recurringScheduleService.js";
@@ -151,7 +152,7 @@ export class BillingLedgerService extends Context.Service<BillingLedgerService>(
     make: Effect.gen(function* () {
       yield* Effect.void;
       return {
-        createBill: Effect.fn("createBill")(function* (sessionId: string, input: CreateBillInput) {
+        createBill: Effect.fn("createBill")(function* (input: CreateBillInput) {
           const subtotalCents = input.lineItems.reduce((sum, li) => sum + li.amountCents, 0);
           const discountCents = input.discountCents ?? 0;
           const taxCents = input.taxCents ?? 0;
@@ -161,8 +162,7 @@ export class BillingLedgerService extends Context.Service<BillingLedgerService>(
             return yield* new InvalidStateError("Bill total cannot be negative");
           }
 
-          const bill = yield* withAuthContext(
-            sessionId,
+          const bill = yield* RequestDatabase.use(
             Effect.fnUntraced(function* (db: Database) {
               const billNumber = yield* db
                 .execute(
@@ -246,9 +246,8 @@ export class BillingLedgerService extends Context.Service<BillingLedgerService>(
           return bill;
         }),
 
-        issueBill: Effect.fn("issueBill")(function* (sessionId: string, billId: string) {
-          const result = yield* withAuthContext(
-            sessionId,
+        issueBill: Effect.fn("issueBill")(function* (billId: string) {
+          const result = yield* RequestDatabase.use(
             Effect.fnUntraced(function* (db: Database) {
               const issued = yield* db
                 .execute(
@@ -289,8 +288,8 @@ export class BillingLedgerService extends Context.Service<BillingLedgerService>(
           return result;
         }),
 
-        getBill: Effect.fn("getBill")(function* (sessionId: string, billId: string) {
-          const bill = yield* withAuthContext(sessionId, (db: Database) =>
+        getBill: Effect.fn("getBill")(function* (billId: string) {
+          const bill = yield* RequestDatabase.use((db: Database) =>
             db
               .execute(db.selectFrom("app_public.bills").selectAll().where("id", "=", billId))
               .pipe(Effect.head, Effect.option),
@@ -299,7 +298,7 @@ export class BillingLedgerService extends Context.Service<BillingLedgerService>(
             return null;
           }
 
-          const lineItems = yield* withAuthContext(sessionId, (db: Database) =>
+          const lineItems = yield* RequestDatabase.use((db: Database) =>
             db.execute(
               db
                 .selectFrom("app_public.bill_line_items")
@@ -309,7 +308,7 @@ export class BillingLedgerService extends Context.Service<BillingLedgerService>(
             ),
           );
 
-          const adjustments = yield* withAuthContext(sessionId, (db: Database) =>
+          const adjustments = yield* RequestDatabase.use((db: Database) =>
             db.execute(
               db
                 .selectFrom("app_public.bill_adjustments")
@@ -319,7 +318,7 @@ export class BillingLedgerService extends Context.Service<BillingLedgerService>(
             ),
           );
 
-          const creditApplications = yield* withAuthContext(sessionId, (db: Database) =>
+          const creditApplications = yield* RequestDatabase.use((db: Database) =>
             db.execute(
               db
                 .selectFrom("app_public.credit_applications")
@@ -332,8 +331,8 @@ export class BillingLedgerService extends Context.Service<BillingLedgerService>(
           return { ...bill.value, lineItems, adjustments, creditApplications };
         }),
 
-        billLineItems: Effect.fn("billLineItems")(function* (sessionId: string, billId: string) {
-          const items = yield* withAuthContext(sessionId, (db: Database) =>
+        billLineItems: Effect.fn("billLineItems")(function* (billId: string) {
+          const items = yield* RequestDatabase.use((db: Database) =>
             db.execute(
               db
                 .selectFrom("app_public.bill_line_items")
@@ -345,8 +344,8 @@ export class BillingLedgerService extends Context.Service<BillingLedgerService>(
           return items;
         }),
 
-        listPayerBills: Effect.fn("listPayerBills")(function* (sessionId: string, payerId: string) {
-          const bills = yield* withAuthContext(sessionId, (db: Database) =>
+        listPayerBills: Effect.fn("listPayerBills")(function* (payerId: string) {
+          const bills = yield* RequestDatabase.use((db: Database) =>
             db.execute(
               db
                 .selectFrom("app_public.bills")
@@ -360,14 +359,11 @@ export class BillingLedgerService extends Context.Service<BillingLedgerService>(
 
         // Single-booking bills for lessons in the month, newest lesson last. Cancelled
         // and voided bills are left out: nobody owes them.
-        listLessonBills: Effect.fn("listLessonBills")(function* (
-          sessionId: string,
-          billingMonth: string,
-        ) {
+        listLessonBills: Effect.fn("listLessonBills")(function* (billingMonth: string) {
           if (!isFirstOfMonth(billingMonth)) {
             return yield* new HttpError(400, "month must be the first day of a month (YYYY-MM-01)");
           }
-          const rows = yield* withAuthContext(sessionId, (db: Database) =>
+          const rows = yield* RequestDatabase.use((db: Database) =>
             db.execute(
               db
                 .selectFrom("app_public.bills as b")
@@ -407,9 +403,8 @@ export class BillingLedgerService extends Context.Service<BillingLedgerService>(
           }));
         }),
 
-        voidBill: Effect.fn("voidBill")(function* (sessionId: string, input: VoidBillInput) {
-          const result = yield* withAuthContext(
-            sessionId,
+        voidBill: Effect.fn("voidBill")(function* (input: VoidBillInput) {
+          const result = yield* RequestDatabase.use(
             Effect.fnUntraced(function* (db: Database) {
               const bill = yield* db
                 .execute(
@@ -450,9 +445,8 @@ export class BillingLedgerService extends Context.Service<BillingLedgerService>(
           return result;
         }),
 
-        cancelBill: Effect.fn("cancelBill")(function* (sessionId: string, billId: string) {
-          const result = yield* withAuthContext(
-            sessionId,
+        cancelBill: Effect.fn("cancelBill")(function* (billId: string) {
+          const result = yield* RequestDatabase.use(
             Effect.fnUntraced(function* (db: Database) {
               const cancelled = yield* db
                 .execute(
@@ -485,10 +479,7 @@ export class BillingLedgerService extends Context.Service<BillingLedgerService>(
           return result;
         }),
 
-        recordPayment: Effect.fn("recordPayment")(function* (
-          sessionId: string,
-          input: RecordPaymentInput,
-        ) {
+        recordPayment: Effect.fn("recordPayment")(function* (input: RecordPaymentInput) {
           if (!Number.isInteger(input.amountCents) || input.amountCents <= 0) {
             return yield* new ValidationError("Payment amount must be a positive number of cents");
           }
@@ -510,8 +501,7 @@ export class BillingLedgerService extends Context.Service<BillingLedgerService>(
             );
           }
 
-          const payment = yield* withAuthContext(
-            sessionId,
+          const payment = yield* RequestDatabase.use(
             Effect.fnUntraced(function* (db: Database) {
               const bills = yield* db.execute(
                 db
@@ -688,11 +678,8 @@ export class BillingLedgerService extends Context.Service<BillingLedgerService>(
           return payment;
         }),
 
-        listPayerPayments: Effect.fn("listPayerPayments")(function* (
-          sessionId: string,
-          payerId: string,
-        ) {
-          const payments = yield* withAuthContext(sessionId, (db: Database) =>
+        listPayerPayments: Effect.fn("listPayerPayments")(function* (payerId: string) {
+          const payments = yield* RequestDatabase.use((db: Database) =>
             db.execute(
               db
                 .selectFrom("app_public.payments")
@@ -704,12 +691,8 @@ export class BillingLedgerService extends Context.Service<BillingLedgerService>(
           return payments;
         }),
 
-        applyCredit: Effect.fn("applyCredit")(function* (
-          sessionId: string,
-          input: ApplyCreditInput,
-        ) {
-          const app = yield* withAuthContext(
-            sessionId,
+        applyCredit: Effect.fn("applyCredit")(function* (input: ApplyCreditInput) {
+          const app = yield* RequestDatabase.use(
             Effect.fnUntraced(function* (db: Database) {
               if (!Number.isInteger(input.amountCents) || input.amountCents <= 0) {
                 return yield* new ValidationError(
@@ -824,18 +807,14 @@ export class BillingLedgerService extends Context.Service<BillingLedgerService>(
           return app;
         }),
 
-        createAdjustment: Effect.fn("createAdjustment")(function* (
-          sessionId: string,
-          input: CreateAdjustmentInput,
-        ) {
+        createAdjustment: Effect.fn("createAdjustment")(function* (input: CreateAdjustmentInput) {
           if (!Number.isInteger(input.amountCents) || input.amountCents === 0) {
             return yield* new ValidationError("Adjustment must be a non-zero number of cents");
           }
           if (!input.reason || input.reason.trim().length === 0) {
             return yield* new ValidationError("Reason is required for an adjustment");
           }
-          const adj = yield* withAuthContext(
-            sessionId,
+          const adj = yield* RequestDatabase.use(
             Effect.fnUntraced(function* (db: Database) {
               const bill = yield* db
                 .execute(
@@ -891,18 +870,14 @@ export class BillingLedgerService extends Context.Service<BillingLedgerService>(
           return adj;
         }),
 
-        processRefund: Effect.fn("processRefund")(function* (
-          sessionId: string,
-          input: ProcessRefundInput,
-        ) {
+        processRefund: Effect.fn("processRefund")(function* (input: ProcessRefundInput) {
           if (!Number.isInteger(input.amountCents) || input.amountCents <= 0) {
             return yield* new ValidationError("Refund amount must be a positive number of cents");
           }
           if (!input.reason || input.reason.trim().length === 0) {
             return yield* new ValidationError("Reason is required for a refund");
           }
-          const refund = yield* withAuthContext(
-            sessionId,
+          const refund = yield* RequestDatabase.use(
             Effect.fnUntraced(function* (db: Database) {
               const payment = yield* db
                 .execute(
@@ -970,11 +945,8 @@ export class BillingLedgerService extends Context.Service<BillingLedgerService>(
           return refund;
         }),
 
-        listPayerCredits: Effect.fn("listPayerCredits")(function* (
-          sessionId: string,
-          payerId: string,
-        ) {
-          const credits = yield* withAuthContext(sessionId, (db: Database) =>
+        listPayerCredits: Effect.fn("listPayerCredits")(function* (payerId: string) {
+          const credits = yield* RequestDatabase.use((db: Database) =>
             db.execute(
               db
                 .selectFrom("app_public.credits")
@@ -986,10 +958,7 @@ export class BillingLedgerService extends Context.Service<BillingLedgerService>(
           return credits;
         }),
 
-        issueCredit: Effect.fn("issueCredit")(function* (
-          sessionId: string,
-          input: IssueCreditInput,
-        ) {
+        issueCredit: Effect.fn("issueCredit")(function* (input: IssueCreditInput) {
           if (!Number.isInteger(input.amountCents) || input.amountCents <= 0) {
             return yield* new ValidationError("Credit amount must be a positive number of cents");
           }
@@ -997,8 +966,7 @@ export class BillingLedgerService extends Context.Service<BillingLedgerService>(
             return yield* new ValidationError("Reason is required when issuing a credit");
           }
 
-          const credit = yield* withAuthContext(
-            sessionId,
+          const credit = yield* RequestDatabase.use(
             Effect.fnUntraced(function* (db: Database) {
               const userId = yield* db
                 .execute(
@@ -1036,11 +1004,8 @@ export class BillingLedgerService extends Context.Service<BillingLedgerService>(
           return credit;
         }),
 
-        getPayerBalance: Effect.fn("getPayerBalance")(function* (
-          sessionId: string,
-          payerId: string,
-        ) {
-          const bills = yield* withAuthContext(sessionId, (db: Database) =>
+        getPayerBalance: Effect.fn("getPayerBalance")(function* (payerId: string) {
+          const bills = yield* RequestDatabase.use((db: Database) =>
             db.execute(
               db
                 .selectFrom("app_public.bills")
@@ -1051,7 +1016,7 @@ export class BillingLedgerService extends Context.Service<BillingLedgerService>(
 
           const billIds = bills.map((b) => b.id);
           const adjustments = billIds.length
-            ? yield* withAuthContext(sessionId, (db: Database) =>
+            ? yield* RequestDatabase.use((db: Database) =>
                 db.execute(
                   db
                     .selectFrom("app_public.bill_adjustments")
@@ -1061,7 +1026,7 @@ export class BillingLedgerService extends Context.Service<BillingLedgerService>(
               )
             : [];
           const creditApplications = billIds.length
-            ? yield* withAuthContext(sessionId, (db: Database) =>
+            ? yield* RequestDatabase.use((db: Database) =>
                 db.execute(
                   db
                     .selectFrom("app_public.credit_applications")
@@ -1071,7 +1036,7 @@ export class BillingLedgerService extends Context.Service<BillingLedgerService>(
               )
             : [];
 
-          const payments = yield* withAuthContext(sessionId, (db: Database) =>
+          const payments = yield* RequestDatabase.use((db: Database) =>
             db.execute(
               db
                 .selectFrom("app_public.payments")
@@ -1083,7 +1048,7 @@ export class BillingLedgerService extends Context.Service<BillingLedgerService>(
           const paymentIds = payments.map((p) => p.id);
 
           const allocations = paymentIds.length
-            ? yield* withAuthContext(sessionId, (db: Database) =>
+            ? yield* RequestDatabase.use((db: Database) =>
                 db.execute(
                   db
                     .selectFrom("app_public.payment_allocations")
@@ -1093,7 +1058,7 @@ export class BillingLedgerService extends Context.Service<BillingLedgerService>(
               )
             : [];
           const refunds = paymentIds.length
-            ? yield* withAuthContext(sessionId, (db: Database) =>
+            ? yield* RequestDatabase.use((db: Database) =>
                 db.execute(
                   db
                     .selectFrom("app_public.refunds")
@@ -1191,7 +1156,7 @@ export class BillingLedgerService extends Context.Service<BillingLedgerService>(
               0,
             );
 
-          const credits = yield* withAuthContext(sessionId, (db: Database) =>
+          const credits = yield* RequestDatabase.use((db: Database) =>
             db.execute(
               db
                 .selectFrom("app_public.credits as c")
@@ -1237,10 +1202,7 @@ export class BillingLedgerService extends Context.Service<BillingLedgerService>(
 
         // Discount/Tax configuration operations
 
-        createDiscount: Effect.fn("createDiscount")(function* (
-          sessionId: string,
-          input: DiscountInput,
-        ) {
+        createDiscount: Effect.fn("createDiscount")(function* (input: DiscountInput) {
           if (
             input.discountType === "percentage" &&
             (input.discountValue < 1 || input.discountValue > 100)
@@ -1251,8 +1213,7 @@ export class BillingLedgerService extends Context.Service<BillingLedgerService>(
             return yield* new ValidationError("Fixed discount amount must be positive");
           }
 
-          const discount = yield* withAuthContext(
-            sessionId,
+          const discount = yield* RequestDatabase.use(
             Effect.fnUntraced(function* (db: Database) {
               const userId = yield* db
                 .execute(
@@ -1292,7 +1253,6 @@ export class BillingLedgerService extends Context.Service<BillingLedgerService>(
         }),
 
         updateDiscount: Effect.fn("updateDiscount")(function* (
-          sessionId: string,
           discountId: string,
           input: Partial<DiscountInput>,
         ) {
@@ -1320,8 +1280,7 @@ export class BillingLedgerService extends Context.Service<BillingLedgerService>(
           if (input.effectiveUntil !== undefined) updates.effective_until = input.effectiveUntil;
           if (input.isActive !== undefined) updates.is_active = input.isActive;
 
-          const discount = yield* withAuthContext(
-            sessionId,
+          const discount = yield* RequestDatabase.use(
             Effect.fnUntraced(function* (db: Database) {
               return yield* db
                 .execute(
@@ -1337,11 +1296,8 @@ export class BillingLedgerService extends Context.Service<BillingLedgerService>(
           return discount;
         }),
 
-        listPayerDiscounts: Effect.fn("listPayerDiscounts")(function* (
-          sessionId: string,
-          payerId: string,
-        ) {
-          const discounts = yield* withAuthContext(sessionId, (db: Database) =>
+        listPayerDiscounts: Effect.fn("listPayerDiscounts")(function* (payerId: string) {
+          const discounts = yield* RequestDatabase.use((db: Database) =>
             db.execute(
               db
                 .selectFrom("app_public.discounts")
@@ -1353,10 +1309,7 @@ export class BillingLedgerService extends Context.Service<BillingLedgerService>(
           return discounts;
         }),
 
-        createTaxRate: Effect.fn("createTaxRate")(function* (
-          sessionId: string,
-          input: TaxRateInput,
-        ) {
+        createTaxRate: Effect.fn("createTaxRate")(function* (input: TaxRateInput) {
           if (
             !Number.isFinite(input.ratePercent) ||
             Math.round(input.ratePercent * 100) !== input.ratePercent * 100 ||
@@ -1366,8 +1319,7 @@ export class BillingLedgerService extends Context.Service<BillingLedgerService>(
             return yield* new ValidationError("Tax rate must be between 0 and 30 percent");
           }
 
-          const rate = yield* withAuthContext(
-            sessionId,
+          const rate = yield* RequestDatabase.use(
             Effect.fnUntraced(function* (db: Database) {
               const userId = yield* db
                 .execute(
@@ -1406,7 +1358,6 @@ export class BillingLedgerService extends Context.Service<BillingLedgerService>(
         }),
 
         updateTaxRate: Effect.fn("updateTaxRate")(function* (
-          sessionId: string,
           taxRateId: string,
           input: Partial<TaxRateInput>,
         ) {
@@ -1428,8 +1379,7 @@ export class BillingLedgerService extends Context.Service<BillingLedgerService>(
           if (input.effectiveFrom !== undefined) updates.effective_from = input.effectiveFrom;
           if (input.effectiveUntil !== undefined) updates.effective_until = input.effectiveUntil;
 
-          const rate = yield* withAuthContext(
-            sessionId,
+          const rate = yield* RequestDatabase.use(
             Effect.fnUntraced(function* (db: Database) {
               return yield* db
                 .execute(
@@ -1445,8 +1395,8 @@ export class BillingLedgerService extends Context.Service<BillingLedgerService>(
           return rate;
         }),
 
-        listTaxRates: Effect.fn("listTaxRates")(function* (sessionId: string) {
-          const rates = yield* withAuthContext(sessionId, (db: Database) =>
+        listTaxRates: Effect.fn("listTaxRates")(function* () {
+          const rates = yield* RequestDatabase.use((db: Database) =>
             db.execute(
               db.selectFrom("app_public.tax_rates").selectAll().orderBy("effective_from", "desc"),
             ),
@@ -1454,12 +1404,8 @@ export class BillingLedgerService extends Context.Service<BillingLedgerService>(
           return rates;
         }),
 
-        createTaxExemption: Effect.fn("createTaxExemption")(function* (
-          sessionId: string,
-          input: TaxExemptionInput,
-        ) {
-          const exemption = yield* withAuthContext(
-            sessionId,
+        createTaxExemption: Effect.fn("createTaxExemption")(function* (input: TaxExemptionInput) {
+          const exemption = yield* RequestDatabase.use(
             Effect.fnUntraced(function* (db: Database) {
               const userId = yield* db
                 .execute(
@@ -1496,11 +1442,8 @@ export class BillingLedgerService extends Context.Service<BillingLedgerService>(
           return exemption;
         }),
 
-        listPayerTaxExemptions: Effect.fn("listPayerTaxExemptions")(function* (
-          sessionId: string,
-          payerId: string,
-        ) {
-          const exemptions = yield* withAuthContext(sessionId, (db: Database) =>
+        listPayerTaxExemptions: Effect.fn("listPayerTaxExemptions")(function* (payerId: string) {
+          const exemptions = yield* RequestDatabase.use((db: Database) =>
             db.execute(
               db
                 .selectFrom("app_public.tax_exemptions")
@@ -1512,11 +1455,11 @@ export class BillingLedgerService extends Context.Service<BillingLedgerService>(
           return exemptions;
         }),
 
-        listPayers: Effect.fn("listPayers")(function* (sessionId: string) {
+        listPayers: Effect.fn("listPayers")(function* () {
           // A payer is anyone who pays for a student, plus anyone who still holds
           // ledger rows after a family change moved their students elsewhere. Users
           // of other roles pay for their own lessons but are listed only once billed.
-          const [payers, studentRows] = yield* withAuthContext(sessionId, (db: Database) =>
+          const [payers, studentRows] = yield* RequestDatabase.use((db: Database) =>
             Effect.all([
               db.execute(
                 db
@@ -1564,13 +1507,13 @@ export class BillingLedgerService extends Context.Service<BillingLedgerService>(
           }
 
           const [allBills, allPayments, allCredits] = yield* Effect.all([
-            withAuthContext(sessionId, (db: Database) =>
+            RequestDatabase.use((db: Database) =>
               db.execute(db.selectFrom("app_public.bills").selectAll()),
             ),
-            withAuthContext(sessionId, (db: Database) =>
+            RequestDatabase.use((db: Database) =>
               db.execute(db.selectFrom("app_public.payments").selectAll()),
             ),
-            withAuthContext(sessionId, (db: Database) =>
+            RequestDatabase.use((db: Database) =>
               db.execute(db.selectFrom("app_public.credits").selectAll()),
             ),
           ]);
@@ -1599,7 +1542,7 @@ export class BillingLedgerService extends Context.Service<BillingLedgerService>(
           const allPaymentIds = allPayments.map((p) => p.id);
           let allocSumByPayment: Map<string, number> | undefined;
           if (allPaymentIds.length > 0) {
-            const allocRows = yield* withAuthContext(sessionId, (db: Database) =>
+            const allocRows = yield* RequestDatabase.use((db: Database) =>
               db.execute(
                 db
                   .selectFrom("app_public.payment_allocations")
@@ -1618,7 +1561,7 @@ export class BillingLedgerService extends Context.Service<BillingLedgerService>(
 
           const unpaidAllocByBill = new Map<string, number>();
           if (allPaymentIds.length > 0) {
-            const billPaidRows = yield* withAuthContext(sessionId, (db: Database) =>
+            const billPaidRows = yield* RequestDatabase.use((db: Database) =>
               db.execute(
                 db
                   .selectFrom("app_public.payment_allocations")
@@ -1700,14 +1643,11 @@ export class BillingLedgerService extends Context.Service<BillingLedgerService>(
           return summaries;
         }),
 
-        getPayerBillingDetail: Effect.fn("getPayerBillingDetail")(function* (
-          sessionId: string,
-          payerId: string,
-        ) {
-          const payer = yield* withAuthContext(sessionId, (db: Database) => getPayer(db, payerId));
+        getPayerBillingDetail: Effect.fn("getPayerBillingDetail")(function* (payerId: string) {
+          const payer = yield* RequestDatabase.use((db: Database) => getPayer(db, payerId));
 
           const [bills, payments, credits] = yield* Effect.all([
-            withAuthContext(sessionId, (db: Database) =>
+            RequestDatabase.use((db: Database) =>
               db.execute(
                 db
                   .selectFrom("app_public.bills")
@@ -1716,7 +1656,7 @@ export class BillingLedgerService extends Context.Service<BillingLedgerService>(
                   .orderBy("created_at", "desc"),
               ),
             ),
-            withAuthContext(sessionId, (db: Database) =>
+            RequestDatabase.use((db: Database) =>
               db.execute(
                 db
                   .selectFrom("app_public.payments")
@@ -1725,7 +1665,7 @@ export class BillingLedgerService extends Context.Service<BillingLedgerService>(
                   .orderBy("received_at", "desc"),
               ),
             ),
-            withAuthContext(sessionId, (db: Database) =>
+            RequestDatabase.use((db: Database) =>
               db.execute(
                 db
                   .selectFrom("app_public.credits")
@@ -1742,7 +1682,7 @@ export class BillingLedgerService extends Context.Service<BillingLedgerService>(
           const paymentIds = payments.map((p) => p.id);
           let totalAllocatedCents = 0;
           if (paymentIds.length > 0) {
-            const allocResult = yield* withAuthContext(sessionId, (db: Database) =>
+            const allocResult = yield* RequestDatabase.use((db: Database) =>
               db
                 .execute(
                   db
@@ -1765,7 +1705,7 @@ export class BillingLedgerService extends Context.Service<BillingLedgerService>(
 
           let refundTotal = 0;
           if (paymentIds.length > 0) {
-            const refundResult = yield* withAuthContext(sessionId, (db: Database) =>
+            const refundResult = yield* RequestDatabase.use((db: Database) =>
               db
                 .execute(
                   db

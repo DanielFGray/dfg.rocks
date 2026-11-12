@@ -1,5 +1,6 @@
 import * as HttpApiBuilder from "effect/http-api/HttpApiBuilder";
 import { Effect } from "effect";
+import { withAuthContext } from "../requestDatabase.js";
 import { Contract } from "../../shared/httpApi.js";
 import { CurrentSession } from "../../shared/api/guards.js";
 import { RecurringScheduleService } from "../services/recurringScheduleService.js";
@@ -15,7 +16,9 @@ export const MonthlyBillingAdminApiGroupLive = HttpApiBuilder.group(
         Effect.fnUntraced(function* ({ params }) {
           const auth = yield* CurrentSession;
           return yield* RecurringScheduleService.use((recurringScheduleService) =>
-            recurringScheduleService.listSchedules(auth.session.id, params.studentId),
+            recurringScheduleService
+              .listSchedules(params.studentId)
+              .pipe(withAuthContext(auth.session.id)),
           );
         }, adaptAdminErrors),
       )
@@ -24,20 +27,21 @@ export const MonthlyBillingAdminApiGroupLive = HttpApiBuilder.group(
         Effect.fnUntraced(function* ({ params, payload }) {
           const auth = yield* CurrentSession;
           return yield* RecurringScheduleService.use((recurringScheduleService) =>
-            recurringScheduleService.saveSchedule({
-              sessionId: auth.session.id,
-              studentId: params.studentId,
-              id: payload.id,
-              schedule: {
-                studentRateId: payload.student_rate_id,
-                dayOfWeek: payload.day_of_week,
-                localStartTime: payload.local_start_time,
-                timezone: payload.timezone,
-                startsOn: payload.starts_on,
-                endsOn: payload.ends_on ?? null,
-                active: payload.active ?? true,
-              },
-            }),
+            recurringScheduleService
+              .saveSchedule({
+                studentId: params.studentId,
+                id: payload.id,
+                schedule: {
+                  studentRateId: payload.student_rate_id,
+                  dayOfWeek: payload.day_of_week,
+                  localStartTime: payload.local_start_time,
+                  timezone: payload.timezone,
+                  startsOn: payload.starts_on,
+                  endsOn: payload.ends_on ?? null,
+                  active: payload.active ?? true,
+                },
+              })
+              .pipe(withAuthContext(auth.session.id)),
           );
         }, adaptAdminErrors),
       )
@@ -46,7 +50,9 @@ export const MonthlyBillingAdminApiGroupLive = HttpApiBuilder.group(
         Effect.fnUntraced(function* ({ params }) {
           const auth = yield* CurrentSession;
           return yield* RecurringScheduleService.use((recurringScheduleService) =>
-            recurringScheduleService.listPayments(auth.session.id, params.studentId),
+            recurringScheduleService
+              .listPayments(params.studentId)
+              .pipe(withAuthContext(auth.session.id)),
           );
         }, adaptAdminErrors),
       )
@@ -55,7 +61,7 @@ export const MonthlyBillingAdminApiGroupLive = HttpApiBuilder.group(
         Effect.fnUntraced(function* ({ query }) {
           const auth = yield* CurrentSession;
           return yield* RecurringScheduleService.use((recurringScheduleService) =>
-            recurringScheduleService.listMonth(auth.session.id, query.month),
+            recurringScheduleService.listMonth(query.month).pipe(withAuthContext(auth.session.id)),
           );
         }, adaptAdminErrors),
       )
@@ -64,14 +70,15 @@ export const MonthlyBillingAdminApiGroupLive = HttpApiBuilder.group(
         Effect.fnUntraced(function* ({ params, payload }) {
           const auth = yield* CurrentSession;
           return yield* RecurringScheduleService.use((recurringScheduleService) =>
-            recurringScheduleService.recordPayment({
-              sessionId: auth.session.id,
-              studentId: params.studentId,
-              billingMonth: payload.billing_month,
-              amountCents: payload.amount_cents,
-              paidAt: payload.paid_at,
-              notes: payload.notes ?? null,
-            }),
+            recurringScheduleService
+              .recordPayment({
+                studentId: params.studentId,
+                billingMonth: payload.billing_month,
+                amountCents: payload.amount_cents,
+                paidAt: payload.paid_at,
+                notes: payload.notes ?? null,
+              })
+              .pipe(withAuthContext(auth.session.id)),
           );
         }, adaptAdminErrors),
       ),

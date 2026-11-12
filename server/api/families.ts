@@ -1,9 +1,11 @@
 import * as HttpApiBuilder from "effect/http-api/HttpApiBuilder";
 import { Effect, Config } from "effect";
+import { withAuthContext } from "../requestDatabase.js";
 import { Contract } from "../../shared/httpApi.js";
 import { CurrentSession } from "../../shared/api/guards.js";
 import { HttpError } from "../pgErrors.js";
 import { FamilyService } from "../services/familyService.js";
+import { SessionService } from "../services/sessionService.js";
 import { adaptSignedInErrors, adaptAdminErrors } from "../httpApiErrors.js";
 
 export const FamiliesApiGroupLive = HttpApiBuilder.group(Contract, "families", (handlers) =>
@@ -15,9 +17,16 @@ export const FamiliesApiGroupLive = HttpApiBuilder.group(Contract, "families", (
         if (auth.user.role !== "parent") {
           return yield* new HttpError(403, "Only parents can create child accounts");
         }
-        return yield* FamilyService.use((familyService) =>
-          familyService.createChild(auth.session.id, auth.user.id, payload.name),
+        const child = yield* FamilyService.use((familyService) =>
+          familyService
+            .createChild(auth.user.id, payload.name)
+            .pipe(withAuthContext(auth.session.id)),
         );
+        // The owner connection can reference the child only after the visitor transaction commits.
+        yield* SessionService.use((sessionService) =>
+          sessionService.updateActiveStudent(auth.session.id, child.id),
+        );
+        return child;
       }, adaptSignedInErrors),
     )
     .handle(
@@ -25,7 +34,7 @@ export const FamiliesApiGroupLive = HttpApiBuilder.group(Contract, "families", (
       Effect.fnUntraced(function* () {
         const auth = yield* CurrentSession;
         return yield* FamilyService.use((familyService) =>
-          familyService.family(auth.session.id, auth.user.id),
+          familyService.family(auth.user.id).pipe(withAuthContext(auth.session.id)),
         );
       }, adaptSignedInErrors),
     )
@@ -34,7 +43,9 @@ export const FamiliesApiGroupLive = HttpApiBuilder.group(Contract, "families", (
       Effect.fnUntraced(function* ({ payload }) {
         const auth = yield* CurrentSession;
         yield* FamilyService.use((familyService) =>
-          familyService.removeFamilyMember(auth.session.id, auth.user.id, payload.user_id),
+          familyService
+            .removeFamilyMember(auth.user.id, payload.user_id)
+            .pipe(withAuthContext(auth.session.id)),
         );
         return { success: true as const };
       }, adaptSignedInErrors),
@@ -44,7 +55,9 @@ export const FamiliesApiGroupLive = HttpApiBuilder.group(Contract, "families", (
       Effect.fnUntraced(function* ({ payload }) {
         const auth = yield* CurrentSession;
         yield* FamilyService.use((familyService) =>
-          familyService.inviteFamilyMember(auth.session.id, auth.user.id, payload.email),
+          familyService
+            .inviteFamilyMember(auth.user.id, payload.email)
+            .pipe(withAuthContext(auth.session.id)),
         );
         return { success: true as const };
       }, adaptSignedInErrors),
@@ -101,10 +114,12 @@ export const FamiliesAdminApiGroupLive = HttpApiBuilder.group(
         Effect.fnUntraced(function* ({ payload }) {
           const auth = yield* CurrentSession;
           const familyResult = yield* FamilyService.use((familyService) =>
-            familyService.createFamily(auth.session.id, {
-              slug: payload.slug,
-              name: payload.name,
-            }),
+            familyService
+              .createFamily({
+                slug: payload.slug,
+                name: payload.name,
+              })
+              .pipe(withAuthContext(auth.session.id)),
           );
           const family = Array.isArray(familyResult) ? familyResult[0] : familyResult;
           if (!family) {
@@ -118,7 +133,7 @@ export const FamiliesAdminApiGroupLive = HttpApiBuilder.group(
         Effect.fnUntraced(function* () {
           const auth = yield* CurrentSession;
           const rows = yield* FamilyService.use((familyService) =>
-            familyService.listFamilies(auth.session.id),
+            familyService.listFamilies().pipe(withAuthContext(auth.session.id)),
           );
           return rows;
         }, adaptAdminErrors),
@@ -128,11 +143,13 @@ export const FamiliesAdminApiGroupLive = HttpApiBuilder.group(
         Effect.fnUntraced(function* ({ params, payload }) {
           const auth = yield* CurrentSession;
           yield* FamilyService.use((familyService) =>
-            familyService.inviteFamily(auth.session.id, params.familyId, {
-              username: payload.username,
-              email: payload.email,
-              invitedRole: payload.invited_role,
-            }),
+            familyService
+              .inviteFamily(params.familyId, {
+                username: payload.username,
+                email: payload.email,
+                invitedRole: payload.invited_role,
+              })
+              .pipe(withAuthContext(auth.session.id)),
           );
           return { success: true as const };
         }, adaptAdminErrors),
@@ -152,10 +169,12 @@ export const FamiliesAdminApiGroupLive = HttpApiBuilder.group(
               );
             }
             const family = yield* FamilyService.use((familyService) =>
-              familyService.createQrInviteFamily(auth.session.id, {
-                name,
-                slug,
-              }),
+              familyService
+                .createQrInviteFamily({
+                  name,
+                  slug,
+                })
+                .pipe(withAuthContext(auth.session.id)),
             );
             familyId = family.id;
           }
@@ -177,7 +196,9 @@ export const FamiliesAdminApiGroupLive = HttpApiBuilder.group(
           const auth = yield* CurrentSession;
           const { params } = context;
           return (yield* FamilyService.use((familyService) =>
-            familyService.listFamilyInvitations(auth.session.id, params.familyId),
+            familyService
+              .listFamilyInvitations(params.familyId)
+              .pipe(withAuthContext(auth.session.id)),
           )).map((invitation) => ({
             ...invitation,
             invited_role:

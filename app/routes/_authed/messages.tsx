@@ -1,6 +1,7 @@
 import { useState, useRef } from "react";
 import { useMove, useSeparator, mergeProps } from "react-aria";
 import { Effect } from "effect";
+import { withAuthContext } from "../../../server/requestDatabase.js";
 import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { useMutation } from "@tanstack/react-query";
 import { createServerFn } from "@tanstack/react-start";
@@ -22,32 +23,33 @@ const getMessagesPageData = createServerFn({ method: "GET" }).handler(() =>
   runServerEffect(
     Effect.gen(function* () {
       const session = yield* requireSession(getCookie("session"));
-      const messageService = yield* MessageService;
+      return yield* Effect.gen(function* () {
+        const messageService = yield* MessageService;
 
-      const effective = resolveEffectiveStudent(session);
-      const filterStudentId = effective.isActing ? effective.studentId : undefined;
+        const effective = resolveEffectiveStudent(session);
+        const filterStudentId = effective.isActing ? effective.studentId : undefined;
 
-      const messages = yield* messageService.messages(
-        session.session.id,
-        {
-          limit: 50,
-          offset: 0,
-        },
-        filterStudentId,
-      );
-      const serializedMessages: ReturnType<typeof serializeMessage>[] =
-        messages.map(serializeMessage);
+        const messages = yield* messageService.messages(
+          {
+            limit: 50,
+            offset: 0,
+          },
+          filterStudentId,
+        );
+        const serializedMessages: ReturnType<typeof serializeMessage>[] =
+          messages.map(serializeMessage);
 
-      let students: ReturnType<typeof normalizeStudents> | null = null;
-      if (session.user.role === "admin") {
-        const studentSvc = yield* StudentService;
-        students = normalizeStudents(yield* studentSvc.listStudents(session.session.id));
-      }
+        let students: ReturnType<typeof normalizeStudents> | null = null;
+        if (session.user.role === "admin") {
+          const studentSvc = yield* StudentService;
+          students = normalizeStudents(yield* studentSvc.listStudents());
+        }
 
-      return {
-        messages: serializedMessages,
-        students,
-      };
+        return {
+          messages: serializedMessages,
+          students,
+        };
+      }).pipe(withAuthContext(session.session.id));
     }),
   ),
 );

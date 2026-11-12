@@ -1,6 +1,7 @@
 import * as HttpApiBuilder from "effect/http-api/HttpApiBuilder";
 import * as HttpServerResponse from "effect/http/HttpServerResponse";
 import { Effect } from "effect";
+import { withAuthContext } from "../requestDatabase.js";
 import { Contract } from "../../shared/httpApi.js";
 import { adaptHttpApiErrors } from "../httpApiErrors.js";
 import { checkRateLimit } from "../rateLimit.js";
@@ -94,10 +95,25 @@ export function makeAuthLayer() {
           return response;
         }, adaptAuthHttpApiErrors),
       )
-      .handle("me", ({ request }) =>
-        AuthService.use((authService) => authService.currentUser(request.cookies.session)).pipe(
-          adaptAuthHttpApiErrors,
-        ),
+      .handle(
+        "me",
+        Effect.fnUntraced(function* ({ request }) {
+          const session = yield* SessionService.use((service) =>
+            service.validateSessionToken(request.cookies.session),
+          );
+          if (!session) {
+            return {
+              user: null,
+              isParent: false,
+              familyStudents: [],
+              activeStudentId: null,
+              activeStudent: null,
+            };
+          }
+          return yield* AuthService.use((service) =>
+            service.me(session.session.id, session.user.id, session.session.active_student_id),
+          ).pipe(withAuthContext(session.session.id));
+        }, adaptAuthHttpApiErrors),
       )
       .handle(
         "resendVerification",
@@ -109,7 +125,9 @@ export function makeAuthLayer() {
             return { success: true as const };
           }
           yield* AuthService.use((authService) =>
-            authService.resendVerification(session.session.id, session.user.id),
+            authService
+              .resendVerification(session.user.id)
+              .pipe(withAuthContext(session.session.id)),
           );
           return { success: true as const };
         }, adaptAuthHttpApiErrors),

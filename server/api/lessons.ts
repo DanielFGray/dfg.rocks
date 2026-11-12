@@ -1,5 +1,6 @@
 import * as HttpApiBuilder from "effect/http-api/HttpApiBuilder";
 import { Effect } from "effect";
+import { withAuthContext } from "../requestDatabase.js";
 import { Contract } from "../../shared/httpApi.js";
 import { CurrentSession } from "../../shared/api/guards.js";
 import { serializeLesson, serializeLessonNote } from "../../shared/responseMappers.js";
@@ -19,17 +20,18 @@ export const LessonsApiGroupLive = HttpApiBuilder.group(Contract, "lessons", (ha
         const effective = resolveEffectiveStudent(auth);
         const filterStudentId = effective.isActing ? effective.studentId : undefined;
         const rows = yield* LessonService.use((lessonService) =>
-          lessonService.myLessons(
-            auth.session.id,
-            {
-              limit: query.limit ?? 50,
-              offset: query.offset ?? 0,
-              status: query.status,
-              from: query.from,
-              to: query.to,
-            },
-            filterStudentId,
-          ),
+          lessonService
+            .myLessons(
+              {
+                limit: query.limit ?? 50,
+                offset: query.offset ?? 0,
+                status: query.status,
+                from: query.from,
+                to: query.to,
+              },
+              filterStudentId,
+            )
+            .pipe(withAuthContext(auth.session.id)),
         );
         return rows.map((row) => serializeLesson(row));
       }, adaptSignedInErrors),
@@ -40,11 +42,12 @@ export const LessonsApiGroupLive = HttpApiBuilder.group(Contract, "lessons", (ha
         const auth = yield* CurrentSession;
         const effective = resolveEffectiveStudent(auth);
         return yield* LessonService.use((lessonService) =>
-          lessonService.myLessonCancellationPolicy({
-            sessionId: auth.session.id,
-            studentId: effective.studentId,
-            lessonId: params.id,
-          }),
+          lessonService
+            .myLessonCancellationPolicy({
+              studentId: effective.studentId,
+              lessonId: params.id,
+            })
+            .pipe(withAuthContext(auth.session.id)),
         );
       }, adaptSignedInErrors),
     )
@@ -54,12 +57,13 @@ export const LessonsApiGroupLive = HttpApiBuilder.group(Contract, "lessons", (ha
         const auth = yield* CurrentSession;
         const effective = resolveEffectiveStudent(auth);
         const lesson = yield* LessonService.use((lessonService) =>
-          lessonService.cancelMyLesson({
-            sessionId: auth.session.id,
-            studentId: effective.studentId,
-            lessonId: params.id,
-            reason: payload.reason ?? null,
-          }),
+          lessonService
+            .cancelMyLesson({
+              studentId: effective.studentId,
+              lessonId: params.id,
+              reason: payload.reason ?? null,
+            })
+            .pipe(withAuthContext(auth.session.id)),
         );
         return serializeLesson(lesson);
       }, adaptSignedInErrors),
@@ -70,12 +74,13 @@ export const LessonsApiGroupLive = HttpApiBuilder.group(Contract, "lessons", (ha
         const auth = yield* CurrentSession;
         const effective = resolveEffectiveStudent(auth);
         const lesson = yield* LessonService.use((lessonService) =>
-          lessonService.rescheduleMyLesson({
-            sessionId: auth.session.id,
-            studentId: effective.studentId,
-            lessonId: params.id,
-            scheduledAt: payload.scheduled_at,
-          }),
+          lessonService
+            .rescheduleMyLesson({
+              studentId: effective.studentId,
+              lessonId: params.id,
+              scheduledAt: payload.scheduled_at,
+            })
+            .pipe(withAuthContext(auth.session.id)),
         );
         return serializeLesson(lesson);
       }, adaptSignedInErrors),
@@ -87,14 +92,15 @@ export const LessonsApiGroupLive = HttpApiBuilder.group(Contract, "lessons", (ha
         const effective = resolveEffectiveStudent(auth);
         const filterStudentId = effective.isActing ? effective.studentId : undefined;
         const rows = yield* LessonService.use((lessonService) =>
-          lessonService.myLessonNotesList(
-            auth.session.id,
-            {
-              limit: query.limit ?? 50,
-              offset: query.offset ?? 0,
-            },
-            filterStudentId,
-          ),
+          lessonService
+            .myLessonNotesList(
+              {
+                limit: query.limit ?? 50,
+                offset: query.offset ?? 0,
+              },
+              filterStudentId,
+            )
+            .pipe(withAuthContext(auth.session.id)),
         );
         return rows.map((row) => ({
           ...row,
@@ -124,13 +130,14 @@ export const LessonsApiGroupLive = HttpApiBuilder.group(Contract, "lessons", (ha
         const effective = resolveEffectiveStudent(auth);
         const studentId = payload.student_id ?? effective.studentId;
         const lesson = yield* LessonService.use((lessonService) =>
-          lessonService.bookLesson({
-            sessionId: auth.session.id,
-            userId: studentId,
-            scheduledAt: payload.scheduled_at,
-            durationMinutes: payload.duration_minutes,
-            locationType: payload.location_type,
-          }),
+          lessonService
+            .bookLesson({
+              userId: studentId,
+              scheduledAt: payload.scheduled_at,
+              durationMinutes: payload.duration_minutes,
+              locationType: payload.location_type,
+            })
+            .pipe(withAuthContext(auth.session.id)),
         );
         return serializeLesson(lesson);
       }, adaptSignedInErrors),
@@ -144,14 +151,15 @@ export const LessonsAdminApiGroupLive = HttpApiBuilder.group(Contract, "lessonsA
       Effect.fnUntraced(function* ({ payload }) {
         const auth = yield* CurrentSession;
         const lesson = yield* LessonService.use((lessonService) =>
-          lessonService.createLesson({
-            sessionId: auth.session.id,
-            studentId: payload.student_id,
-            scheduledAt: payload.scheduled_at,
-            durationMinutes: payload.duration_minutes,
-            locationType: payload.location_type,
-            gcalEventId: null,
-          }),
+          lessonService
+            .createLesson({
+              studentId: payload.student_id,
+              scheduledAt: payload.scheduled_at,
+              durationMinutes: payload.duration_minutes,
+              locationType: payload.location_type,
+              gcalEventId: null,
+            })
+            .pipe(withAuthContext(auth.session.id)),
         );
         return serializeLesson(lesson);
       }, adaptAdminErrors),
@@ -161,11 +169,13 @@ export const LessonsAdminApiGroupLive = HttpApiBuilder.group(Contract, "lessonsA
       Effect.fnUntraced(function* ({ params, payload }) {
         const auth = yield* CurrentSession;
         const lesson = yield* LessonService.use((lessonService) =>
-          lessonService.updateLesson(auth.session.id, params.id, {
-            scheduledAt: payload.scheduled_at,
-            durationMinutes: payload.duration_minutes,
-            locationType: payload.location_type,
-          }),
+          lessonService
+            .updateLesson(params.id, {
+              scheduledAt: payload.scheduled_at,
+              durationMinutes: payload.duration_minutes,
+              locationType: payload.location_type,
+            })
+            .pipe(withAuthContext(auth.session.id)),
         );
         if (!lesson) {
           return yield* new HttpError(404, "Lesson not found");
@@ -179,7 +189,7 @@ export const LessonsAdminApiGroupLive = HttpApiBuilder.group(Contract, "lessonsA
         const auth = yield* CurrentSession;
         const { params } = context;
         const lesson = yield* LessonService.use((lessonService) =>
-          lessonService.deleteLesson(auth.session.id, params.id),
+          lessonService.deleteLesson(params.id).pipe(withAuthContext(auth.session.id)),
         );
         if (!lesson) {
           return yield* new HttpError(404, "Lesson not found");
@@ -192,7 +202,9 @@ export const LessonsAdminApiGroupLive = HttpApiBuilder.group(Contract, "lessonsA
       Effect.fnUntraced(function* ({ params, payload }) {
         const auth = yield* CurrentSession;
         const lesson = yield* LessonService.use((lessonService) =>
-          lessonService.cancelLesson(auth.session.id, params.id, payload.reason ?? null),
+          lessonService
+            .cancelLesson(params.id, payload.reason ?? null)
+            .pipe(withAuthContext(auth.session.id)),
         );
         return serializeLesson(lesson);
       }, adaptAdminErrors),
@@ -202,7 +214,7 @@ export const LessonsAdminApiGroupLive = HttpApiBuilder.group(Contract, "lessonsA
       Effect.fnUntraced(function* ({ params }) {
         const auth = yield* CurrentSession;
         const lesson = yield* LessonService.use((lessonService) =>
-          lessonService.completeLesson(auth.session.id, params.id),
+          lessonService.completeLesson(params.id).pipe(withAuthContext(auth.session.id)),
         );
         return serializeLesson(lesson);
       }, adaptAdminErrors),
@@ -212,14 +224,16 @@ export const LessonsAdminApiGroupLive = HttpApiBuilder.group(Contract, "lessonsA
       Effect.fnUntraced(function* ({ query }) {
         const auth = yield* CurrentSession;
         const lessons = yield* LessonService.use((lessonService) =>
-          lessonService.listLessons(auth.session.id, {
-            limit: query.limit ?? 50,
-            offset: query.offset ?? 0,
-            studentId: query.student_id,
-            status: query.status,
-            from: query.from ? new Date(query.from) : undefined,
-            to: query.to ? new Date(query.to) : undefined,
-          }),
+          lessonService
+            .listLessons({
+              limit: query.limit ?? 50,
+              offset: query.offset ?? 0,
+              studentId: query.student_id,
+              status: query.status,
+              from: query.from ? new Date(query.from) : undefined,
+              to: query.to ? new Date(query.to) : undefined,
+            })
+            .pipe(withAuthContext(auth.session.id)),
         );
         return lessons.map(serializeLesson);
       }, adaptAdminErrors),
@@ -229,14 +243,16 @@ export const LessonsAdminApiGroupLive = HttpApiBuilder.group(Contract, "lessonsA
       Effect.fnUntraced(function* ({ params, payload }) {
         const auth = yield* CurrentSession;
         const note = yield* LessonService.use((lessonService) =>
-          lessonService.saveLessonNote(auth.session.id, params.id, {
-            topicsCovered: payload.topics_covered ?? null,
-            homework: payload.homework ?? null,
-            progressObservations: payload.progress_observations ?? null,
-            notes: payload.notes ?? null,
-            materialIds: payload.material_ids ? [...payload.material_ids] : null,
-            draft: payload.draft ?? true,
-          }),
+          lessonService
+            .saveLessonNote(params.id, {
+              topicsCovered: payload.topics_covered ?? null,
+              homework: payload.homework ?? null,
+              progressObservations: payload.progress_observations ?? null,
+              notes: payload.notes ?? null,
+              materialIds: payload.material_ids ? [...payload.material_ids] : null,
+              draft: payload.draft ?? true,
+            })
+            .pipe(withAuthContext(auth.session.id)),
         );
         return serializeLessonNote(note);
       }, adaptAdminErrors),
@@ -247,7 +263,7 @@ export const LessonsAdminApiGroupLive = HttpApiBuilder.group(Contract, "lessonsA
         const auth = yield* CurrentSession;
         const { params } = context;
         const note = yield* LessonService.use((lessonService) =>
-          lessonService.getLessonNote(auth.session.id, params.id),
+          lessonService.getLessonNote(params.id).pipe(withAuthContext(auth.session.id)),
         );
         if (!note) {
           return yield* new HttpError(404, "Lesson note not found");
@@ -261,7 +277,7 @@ export const LessonsAdminApiGroupLive = HttpApiBuilder.group(Contract, "lessonsA
         const auth = yield* CurrentSession;
         const { params } = context;
         const note = yield* LessonService.use((lessonService) =>
-          lessonService.publishLessonNote(auth.session.id, params.id),
+          lessonService.publishLessonNote(params.id).pipe(withAuthContext(auth.session.id)),
         );
         if (!note) {
           return yield* new HttpError(404, "Lesson note not found");

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Effect } from "effect";
+import { withAuthContext } from "../../../server/requestDatabase.js";
 import * as S from "effect/Schema";
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
@@ -38,55 +39,56 @@ const getAssignmentsPageData = createServerFn({ method: "GET" }).handler(() =>
         sessionService.validateSessionToken(token),
       );
       if (!session) throw new Error("Unauthorized");
+      return yield* Effect.gen(function* () {
+        const effectiveStudentId =
+          session.user.role === "parent" && session.session.active_student_id
+            ? session.session.active_student_id
+            : null;
+        const filterStudentId = effectiveStudentId ?? undefined;
 
-      const effectiveStudentId =
-        session.user.role === "parent" && session.session.active_student_id
-          ? session.session.active_student_id
-          : null;
-      const filterStudentId = effectiveStudentId ?? undefined;
+        const materialService = yield* MaterialService;
 
-      const materialService = yield* MaterialService;
+        if (session.user.role === "admin" || session.user.role === "teacher") {
+          const studentSvc = yield* StudentService;
+          const [studentsResult, libraryResult] = yield* Effect.all([
+            studentSvc.listStudents(),
+            materialService.library({
+              limit: 1000,
+              offset: 0,
+            }),
+          ]);
 
-      if (session.user.role === "admin" || session.user.role === "teacher") {
-        const studentSvc = yield* StudentService;
-        const [studentsResult, libraryResult] = yield* Effect.all([
-          studentSvc.listStudents(session.session.id),
-          materialService.library(session.session.id, {
-            limit: 1000,
-            offset: 0,
-          }),
-        ]);
+          return {
+            kind: "staff" as const,
+            students: normalizeStudents(studentsResult),
+            allMaterials: libraryResult.map((m) => ({
+              id: m.id,
+              title: m.title,
+              original_filename: m.original_filename,
+              mime_type: m.mime_type,
+              file_size: m.file_size,
+              is_global: m.is_global,
+              notation_tracks: S.decodeUnknownSync(
+                S.NullishOr(S.Array(SharedSchemas.MaterialNotationTrack)),
+              )(m.notation_tracks),
+            })),
+          } as {
+            kind: "staff";
+            students: User[];
+            allMaterials: Material[];
+          };
+        }
+
+        const assignments = yield* materialService.assignments(filterStudentId);
 
         return {
-          kind: "staff" as const,
-          students: normalizeStudents(studentsResult),
-          allMaterials: libraryResult.map((m) => ({
-            id: m.id,
-            title: m.title,
-            original_filename: m.original_filename,
-            mime_type: m.mime_type,
-            file_size: m.file_size,
-            is_global: m.is_global,
-            notation_tracks: S.decodeUnknownSync(
-              S.NullishOr(S.Array(SharedSchemas.MaterialNotationTrack)),
-            )(m.notation_tracks),
-          })),
+          kind: "student" as const,
+          materials: assignments.map(serializeMaterial),
         } as {
-          kind: "staff";
-          students: User[];
-          allMaterials: Material[];
+          kind: "student";
+          materials: AssignedMaterial[];
         };
-      }
-
-      const assignments = yield* materialService.assignments(session.session.id, filterStudentId);
-
-      return {
-        kind: "student" as const,
-        materials: assignments.map(serializeMaterial),
-      } as {
-        kind: "student";
-        materials: AssignedMaterial[];
-      };
+      }).pipe(withAuthContext(session.session.id));
     }),
   ),
 );

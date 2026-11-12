@@ -1,5 +1,6 @@
 import * as HttpApiBuilder from "effect/http-api/HttpApiBuilder";
 import { Effect } from "effect";
+import { withAuthContext } from "../requestDatabase.js";
 import { Contract } from "../../shared/httpApi.js";
 import { CurrentSession } from "../../shared/api/guards.js";
 import { MessageService } from "../services/messageService.js";
@@ -15,15 +16,16 @@ export const MessagesApiGroupLive = HttpApiBuilder.group(Contract, "messages", (
         const effective = resolveEffectiveStudent(auth);
         const filterStudentId = effective.isActing ? effective.studentId : undefined;
         const rows = yield* MessageService.use((messageService) =>
-          messageService.messages(
-            auth.session.id,
-            {
-              limit: query.limit ?? 50,
-              offset: query.offset ?? 0,
-              withUser: query.with,
-            },
-            filterStudentId,
-          ),
+          messageService
+            .messages(
+              {
+                limit: query.limit ?? 50,
+                offset: query.offset ?? 0,
+                withUser: query.with,
+              },
+              filterStudentId,
+            )
+            .pipe(withAuthContext(auth.session.id)),
         );
         return rows;
       }, adaptSignedInErrors),
@@ -34,12 +36,13 @@ export const MessagesApiGroupLive = HttpApiBuilder.group(Contract, "messages", (
         const auth = yield* CurrentSession;
         const effective = resolveEffectiveStudent(auth);
         const row = yield* MessageService.use((messageService) =>
-          messageService.createMessage({
-            sessionId: auth.session.id,
-            senderId: effective.studentId,
-            recipientId: payload.recipient_id,
-            body: payload.body,
-          }),
+          messageService
+            .createMessage({
+              senderId: effective.studentId,
+              recipientId: payload.recipient_id,
+              body: payload.body,
+            })
+            .pipe(withAuthContext(auth.session.id)),
         );
         return row;
       }, adaptSignedInErrors),
@@ -49,7 +52,7 @@ export const MessagesApiGroupLive = HttpApiBuilder.group(Contract, "messages", (
       Effect.fnUntraced(function* ({ params }) {
         const auth = yield* CurrentSession;
         yield* MessageService.use((messageService) =>
-          messageService.markMessageRead(auth.session.id, params.id),
+          messageService.markMessageRead(params.id).pipe(withAuthContext(auth.session.id)),
         );
         return { success: true as const };
       }, adaptSignedInErrors),

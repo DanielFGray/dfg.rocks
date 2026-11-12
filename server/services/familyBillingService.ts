@@ -1,5 +1,5 @@
 import { Effect, Option, Context, Layer } from "effect";
-import { type Database, withAuthContext } from "../db.js";
+import { RequestDatabase } from "../requestDatabase.js";
 import { HttpError } from "../pgErrors.js";
 import { PdfService } from "./pdfService.js";
 import { BillingLedgerService, getPayer } from "./billingLedgerService.js";
@@ -17,18 +17,18 @@ export class FamilyBillingService extends Context.Service<FamilyBillingService>(
       const ledger = yield* BillingLedgerService;
 
       return {
-        overview: Effect.fn("overview")(function* (sessionId: string) {
-          const bills = yield* withAuthContext(sessionId, (db: Database) =>
+        overview: Effect.fn("overview")(function* () {
+          const bills = yield* RequestDatabase.use((db) =>
             db.execute(db.selectFrom("app_public.bills").selectAll().orderBy("created_at", "desc")),
           );
 
-          const payments = yield* withAuthContext(sessionId, (db: Database) =>
+          const payments = yield* RequestDatabase.use((db) =>
             db.execute(
               db.selectFrom("app_public.payments").selectAll().orderBy("received_at", "desc"),
             ),
           );
 
-          const credits = yield* withAuthContext(sessionId, (db: Database) =>
+          const credits = yield* RequestDatabase.use((db) =>
             db.execute(
               db.selectFrom("app_public.credits").selectAll().orderBy("created_at", "desc"),
             ),
@@ -37,7 +37,7 @@ export class FamilyBillingService extends Context.Service<FamilyBillingService>(
           // Balances add up across payers, so the overview sums each visible ledger.
           const payerIds = new Set([...bills, ...payments, ...credits].map((row) => row.payer_id));
           const ledgerBalance = (yield* Effect.forEach(payerIds, (payerId) =>
-            ledger.getPayerBalance(sessionId, payerId),
+            ledger.getPayerBalance(payerId),
           )).reduce(
             (sum, balance) => ({
               outstandingCents: sum.outstandingCents + balance.outstandingCents,
@@ -76,14 +76,14 @@ export class FamilyBillingService extends Context.Service<FamilyBillingService>(
           };
         }),
 
-        bills: Effect.fn("bills")(function* (sessionId: string) {
-          return yield* withAuthContext(sessionId, (db: Database) =>
+        bills: Effect.fn("bills")(function* () {
+          return yield* RequestDatabase.use((db) =>
             db.execute(db.selectFrom("app_public.bills").selectAll().orderBy("created_at", "desc")),
           );
         }),
 
-        billDetail: Effect.fn("billDetail")(function* (sessionId: string, billId: string) {
-          const bill = yield* withAuthContext(sessionId, (db: Database) =>
+        billDetail: Effect.fn("billDetail")(function* (billId: string) {
+          const bill = yield* RequestDatabase.use((db) =>
             db
               .execute(db.selectFrom("app_public.bills").selectAll().where("id", "=", billId))
               .pipe(Effect.head, Effect.option),
@@ -92,7 +92,7 @@ export class FamilyBillingService extends Context.Service<FamilyBillingService>(
             return yield* new HttpError(404, "Bill not found");
           }
 
-          const lineItems = yield* withAuthContext(sessionId, (db: Database) =>
+          const lineItems = yield* RequestDatabase.use((db) =>
             db.execute(
               db
                 .selectFrom("app_public.bill_line_items")
@@ -102,7 +102,7 @@ export class FamilyBillingService extends Context.Service<FamilyBillingService>(
             ),
           );
 
-          const adjustments = yield* withAuthContext(sessionId, (db: Database) =>
+          const adjustments = yield* RequestDatabase.use((db) =>
             db.execute(
               db
                 .selectFrom("app_public.bill_adjustments")
@@ -112,7 +112,7 @@ export class FamilyBillingService extends Context.Service<FamilyBillingService>(
             ),
           );
 
-          const creditApplications = yield* withAuthContext(sessionId, (db: Database) =>
+          const creditApplications = yield* RequestDatabase.use((db) =>
             db.execute(
               db
                 .selectFrom("app_public.credit_applications")
@@ -125,16 +125,16 @@ export class FamilyBillingService extends Context.Service<FamilyBillingService>(
           return { ...bill.value, lineItems, adjustments, creditApplications };
         }),
 
-        payments: Effect.fn("payments")(function* (sessionId: string) {
-          return yield* withAuthContext(sessionId, (db: Database) =>
+        payments: Effect.fn("payments")(function* () {
+          return yield* RequestDatabase.use((db) =>
             db.execute(
               db.selectFrom("app_public.payments").selectAll().orderBy("received_at", "desc"),
             ),
           );
         }),
 
-        paymentDetail: Effect.fn("paymentDetail")(function* (sessionId: string, paymentId: string) {
-          const payment = yield* withAuthContext(sessionId, (db: Database) =>
+        paymentDetail: Effect.fn("paymentDetail")(function* (paymentId: string) {
+          const payment = yield* RequestDatabase.use((db) =>
             db
               .execute(db.selectFrom("app_public.payments").selectAll().where("id", "=", paymentId))
               .pipe(Effect.head, Effect.option),
@@ -142,7 +142,7 @@ export class FamilyBillingService extends Context.Service<FamilyBillingService>(
           if (Option.isNone(payment)) {
             return yield* new HttpError(404, "Payment not found");
           }
-          const allocations = yield* withAuthContext(sessionId, (db: Database) =>
+          const allocations = yield* RequestDatabase.use((db) =>
             db.execute(
               db
                 .selectFrom("app_public.payment_allocations as pa")
@@ -166,16 +166,16 @@ export class FamilyBillingService extends Context.Service<FamilyBillingService>(
           };
         }),
 
-        credits: Effect.fn("credits")(function* (sessionId: string) {
-          return yield* withAuthContext(sessionId, (db: Database) =>
+        credits: Effect.fn("credits")(function* () {
+          return yield* RequestDatabase.use((db) =>
             db.execute(
               db.selectFrom("app_public.credits").selectAll().orderBy("created_at", "desc"),
             ),
           );
         }),
 
-        billPdf: Effect.fn("billPdf")(function* (sessionId: string, billId: string) {
-          const bill = yield* withAuthContext(sessionId, (db: Database) =>
+        billPdf: Effect.fn("billPdf")(function* (billId: string) {
+          const bill = yield* RequestDatabase.use((db) =>
             db
               .execute(db.selectFrom("app_public.bills").selectAll().where("id", "=", billId))
               .pipe(Effect.head, Effect.option),
@@ -183,11 +183,9 @@ export class FamilyBillingService extends Context.Service<FamilyBillingService>(
           if (Option.isNone(bill)) {
             return yield* new HttpError(404, "Bill not found");
           }
-          const payer = yield* withAuthContext(sessionId, (db: Database) =>
-            getPayer(db, bill.value.payer_id),
-          );
+          const payer = yield* RequestDatabase.use((db) => getPayer(db, bill.value.payer_id));
 
-          const lineItems = yield* withAuthContext(sessionId, (db: Database) =>
+          const lineItems = yield* RequestDatabase.use((db) =>
             db.execute(
               db
                 .selectFrom("app_public.bill_line_items")
@@ -227,11 +225,8 @@ export class FamilyBillingService extends Context.Service<FamilyBillingService>(
           return buffer;
         }),
 
-        paymentReceipt: Effect.fn("paymentReceipt")(function* (
-          sessionId: string,
-          paymentId: string,
-        ) {
-          const payment = yield* withAuthContext(sessionId, (db: Database) =>
+        paymentReceipt: Effect.fn("paymentReceipt")(function* (paymentId: string) {
+          const payment = yield* RequestDatabase.use((db) =>
             db
               .execute(db.selectFrom("app_public.payments").selectAll().where("id", "=", paymentId))
               .pipe(Effect.head, Effect.option),
@@ -239,11 +234,9 @@ export class FamilyBillingService extends Context.Service<FamilyBillingService>(
           if (Option.isNone(payment)) {
             return yield* new HttpError(404, "Payment not found");
           }
-          const payer = yield* withAuthContext(sessionId, (db: Database) =>
-            getPayer(db, payment.value.payer_id),
-          );
+          const payer = yield* RequestDatabase.use((db) => getPayer(db, payment.value.payer_id));
 
-          const allocations = yield* withAuthContext(sessionId, (db: Database) =>
+          const allocations = yield* RequestDatabase.use((db) =>
             db.execute(
               db
                 .selectFrom("app_public.payment_allocations as pa")

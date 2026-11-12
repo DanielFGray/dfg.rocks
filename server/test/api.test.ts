@@ -13,6 +13,7 @@ import { Logger, consoleLogFactory } from "graphile-worker";
 import pg from "pg";
 import generatePrepaidPeriodTask from "../../worker/tasks/lessons__generate_prepaid_period.js";
 import { StorageService } from "../services/storageService.js";
+import { withAuthContext } from "../requestDatabase.js";
 import type { MonthlyPaymentStatus } from "../../shared/schemas.js";
 
 let testDb: pg.Pool;
@@ -1211,6 +1212,16 @@ describe("DFG Portal API", () => {
       const parentCookie = getCookie(parentLoginRes)!;
       expect(parentCookie).toBeTruthy();
 
+      const createChild = yield* reqEffect("POST", "/api/create-child", {
+        body: { name: "New Child" },
+        cookie: parentCookie,
+      });
+      expect(createChild.status).toBe(200);
+      const createdChild: { id: string } = yield* resJson(createChild);
+      const afterCreate = yield* reqEffect("GET", "/api/me", { cookie: parentCookie });
+      const afterCreateMe = yield* resJson(afterCreate);
+      expect(afterCreateMe.activeStudentId).toBe(createdChild.id);
+
       const setActive = yield* reqEffect("POST", "/api/switch-active-student", {
         body: { student_id: childId },
         cookie: parentCookie,
@@ -1236,7 +1247,9 @@ describe("DFG Portal API", () => {
       const directMe = yield* Effect.promise(() =>
         testRuntime.runPromise(
           AuthService.use((authService) =>
-            authService.me(sessionResult.rows[0].id, parentId, childId),
+            authService
+              .me(sessionResult.rows[0].id, parentId, childId)
+              .pipe(withAuthContext(sessionResult.rows[0].id)),
           ),
         ),
       );

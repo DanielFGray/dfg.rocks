@@ -1,5 +1,6 @@
 import * as HttpApiBuilder from "effect/http-api/HttpApiBuilder";
 import { Effect } from "effect";
+import { withAuthContext } from "../requestDatabase.js";
 import { Contract } from "../../shared/httpApi.js";
 import { CurrentSession } from "../../shared/api/guards.js";
 import { BillingLedgerService } from "../services/billingLedgerService.js";
@@ -12,22 +13,25 @@ export const PayersAdminApiGroupLive = HttpApiBuilder.group(Contract, "payersAdm
       "billingPayers",
       Effect.fnUntraced(function* () {
         const auth = yield* CurrentSession;
-        const summaries = yield* BillingLedgerService.use((billingLedgerService) =>
-          billingLedgerService.listPayers(auth.session.id),
-        );
-        const balances = yield* Effect.all(
-          summaries.map((summary) =>
-            BillingLedgerService.use((billingLedgerService) =>
-              billingLedgerService.getPayerBalance(auth.session.id, summary.payer_id),
+        return yield* Effect.gen(function* () {
+          const summaries = yield* BillingLedgerService.use((billingLedgerService) =>
+            billingLedgerService.listPayers(),
+          );
+          const balances = yield* Effect.all(
+            summaries.map((summary) =>
+              BillingLedgerService.use((billingLedgerService) =>
+                billingLedgerService.getPayerBalance(summary.payer_id),
+              ),
             ),
-          ),
-        );
-        return summaries.map((summary, index) => ({
-          ...summary,
-          outstanding_cents: balances[index]?.outstandingCents ?? summary.outstanding_cents,
-          overdue_cents: balances[index]?.overdueCents ?? summary.overdue_cents,
-          credit_balance_cents: balances[index]?.creditBalanceCents ?? summary.credit_balance_cents,
-        }));
+          );
+          return summaries.map((summary, index) => ({
+            ...summary,
+            outstanding_cents: balances[index]?.outstandingCents ?? summary.outstanding_cents,
+            overdue_cents: balances[index]?.overdueCents ?? summary.overdue_cents,
+            credit_balance_cents:
+              balances[index]?.creditBalanceCents ?? summary.credit_balance_cents,
+          }));
+        }).pipe(withAuthContext(auth.session.id));
       }, adaptAdminErrors),
     )
     .handle(
@@ -35,7 +39,9 @@ export const PayersAdminApiGroupLive = HttpApiBuilder.group(Contract, "payersAdm
       Effect.fnUntraced(function* ({ params }) {
         const auth = yield* CurrentSession;
         return yield* BillingLedgerService.use((billingLedgerService) =>
-          billingLedgerService.getPayerBillingDetail(auth.session.id, params.payerId),
+          billingLedgerService
+            .getPayerBillingDetail(params.payerId)
+            .pipe(withAuthContext(auth.session.id)),
         );
       }, adaptAdminErrors),
     )
@@ -44,7 +50,9 @@ export const PayersAdminApiGroupLive = HttpApiBuilder.group(Contract, "payersAdm
       Effect.fnUntraced(function* ({ params }) {
         const auth = yield* CurrentSession;
         return yield* BillingLedgerService.use((billingLedgerService) =>
-          billingLedgerService.listPayerBills(auth.session.id, params.payerId),
+          billingLedgerService
+            .listPayerBills(params.payerId)
+            .pipe(withAuthContext(auth.session.id)),
         );
       }, adaptAdminErrors),
     )
@@ -53,7 +61,9 @@ export const PayersAdminApiGroupLive = HttpApiBuilder.group(Contract, "payersAdm
       Effect.fnUntraced(function* ({ params }) {
         const auth = yield* CurrentSession;
         const payments = yield* BillingLedgerService.use((billingLedgerService) =>
-          billingLedgerService.listPayerPayments(auth.session.id, params.payerId),
+          billingLedgerService
+            .listPayerPayments(params.payerId)
+            .pipe(withAuthContext(auth.session.id)),
         );
         return payments;
       }, adaptAdminErrors),
@@ -63,7 +73,9 @@ export const PayersAdminApiGroupLive = HttpApiBuilder.group(Contract, "payersAdm
       Effect.fnUntraced(function* ({ params }) {
         const auth = yield* CurrentSession;
         const credits = yield* BillingLedgerService.use((billingLedgerService) =>
-          billingLedgerService.listPayerCredits(auth.session.id, params.payerId),
+          billingLedgerService
+            .listPayerCredits(params.payerId)
+            .pipe(withAuthContext(auth.session.id)),
         );
         return credits;
       }, adaptAdminErrors),
@@ -73,7 +85,9 @@ export const PayersAdminApiGroupLive = HttpApiBuilder.group(Contract, "payersAdm
       Effect.fnUntraced(function* ({ params }) {
         const auth = yield* CurrentSession;
         const discounts = yield* BillingLedgerService.use((billingLedgerService) =>
-          billingLedgerService.listPayerDiscounts(auth.session.id, params.payerId),
+          billingLedgerService
+            .listPayerDiscounts(params.payerId)
+            .pipe(withAuthContext(auth.session.id)),
         );
         return discounts.map(serializeDiscount);
       }, adaptAdminErrors),
@@ -83,7 +97,9 @@ export const PayersAdminApiGroupLive = HttpApiBuilder.group(Contract, "payersAdm
       Effect.fnUntraced(function* ({ params }) {
         const auth = yield* CurrentSession;
         return yield* BillingLedgerService.use((billingLedgerService) =>
-          billingLedgerService.listPayerTaxExemptions(auth.session.id, params.payerId),
+          billingLedgerService
+            .listPayerTaxExemptions(params.payerId)
+            .pipe(withAuthContext(auth.session.id)),
         );
       }, adaptAdminErrors),
     ),

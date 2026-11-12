@@ -1,5 +1,6 @@
 import * as HttpApiBuilder from "effect/http-api/HttpApiBuilder";
 import { Effect } from "effect";
+import { withAuthContext } from "../requestDatabase.js";
 import { Contract } from "../../shared/httpApi.js";
 import { CurrentSession, type SignedIn } from "../../shared/api/guards.js";
 import { serializeTestimonial } from "../../shared/responseMappers.js";
@@ -22,7 +23,9 @@ export const TestimonialsApiGroupLive = HttpApiBuilder.group(Contract, "testimon
         const auth = yield* CurrentSession;
         yield* assertCanManageTestimonial(auth);
         const testimonial = yield* TestimonialService.use((testimonialService) =>
-          testimonialService.upsertTestimonial(auth.session.id, auth.user.id, payload.body),
+          testimonialService
+            .upsertTestimonial(auth.user.id, payload.body)
+            .pipe(withAuthContext(auth.session.id)),
         );
         return serializeTestimonial(testimonial);
       }, adaptSignedInErrors),
@@ -33,7 +36,7 @@ export const TestimonialsApiGroupLive = HttpApiBuilder.group(Contract, "testimon
         const auth = yield* CurrentSession;
         yield* assertCanManageTestimonial(auth);
         yield* TestimonialService.use((testimonialService) =>
-          testimonialService.deleteTestimonial(auth.session.id, auth.user.id),
+          testimonialService.deleteTestimonial(auth.user.id).pipe(withAuthContext(auth.session.id)),
         );
         return { success: true as const };
       }, adaptSignedInErrors),
@@ -75,11 +78,9 @@ export const TestimonialsAdminApiGroupLive = HttpApiBuilder.group(
         Effect.fnUntraced(function* ({ params, payload }) {
           const auth = yield* CurrentSession;
           const testimonial = yield* TestimonialService.use((testimonialService) =>
-            testimonialService.updateTestimonialApproval(
-              auth.session.id,
-              params.id,
-              payload.is_approved,
-            ),
+            testimonialService
+              .updateTestimonialApproval(params.id, payload.is_approved)
+              .pipe(withAuthContext(auth.session.id)),
           );
           if (testimonial.is_approved) {
             yield* TestimonialReminderService.use((testimonialReminderService) =>

@@ -308,13 +308,12 @@ export class TestingService extends Context.Service<TestingService>()("TestingSe
           .execute(
             db
               .selectFrom("app_public.materials")
-              .select("id")
+              .select(["id", "notation_tracks"])
               .where("title", "=", values.materialTitle),
           )
           .pipe(Effect.head);
         const assignedTrackIndex = yield* resolveAssignedTrackIndex(
-          null,
-          material.id,
+          material.notation_tracks,
           values.assignedTrackIndex ? Number(values.assignedTrackIndex) : undefined,
         );
 

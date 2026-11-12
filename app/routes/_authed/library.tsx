@@ -1,4 +1,5 @@
 import { Effect } from "effect";
+import { withAuthContext } from "../../../server/requestDatabase.js";
 import { useEffect, useState } from "react";
 import { createFileRoute, redirect, useRouter } from "@tanstack/react-router";
 import { useMutation } from "@tanstack/react-query";
@@ -28,10 +29,12 @@ const getLibraryPageData = createServerFn({ method: "GET" }).handler(() =>
         return null;
       }
       const rows = yield* MaterialService.use((materialService) =>
-        materialService.library(session.session.id, {
-          limit: 1000,
-          offset: 0,
-        }),
+        materialService
+          .library({
+            limit: 1000,
+            offset: 0,
+          })
+          .pipe(withAuthContext(session.session.id)),
       );
       return rows.map(serializeLibraryMaterial);
     }),

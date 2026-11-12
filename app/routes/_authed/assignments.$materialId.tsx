@@ -1,4 +1,5 @@
 import { Effect } from "effect";
+import { withAuthContext } from "../../../server/requestDatabase.js";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
 import { getCookie } from "@tanstack/react-start/server";
@@ -19,7 +20,9 @@ const getAssignmentPageData = createServerFn({ method: "GET" }).handler(() =>
     Effect.gen(function* () {
       const session = yield* requireSession(getCookie("session"));
       const materialService = yield* MaterialService;
-      const assignments = yield* materialService.assignments(session.session.id);
+      const assignments = yield* materialService
+        .assignments()
+        .pipe(withAuthContext(session.session.id));
       return assignments.map(serializeMaterial);
     }),
   ),

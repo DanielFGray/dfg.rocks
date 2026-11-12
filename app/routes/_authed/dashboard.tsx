@@ -1,4 +1,5 @@
 import { Effect } from "effect";
+import { withAuthContext } from "../../../server/requestDatabase.js";
 import * as S from "effect/Schema";
 import { useState } from "react";
 import { createFileRoute, useRouter } from "@tanstack/react-router";
@@ -41,100 +42,94 @@ const getDashboardPageData = createServerFn({ method: "GET" }).handler(() =>
         sessionService.validateSessionToken(token),
       );
       if (!session) throw new Error("Unauthorized");
+      return yield* Effect.gen(function* () {
+        const effective = resolveEffectiveStudent(session);
+        const filterStudentId = effective.isActing ? effective.studentId : undefined;
 
-      const effective = resolveEffectiveStudent(session);
-      const filterStudentId = effective.isActing ? effective.studentId : undefined;
-
-      if (session.user.role === "admin") {
-        const today = todayRange();
-        const week = weekRange();
-        const data = yield* Effect.all({
-          students: StudentService.use((studentService) =>
-            studentService.listStudents(session.session.id),
-          ),
-          messages: MessageService.use((messageService) =>
-            messageService.messages(session.session.id, {
-              limit: 50,
-              offset: 0,
-            }),
-          ),
-          todayLessons: LessonService.use((lessonService) =>
-            lessonService.listLessons(session.session.id, {
-              limit: 50,
-              offset: 0,
-              from: today.from,
-              to: today.to,
-            }),
-          ),
-          weekLessons: LessonService.use((lessonService) =>
-            lessonService.listLessons(session.session.id, {
-              limit: 50,
-              offset: 0,
-              from: week.from,
-              to: week.to,
-            }),
-          ),
-          courses: CourseService.use((courseService) =>
-            courseService.listCourses(session.session.id),
-          ),
-        });
-        const adminMessages: ReturnType<typeof serializeMessage>[] =
-          data.messages.map(serializeMessage);
-        const adminTodayLessons: ReturnType<typeof serializeLesson>[] =
-          data.todayLessons.map(serializeLesson);
-        const adminWeekLessons: ReturnType<typeof serializeLesson>[] =
-          data.weekLessons.map(serializeLesson);
-        return {
-          kind: "admin" as const,
-          students: normalizeStudents(data.students),
-          messages: adminMessages,
-          todayLessons: adminTodayLessons,
-          weekLessons: adminWeekLessons,
-          courses: [...S.decodeUnknownSync(S.Array(SharedSchemas.Course))(data.courses)],
-        };
-      }
-
-      const [data, canShowTestimonialPrompt] = yield* Effect.all([
-        Effect.all({
-          messages: MessageService.use((messageService) =>
-            messageService.messages(session.session.id, { limit: 50, offset: 0 }, filterStudentId),
-          ),
-          assignments: MaterialService.use((materialService) =>
-            materialService.assignments(session.session.id, filterStudentId),
-          ),
-          scheduledLessons: LessonService.use((lessonService) =>
-            lessonService.myLessons(
-              session.session.id,
-              { status: "scheduled", limit: 5, offset: 0 },
-              filterStudentId,
+        if (session.user.role === "admin") {
+          const today = todayRange();
+          const week = weekRange();
+          const data = yield* Effect.all({
+            students: StudentService.use((studentService) => studentService.listStudents()),
+            messages: MessageService.use((messageService) =>
+              messageService.messages({
+                limit: 50,
+                offset: 0,
+              }),
             ),
+            todayLessons: LessonService.use((lessonService) =>
+              lessonService.listLessons({
+                limit: 50,
+                offset: 0,
+                from: today.from,
+                to: today.to,
+              }),
+            ),
+            weekLessons: LessonService.use((lessonService) =>
+              lessonService.listLessons({
+                limit: 50,
+                offset: 0,
+                from: week.from,
+                to: week.to,
+              }),
+            ),
+            courses: CourseService.use((courseService) => courseService.listCourses()),
+          });
+          const adminMessages: ReturnType<typeof serializeMessage>[] =
+            data.messages.map(serializeMessage);
+          const adminTodayLessons: ReturnType<typeof serializeLesson>[] =
+            data.todayLessons.map(serializeLesson);
+          const adminWeekLessons: ReturnType<typeof serializeLesson>[] =
+            data.weekLessons.map(serializeLesson);
+          return {
+            kind: "admin" as const,
+            students: normalizeStudents(data.students),
+            messages: adminMessages,
+            todayLessons: adminTodayLessons,
+            weekLessons: adminWeekLessons,
+            courses: [...S.decodeUnknownSync(S.Array(SharedSchemas.Course))(data.courses)],
+          };
+        }
+
+        const [data, canShowTestimonialPrompt] = yield* Effect.all([
+          Effect.all({
+            messages: MessageService.use((messageService) =>
+              messageService.messages({ limit: 50, offset: 0 }, filterStudentId),
+            ),
+            assignments: MaterialService.use((materialService) =>
+              materialService.assignments(filterStudentId),
+            ),
+            scheduledLessons: LessonService.use((lessonService) =>
+              lessonService.myLessons(
+                { status: "scheduled", limit: 5, offset: 0 },
+                filterStudentId,
+              ),
+            ),
+            courses: CourseService.use((courseService) => courseService.courses(filterStudentId)),
+            testimonial: TestimonialService.use((testimonialService) =>
+              testimonialService.testimonial(session.user.id),
+            ),
+          }),
+          TestimonialReminderService.use((testimonialReminderService) =>
+            testimonialReminderService.getPromptEnabled(session.user.id),
           ),
-          courses: CourseService.use((courseService) =>
-            courseService.courses(session.session.id, filterStudentId),
-          ),
-          testimonial: TestimonialService.use((testimonialService) =>
-            testimonialService.testimonial(session.session.id, session.user.id),
-          ),
-        }),
-        TestimonialReminderService.use((testimonialReminderService) =>
-          testimonialReminderService.getPromptEnabled(session.user.id),
-        ),
-      ]);
-      const studentMessages: ReturnType<typeof serializeMessage>[] =
-        data.messages.map(serializeMessage);
-      const studentAssignments: ReturnType<typeof serializeMaterial>[] =
-        data.assignments.map(serializeMaterial);
-      const studentScheduledLessons: ReturnType<typeof serializeLesson>[] =
-        data.scheduledLessons.map(serializeLesson);
-      return {
-        kind: "student" as const,
-        messages: studentMessages,
-        assignments: studentAssignments,
-        scheduledLessons: studentScheduledLessons,
-        courses: [...S.decodeUnknownSync(S.Array(SharedSchemas.Course))(data.courses)],
-        testimonial: data.testimonial ? serializeTestimonial(data.testimonial) : null,
-        canShowTestimonialPrompt,
-      };
+        ]);
+        const studentMessages: ReturnType<typeof serializeMessage>[] =
+          data.messages.map(serializeMessage);
+        const studentAssignments: ReturnType<typeof serializeMaterial>[] =
+          data.assignments.map(serializeMaterial);
+        const studentScheduledLessons: ReturnType<typeof serializeLesson>[] =
+          data.scheduledLessons.map(serializeLesson);
+        return {
+          kind: "student" as const,
+          messages: studentMessages,
+          assignments: studentAssignments,
+          scheduledLessons: studentScheduledLessons,
+          courses: [...S.decodeUnknownSync(S.Array(SharedSchemas.Course))(data.courses)],
+          testimonial: data.testimonial ? serializeTestimonial(data.testimonial) : null,
+          canShowTestimonialPrompt,
+        };
+      }).pipe(withAuthContext(session.session.id));
     }),
   ),
 );

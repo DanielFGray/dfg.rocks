@@ -1,8 +1,8 @@
 import { Effect, Context, Layer } from "effect";
-import { withAuthContext, PgRootDB } from "../db.js";
+import { PgRootDB } from "../db.js";
+import { RequestDatabase } from "../requestDatabase.js";
 import { HttpError, catchPgErrors } from "../pgErrors.js";
 import { sql } from "kysely";
-import { SessionService } from "./sessionService.js";
 import * as S from "effect/Schema";
 import { UserRole, FamilyInviteRole } from "../../shared/schemas.js";
 import { type UserRow, UserService } from "./userService.js";
@@ -17,15 +17,14 @@ export class FamilyService extends Context.Service<FamilyService>()("FamilyServi
         .select(["id", "family_id", "code", "email", "invited_role", "expires_at"])
         .where("id", "=", invitationId);
     return {
-      createChild: Effect.fnUntraced(function* (sessionId: string, userId: string, name: string) {
-        const memberships = yield* withAuthContext(sessionId, (db) =>
-          db.execute(
-            db
-              .selectFrom("app_public.family_memberships")
-              .select("family_id")
-              .where("user_id", "=", userId)
-              .limit(2),
-          ),
+      createChild: Effect.fnUntraced(function* (userId: string, name: string) {
+        const db = yield* RequestDatabase;
+        const memberships = yield* db.execute(
+          db
+            .selectFrom("app_public.family_memberships")
+            .select("family_id")
+            .where("user_id", "=", userId)
+            .limit(2),
         );
 
         if (memberships.length === 0) {
@@ -49,21 +48,13 @@ export class FamilyService extends Context.Service<FamilyService>()("FamilyServi
           is_verified: boolean;
         };
 
-        const child = yield* withAuthContext(sessionId, (db) =>
-          db
-            .execute(
-              db
-                .selectFrom(
-                  sql<ChildRow>`app_public.create_child(${familyId}, ${name})`.as("child"),
-                )
-                .selectAll(),
-            )
-            .pipe(Effect.head),
-        );
-
-        yield* SessionService.use((sessionService) =>
-          sessionService.updateActiveStudent(sessionId, child.id),
-        );
+        const child = yield* db
+          .execute(
+            db
+              .selectFrom(sql<ChildRow>`app_public.create_child(${familyId}, ${name})`.as("child"))
+              .selectAll(),
+          )
+          .pipe(Effect.head);
 
         return {
           id: child.id,
@@ -73,53 +64,49 @@ export class FamilyService extends Context.Service<FamilyService>()("FamilyServi
           is_verified: child.is_verified,
         };
       }),
-      family: Effect.fn("family")(function* (sessionId: string, userId: string) {
+      family: Effect.fn("family")(function* (userId: string) {
         const rootDb = yield* PgRootDB;
 
-        const result = yield* withAuthContext(
-          sessionId,
-          Effect.fnUntraced(function* (db) {
-            const membership = yield* db
-              .execute(
-                db
-                  .selectFrom("app_public.family_memberships as fm")
-                  .innerJoin("app_public.families as f", "f.id", "fm.family_id")
-                  .select([
-                    "f.id",
-                    "f.slug",
-                    "f.name",
-                    "f.description",
-                    "fm.is_owner",
-                    "fm.is_billing_contact",
-                  ])
-                  .where("fm.user_id", "=", userId),
-              )
-              .pipe(
-                Effect.head,
-                Effect.catchTags({
-                  NoSuchElementError: () => new HttpError(404, "Family not found"),
-                }),
-              );
+        const db = yield* RequestDatabase;
+        const membership = yield* db
+          .execute(
+            db
+              .selectFrom("app_public.family_memberships as fm")
+              .innerJoin("app_public.families as f", "f.id", "fm.family_id")
+              .select([
+                "f.id",
+                "f.slug",
+                "f.name",
+                "f.description",
+                "fm.is_owner",
+                "fm.is_billing_contact",
+              ])
+              .where("fm.user_id", "=", userId),
+          )
+          .pipe(
+            Effect.head,
+            Effect.catchTags({
+              NoSuchElementError: () => new HttpError(404, "Family not found"),
+            }),
+          );
 
-            const members = yield* db.execute(
-              db
-                .selectFrom("app_public.family_memberships as fm")
-                .innerJoin("app_public.users as u", "u.id", "fm.user_id")
-                .select([
-                  "u.id",
-                  "u.username",
-                  "u.name",
-                  "u.role",
-                  "u.is_verified",
-                  "fm.is_owner",
-                  "fm.is_billing_contact",
-                ])
-                .where("fm.family_id", "=", membership.id),
-            );
-
-            return { membership, members };
-          }),
+        const members = yield* db.execute(
+          db
+            .selectFrom("app_public.family_memberships as fm")
+            .innerJoin("app_public.users as u", "u.id", "fm.user_id")
+            .select([
+              "u.id",
+              "u.username",
+              "u.name",
+              "u.role",
+              "u.is_verified",
+              "fm.is_owner",
+              "fm.is_billing_contact",
+            ])
+            .where("fm.family_id", "=", membership.id),
         );
+
+        const result = { membership, members };
 
         const invitations = yield* rootDb.execute(
           rootDb
@@ -152,30 +139,28 @@ export class FamilyService extends Context.Service<FamilyService>()("FamilyServi
         };
       }),
       removeFamilyMember: Effect.fn("removeFamilyMember")(function* (
-        sessionId: string,
         userId: string,
         targetUserId: string,
       ) {
-        const membership = yield* withAuthContext(sessionId, (db) =>
-          db
-            .execute(
-              db
-                .selectFrom("app_public.family_memberships as fm")
-                .select("fm.family_id")
-                .where("fm.user_id", "=", userId)
-                .where("fm.is_owner", "=", true),
-            )
-            .pipe(
-              Effect.head,
-              Effect.catchTags({
-                NoSuchElementError: () =>
-                  new HttpError(403, "Only the family owner can remove members"),
-              }),
-            ),
-        );
+        const db = yield* RequestDatabase;
+        const membership = yield* db
+          .execute(
+            db
+              .selectFrom("app_public.family_memberships as fm")
+              .select("fm.family_id")
+              .where("fm.user_id", "=", userId)
+              .where("fm.is_owner", "=", true),
+          )
+          .pipe(
+            Effect.head,
+            Effect.catchTags({
+              NoSuchElementError: () =>
+                new HttpError(403, "Only the family owner can remove members"),
+            }),
+          );
 
-        yield* withAuthContext(sessionId, (db) =>
-          db.execute(
+        yield* db
+          .execute(
             db.selectNoFrom((eb) =>
               eb
                 .fn<unknown>("app_public.remove_from_family", [
@@ -184,34 +169,32 @@ export class FamilyService extends Context.Service<FamilyService>()("FamilyServi
                 ])
                 .as("remove_from_family"),
             ),
-          ),
-        ).pipe(catchPgErrors);
+          )
+          .pipe(catchPgErrors);
       }),
       inviteFamilyMember: Effect.fn("inviteFamilyMember")(function* (
-        sessionId: string,
         userId: string,
         email: string,
       ) {
-        const membership = yield* withAuthContext(sessionId, (db) =>
-          db
-            .execute(
-              db
-                .selectFrom("app_public.family_memberships as fm")
-                .select("fm.family_id")
-                .where("fm.user_id", "=", userId)
-                .where("fm.is_owner", "=", true),
-            )
-            .pipe(
-              Effect.head,
-              Effect.catchTags({
-                NoSuchElementError: () =>
-                  new HttpError(403, "Only the family owner can invite members"),
-              }),
-            ),
-        );
+        const db = yield* RequestDatabase;
+        const membership = yield* db
+          .execute(
+            db
+              .selectFrom("app_public.family_memberships as fm")
+              .select("fm.family_id")
+              .where("fm.user_id", "=", userId)
+              .where("fm.is_owner", "=", true),
+          )
+          .pipe(
+            Effect.head,
+            Effect.catchTags({
+              NoSuchElementError: () =>
+                new HttpError(403, "Only the family owner can invite members"),
+            }),
+          );
 
-        yield* withAuthContext(sessionId, (db) =>
-          db.execute(
+        yield* db
+          .execute(
             db.selectNoFrom((eb) =>
               eb
                 .fn<unknown>("app_public.invite_to_family", [
@@ -222,8 +205,8 @@ export class FamilyService extends Context.Service<FamilyService>()("FamilyServi
                 ])
                 .as("invite_to_family"),
             ),
-          ),
-        ).pipe(catchPgErrors);
+          )
+          .pipe(catchPgErrors);
       }),
       setChildEmail: Effect.fn("setChildEmail")(function* (
         sessionId: string,
@@ -295,15 +278,10 @@ export class FamilyService extends Context.Service<FamilyService>()("FamilyServi
 
         return { success: true as const };
       }),
-      createFamily: Effect.fn("createFamily")(function* (
-        sessionId: string,
-        values: {
-          slug: string;
-          name: string;
-        },
-      ) {
-        return yield* withAuthContext(sessionId, (trx) =>
-          trx.execute(
+      createFamily: Effect.fn("createFamily")(function* (values: { slug: string; name: string }) {
+        const trx = yield* RequestDatabase;
+        return yield* trx
+          .execute(
             trx
               .selectFrom((eb) =>
                 eb
@@ -317,21 +295,19 @@ export class FamilyService extends Context.Service<FamilyService>()("FamilyServi
                   .as("f"),
               )
               .selectAll(),
-          ),
-        ).pipe(catchPgErrors);
+          )
+          .pipe(catchPgErrors);
       }),
-      listFamilies: Effect.fn("listFamilies")(function* (sessionId: string) {
-        return yield* withAuthContext(sessionId, (db) =>
-          db.execute(
-            db
-              .selectFrom("app_public.families")
-              .select(["id", "slug", "name", "description", "created_at"])
-              .orderBy("created_at", "desc"),
-          ),
+      listFamilies: Effect.fn("listFamilies")(function* () {
+        const db = yield* RequestDatabase;
+        return yield* db.execute(
+          db
+            .selectFrom("app_public.families")
+            .select(["id", "slug", "name", "description", "created_at"])
+            .orderBy("created_at", "desc"),
         );
       }),
       inviteFamily: Effect.fn("inviteFamily")(function* (
-        sessionId: string,
         familyId: string,
         values: {
           username?: string;
@@ -339,8 +315,9 @@ export class FamilyService extends Context.Service<FamilyService>()("FamilyServi
           invitedRole?: string;
         },
       ) {
-        yield* withAuthContext(sessionId, (trx) =>
-          trx.execute(
+        const trx = yield* RequestDatabase;
+        yield* trx
+          .execute(
             trx.selectNoFrom((eb) =>
               eb
                 .fn<unknown>("app_public.invite_to_family", [
@@ -351,25 +328,23 @@ export class FamilyService extends Context.Service<FamilyService>()("FamilyServi
                 ])
                 .as("invite_to_family"),
             ),
-          ),
-        ).pipe(catchPgErrors);
+          )
+          .pipe(catchPgErrors);
       }),
-      createQrInviteFamily: Effect.fn("createQrInviteFamily")(function* (
-        sessionId: string,
-        values: {
-          name: string;
-          slug: string;
-        },
-      ) {
-        return yield* withAuthContext(sessionId, (db) =>
-          db.execute(db.insertInto("app_public.families").values(values).returning(["id"])).pipe(
+      createQrInviteFamily: Effect.fn("createQrInviteFamily")(function* (values: {
+        name: string;
+        slug: string;
+      }) {
+        const db = yield* RequestDatabase;
+        return yield* db
+          .execute(db.insertInto("app_public.families").values(values).returning(["id"]))
+          .pipe(
             Effect.head,
             Effect.catchTags({
               NoSuchElementError: () => new HttpError(500, "Failed to create family"),
             }),
             catchPgErrors,
-          ),
-        );
+          );
       }),
       createQrInvite: Effect.fn("createQrInvite")(function* (
         familyId: string,
@@ -400,26 +375,22 @@ export class FamilyService extends Context.Service<FamilyService>()("FamilyServi
             }),
           );
       }),
-      listFamilyInvitations: Effect.fn("listFamilyInvitations")(function* (
-        sessionId: string,
-        familyId: string,
-      ) {
-        return yield* withAuthContext(sessionId, (db) =>
-          db.execute(
-            db
-              .selectFrom("app_public.family_invitations as fi")
-              .innerJoin("app_public.families as f", "f.id", "fi.family_id")
-              .select([
-                "fi.id",
-                "fi.family_id",
-                "f.name as family_name",
-                "fi.code",
-                "fi.user_id",
-                "fi.email",
-                "fi.invited_role",
-              ])
-              .where("fi.family_id", "=", familyId),
-          ),
+      listFamilyInvitations: Effect.fn("listFamilyInvitations")(function* (familyId: string) {
+        const db = yield* RequestDatabase;
+        return yield* db.execute(
+          db
+            .selectFrom("app_public.family_invitations as fi")
+            .innerJoin("app_public.families as f", "f.id", "fi.family_id")
+            .select([
+              "fi.id",
+              "fi.family_id",
+              "f.name as family_name",
+              "fi.code",
+              "fi.user_id",
+              "fi.email",
+              "fi.invited_role",
+            ])
+            .where("fi.family_id", "=", familyId),
         );
       }),
       invitation: Effect.fn("invitation")(function* (invitationId: string, code: string) {

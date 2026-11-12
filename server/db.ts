@@ -21,7 +21,7 @@ export interface Compilable<O> {
 /**
  * Kysely builds and compiles queries; the Effect SQL client runs them. Running
  * through the client keeps queries inside Effect transactions, which
- * `withAuthContext` needs for its per-transaction `set_config`.
+ * visitor queries need for their per-transaction `set_config`.
  *
  * Kysely's own `.execute()` methods are left unusable on purpose: the driver
  * rejects every connection, so a query that bypasses `execute` fails loudly
@@ -132,7 +132,7 @@ const databaseLayer = <Self>(tag: Context.Key<Self, Database>) =>
     Effect.map(SqlClient.SqlClient, (client) => new Database(client)),
   );
 
-/** The API login, which `withAuthContext` switches to the visitor role. */
+/** The API login used for transactions under the visitor role. */
 export class PgAuthDB extends Context.Service<PgAuthDB, Database>()("PgAuthDB") {
   static Live = databaseLayer(this).pipe(Layer.provide(clientLayer("AUTH_DATABASE_URL")));
 }
@@ -142,28 +142,6 @@ export class PgRootDB extends Context.Service<PgRootDB, Database>()("PgRootDB") 
   // Also exposes its PgClient, so scoped services such as RealtimeService share this pool.
   static Live = databaseLayer(this).pipe(Layer.provideMerge(clientLayer("DATABASE_URL")));
 }
-
-export const withAuthContext = Effect.fnUntraced(function* <A, E, R>(
-  sessionId: string,
-  cb: (db: Database) => Effect.Effect<A, E, R>,
-) {
-  const db = yield* PgAuthDB;
-  const databaseVisitor = yield* Config.String("DATABASE_VISITOR");
-  return yield* db.withTransaction(
-    db
-      .execute(
-        db.selectNoFrom((eb) => [
-          eb
-            .fn<void>("set_config", [sql.lit("role"), eb.val(databaseVisitor), eb.lit(true)])
-            .as("_1"),
-          eb
-            .fn<void>("set_config", [sql.lit("my.session_id"), eb.val(sessionId), eb.lit(true)])
-            .as("_2"),
-        ]),
-      )
-      .pipe(Effect.andThen(cb(db))),
-  );
-});
 
 /**
  * Queues a graphile-worker job inside the current transaction. Only the job id

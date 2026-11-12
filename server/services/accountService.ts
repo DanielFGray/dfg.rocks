@@ -1,5 +1,6 @@
 import { Effect, Option, Context, Layer } from "effect";
-import { withAuthContext, PgRootDB } from "../db.js";
+import { PgRootDB } from "../db.js";
+import { RequestDatabase } from "../requestDatabase.js";
 import { HttpError, catchPgErrors } from "../pgErrors.js";
 import { SessionService } from "./sessionService.js";
 import { sql } from "kysely";
@@ -9,8 +10,8 @@ export class AccountService extends Context.Service<AccountService>()("AccountSe
   make: Effect.gen(function* () {
     const rootDb = yield* PgRootDB;
     return {
-      requestDeleteAccount: Effect.fn("requestDeleteAccount")(function* (sessionId: string) {
-        yield* withAuthContext(sessionId, (db) =>
+      requestDeleteAccount: Effect.fn("requestDeleteAccount")(function* () {
+        yield* RequestDatabase.use((db) =>
           db.execute(
             db.selectNoFrom((eb) =>
               eb
@@ -20,11 +21,8 @@ export class AccountService extends Context.Service<AccountService>()("AccountSe
           ),
         );
       }),
-      confirmDeleteAccount: Effect.fn("confirmDeleteAccount")(function* (
-        sessionId: string,
-        token: string,
-      ) {
-        const result = yield* withAuthContext(sessionId, (db) =>
+      confirmDeleteAccount: Effect.fn("confirmDeleteAccount")(function* (token: string) {
+        const result = yield* RequestDatabase.use((db) =>
           db
             .execute(
               db.selectNoFrom((eb) =>
@@ -37,8 +35,8 @@ export class AccountService extends Context.Service<AccountService>()("AccountSe
         );
         return result?.confirm_account_deletion ?? false;
       }),
-      myEmails: Effect.fn("myEmails")(function* (sessionId: string) {
-        return yield* withAuthContext(sessionId, (db) =>
+      myEmails: Effect.fn("myEmails")(function* () {
+        return yield* RequestDatabase.use((db) =>
           db.execute(
             db
               .selectFrom("app_public.user_emails")
@@ -48,9 +46,8 @@ export class AccountService extends Context.Service<AccountService>()("AccountSe
           ),
         );
       }),
-      addMyEmail: Effect.fn("addMyEmail")(function* (sessionId: string, email: string) {
-        return yield* withAuthContext(
-          sessionId,
+      addMyEmail: Effect.fn("addMyEmail")(function* (email: string) {
+        return yield* RequestDatabase.use(
           Effect.fnUntraced(function* (db) {
             return yield* db
               .execute(
@@ -68,9 +65,8 @@ export class AccountService extends Context.Service<AccountService>()("AccountSe
           }),
         ).pipe(catchPgErrors);
       }),
-      deleteMyEmail: Effect.fn("deleteMyEmail")(function* (sessionId: string, emailId: string) {
-        yield* withAuthContext(
-          sessionId,
+      deleteMyEmail: Effect.fn("deleteMyEmail")(function* (emailId: string) {
+        yield* RequestDatabase.use(
           Effect.fnUntraced(function* (db) {
             const email = yield* db
               .execute(
@@ -92,12 +88,8 @@ export class AccountService extends Context.Service<AccountService>()("AccountSe
           }),
         );
       }),
-      makePrimaryEmail: Effect.fn("makePrimaryEmail")(function* (
-        sessionId: string,
-        emailId: string,
-      ) {
-        return yield* withAuthContext(
-          sessionId,
+      makePrimaryEmail: Effect.fn("makePrimaryEmail")(function* (emailId: string) {
+        return yield* RequestDatabase.use(
           Effect.fnUntraced(function* (db) {
             yield* db
               .execute(
@@ -133,12 +125,8 @@ export class AccountService extends Context.Service<AccountService>()("AccountSe
           }),
         );
       }),
-      resendEmailVerification: Effect.fn("resendEmailVerification")(function* (
-        sessionId: string,
-        emailId: string,
-      ) {
-        yield* withAuthContext(
-          sessionId,
+      resendEmailVerification: Effect.fn("resendEmailVerification")(function* (emailId: string) {
+        yield* RequestDatabase.use(
           Effect.fnUntraced(function* (db) {
             const email = yield* db
               .execute(
@@ -171,7 +159,7 @@ export class AccountService extends Context.Service<AccountService>()("AccountSe
         userId: string,
         studentId: string,
       ) {
-        const familyMembership = yield* withAuthContext(sessionId, (db) =>
+        const familyMembership = yield* RequestDatabase.use((db) =>
           db
             .execute(
               db

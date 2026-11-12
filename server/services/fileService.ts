@@ -3,7 +3,7 @@ import * as FileSystem from "effect/FileSystem";
 import * as Multipart from "effect/http/Multipart";
 import { sql } from "kysely";
 import { Effect, Option, Context, Layer } from "effect";
-import { withAuthContext } from "../db.js";
+import { RequestDatabase } from "../requestDatabase.js";
 import { HttpError } from "../pgErrors.js";
 import { extractNotationTracksFromBytes } from "./notationService.js";
 import { StorageService, type StorageLocation } from "./storageService.js";
@@ -56,11 +56,8 @@ function toMaterialResponse(material: MaterialRecord): MaterialRecord {
   };
 }
 
-const findMaterialByContentHashEffect = Effect.fnUntraced(function* (
-  sessionId: string,
-  contentHash: string,
-) {
-  return yield* withAuthContext(sessionId, (db) =>
+const findMaterialByContentHashEffect = Effect.fnUntraced(function* (contentHash: string) {
+  return yield* RequestDatabase.use((db) =>
     db
       .execute(
         db
@@ -105,7 +102,6 @@ export class FileService extends Context.Service<FileService>()("FileService", {
         title: string,
         isGlobal: boolean,
         uploadedBy: string,
-        sessionId: string,
       ) {
         let fileSize: number;
         let mimeType: string;
@@ -142,7 +138,7 @@ export class FileService extends Context.Service<FileService>()("FileService", {
         }
         const contentHash = StorageService.hashBytes(bytes);
         const notationTracks = yield* extractNotationTracksFromBytes(bytes, file.name);
-        const existingMaterial = yield* findMaterialByContentHashEffect(sessionId, contentHash);
+        const existingMaterial = yield* findMaterialByContentHashEffect(contentHash);
         if (existingMaterial) {
           yield* ensureStoredBlobEffect(existingMaterial, bytes);
           return yield* Effect.succeed(toMaterialResponse(existingMaterial));
@@ -151,7 +147,7 @@ export class FileService extends Context.Service<FileService>()("FileService", {
         const location = storage.materialLocation(contentHash);
         yield* storage.put(location, bytes);
         // Handle concurrent uploads with the same content hash (unique constraint race)
-        return yield* withAuthContext(sessionId, (db) =>
+        return yield* RequestDatabase.use((db) =>
           db
             .execute(
               db
@@ -191,10 +187,7 @@ export class FileService extends Context.Service<FileService>()("FileService", {
                     constraint?: unknown;
                   };
                   if (cause.code === "23505" && cause.constraint === "materials_content_hash_key") {
-                    const concurrent = yield* findMaterialByContentHashEffect(
-                      sessionId,
-                      contentHash,
-                    );
+                    const concurrent = yield* findMaterialByContentHashEffect(contentHash);
                     if (concurrent) {
                       yield* ensureStoredBlobEffect(concurrent, bytes);
                       return [toMaterialResponse(concurrent)] as const;
@@ -208,12 +201,8 @@ export class FileService extends Context.Service<FileService>()("FileService", {
         );
       }),
 
-      download: Effect.fnUntraced(function* (
-        materialId: string,
-        userId: string,
-        sessionId: string,
-      ) {
-        const material = yield* withAuthContext(sessionId, (db) =>
+      download: Effect.fnUntraced(function* (materialId: string, userId: string) {
+        const material = yield* RequestDatabase.use((db) =>
           db
             .execute(
               db
@@ -237,7 +226,7 @@ export class FileService extends Context.Service<FileService>()("FileService", {
               }),
             ),
         );
-        const user = yield* withAuthContext(sessionId, (db) =>
+        const user = yield* RequestDatabase.use((db) =>
           db
             .execute(
               db.selectFrom("app_public.users").select(["id", "role"]).where("id", "=", userId),
@@ -252,7 +241,7 @@ export class FileService extends Context.Service<FileService>()("FileService", {
         if (user.role !== "admin") {
           let hasAccess = material.is_global;
           if (!hasAccess) {
-            const assignedRows = yield* withAuthContext(sessionId, (db) =>
+            const assignedRows = yield* RequestDatabase.use((db) =>
               db.execute(
                 db
                   .selectFrom("app_public.student_materials")
@@ -264,7 +253,7 @@ export class FileService extends Context.Service<FileService>()("FileService", {
             if (assignedRows[0]) hasAccess = true;
           }
           if (!hasAccess) {
-            const enrolledRows = yield* withAuthContext(sessionId, (db) =>
+            const enrolledRows = yield* RequestDatabase.use((db) =>
               db.execute(
                 db
                   .selectFrom("app_public.module_materials as mm")

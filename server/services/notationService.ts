@@ -1,8 +1,7 @@
 import { importer } from "@coderline/alphatab";
-import { Effect, Option } from "effect";
+import { Effect } from "effect";
 import type { MaterialNotationTrack } from "../../shared/schemas.js";
 import { toMaterialNotationTrack } from "../../shared/notationTracks.js";
-import { PgRootDB, withAuthContext } from "../db.js";
 import { HttpError } from "../pgErrors.js";
 
 const NOTATION_EXTENSIONS = new Set([".gp", ".gp3", ".gp4", ".gp5", ".gpx", ".musicxml", ".mxl"]);
@@ -59,34 +58,10 @@ export const extractNotationTracksFromBytes = Effect.fnUntraced(function* (
 });
 
 export const resolveAssignedTrackIndex = Effect.fnUntraced(function* (
-  sessionId: string | null,
-  materialId: string,
+  notationTracks: unknown,
   assignedTrackIndex: number | string | null | undefined,
 ) {
-  const rootDb = yield* PgRootDB;
-  const material = yield* sessionId
-    ? withAuthContext(sessionId, (db) =>
-        db
-          .execute(
-            db
-              .selectFrom("app_public.materials")
-              .select(["id", "notation_tracks"])
-              .where("id", "=", materialId),
-          )
-          .pipe(Effect.head, Effect.option),
-      )
-    : rootDb
-        .execute(
-          rootDb
-            .selectFrom("app_public.materials")
-            .select(["id", "notation_tracks"])
-            .where("id", "=", materialId),
-        )
-        .pipe(Effect.head, Effect.option);
-  if (Option.isNone(material)) {
-    return yield* new HttpError(404, "Material not found");
-  }
-  const tracks = normalizeNotationTracks(material.value.notation_tracks);
+  const tracks = normalizeNotationTracks(notationTracks);
   const normalizedAssignedTrackIndex = parseTrackIndex(assignedTrackIndex);
   if (!tracks) {
     if (normalizedAssignedTrackIndex !== null) {

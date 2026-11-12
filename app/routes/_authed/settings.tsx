@@ -1,4 +1,5 @@
 import { Effect } from "effect";
+import { withAuthContext } from "../../../server/requestDatabase.js";
 import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
 import { getCookie } from "@tanstack/react-start/server";
@@ -18,58 +19,54 @@ const getSettingsPageData = createServerFn({ method: "GET" }).handler(() =>
   runServerEffect(
     Effect.gen(function* () {
       const session = yield* requireSession(getCookie("session"));
+      return yield* Effect.gen(function* () {
+        const emailsEffect = AccountService.use((accountService) => accountService.myEmails());
 
-      const emailsEffect = AccountService.use((accountService) =>
-        accountService.myEmails(session.session.id),
-      );
+        if (session.user.role !== "admin") {
+          const [emails, testimonial] = yield* Effect.all([
+            emailsEffect,
+            TestimonialService.use((testimonialService) =>
+              testimonialService.testimonial(session.user.id),
+            ),
+          ]);
 
-      if (session.user.role !== "admin") {
-        const [emails, testimonial] = yield* Effect.all([
-          emailsEffect,
-          TestimonialService.use((testimonialService) =>
-            testimonialService.testimonial(session.session.id, session.user.id),
-          ),
-        ]);
+          return {
+            emails: emails.map(serializeUserEmail),
+            testimonial: testimonial ? serializeTestimonial(testimonial) : null,
+            gcalStatus: null,
+            workingHours: null,
+            testimonialReminderIntervalDays: null,
+            adminTestimonials: null,
+          };
+        }
+
+        const [emails, gcalStatus, workingHours, intervalDays, adminTestimonials] =
+          yield* Effect.all([
+            emailsEffect,
+            GoogleCalendarService.use((googleCalendarService) =>
+              googleCalendarService.getGoogleCalendarStatus(),
+            ),
+            GoogleCalendarService.use((googleCalendarService) =>
+              googleCalendarService.getWorkingHours(),
+            ),
+            TestimonialReminderService.use((testimonialReminderService) =>
+              testimonialReminderService.getIntervalDays(),
+            ),
+            TestimonialService.use((testimonialService) => testimonialService.listTestimonials()),
+          ]);
 
         return {
           emails: emails.map(serializeUserEmail),
-          testimonial: testimonial ? serializeTestimonial(testimonial) : null,
-          gcalStatus: null,
-          workingHours: null,
-          testimonialReminderIntervalDays: null,
-          adminTestimonials: null,
+          testimonial: null,
+          gcalStatus: {
+            connected: gcalStatus.connected,
+            calendar_id: typeof gcalStatus.calendar_id === "string" ? gcalStatus.calendar_id : null,
+          },
+          workingHours,
+          testimonialReminderIntervalDays: intervalDays,
+          adminTestimonials: adminTestimonials.map(serializeTestimonial),
         };
-      }
-
-      const [emails, gcalStatus, workingHours, intervalDays, adminTestimonials] = yield* Effect.all(
-        [
-          emailsEffect,
-          GoogleCalendarService.use((googleCalendarService) =>
-            googleCalendarService.getGoogleCalendarStatus(),
-          ),
-          GoogleCalendarService.use((googleCalendarService) =>
-            googleCalendarService.getWorkingHours(),
-          ),
-          TestimonialReminderService.use((testimonialReminderService) =>
-            testimonialReminderService.getIntervalDays(),
-          ),
-          TestimonialService.use((testimonialService) =>
-            testimonialService.listTestimonials(session.session.id),
-          ),
-        ],
-      );
-
-      return {
-        emails: emails.map(serializeUserEmail),
-        testimonial: null,
-        gcalStatus: {
-          connected: gcalStatus.connected,
-          calendar_id: typeof gcalStatus.calendar_id === "string" ? gcalStatus.calendar_id : null,
-        },
-        workingHours,
-        testimonialReminderIntervalDays: intervalDays,
-        adminTestimonials: adminTestimonials.map(serializeTestimonial),
-      };
+      }).pipe(withAuthContext(session.session.id));
     }),
   ),
 );

@@ -1,5 +1,6 @@
 import * as HttpApiBuilder from "effect/http-api/HttpApiBuilder";
 import { Effect } from "effect";
+import { withAuthContext } from "../requestDatabase.js";
 import { Contract } from "../../shared/httpApi.js";
 import { CurrentSession } from "../../shared/api/guards.js";
 import { BillingLedgerService } from "../services/billingLedgerService.js";
@@ -13,13 +14,15 @@ export const CreditsAdminApiGroupLive = HttpApiBuilder.group(Contract, "creditsA
       Effect.fnUntraced(function* ({ payload }) {
         const auth = yield* CurrentSession;
         const result = yield* BillingLedgerService.use((billingLedgerService) =>
-          billingLedgerService.issueCredit(auth.session.id, {
-            payerId: payload.payer_id,
-            studentId: payload.student_id,
-            amountCents: payload.amount_cents,
-            reason: payload.reason,
-            expiresAt: payload.expires_at,
-          }),
+          billingLedgerService
+            .issueCredit({
+              payerId: payload.payer_id,
+              studentId: payload.student_id,
+              amountCents: payload.amount_cents,
+              reason: payload.reason,
+              expiresAt: payload.expires_at,
+            })
+            .pipe(withAuthContext(auth.session.id)),
         );
         return result;
       }, adaptAdminErrors),
@@ -29,11 +32,13 @@ export const CreditsAdminApiGroupLive = HttpApiBuilder.group(Contract, "creditsA
       Effect.fnUntraced(function* ({ payload }) {
         const auth = yield* CurrentSession;
         const result = yield* BillingLedgerService.use((billingLedgerService) =>
-          billingLedgerService.applyCredit(auth.session.id, {
-            creditId: payload.credit_id,
-            billId: payload.bill_id,
-            amountCents: payload.amount_cents,
-          }),
+          billingLedgerService
+            .applyCredit({
+              creditId: payload.credit_id,
+              billId: payload.bill_id,
+              amountCents: payload.amount_cents,
+            })
+            .pipe(withAuthContext(auth.session.id)),
         );
         return serializeCreditApplication(result);
       }, adaptAdminErrors),

@@ -6,6 +6,7 @@ import pg from "pg";
 import { PgAuthDB, PgRootDB } from "../db.js";
 import { BillingLedgerService } from "../services/billingLedgerService.js";
 import { FamilyBillingService } from "../services/familyBillingService.js";
+import { withAuthContext } from "../requestDatabase.js";
 import { PdfService } from "../services/pdfService.js";
 
 const familyBillingTestLayer = Layer.mergeAll(
@@ -236,15 +237,19 @@ describe("PDF Service", () => {
     effectIt.effect("parent reads their own billing overview and lists", () =>
       Effect.gen(function* () {
         const svc = yield* FamilyBillingService;
-        const overview = yield* svc.overview(parentSessionId);
+        const overview = yield* svc.overview().pipe(withAuthContext(parentSessionId));
         expect(overview.balance.gross_outstanding_cents).toBeGreaterThanOrEqual(19000);
-        const bills = yield* svc.bills(parentSessionId);
+        const bills = yield* svc.bills().pipe(withAuthContext(parentSessionId));
         expect(bills.length).toBeGreaterThanOrEqual(1);
-        const detail = yield* svc.billDetail(parentSessionId, bills[0].id);
+        const detail = yield* svc.billDetail(bills[0].id).pipe(withAuthContext(parentSessionId));
         expect(detail.lineItems.length).toBeGreaterThanOrEqual(1);
-        expect((yield* svc.payments(parentSessionId)).length).toBeGreaterThanOrEqual(1);
         expect(
-          (yield* svc.credits(parentSessionId)).some((c) => c.reason === "Referral bonus"),
+          (yield* svc.payments().pipe(withAuthContext(parentSessionId))).length,
+        ).toBeGreaterThanOrEqual(1);
+        expect(
+          (yield* svc.credits().pipe(withAuthContext(parentSessionId))).some(
+            (c) => c.reason === "Referral bonus",
+          ),
         ).toBe(true);
       }),
     );
@@ -252,7 +257,7 @@ describe("PDF Service", () => {
     effectIt.effect("a family member who is not the payer sees the billing contact's bills", () =>
       Effect.gen(function* () {
         const svc = yield* FamilyBillingService;
-        const bills = yield* svc.bills(studentSessionId);
+        const bills = yield* svc.bills().pipe(withAuthContext(studentSessionId));
         expect(bills.map((bill) => bill.id)).toContain(seededBillId);
       }),
     );
@@ -260,11 +265,13 @@ describe("PDF Service", () => {
     effectIt.effect("parent can download their bill and payment receipt", () =>
       Effect.gen(function* () {
         const svc = yield* FamilyBillingService;
-        const billPdf = yield* svc.billPdf(parentSessionId, seededBillId);
+        const billPdf = yield* svc.billPdf(seededBillId).pipe(withAuthContext(parentSessionId));
         expect(billPdf.slice(0, 4).toString()).toBe("%PDF");
         expect(extractPdfText(billPdf)).toContain("Payer: FB Parent");
-        const payments = yield* svc.payments(parentSessionId);
-        const receipt = yield* svc.paymentReceipt(parentSessionId, payments[0].id);
+        const payments = yield* svc.payments().pipe(withAuthContext(parentSessionId));
+        const receipt = yield* svc
+          .paymentReceipt(payments[0].id)
+          .pipe(withAuthContext(parentSessionId));
         expect(receipt.slice(0, 4).toString()).toBe("%PDF");
         expect(extractPdfText(receipt)).toContain("Receipt");
       }),
@@ -273,12 +280,16 @@ describe("PDF Service", () => {
     effectIt.effect("admin can download billing documents", () =>
       Effect.gen(function* () {
         const svc = yield* FamilyBillingService;
-        const payments = yield* svc.payments(parentSessionId);
-        expect((yield* svc.billPdf(adminSessionId, seededBillId)).slice(0, 4).toString()).toBe(
-          "%PDF",
-        );
+        const payments = yield* svc.payments().pipe(withAuthContext(parentSessionId));
         expect(
-          (yield* svc.paymentReceipt(adminSessionId, payments[0].id)).slice(0, 4).toString(),
+          (yield* svc.billPdf(seededBillId).pipe(withAuthContext(adminSessionId)))
+            .slice(0, 4)
+            .toString(),
+        ).toBe("%PDF");
+        expect(
+          (yield* svc.paymentReceipt(payments[0].id).pipe(withAuthContext(adminSessionId)))
+            .slice(0, 4)
+            .toString(),
         ).toBe("%PDF");
       }),
     );
@@ -286,17 +297,23 @@ describe("PDF Service", () => {
     effectIt.effect("teacher and another family cannot access billing documents", () =>
       Effect.gen(function* () {
         const svc = yield* FamilyBillingService;
-        const teacherError = yield* Effect.flip(svc.billPdf(teacherSessionId, seededBillId));
+        const teacherError = yield* Effect.flip(
+          svc.billPdf(seededBillId).pipe(withAuthContext(teacherSessionId)),
+        );
         expect(teacherError.message).toBe("Bill not found");
-        expect(yield* svc.bills(otherParentSessionId)).toEqual([]);
-        const otherError = yield* Effect.flip(svc.billPdf(otherParentSessionId, seededBillId));
+        expect(yield* svc.bills().pipe(withAuthContext(otherParentSessionId))).toEqual([]);
+        const otherError = yield* Effect.flip(
+          svc.billPdf(seededBillId).pipe(withAuthContext(otherParentSessionId)),
+        );
         expect(otherError.message).toBe("Bill not found");
         const otherDetailError = yield* Effect.flip(
-          svc.billDetail(otherParentSessionId, seededBillId),
+          svc.billDetail(seededBillId).pipe(withAuthContext(otherParentSessionId)),
         );
         expect(otherDetailError.message).toBe("Bill not found");
         const missingError = yield* Effect.flip(
-          svc.billPdf(parentSessionId, "00000000-0000-0000-0000-000000000000"),
+          svc
+            .billPdf("00000000-0000-0000-0000-000000000000")
+            .pipe(withAuthContext(parentSessionId)),
         );
         expect(missingError.message).toBe("Bill not found");
       }),

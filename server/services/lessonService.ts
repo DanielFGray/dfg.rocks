@@ -1,9 +1,8 @@
 import { Clock, Effect, Option, Context, Layer } from "effect";
 import { sql } from "kysely";
 import type { LessonStatus, LocationType } from "../../shared/schemas.js";
-import { withAuthContext } from "../db.js";
+import { RequestDatabase } from "../requestDatabase.js";
 import { catchPgErrors, HttpError } from "../pgErrors.js";
-import { GoogleCalendarService } from "./googleCalendarService.js";
 import { settleSingleBookingCancellation, singleBookingObligation } from "./singleBookingBills.js";
 import { calculateDepositAmount } from "./billingCalculation.js";
 import { LessonPolicyService } from "./lessonPolicyService.js";
@@ -43,15 +42,13 @@ export class LessonService extends Context.Service<LessonService>()("LessonServi
   make: Effect.sync(() => {
     return {
       createLesson: Effect.fn("createLesson")(function* (values: {
-        sessionId: string;
         studentId: string;
         scheduledAt: Date;
         durationMinutes: number;
         locationType: LocationType;
         gcalEventId: string | null;
       }) {
-        const lesson = yield* withAuthContext(
-          values.sessionId,
+        const lesson = yield* RequestDatabase.use(
           Effect.fnUntraced(function* (db) {
             const created = yield* db
               .execute(
@@ -77,48 +74,10 @@ export class LessonService extends Context.Service<LessonService>()("LessonServi
             return created;
           }),
         ).pipe(catchPgErrors);
-        const connected = yield* GoogleCalendarService.use((googleCalendarService) =>
-          googleCalendarService.isConnected(),
-        );
-        if (connected && lesson.scheduled_at) {
-          const student = yield* withAuthContext(values.sessionId, (db) =>
-            db
-              .execute(
-                db
-                  .selectFrom("app_public.users")
-                  .select(["name"])
-                  .where("id", "=", lesson.student_id),
-              )
-              .pipe(Effect.head, Effect.option),
-          );
-          const studentName = Option.getOrNull(student)?.name ?? "Student";
-          const startTime = new Date(String(lesson.scheduled_at));
-          const endTime = new Date(startTime.getTime() + lesson.duration_minutes * 60000);
-          const eventId = yield* GoogleCalendarService.use((googleCalendarService) =>
-            googleCalendarService.createEvent({
-              summary: `Lesson: ${studentName}`,
-              description: `${lesson.duration_minutes} min ${lesson.location_type.replace(/_/g, " ")} lesson`,
-              start: startTime.toISOString(),
-              end: endTime.toISOString(),
-            }),
-          ).pipe(Effect.catch(() => Effect.succeed(null)));
-          if (eventId) {
-            yield* withAuthContext(values.sessionId, (db) =>
-              db.execute(
-                db
-                  .updateTable("app_public.lessons")
-                  .set({ gcal_event_id: eventId })
-                  .where("id", "=", lesson.id),
-              ),
-            );
-            return { ...lesson, gcal_event_id: eventId };
-          }
-        }
         return lesson;
       }),
 
       updateLesson: Effect.fn("updateLesson")(function* (
-        sessionId: string,
         id: string,
         updates: {
           scheduledAt?: Date;
@@ -136,7 +95,7 @@ export class LessonService extends Context.Service<LessonService>()("LessonServi
         if (updates.locationType !== undefined) {
           lessonUpdates.location_type = updates.locationType;
         }
-        const lesson = yield* withAuthContext(sessionId, (db) =>
+        const lesson = yield* RequestDatabase.use((db) =>
           db
             .execute(
               db
@@ -155,9 +114,8 @@ export class LessonService extends Context.Service<LessonService>()("LessonServi
         return lesson;
       }),
 
-      deleteLesson: Effect.fn("deleteLesson")(function* (sessionId: string, id: string) {
-        const lesson = yield* withAuthContext(
-          sessionId,
+      deleteLesson: Effect.fn("deleteLesson")(function* (id: string) {
+        const lesson = yield* RequestDatabase.use(
           Effect.fnUntraced(function* (db) {
             // Deleting a lesson keeps its bill line (lesson_id becomes null), so
             // cancel the open bill while the line still names the lesson.
@@ -177,27 +135,18 @@ export class LessonService extends Context.Service<LessonService>()("LessonServi
               );
           }),
         ).pipe(catchPgErrors);
-        if (lesson.gcal_event_id) {
-          const googleCalendarService = yield* GoogleCalendarService;
-          yield* googleCalendarService.deleteEvent(lesson.gcal_event_id).pipe(Effect.ignore);
-        }
         return lesson;
       }),
 
-      cancelLesson: Effect.fn("cancelLesson")(function* (
-        sessionId: string,
-        id: string,
-        reason: string | null,
-      ) {
+      cancelLesson: Effect.fn("cancelLesson")(function* (id: string, reason: string | null) {
         const now = new Date();
-        const result = yield* withAuthContext(
-          sessionId,
+        const lesson = yield* RequestDatabase.use(
           Effect.fnUntraced(function* (db) {
             const existing = yield* db
               .execute(
                 db
                   .selectFrom("app_public.lessons")
-                  .select(["id", "status", "gcal_event_id"])
+                  .select(["id", "status"])
                   .where("id", "=", id)
                   .forUpdate(),
               )
@@ -233,20 +182,15 @@ export class LessonService extends Context.Service<LessonService>()("LessonServi
                   .returning(lessonColumns),
               )
               .pipe(Effect.head);
-            return { lesson, gcalEventId: existing.gcal_event_id };
+            return lesson;
           }),
         );
-        if (result.gcalEventId) {
-          const googleCalendarService = yield* GoogleCalendarService;
-          yield* googleCalendarService.deleteEvent(result.gcalEventId).pipe(Effect.ignore);
-        }
-        return result.lesson;
+        return lesson;
       }),
 
-      completeLesson: Effect.fn("completeLesson")(function* (sessionId: string, id: string) {
+      completeLesson: Effect.fn("completeLesson")(function* (id: string) {
         const now = new Date();
-        return yield* withAuthContext(
-          sessionId,
+        return yield* RequestDatabase.use(
           Effect.fnUntraced(function* (db) {
             const existing = yield* db
               .execute(
@@ -377,18 +321,15 @@ export class LessonService extends Context.Service<LessonService>()("LessonServi
         );
       }),
 
-      listLessons: Effect.fn("listLessons")(function* (
-        sessionId: string,
-        filters: {
-          limit: number;
-          offset: number;
-          studentId?: string;
-          status?: LessonStatus;
-          from?: Date;
-          to?: Date;
-        },
-      ) {
-        return yield* withAuthContext(sessionId, (db) => {
+      listLessons: Effect.fn("listLessons")(function* (filters: {
+        limit: number;
+        offset: number;
+        studentId?: string;
+        status?: LessonStatus;
+        from?: Date;
+        to?: Date;
+      }) {
+        return yield* RequestDatabase.use((db) => {
           let query = db
             .selectFrom("app_public.lessons")
             .select(lessonColumns)
@@ -412,7 +353,6 @@ export class LessonService extends Context.Service<LessonService>()("LessonServi
       }),
 
       saveLessonNote: Effect.fn("saveLessonNote")(function* (
-        sessionId: string,
         lessonId: string,
         values: {
           topicsCovered: string | null;
@@ -423,7 +363,7 @@ export class LessonService extends Context.Service<LessonService>()("LessonServi
           draft: boolean;
         },
       ) {
-        return yield* withAuthContext(sessionId, (db) =>
+        return yield* RequestDatabase.use((db) =>
           db
             .execute(
               db
@@ -458,8 +398,8 @@ export class LessonService extends Context.Service<LessonService>()("LessonServi
         );
       }),
 
-      getLessonNote: Effect.fn("getLessonNote")(function* (sessionId: string, lessonId: string) {
-        return yield* withAuthContext(sessionId, (db) =>
+      getLessonNote: Effect.fn("getLessonNote")(function* (lessonId: string) {
+        return yield* RequestDatabase.use((db) =>
           db
             .execute(
               db
@@ -476,11 +416,8 @@ export class LessonService extends Context.Service<LessonService>()("LessonServi
         );
       }),
 
-      publishLessonNote: Effect.fn("publishLessonNote")(function* (
-        sessionId: string,
-        lessonId: string,
-      ) {
-        return yield* withAuthContext(sessionId, (db) =>
+      publishLessonNote: Effect.fn("publishLessonNote")(function* (lessonId: string) {
+        return yield* RequestDatabase.use((db) =>
           db
             .execute(
               db
@@ -499,7 +436,6 @@ export class LessonService extends Context.Service<LessonService>()("LessonServi
       }),
 
       myLessons: Effect.fn("myLessons")(function* (
-        sessionId: string,
         values: {
           limit: number;
           offset: number;
@@ -509,8 +445,7 @@ export class LessonService extends Context.Service<LessonService>()("LessonServi
         },
         studentId?: string,
       ) {
-        return yield* withAuthContext(
-          sessionId,
+        return yield* RequestDatabase.use(
           Effect.fnUntraced(function* (db) {
             let query = db
               .selectFrom("app_public.lessons")
@@ -549,9 +484,8 @@ export class LessonService extends Context.Service<LessonService>()("LessonServi
         );
       }),
 
-      myLessonById: Effect.fn("myLessonById")(function* (sessionId: string, lessonId: string) {
-        return yield* withAuthContext(
-          sessionId,
+      myLessonById: Effect.fn("myLessonById")(function* (lessonId: string) {
+        return yield* RequestDatabase.use(
           Effect.fnUntraced(function* (db) {
             return yield* db
               .execute(
@@ -584,9 +518,8 @@ export class LessonService extends Context.Service<LessonService>()("LessonServi
         );
       }),
 
-      myLessonNotes: Effect.fn("myLessonNotes")(function* (sessionId: string, lessonId: string) {
-        return yield* withAuthContext(
-          sessionId,
+      myLessonNotes: Effect.fn("myLessonNotes")(function* (lessonId: string) {
+        return yield* RequestDatabase.use(
           Effect.fnUntraced(function* (db) {
             return yield* db
               .execute(
@@ -617,14 +550,13 @@ export class LessonService extends Context.Service<LessonService>()("LessonServi
       }),
 
       myLessonNotesList: Effect.fn("myLessonNotesList")(function* (
-        sessionId: string,
         values: {
           limit: number;
           offset: number;
         },
         studentId?: string,
       ) {
-        return yield* withAuthContext(sessionId, (db) => {
+        return yield* RequestDatabase.use((db) => {
           let q = db
             .selectFrom("app_public.lesson_notes as ln")
             .innerJoin("app_public.lessons as l", "l.id", "ln.lesson_id")
@@ -651,11 +583,10 @@ export class LessonService extends Context.Service<LessonService>()("LessonServi
       }),
 
       myLessonCancellationPolicy: Effect.fn("myLessonCancellationPolicy")(function* (values: {
-        sessionId: string;
         studentId: string;
         lessonId: string;
       }) {
-        const row = yield* withAuthContext(values.sessionId, (db) =>
+        const row = yield* RequestDatabase.use((db) =>
           db
             .execute(
               db
@@ -683,7 +614,7 @@ export class LessonService extends Context.Service<LessonService>()("LessonServi
         if (new Date(row.scheduled_at).getTime() <= now.getTime()) {
           return yield* new HttpError(409, "Only future lessons can be cancelled");
         }
-        const deposit = yield* withAuthContext(values.sessionId, (db) =>
+        const deposit = yield* RequestDatabase.use((db) =>
           db
             .execute(
               db
@@ -706,7 +637,6 @@ export class LessonService extends Context.Service<LessonService>()("LessonServi
       }),
 
       cancelMyLesson: Effect.fn("cancelMyLesson")(function* (values: {
-        sessionId: string;
         studentId: string;
         lessonId: string;
         reason: string | null;
@@ -715,8 +645,7 @@ export class LessonService extends Context.Service<LessonService>()("LessonServi
           lessonPolicyService.getSettings(),
         );
         const now = new Date(yield* Clock.currentTimeMillis);
-        const result = yield* withAuthContext(
-          values.sessionId,
+        const lesson = yield* RequestDatabase.use(
           Effect.fnUntraced(function* (db) {
             const row = yield* db
               .execute(
@@ -731,7 +660,6 @@ export class LessonService extends Context.Service<LessonService>()("LessonServi
                     "l.id",
                     "l.scheduled_at",
                     "l.status",
-                    "l.gcal_event_id",
                     "sr.rate_cents",
                     "sr.billing_model",
                   ])
@@ -805,18 +733,13 @@ export class LessonService extends Context.Service<LessonService>()("LessonServi
                   .returning(lessonColumns),
               )
               .pipe(Effect.head);
-            return { lesson, gcalEventId: row.gcal_event_id };
+            return lesson;
           }),
         );
-        if (result.gcalEventId) {
-          const googleCalendarService = yield* GoogleCalendarService;
-          yield* googleCalendarService.deleteEvent(result.gcalEventId).pipe(Effect.ignore);
-        }
-        return result.lesson;
+        return lesson;
       }),
 
       rescheduleMyLesson: Effect.fn("rescheduleMyLesson")(function* (values: {
-        sessionId: string;
         studentId: string;
         lessonId: string;
         scheduledAt: Date;
@@ -825,12 +748,12 @@ export class LessonService extends Context.Service<LessonService>()("LessonServi
         if (!Number.isFinite(values.scheduledAt.getTime()) || values.scheduledAt <= now) {
           return yield* new HttpError(400, "The new lesson time must be in the future");
         }
-        const existing = yield* withAuthContext(values.sessionId, (db) =>
+        const existing = yield* RequestDatabase.use((db) =>
           db
             .execute(
               db
                 .selectFrom("app_public.lessons")
-                .select(["scheduled_at", "duration_minutes", "gcal_event_id", "status"])
+                .select(["scheduled_at", "duration_minutes", "status"])
                 .where("id", "=", values.lessonId)
                 .where("student_id", "=", values.studentId),
             )
@@ -857,23 +780,11 @@ export class LessonService extends Context.Service<LessonService>()("LessonServi
         }
 
         const oldStart = new Date(existing.scheduled_at);
-        const oldEnd = new Date(oldStart.getTime() + existing.duration_minutes * 60 * 1000);
-        const newEnd = new Date(
-          values.scheduledAt.getTime() + existing.duration_minutes * 60 * 1000,
-        );
-        if (existing.gcal_event_id) {
-          const googleCalendarService = yield* GoogleCalendarService;
-          yield* googleCalendarService.updateEvent(existing.gcal_event_id, {
-            start: values.scheduledAt.toISOString(),
-            end: newEnd.toISOString(),
-          });
-        }
 
         const settings = yield* LessonPolicyService.use((lessonPolicyService) =>
           lessonPolicyService.getSettings(),
         );
-        const persist = withAuthContext(
-          values.sessionId,
+        return yield* RequestDatabase.use(
           Effect.fnUntraced(function* (db) {
             const row = yield* db
               .execute(
@@ -955,24 +866,9 @@ export class LessonService extends Context.Service<LessonService>()("LessonServi
               .pipe(Effect.head);
           }),
         );
-
-        return yield* persist.pipe(
-          Effect.catch((error) => {
-            const gcalEventId = existing.gcal_event_id;
-            return gcalEventId
-              ? GoogleCalendarService.use((googleCalendarService) =>
-                  googleCalendarService.updateEvent(gcalEventId, {
-                    start: oldStart.toISOString(),
-                    end: oldEnd.toISOString(),
-                  }),
-                ).pipe(Effect.ignore, Effect.andThen(Effect.fail(error)))
-              : Effect.fail(error);
-          }),
-        );
       }),
 
       bookLesson: Effect.fn("bookLesson")(function* (values: {
-        sessionId: string;
         userId: string;
         scheduledAt: Date;
         durationMinutes: number;
@@ -984,8 +880,7 @@ export class LessonService extends Context.Service<LessonService>()("LessonServi
       }) {
         const slotEnd = new Date(values.scheduledAt.getTime() + values.durationMinutes * 60000);
 
-        const { lesson } = yield* withAuthContext(
-          values.sessionId,
+        const { lesson } = yield* RequestDatabase.use(
           Effect.fnUntraced(function* (db) {
             const preflight = yield* db
               .execute(
@@ -1091,46 +986,6 @@ export class LessonService extends Context.Service<LessonService>()("LessonServi
             return { lesson, rate };
           }),
         );
-
-        const connected = yield* GoogleCalendarService.use((googleCalendarService) =>
-          googleCalendarService.isConnected(),
-        );
-        if (connected) {
-          const student = yield* withAuthContext(values.sessionId, (db) =>
-            db
-              .execute(
-                db
-                  .selectFrom("app_public.users")
-                  .select(["name", "username"])
-                  .where("id", "=", values.userId),
-              )
-              .pipe(
-                Effect.head,
-                Effect.catchTags({
-                  NoSuchElementError: () => new HttpError(404, "Student not found"),
-                }),
-              ),
-          );
-          const studentName = student.name || student.username || "Student";
-          const eventId = yield* GoogleCalendarService.use((googleCalendarService) =>
-            googleCalendarService.createEvent({
-              summary: `Lesson: ${studentName}`,
-              description: `${values.durationMinutes} min ${values.locationType.replace(/_/g, " ")} lesson`,
-              start: values.scheduledAt.toISOString(),
-              end: slotEnd.toISOString(),
-            }),
-          );
-          if (eventId) {
-            yield* withAuthContext(values.sessionId, (db) =>
-              db.execute(
-                db
-                  .updateTable("app_public.lessons")
-                  .set({ gcal_event_id: eventId })
-                  .where("id", "=", lesson.id),
-              ),
-            );
-          }
-        }
 
         return lesson;
       }),

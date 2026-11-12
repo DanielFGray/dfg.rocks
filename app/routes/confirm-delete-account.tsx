@@ -1,4 +1,5 @@
 import * as S from "effect/Schema";
+import { withAuthContext } from "../../server/requestDatabase.js";
 import { createServerFn } from "@tanstack/react-start";
 import { deleteCookie, getCookie } from "@tanstack/react-start/server";
 import { createFileRoute, Link, redirect } from "@tanstack/react-router";
@@ -31,7 +32,7 @@ const confirmDeleteAccountAction = createServerFn({ method: "POST" })
 
     const deleted = await runServerEffect(
       AccountService.use((accountService) =>
-        accountService.confirmDeleteAccount(auth.session.id, data.token),
+        accountService.confirmDeleteAccount(data.token).pipe(withAuthContext(auth.session.id)),
       ),
     );
 

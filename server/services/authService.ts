@@ -1,5 +1,6 @@
 import { Effect, Option, Context, Layer } from "effect";
-import { addJob, PgRootDB, withAuthContext } from "../db.js";
+import { addJob, PgRootDB } from "../db.js";
+import { RequestDatabase } from "../requestDatabase.js";
 import { sql } from "kysely";
 import type { UserRow } from "./userService.js";
 import { UserService } from "./userService.js";
@@ -36,7 +37,7 @@ export class AuthService extends Context.Service<AuthService>()("AuthService", {
       userId: string,
       knownActiveStudentId?: string | null,
     ) {
-      const profile = yield* withAuthContext(sessionId, (authDb) =>
+      const profile = yield* RequestDatabase.use((authDb) =>
         authDb
           .execute(
             authDb
@@ -79,7 +80,7 @@ export class AuthService extends Context.Service<AuthService>()("AuthService", {
 
       const familyStudents =
         isParent && profile
-          ? yield* withAuthContext(sessionId, (authDb) =>
+          ? yield* RequestDatabase.use((authDb) =>
               authDb
                 .execute(
                   authDb
@@ -129,7 +130,7 @@ export class AuthService extends Context.Service<AuthService>()("AuthService", {
 
       const activeStudent =
         activeStudentId && isParent
-          ? yield* withAuthContext(sessionId, (authDb) =>
+          ? yield* RequestDatabase.use((authDb) =>
               authDb
                 .execute(
                   authDb
@@ -311,28 +312,8 @@ export class AuthService extends Context.Service<AuthService>()("AuthService", {
 
       me,
 
-      /** The signed-in state for a session cookie; anonymous when the token names no live session. */
-      currentUser: Effect.fn("currentUser")(function* (token: string | undefined) {
-        const session = yield* SessionService.use((sessionService) =>
-          sessionService.validateSessionToken(token),
-        );
-        if (!session) {
-          return {
-            user: null,
-            isParent: false,
-            familyStudents: [],
-            activeStudentId: null,
-            activeStudent: null,
-          };
-        }
-        return yield* me(session.session.id, session.user.id, session.session.active_student_id);
-      }),
-
-      resendVerification: Effect.fn("resendVerification")(function* (
-        sessionId: string,
-        userId: string,
-      ) {
-        const email = yield* withAuthContext(sessionId, (authDb) =>
+      resendVerification: Effect.fn("resendVerification")(function* (userId: string) {
+        const email = yield* RequestDatabase.use((authDb) =>
           authDb
             .execute(
               authDb

@@ -4,6 +4,7 @@ import { sql } from "kysely";
 import pg from "pg";
 import { PgAuthDB, PgRootDB } from "../db.js";
 import { BillingLedgerService } from "../services/billingLedgerService.js";
+import { withAuthContext } from "../requestDatabase.js";
 
 const financialAuditServiceLayer = Layer.mergeAll(
   BillingLedgerService.layer,
@@ -97,21 +98,23 @@ describe("Financial audit", () => {
       Effect.gen(function* () {
         const svc = yield* BillingLedgerService;
         const db = yield* PgRootDB;
-        const bill = yield* svc.createBill(adminSessionId, {
-          payerId,
-          billingPeriodStart: "2026-07-01",
-          billingPeriodEnd: "2026-07-31",
-          lineItems: [
-            {
-              studentId,
-              lineType: "lesson",
-              description: "Test audit insert",
-              quantity: 1,
-              unitPriceCents: 5000,
-              amountCents: 5000,
-            },
-          ],
-        });
+        const bill = yield* svc
+          .createBill({
+            payerId,
+            billingPeriodStart: "2026-07-01",
+            billingPeriodEnd: "2026-07-31",
+            lineItems: [
+              {
+                studentId,
+                lineType: "lesson",
+                description: "Test audit insert",
+                quantity: 1,
+                unitPriceCents: 5000,
+                amountCents: 5000,
+              },
+            ],
+          })
+          .pipe(withAuthContext(adminSessionId));
         const audit = yield* db
           .execute(
             db
@@ -132,22 +135,24 @@ describe("Financial audit", () => {
       Effect.gen(function* () {
         const svc = yield* BillingLedgerService;
         const db = yield* PgRootDB;
-        const bill = yield* svc.createBill(adminSessionId, {
-          payerId,
-          billingPeriodStart: "2026-08-01",
-          billingPeriodEnd: "2026-08-31",
-          lineItems: [
-            {
-              studentId,
-              lineType: "lesson",
-              description: "Test audit update",
-              quantity: 1,
-              unitPriceCents: 5000,
-              amountCents: 5000,
-            },
-          ],
-        });
-        yield* svc.issueBill(adminSessionId, bill.id);
+        const bill = yield* svc
+          .createBill({
+            payerId,
+            billingPeriodStart: "2026-08-01",
+            billingPeriodEnd: "2026-08-31",
+            lineItems: [
+              {
+                studentId,
+                lineType: "lesson",
+                description: "Test audit update",
+                quantity: 1,
+                unitPriceCents: 5000,
+                amountCents: 5000,
+              },
+            ],
+          })
+          .pipe(withAuthContext(adminSessionId));
+        yield* svc.issueBill(bill.id).pipe(withAuthContext(adminSessionId));
         const audit = yield* db
           .execute(
             db
@@ -168,29 +173,33 @@ describe("Financial audit", () => {
       Effect.gen(function* () {
         const svc = yield* BillingLedgerService;
         const db = yield* PgRootDB;
-        const bill = yield* svc.createBill(adminSessionId, {
-          payerId,
-          billingPeriodStart: "2026-09-01",
-          billingPeriodEnd: "2026-09-30",
-          lineItems: [
-            {
-              studentId,
-              lineType: "lesson",
-              description: "Test audit payment",
-              quantity: 1,
-              unitPriceCents: 10000,
-              amountCents: 10000,
-            },
-          ],
-        });
-        yield* svc.issueBill(adminSessionId, bill.id);
-        const payment = yield* svc.recordPayment(adminSessionId, {
-          payerId,
-          amountCents: 10000,
-          method: "check",
-          reference: "AUDIT-001",
-          allocations: [{ billId: bill.id, amountCents: 10000 }],
-        });
+        const bill = yield* svc
+          .createBill({
+            payerId,
+            billingPeriodStart: "2026-09-01",
+            billingPeriodEnd: "2026-09-30",
+            lineItems: [
+              {
+                studentId,
+                lineType: "lesson",
+                description: "Test audit payment",
+                quantity: 1,
+                unitPriceCents: 10000,
+                amountCents: 10000,
+              },
+            ],
+          })
+          .pipe(withAuthContext(adminSessionId));
+        yield* svc.issueBill(bill.id).pipe(withAuthContext(adminSessionId));
+        const payment = yield* svc
+          .recordPayment({
+            payerId,
+            amountCents: 10000,
+            method: "check",
+            reference: "AUDIT-001",
+            allocations: [{ billId: bill.id, amountCents: 10000 }],
+          })
+          .pipe(withAuthContext(adminSessionId));
         const audit = yield* db
           .execute(
             db
@@ -330,21 +339,23 @@ describe("Financial audit", () => {
               .pipe(Effect.head);
           const before = yield* nextNumber();
           const result = yield* Effect.exit(
-            svc.createBill(adminSessionId, {
-              payerId: "00000000-0000-0000-0000-000000000000",
-              billingPeriodStart: "2026-10-01",
-              billingPeriodEnd: "2026-10-31",
-              lineItems: [
-                {
-                  studentId,
-                  lineType: "lesson",
-                  description: "Should fail",
-                  quantity: 1,
-                  unitPriceCents: 5000,
-                  amountCents: 5000,
-                },
-              ],
-            }),
+            svc
+              .createBill({
+                payerId: "00000000-0000-0000-0000-000000000000",
+                billingPeriodStart: "2026-10-01",
+                billingPeriodEnd: "2026-10-31",
+                lineItems: [
+                  {
+                    studentId,
+                    lineType: "lesson",
+                    description: "Should fail",
+                    quantity: 1,
+                    unitPriceCents: 5000,
+                    amountCents: 5000,
+                  },
+                ],
+              })
+              .pipe(withAuthContext(adminSessionId)),
           );
           expect(result._tag).toBe("Failure");
           expect((yield* nextNumber()).n).toBeGreaterThan(before.n);

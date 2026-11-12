@@ -1,5 +1,6 @@
 import { Effect, Option, Context, Layer } from "effect";
-import { withAuthContext, type Database, PgRootDB } from "../db.js";
+import { type Database, PgRootDB } from "../db.js";
+import { RequestDatabase } from "../requestDatabase.js";
 import { HttpError } from "../pgErrors.js";
 import { TestimonialReminderService } from "./testimonialReminderService.js";
 import { serializeTestimonial } from "../../shared/responseMappers.js";
@@ -12,8 +13,8 @@ export class TestimonialService extends Context.Service<TestimonialService>()(
     make: Effect.gen(function* () {
       const rootDb = yield* PgRootDB;
       return {
-        testimonial: Effect.fn("testimonial")(function* (sessionId: string, userId: string) {
-          return yield* withAuthContext(sessionId, (db) =>
+        testimonial: Effect.fn("testimonial")(function* (userId: string) {
+          return yield* RequestDatabase.use((db) =>
             testimonialSelect(db, userId).pipe(
               Effect.head,
               Effect.option,
@@ -21,13 +22,8 @@ export class TestimonialService extends Context.Service<TestimonialService>()(
             ),
           );
         }),
-        upsertTestimonial: Effect.fn("upsertTestimonial")(function* (
-          sessionId: string,
-          userId: string,
-          body: string,
-        ) {
-          const row = yield* withAuthContext(
-            sessionId,
+        upsertTestimonial: Effect.fn("upsertTestimonial")(function* (userId: string, body: string) {
+          const row = yield* RequestDatabase.use(
             Effect.fnUntraced(function* (db) {
               yield* db.execute(
                 db
@@ -52,12 +48,8 @@ export class TestimonialService extends Context.Service<TestimonialService>()(
           );
           return row;
         }),
-        deleteTestimonial: Effect.fn("deleteTestimonial")(function* (
-          sessionId: string,
-          userId: string,
-        ) {
-          yield* withAuthContext(
-            sessionId,
+        deleteTestimonial: Effect.fn("deleteTestimonial")(function* (userId: string) {
+          yield* RequestDatabase.use(
             Effect.fnUntraced(function* (db) {
               return yield* db
                 .execute(
@@ -78,8 +70,8 @@ export class TestimonialService extends Context.Service<TestimonialService>()(
             testimonialReminderService.scheduleNextReminder(userId),
           );
         }),
-        listTestimonials: Effect.fn("listTestimonials")(function* (sessionId: string) {
-          return yield* withAuthContext(sessionId, (db) =>
+        listTestimonials: Effect.fn("listTestimonials")(function* () {
+          return yield* RequestDatabase.use((db) =>
             db.execute(
               db
                 .selectFrom("app_public.testimonials as t")
@@ -102,11 +94,10 @@ export class TestimonialService extends Context.Service<TestimonialService>()(
           );
         }),
         updateTestimonialApproval: Effect.fn("updateTestimonialApproval")(function* (
-          sessionId: string,
           testimonialId: string,
           isApproved: boolean,
         ) {
-          return yield* withAuthContext(sessionId, (db) =>
+          return yield* RequestDatabase.use((db) =>
             db
               .execute(
                 db

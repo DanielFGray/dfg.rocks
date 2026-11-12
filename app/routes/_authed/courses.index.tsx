@@ -1,4 +1,5 @@
 import { Effect } from "effect";
+import { withAuthContext } from "../../../server/requestDatabase.js";
 import { useState } from "react";
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { useMutation } from "@tanstack/react-query";
@@ -27,7 +28,7 @@ const getCoursesPageData = createServerFn({ method: "GET" }).handler(() =>
       const effective = resolveEffectiveStudent(session);
       const filterStudentId = effective.isActing ? effective.studentId : undefined;
       const data = yield* CourseService.use((courseService) =>
-        courseService.courses(session.session.id, filterStudentId),
+        courseService.courses(filterStudentId).pipe(withAuthContext(session.session.id)),
       );
       return data.map(serializeCourse) satisfies CoursesPageData;
     }),

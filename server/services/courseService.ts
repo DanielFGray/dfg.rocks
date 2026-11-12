@@ -1,5 +1,5 @@
 import { Effect, Option, Context, Layer } from "effect";
-import { withAuthContext } from "../db.js";
+import { RequestDatabase } from "../requestDatabase.js";
 import { sql } from "kysely";
 import { HttpError } from "../pgErrors.js";
 import * as S from "effect/Schema";
@@ -10,164 +10,146 @@ import * as Struct from "effect/Struct";
 /** Courses, their modules and enrollments. */
 export class CourseService extends Context.Service<CourseService>()("CourseService", {
   make: Effect.sync(() => ({
-    courses: Effect.fn("courses")(function* (sessionId: string, studentId?: string) {
-      return yield* withAuthContext(sessionId, (db) => {
-        let q = db
-          .selectFrom("app_public.courses")
-          .select(["id", "title", "description", "instrument"]);
-        if (studentId) {
-          q = q.where((eb) =>
-            eb("id", "in", (sq) =>
-              sq
-                .selectFrom("app_public.enrollments")
-                .select("course_id")
-                .where("student_id", "=", studentId),
-            ),
-          );
-        }
-        return db.execute(q);
-      });
+    courses: Effect.fn("courses")(function* (studentId?: string) {
+      const db = yield* RequestDatabase;
+      let q = db
+        .selectFrom("app_public.courses")
+        .select(["id", "title", "description", "instrument"]);
+      if (studentId) {
+        q = q.where((eb) =>
+          eb("id", "in", (sq) =>
+            sq
+              .selectFrom("app_public.enrollments")
+              .select("course_id")
+              .where("student_id", "=", studentId),
+          ),
+        );
+      }
+      return yield* db.execute(q);
     }),
-    courseById: Effect.fn("courseById")(function* (sessionId: string, courseId: string) {
-      return yield* withAuthContext(
-        sessionId,
-        Effect.fnUntraced(function* (db) {
-          const rows = yield* db
-            .execute(
-              db
-                .with("course_data", (qb) =>
-                  qb
-                    .selectFrom("app_public.courses")
-                    .select(["id", "title", "description", "instrument"])
-                    .where("id", "=", courseId),
-                )
-                .with("mods", (qb) =>
-                  qb
-                    .selectFrom("app_public.modules")
-                    .select(["id", "course_id", "title", "content", "sort_order"])
-                    .where("course_id", "=", courseId)
-                    .orderBy("sort_order"),
-                )
-                .with("mod_mats", (qb) =>
-                  qb
-                    .selectFrom("app_public.module_materials as mm")
-                    .innerJoin("app_public.materials as mat", "mat.id", "mm.material_id")
-                    .innerJoin("app_public.modules as mod", "mod.id", "mm.module_id")
-                    .where("mod.course_id", "=", courseId)
-                    .select((eb) => [
-                      "mm.module_id",
-                      "mat.id",
-                      "mat.title",
-                      "mat.original_filename",
-                      "mat.mime_type",
-                      eb.cast("mat.file_size", "integer").as("file_size"),
-                      "mat.is_global",
-                      "mat.notation_tracks",
-                      "mm.sort_order",
-                    ])
-                    .orderBy("mm.sort_order"),
-                )
-                .selectFrom("course_data")
-                .selectAll("course_data")
-                .select((eb) => [
-                  eb.fn
-                    .coalesce(
-                      sql`(SELECT json_agg(row_to_json(mods.*)) FROM mods)`,
-                      sql`'[]'::json`,
-                    )
-                    .as("modules_json"),
-                  eb.fn
-                    .coalesce(
-                      sql`(SELECT json_agg(row_to_json(mod_mats.*)) FROM mod_mats)`,
-                      sql`'[]'::json`,
-                    )
-                    .as("materials_json"),
-                ]),
-            )
-            .pipe(
-              Effect.head,
-              Effect.catchTags({
-                NoSuchElementError: () => new HttpError(404, "Course not found"),
-              }),
-            );
-
-          const modulesJson = yield* S.decodeUnknownEffect(S.Array(Module))(rows.modules_json);
-          const materialsJson = yield* S.decodeUnknownEffect(S.Array(CourseMaterial))(
-            rows.materials_json,
-          );
-
-          const matsByModule = new Map<string, S.Schema.Type<typeof CourseMaterial>[]>();
-          for (const mat of materialsJson) {
-            const list = matsByModule.get(mat.module_id) || [];
-            list.push(mat);
-            matsByModule.set(mat.module_id, list);
-          }
-
-          const { modules_json: _modules_json, materials_json: _materials_json, ...course } = rows;
-          const modulesWithMaterials = modulesJson.map((mod) => ({
-            ...mod,
-            materials: matsByModule.get(mod.id) || [],
-          }));
-
-          return { ...course, modules: modulesWithMaterials };
-        }),
-      );
-    }),
-    listCourses: Effect.fn("listCourses")(function* (sessionId: string) {
-      return yield* withAuthContext(sessionId, (db) =>
-        db.execute(
-          db.selectFrom("app_public.courses").select(["id", "title", "description", "instrument"]),
-        ),
-      );
-    }),
-    listCourseStudents: Effect.fn("listCourseStudents")(function* (
-      sessionId: string,
-      courseId: string,
-    ) {
-      return yield* withAuthContext(sessionId, (db) =>
-        db.execute(
+    courseById: Effect.fn("courseById")(function* (courseId: string) {
+      const db = yield* RequestDatabase;
+      const rows = yield* db
+        .execute(
           db
-            .selectFrom("app_public.enrollments as e")
-            .innerJoin("app_public.users as u", "u.id", "e.student_id")
-            .where("e.course_id", "=", courseId)
-            .select(["u.id", "u.username", "u.name", "u.role", "u.is_verified"])
-            .select((eb) =>
-              eb
-                .selectFrom("app_public.user_emails")
-                .select("email")
-                .whereRef("app_public.user_emails.user_id", "=", "u.id")
-                .where("is_primary", "=", true)
-                .as("email"),
-            ),
-        ),
+            .with("course_data", (qb) =>
+              qb
+                .selectFrom("app_public.courses")
+                .select(["id", "title", "description", "instrument"])
+                .where("id", "=", courseId),
+            )
+            .with("mods", (qb) =>
+              qb
+                .selectFrom("app_public.modules")
+                .select(["id", "course_id", "title", "content", "sort_order"])
+                .where("course_id", "=", courseId)
+                .orderBy("sort_order"),
+            )
+            .with("mod_mats", (qb) =>
+              qb
+                .selectFrom("app_public.module_materials as mm")
+                .innerJoin("app_public.materials as mat", "mat.id", "mm.material_id")
+                .innerJoin("app_public.modules as mod", "mod.id", "mm.module_id")
+                .where("mod.course_id", "=", courseId)
+                .select((eb) => [
+                  "mm.module_id",
+                  "mat.id",
+                  "mat.title",
+                  "mat.original_filename",
+                  "mat.mime_type",
+                  eb.cast("mat.file_size", "integer").as("file_size"),
+                  "mat.is_global",
+                  "mat.notation_tracks",
+                  "mm.sort_order",
+                ])
+                .orderBy("mm.sort_order"),
+            )
+            .selectFrom("course_data")
+            .selectAll("course_data")
+            .select((eb) => [
+              eb.fn
+                .coalesce(sql`(SELECT json_agg(row_to_json(mods.*)) FROM mods)`, sql`'[]'::json`)
+                .as("modules_json"),
+              eb.fn
+                .coalesce(
+                  sql`(SELECT json_agg(row_to_json(mod_mats.*)) FROM mod_mats)`,
+                  sql`'[]'::json`,
+                )
+                .as("materials_json"),
+            ]),
+        )
+        .pipe(
+          Effect.head,
+          Effect.catchTags({
+            NoSuchElementError: () => new HttpError(404, "Course not found"),
+          }),
+        );
+
+      const modulesJson = yield* S.decodeUnknownEffect(S.Array(Module))(rows.modules_json);
+      const materialsJson = yield* S.decodeUnknownEffect(S.Array(CourseMaterial))(
+        rows.materials_json,
+      );
+
+      const matsByModule = new Map<string, S.Schema.Type<typeof CourseMaterial>[]>();
+      for (const mat of materialsJson) {
+        const list = matsByModule.get(mat.module_id) || [];
+        list.push(mat);
+        matsByModule.set(mat.module_id, list);
+      }
+
+      const { modules_json: _modules_json, materials_json: _materials_json, ...course } = rows;
+      const modulesWithMaterials = modulesJson.map((mod) => ({
+        ...mod,
+        materials: matsByModule.get(mod.id) || [],
+      }));
+
+      return { ...course, modules: modulesWithMaterials };
+    }),
+    listCourses: Effect.fn("listCourses")(function* () {
+      const db = yield* RequestDatabase;
+      return yield* db.execute(
+        db.selectFrom("app_public.courses").select(["id", "title", "description", "instrument"]),
       );
     }),
-    createCourse: Effect.fn("createCourse")(function* (
-      sessionId: string,
-      values: {
-        title: string;
-        description: string;
-        instrument: string;
-      },
-    ) {
-      return yield* withAuthContext(sessionId, (db) =>
+    listCourseStudents: Effect.fn("listCourseStudents")(function* (courseId: string) {
+      const db = yield* RequestDatabase;
+      return yield* db.execute(
         db
-          .execute(
-            db
-              .insertInto("app_public.courses")
-              .values(values)
-              .returning(["id", "title", "description", "instrument"]),
-          )
-          .pipe(
-            Effect.head,
-            Effect.catchTags({
-              NoSuchElementError: () => new HttpError(500, "Failed to create course"),
-            }),
+          .selectFrom("app_public.enrollments as e")
+          .innerJoin("app_public.users as u", "u.id", "e.student_id")
+          .where("e.course_id", "=", courseId)
+          .select(["u.id", "u.username", "u.name", "u.role", "u.is_verified"])
+          .select((eb) =>
+            eb
+              .selectFrom("app_public.user_emails")
+              .select("email")
+              .whereRef("app_public.user_emails.user_id", "=", "u.id")
+              .where("is_primary", "=", true)
+              .as("email"),
           ),
       );
     }),
+    createCourse: Effect.fn("createCourse")(function* (values: {
+      title: string;
+      description: string;
+      instrument: string;
+    }) {
+      const db = yield* RequestDatabase;
+      return yield* db
+        .execute(
+          db
+            .insertInto("app_public.courses")
+            .values(values)
+            .returning(["id", "title", "description", "instrument"]),
+        )
+        .pipe(
+          Effect.head,
+          Effect.catchTags({
+            NoSuchElementError: () => new HttpError(500, "Failed to create course"),
+          }),
+        );
+    }),
     updateCourse: Effect.fn("updateCourse")(function* (
-      sessionId: string,
       id: string,
       updates: Partial<{
         title: string;
@@ -175,72 +157,66 @@ export class CourseService extends Context.Service<CourseService>()("CourseServi
         instrument: string;
       }>,
     ) {
-      return yield* withAuthContext(sessionId, (db) =>
-        db
-          .execute(
-            db
-              .updateTable("app_public.courses")
-              .set(updates)
-              .where("id", "=", id)
-              .returning(["id", "title", "description", "instrument"]),
-          )
-          .pipe(Effect.head, Effect.option, Effect.map(Option.getOrUndefined)),
-      );
+      const db = yield* RequestDatabase;
+      return yield* db
+        .execute(
+          db
+            .updateTable("app_public.courses")
+            .set(updates)
+            .where("id", "=", id)
+            .returning(["id", "title", "description", "instrument"]),
+        )
+        .pipe(Effect.head, Effect.option, Effect.map(Option.getOrUndefined));
     }),
-    deleteCourse: Effect.fn("deleteCourse")(function* (sessionId: string, id: string) {
-      yield* withAuthContext(sessionId, (db) =>
-        db.execute(db.deleteFrom("app_public.courses").where("id", "=", id)),
-      );
+    deleteCourse: Effect.fn("deleteCourse")(function* (id: string) {
+      const db = yield* RequestDatabase;
+      yield* db.execute(db.deleteFrom("app_public.courses").where("id", "=", id));
     }),
-    getModule: Effect.fn("getModule")(function* (sessionId: string, id: string) {
-      return yield* withAuthContext(sessionId, (db) =>
-        db
-          .execute(
-            db
-              .selectFrom("app_public.modules")
-              .select(["id", "course_id", "title", "content", "sort_order"])
-              .where("id", "=", id),
-          )
-          .pipe(
-            Effect.head,
-            Effect.catchTags({
-              NoSuchElementError: () => new HttpError(404, "Module not found"),
-            }),
-            Effect.flatMap(S.decodeUnknownEffect(Module)),
-          ),
-      );
+    getModule: Effect.fn("getModule")(function* (id: string) {
+      const db = yield* RequestDatabase;
+      return yield* db
+        .execute(
+          db
+            .selectFrom("app_public.modules")
+            .select(["id", "course_id", "title", "content", "sort_order"])
+            .where("id", "=", id),
+        )
+        .pipe(
+          Effect.head,
+          Effect.catchTags({
+            NoSuchElementError: () => new HttpError(404, "Module not found"),
+          }),
+          Effect.flatMap(S.decodeUnknownEffect(Module)),
+        );
     }),
     createModule: Effect.fn("createModule")(function* (
-      sessionId: string,
       courseId: string,
       values: {
         title: string;
         sort_order: number;
       },
     ) {
-      return yield* withAuthContext(sessionId, (db) =>
-        db
-          .execute(
-            db
-              .insertInto("app_public.modules")
-              .values({
-                course_id: courseId,
-                title: values.title,
-                sort_order: values.sort_order,
-              })
-              .returning(["id", "course_id", "title", "content", "sort_order"]),
-          )
-          .pipe(
-            Effect.head,
-            Effect.catchTags({
-              NoSuchElementError: () => new HttpError(500, "Failed to create module"),
-            }),
-            Effect.flatMap(S.decodeUnknownEffect(Module)),
-          ),
-      );
+      const db = yield* RequestDatabase;
+      return yield* db
+        .execute(
+          db
+            .insertInto("app_public.modules")
+            .values({
+              course_id: courseId,
+              title: values.title,
+              sort_order: values.sort_order,
+            })
+            .returning(["id", "course_id", "title", "content", "sort_order"]),
+        )
+        .pipe(
+          Effect.head,
+          Effect.catchTags({
+            NoSuchElementError: () => new HttpError(500, "Failed to create module"),
+          }),
+          Effect.flatMap(S.decodeUnknownEffect(Module)),
+        );
     }),
     updateModule: Effect.fn("updateModule")(function* (
-      sessionId: string,
       id: string,
       updates: {
         title?: string;
@@ -258,91 +234,76 @@ export class CourseService extends Context.Service<CourseService>()("CourseServi
       if (updates.sort_order !== undefined) {
         moduleUpdates.sort_order = updates.sort_order;
       }
-      return yield* withAuthContext(
-        sessionId,
-        Effect.fnUntraced(function* (db) {
-          const mod = yield* db
-            .execute(
-              db
-                .updateTable("app_public.modules")
-                .set(moduleUpdates)
-                .where("id", "=", id)
-                .returning(["id", "course_id", "title", "content", "sort_order"]),
-            )
-            .pipe(
-              Effect.head,
-              Effect.catchTags({
-                NoSuchElementError: () => new HttpError(404, "Module not found"),
-              }),
-              Effect.flatMap(S.decodeUnknownEffect(Module)),
-            );
-          if (updates.content !== undefined) {
-            const materialIds = updates.content === null ? [] : extractMaterialIds(updates.content);
-            if (materialIds.length > 0) {
-              yield* db.execute(
-                db
-                  .deleteFrom("app_public.module_materials")
-                  .where("module_id", "=", id)
-                  .where("material_id", "not in", materialIds),
-              );
-            } else {
-              yield* db.execute(
-                db.deleteFrom("app_public.module_materials").where("module_id", "=", id),
-              );
-            }
-            if (materialIds.length > 0) {
-              yield* db.execute(
-                db
-                  .insertInto("app_public.module_materials")
-                  .values(
-                    materialIds.map((materialId, index) => ({
-                      module_id: id,
-                      material_id: materialId,
-                      sort_order: index,
-                    })),
-                  )
-                  .onConflict((oc) => oc.doNothing()),
-              );
-            }
-          }
-          return mod;
-        }),
-      );
-    }),
-    deleteModule: Effect.fn("deleteModule")(function* (sessionId: string, id: string) {
-      yield* withAuthContext(sessionId, (db) =>
-        db.execute(db.deleteFrom("app_public.modules").where("id", "=", id)),
-      );
-    }),
-    enrollStudent: Effect.fn("enrollStudent")(function* (
-      sessionId: string,
-      studentId: string,
-      courseId: string,
-    ) {
-      yield* withAuthContext(sessionId, (db) =>
-        db.execute(
+      const db = yield* RequestDatabase;
+      const mod = yield* db
+        .execute(
           db
-            .insertInto("app_public.enrollments")
-            .values({
-              student_id: studentId,
-              course_id: courseId,
-            })
-            .onConflict((oc) => oc.doNothing()),
-        ),
+            .updateTable("app_public.modules")
+            .set(moduleUpdates)
+            .where("id", "=", id)
+            .returning(["id", "course_id", "title", "content", "sort_order"]),
+        )
+        .pipe(
+          Effect.head,
+          Effect.catchTags({
+            NoSuchElementError: () => new HttpError(404, "Module not found"),
+          }),
+          Effect.flatMap(S.decodeUnknownEffect(Module)),
+        );
+      if (updates.content !== undefined) {
+        const materialIds = updates.content === null ? [] : extractMaterialIds(updates.content);
+        if (materialIds.length > 0) {
+          yield* db.execute(
+            db
+              .deleteFrom("app_public.module_materials")
+              .where("module_id", "=", id)
+              .where("material_id", "not in", materialIds),
+          );
+        } else {
+          yield* db.execute(
+            db.deleteFrom("app_public.module_materials").where("module_id", "=", id),
+          );
+        }
+        if (materialIds.length > 0) {
+          yield* db.execute(
+            db
+              .insertInto("app_public.module_materials")
+              .values(
+                materialIds.map((materialId, index) => ({
+                  module_id: id,
+                  material_id: materialId,
+                  sort_order: index,
+                })),
+              )
+              .onConflict((oc) => oc.doNothing()),
+          );
+        }
+      }
+      return mod;
+    }),
+    deleteModule: Effect.fn("deleteModule")(function* (id: string) {
+      const db = yield* RequestDatabase;
+      yield* db.execute(db.deleteFrom("app_public.modules").where("id", "=", id));
+    }),
+    enrollStudent: Effect.fn("enrollStudent")(function* (studentId: string, courseId: string) {
+      const db = yield* RequestDatabase;
+      yield* db.execute(
+        db
+          .insertInto("app_public.enrollments")
+          .values({
+            student_id: studentId,
+            course_id: courseId,
+          })
+          .onConflict((oc) => oc.doNothing()),
       );
     }),
-    unenrollStudent: Effect.fn("unenrollStudent")(function* (
-      sessionId: string,
-      studentId: string,
-      courseId: string,
-    ) {
-      yield* withAuthContext(sessionId, (db) =>
-        db.execute(
-          db
-            .deleteFrom("app_public.enrollments")
-            .where("student_id", "=", studentId)
-            .where("course_id", "=", courseId),
-        ),
+    unenrollStudent: Effect.fn("unenrollStudent")(function* (studentId: string, courseId: string) {
+      const db = yield* RequestDatabase;
+      yield* db.execute(
+        db
+          .deleteFrom("app_public.enrollments")
+          .where("student_id", "=", studentId)
+          .where("course_id", "=", courseId),
       );
     }),
   })),

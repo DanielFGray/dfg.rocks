@@ -4,6 +4,9 @@ import { describe, expect, it } from "@effect/vitest";
 import { Context, Effect, Layer } from "effect";
 import * as FileSystem from "effect/FileSystem";
 import { BackgroundWorker } from "../services/backgroundWorker.js";
+import * as FetchHttpClient from "effect/http/FetchHttpClient";
+import { PgRootDB } from "../db.js";
+import { GoogleCalendarService } from "../services/googleCalendarService.js";
 
 describe("BackgroundWorker.layer", () => {
   // The server builds this layer before it listens. A runner that cannot start must not stop the
@@ -17,7 +20,18 @@ describe("BackgroundWorker.layer", () => {
         yield* fileSystem.writeFileString(`${dir}/crontab`, "not a crontab line\n");
         const services = yield* Layer.build(BackgroundWorker.layer(dir));
         expect(yield* Context.get(services, BackgroundWorker).failed).toBe(true);
-      }).pipe(Effect.scoped, Effect.provide(Layer.mergeAll(NodeFileSystem.layer, NodePath.layer))),
+      }).pipe(
+        Effect.scoped,
+        Effect.provide(
+          Layer.mergeAll(
+            NodeFileSystem.layer,
+            NodePath.layer,
+            FetchHttpClient.layer,
+            PgRootDB.Live,
+            GoogleCalendarService.layer.pipe(Layer.provide(PgRootDB.Live)),
+          ),
+        ),
+      ),
     30_000,
   );
 });

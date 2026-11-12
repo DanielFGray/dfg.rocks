@@ -1,9 +1,19 @@
 import { Config, Context, Effect, Layer, Redacted, Ref } from "effect";
 import { FileSystem } from "effect/FileSystem";
 import { Path } from "effect/Path";
+import * as HttpClient from "effect/http/HttpClient";
 import { getTasks, run, type Runner, type Task } from "graphile-worker";
 import { Mailer } from "../../worker/email/mailer.js";
 import { sendEmail } from "../../worker/email/sendEmail.js";
+import { syncLessonEvent } from "../../worker/calendar/syncLessonEvent.js";
+import { PgRootDB } from "../db.js";
+import { GoogleCalendarService } from "./googleCalendarService.js";
+
+/** The Effect tasks installed in addition to task files. */
+export const effectTasks = (templateDirectory: string) => ({
+  send_email: (payload: unknown) => sendEmail(payload, templateDirectory),
+  lessons__sync_calendar_event: syncLessonEvent,
+});
 
 export interface BackgroundWorkerShape {
   // True once the runner has failed to start, or has stopped before its layer closed.
@@ -47,7 +57,9 @@ const startRunner = Effect.fnUntraced(function* (
   failedRef: Ref.Ref<boolean>,
 ) {
   const connectionString = Redacted.value(yield* Config.Redacted("DATABASE_URL"));
-  const files = yield* Effect.context<FileSystem | Path>();
+  const files = yield* Effect.context<
+    FileSystem | Path | PgRootDB | GoogleCalendarService | HttpClient.HttpClient
+  >();
   const path = yield* Path;
   // Built here, not as a dependency of the layer: a mail provider that cannot start stops only the
   // worker.
@@ -59,10 +71,19 @@ const startRunner = Effect.fnUntraced(function* (
   );
   // graphile-worker retries a job whose task rejects, so a failed delivery must reject.
   const templateDirectory = path.join(workerDirectory, "templates");
-  const deliver: Task = (payload, helpers) =>
-    Effect.runPromiseWith(services)(sendEmail(payload, templateDirectory), {
-      signal: helpers.abortSignal,
-    });
+  const registered = Object.fromEntries(
+    Object.entries(effectTasks(templateDirectory)).map(([name, task]): [string, Task] => {
+      const deliver: Task = (payload, helpers) => {
+        const effect: Effect.Effect<
+          void,
+          Effect.Error<ReturnType<typeof task>>,
+          Effect.Services<ReturnType<typeof task>>
+        > = task(payload);
+        return Effect.runPromiseWith(services)(effect, { signal: helpers.abortSignal });
+      };
+      return [name, deliver];
+    }),
+  );
   const runner = yield* Effect.acquireRelease(
     Effect.tryPromise(() =>
       run({
@@ -70,7 +91,7 @@ const startRunner = Effect.fnUntraced(function* (
         // The signal handlers belong to the server, which closes this layer on SIGTERM and SIGINT.
         noHandleSignals: true,
         crontabFile: path.join(workerDirectory, "crontab"),
-        taskList: { ...loaded.tasks, send_email: deliver },
+        taskList: { ...loaded.tasks, ...registered },
       }),
     ),
     stopRunner(failedRef),
