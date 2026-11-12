@@ -27,6 +27,8 @@ Production runs on the server-ansible platform (`~/build/server-ansible`), descr
 
 The server reads each setting with Effect `Config` where it uses it. Worker tasks read `process.env`, and the graphile-worker CLI takes `DATABASE_URL` from the environment.
 
+**Boot.** The server waits for both Postgres pools, and in production for Valkey (a PING), before it starts the worker or opens its port (`server/dependencies.ts`). Each retries for about 78 s, then startup fails with `DependencyUnavailable` naming it. The worker runner starts while its layer builds (`server/services/backgroundWorker.ts`), and a runner that cannot start stops the server. After boot, a Valkey outage does not stop the server: each rate-limit rule applies its `whenStoreDown` policy, and `/healthz` reports a worker that stopped.
+
 ## Backend reference
 
 The backend follows ~/build/effect-web-template. Before you add or change a
