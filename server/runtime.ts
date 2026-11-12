@@ -30,6 +30,7 @@ import { makeFamilyBillingLayer } from "./api/familyBilling.js";
 import { makeHealthLayer } from "./api/health.js";
 import { makePublicLayer } from "./api/public.js";
 import { PgAuthDB, PgRootDB } from "./db.js";
+import { ValkeyReady } from "./dependencies.js";
 import { LessonService } from "./services/lessonService.js";
 import { AuthService } from "./services/authService.js";
 import { BackgroundWorker } from "./services/backgroundWorker.js";
@@ -69,26 +70,26 @@ const infrastructureLayer = Layer.mergeAll(
   PgAuthDB.Live,
 );
 
+// By default Bun's client stops after a few reconnect attempts and stays
+// closed when Valkey returns, and it holds commands while it reconnects.
+// With these options it keeps reconnecting, and a command fails at once
+// while it is not connected, so a request does not wait on an outage. The
+// client connects on first use; the boot waits for it (ValkeyReady).
+const valkeyClient = BunRedis.layerConfig({
+  url: Config.String("VALKEY_URL"),
+  maxRetries: Config.succeed(1_000_000),
+  enableOfflineQueue: Config.succeed(false),
+});
+
+const rateLimiterWithValkey = Layer.mergeAll(
+  ValkeyReady,
+  RateLimitService.Live.pipe(Layer.provide(RateLimiterValkey)),
+).pipe(Layer.provide(valkeyClient));
+
 // Outside production, E2E browsers share one address, so a real limiter would throttle the suite.
 const rateLimitLayer = Layer.unwrap(
   Effect.map(Config.String("NODE_ENV"), (nodeEnv) =>
-    nodeEnv === "production"
-      ? RateLimitService.Live.pipe(
-          Layer.provide(RateLimiterValkey),
-          // Bun's client connects on first use, so the server starts while Valkey is down.
-          // By default the client stops after a few reconnect attempts and stays closed
-          // when Valkey returns, and it holds commands while it reconnects. With these
-          // options it keeps reconnecting, and a command fails at once while Valkey is
-          // down, so each rule applies its whenStoreDown policy without waiting.
-          Layer.provide(
-            BunRedis.layerConfig({
-              url: Config.String("VALKEY_URL"),
-              maxRetries: Config.succeed(1_000_000),
-              enableOfflineQueue: Config.succeed(false),
-            }),
-          ),
-        )
-      : RateLimitService.Test,
+    nodeEnv === "production" ? rateLimiterWithValkey : RateLimitService.Test,
   ),
 );
 

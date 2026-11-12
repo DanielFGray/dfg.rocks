@@ -1,7 +1,8 @@
 import { PgClient, PgTypes } from "@effect/sql-pg";
 import * as SqlClient from "effect/sql/SqlClient";
 import type { SqlError } from "effect/sql/SqlError";
-import { Effect, Context, Config, Schedule, Layer, Duration, Result } from "effect";
+import { Effect, Context, Config, Layer, Result } from "effect";
+import { waitFor } from "./dependencies.js";
 import {
   type CompiledQuery,
   DummyDriver,
@@ -105,24 +106,11 @@ pgTypes.register<string>(PgTypes.OID.time, {
   },
 });
 
-// Keeps retrying while Postgres is unreachable, e.g. while the container starts.
-const connectRetrySchedule = Schedule.exponential("100 millis").pipe(
-  Schedule.jittered,
-  Schedule.tap((meta) =>
-    Effect.logInfo(
-      `Retrying database connection in ${Duration.format(meta.output)} (attempt #${meta.attempt})`,
-    ),
-  ),
-);
-
 const clientLayer = (urlKey: string) =>
   PgClient.layerFrom(
     Config.Redacted(urlKey).pipe(
       Effect.flatMap((url) => PgClient.make({ url, types: pgTypes })),
-      Effect.retry({
-        schedule: connectRetrySchedule,
-        while: (error) => error._tag === "SqlError",
-      }),
+      waitFor(`postgres (${urlKey})`),
     ),
   );
 
