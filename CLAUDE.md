@@ -93,20 +93,22 @@ Routes live in `app/routes/`. Auth-guarded routes under `app/routes/_authed/` (l
 
 Backend uses Effect HttpApi for routing/handlers, Kysely for type-safe SQL, and PostgreSQL RLS for row-level security.
 
-**DB connections** (`server/db.ts`):
+**DB connections** (`server/db.ts`, `server/requestDatabase.ts`):
 
-- `withAuthContext(sessionId, fn)` — authenticated queries on `PgAuthDB` (RLS enforced via `set_config`)
+- `RequestDatabase` (`server/requestDatabase.ts`): the visitor connection inside the request's transaction. A service method yields it; its handler pipes the call through `withAuthContext(sessionId)`, which sets the visitor role and session for that transaction, so RLS applies.
 - `PgRootDB` — auth functions (`app_private.*`), admin DML, cross-user lookups (bypasses RLS)
 
 Both are a `Database`: a Kysely instance that only builds queries. Run a query with `db.execute(builder)`, which returns an Effect of its rows inside the current Effect transaction. Kysely's own `.execute()` throws, so no query runs outside the transaction.
 
 ```typescript
-// Authenticated handler with RLS:
-.get("/courses", ({ auth }) =>
-  withAuthContext(auth.session.id, (db) =>
-    db.execute(db.selectFrom("app_public.courses").select([...]))
-  )
-)
+// Service method: queries as the visitor, with RLS
+listCourses: Effect.fn("CourseService.listCourses")(function* () {
+  const db = yield* RequestDatabase
+  return yield* db.execute(db.selectFrom("app_public.courses").select([...]))
+}),
+
+// Handler: one visitor transaction for the call
+courseService.listCourses().pipe(withAuthContext(auth.session.id))
 ```
 
 **Don't filter by user_id in TypeScript** — RLS handles it.
@@ -136,10 +138,10 @@ RLS policies derive user context from `current_setting('my.session_id')` joined 
 
 ## RLS & `withAuthContext` Rules
 
-- **All `app_public` queries MUST use `withAuthContext`** so RLS enforces per-row access.
+- **All `app_public` queries run as the visitor**: the service yields `RequestDatabase` and the handler pipes the call through `withAuthContext`, so RLS enforces per-row access. One handler call runs in one visitor transaction.
+- **No HTTP call runs inside that transaction.** Queue a job; when the visitor role cannot queue it, a row-change trigger does (`app_private.tg_lessons__sync_calendar_event`).
 - **Only `app_private` schema operations** (session creation, auth functions, background workers) use `rootDb` directly.
 - Even admin CRUD on `app_public` tables goes through `withAuthContext` — RLS confirms admin role via `current_user_role()`.
-- **`withAuthContext` callback signature**: `<A, E, R>(sessionId, (db) => Effect<A, E, R>)` — the `<R>` generic allows callbacks with environment requirements (e.g., `fileService.ts` which nests `withAuthContext` calls).
 - **Server function payloads**: a `createServerFn` returns the contract types directly. TanStack Start serializes them with Seroval, so a Date arrives as a Date.
 
 ## Known Issues
@@ -154,7 +156,7 @@ Benign warning, no functionality impact.
 
 - Effect throughout: handlers and services are Effects, and errors are Schema tagged errors in the error channel. When you touch an async/await handler, convert it.
 - Effect HttpApi route groups with shared auth/raw-handler helpers
-- Kysely queries run through `withAuthContext`, and PostgreSQL errcodes map to typed HTTP errors
+- Kysely queries run as the visitor through `RequestDatabase` and `withAuthContext`, and PostgreSQL errcodes map to typed HTTP errors
 
 ### Client
 
@@ -179,7 +181,8 @@ Benign warning, no functionality impact.
 | `server/shell/`                            | Site: routing, static files, Vite                     |
 | `server/app.ts`                            | makeApp: services, job runner, /api handler           |
 | `server/runtime.ts`                        | Application layer, AppServices, HttpApiLive           |
-| `server/db.ts`                             | Database, PgRootDB, PgAuthDB, withAuthContext         |
+| `server/db.ts`                             | Database, PgRootDB, PgAuthDB                          |
+| `server/requestDatabase.ts`                | RequestDatabase, withAuthContext                      |
 | `server/api/health.ts`                     | GET /healthz (database and worker)                    |
 | `server/api/public.ts`                     | Public endpoints (contact, OAuth)                     |
 | `server/api/auth.ts`                       | Auth endpoints (login, logout, me, password)          |
