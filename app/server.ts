@@ -4,7 +4,7 @@ import {
   defaultStreamHandler,
   type RequestOptions,
 } from "@tanstack/react-start/server";
-import { makeApp } from "../server/app.js";
+import { App } from "../server/app.js";
 
 const startHandler = createStartHandler(defaultStreamHandler);
 
@@ -14,5 +14,5 @@ export default {
   fetch(request: Request, opts: RequestOptions<Register>) {
     return startHandler(request, opts);
   },
-  makeApp,
+  App,
 };

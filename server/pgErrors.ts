@@ -8,29 +8,34 @@ import { SqlError } from "effect/sql/SqlError";
 import { Effect } from "effect";
 import * as Schema from "effect/Schema";
 
-export class HttpError extends Schema.TaggedError<HttpError>()("HttpError", {
-  status: Schema.Number,
-  message: Schema.String,
-}) {
-  constructor(status: number, message: string) {
-    super({ status, message });
-  }
-}
+export class HttpError extends Schema.TaggedError<HttpError, { readonly brand: unique symbol }>()(
+  "HttpError",
+  {
+    status: Schema.Finite,
+    message: Schema.String,
+  },
+) {}
 /** Custom errcodes raised by our SQL functions. */
 const pg_errcodes: Record<string, (msg: string) => HttpError> = {
   /** Account locked -- too many failed login/reset attempts */
-  LOCKD: (msg) => new HttpError(423, msg || "Account locked -- too many failed attempts"),
+  LOCKD: (msg) =>
+    new HttpError({ status: 423, message: msg || "Account locked -- too many failed attempts" }),
   /** Password too weak (< 8 chars) */
-  WEAKP: (msg) => new HttpError(400, msg || "Password is too weak (minimum 8 characters)"),
+  WEAKP: (msg) =>
+    new HttpError({ status: 400, message: msg || "Password is too weak (minimum 8 characters)" }),
   /** Cannot delete -- user is a family parent */
   OWNER: (msg) =>
-    new HttpError(400, msg || "Cannot delete account while you are a parent in a family"),
+    new HttpError({
+      status: 400,
+      message: msg || "Cannot delete account while you are a parent in a family",
+    }),
   /** Not found */
-  NTFND: (msg) => new HttpError(404, msg || "Not found"),
+  NTFND: (msg) => new HttpError({ status: 404, message: msg || "Not found" }),
   /** Denied -- business rule violation */
-  DNIED: (msg) => new HttpError(400, msg || "Operation denied"),
+  DNIED: (msg) => new HttpError({ status: 400, message: msg || "Operation denied" }),
   /** Unique violation (duplicate username, email, etc.) */
-  23505: (msg) => new HttpError(409, msg || "A record with this value already exists"),
+  23505: (msg) =>
+    new HttpError({ status: 409, message: msg || "A record with this value already exists" }),
 };
 
 function unwrapSqlError(err: unknown): unknown {

@@ -8,8 +8,8 @@ export function params<const Name extends string>(...names: readonly Name[]) {
 }
 
 export const PaginationQuery = S.Struct({
-  limit: S.optional(S.NumberFromString),
-  offset: S.optional(S.NumberFromString),
+  limit: S.optional(S.FiniteFromString),
+  offset: S.optional(S.FiniteFromString),
 });
 
 export const BillingMonthQuery = S.Struct({ month: S.String });

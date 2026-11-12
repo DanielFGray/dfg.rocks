@@ -10,7 +10,7 @@ const CreateDiscountPayload = S.Struct({
   payer_id: S.String,
   label: S.String,
   discount_type: S.Literals(["percentage", "fixed"]),
-  discount_value: S.Number,
+  discount_value: S.Finite,
   applies_to: S.Union([S.Literal("all"), S.Literal("tuition"), S.Literal("fees")]),
   effective_from: S.String,
   effective_until: S.optional(S.String),
@@ -19,7 +19,7 @@ const CreateDiscountPayload = S.Struct({
 const UpdateDiscountPayload = S.Struct({
   label: S.optional(S.String),
   discount_type: S.optional(S.Literals(["percentage", "fixed"])),
-  discount_value: S.optional(S.Number),
+  discount_value: S.optional(S.Finite),
   applies_to: S.optional(S.Union([S.Literal("all"), S.Literal("tuition"), S.Literal("fees")])),
   effective_from: S.optional(S.String),
   effective_until: S.optional(S.String),
@@ -29,7 +29,7 @@ const UpdateDiscountPayload = S.Struct({
 const CreateTaxRatePayload = S.Struct({
   label: S.String,
   jurisdiction: S.String,
-  rate_percent: S.Number.pipe(S.check(S.isBetween({ minimum: 0, maximum: 30 }))),
+  rate_percent: S.Finite.pipe(S.check(S.isBetween({ minimum: 0, maximum: 30 }))),
   applies_to: S.Union([S.Literal("all"), S.Literal("tuition"), S.Literal("fees")]),
   effective_from: S.String,
   effective_until: S.optional(S.String),

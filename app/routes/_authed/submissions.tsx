@@ -5,11 +5,11 @@ import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { useMutation } from "@tanstack/react-query";
 import { createServerFn } from "@tanstack/react-start";
 import { getCookie } from "@tanstack/react-start/server";
-import { requireSession } from "../../lib/sessionGuards.server.js";
+import { Sessions } from "../../../server/services/sessions.js";
 import { api } from "../../lib/api.js";
 import type { Submission } from "../../../shared/schemas.js";
 import { runServerEffect } from "../../lib/serverEffect.js";
-import { PracticeService } from "../../../server/services/practiceService.js";
+import { Practice } from "../../../server/services/practice.js";
 import { HttpError } from "../../../server/pgErrors.js";
 import { Button } from "../../components/ui/Button.js";
 import { EmptyState } from "../../components/ui/EmptyState.js";
@@ -22,11 +22,11 @@ const getSubmissionsPageData = createServerFn({ method: "GET" }).handler(() =>
   runServerEffect(
     Effect.gen(function* () {
       const token = getCookie("session");
-      const session = yield* requireSession(token);
+      const session = yield* Sessions.use((sessions) => sessions.requireSession(token));
       if (session.user.role !== "admin") {
-        throw new HttpError(403, "Forbidden");
+        throw new HttpError({ status: 403, message: "Forbidden" });
       }
-      return (yield* PracticeService.use((practiceService) =>
+      return (yield* Practice.use((practiceService) =>
         practiceService.listSubmissions(5000, 0).pipe(withAuthContext(session.session.id)),
       )) satisfies ReadonlyArray<Submission>;
     }),

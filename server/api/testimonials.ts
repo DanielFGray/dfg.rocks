@@ -5,13 +5,13 @@ import { Contract } from "../../shared/httpApi.js";
 import { CurrentSession, type SignedIn } from "../../shared/api/guards.js";
 import { serializeTestimonial } from "../../shared/responseMappers.js";
 import { HttpError } from "../pgErrors.js";
-import { TestimonialService } from "../services/testimonialService.js";
-import { TestimonialReminderService } from "../services/testimonialReminderService.js";
+import { Testimonials } from "../services/testimonials.js";
+import { TestimonialReminder } from "../services/testimonialReminder.js";
 import { adaptSignedInErrors, adaptAdminErrors } from "../httpApiErrors.js";
 
 const assertCanManageTestimonial = Effect.fnUntraced(function* (auth: SignedIn) {
   if (auth.user.role === "admin") {
-    return yield* new HttpError(403, "Admins cannot manage testimonials");
+    return yield* new HttpError({ status: 403, message: "Admins cannot manage testimonials" });
   }
 });
 
@@ -22,7 +22,7 @@ export const TestimonialsApiGroupLive = HttpApiBuilder.group(Contract, "testimon
       Effect.fnUntraced(function* ({ payload }) {
         const auth = yield* CurrentSession;
         yield* assertCanManageTestimonial(auth);
-        const testimonial = yield* TestimonialService.use((testimonialService) =>
+        const testimonial = yield* Testimonials.use((testimonialService) =>
           testimonialService
             .upsertTestimonial(auth.user.id, payload.body)
             .pipe(withAuthContext(auth.session.id)),
@@ -35,7 +35,7 @@ export const TestimonialsApiGroupLive = HttpApiBuilder.group(Contract, "testimon
       Effect.fnUntraced(function* () {
         const auth = yield* CurrentSession;
         yield* assertCanManageTestimonial(auth);
-        yield* TestimonialService.use((testimonialService) =>
+        yield* Testimonials.use((testimonialService) =>
           testimonialService.deleteTestimonial(auth.user.id).pipe(withAuthContext(auth.session.id)),
         );
         return { success: true as const };
@@ -52,7 +52,7 @@ export const TestimonialsAdminApiGroupLive = HttpApiBuilder.group(
         "testimonialReminderInterval",
         Effect.fnUntraced(function* () {
           return {
-            interval_days: yield* TestimonialReminderService.use((testimonialReminderService) =>
+            interval_days: yield* TestimonialReminder.use((testimonialReminderService) =>
               testimonialReminderService.getIntervalDays(),
             ),
           };
@@ -61,10 +61,10 @@ export const TestimonialsAdminApiGroupLive = HttpApiBuilder.group(
       .handle(
         "saveTestimonialReminderInterval",
         Effect.fnUntraced(function* ({ payload }) {
-          yield* TestimonialReminderService.use((testimonialReminderService) =>
+          yield* TestimonialReminder.use((testimonialReminderService) =>
             testimonialReminderService.setIntervalDays(payload.interval_days),
           );
-          yield* TestimonialReminderService.use((testimonialReminderService) =>
+          yield* TestimonialReminder.use((testimonialReminderService) =>
             testimonialReminderService.rescheduleAll(payload.interval_days),
           );
           return {
@@ -77,17 +77,17 @@ export const TestimonialsAdminApiGroupLive = HttpApiBuilder.group(
         "updateTestimonialApproval",
         Effect.fnUntraced(function* ({ params, payload }) {
           const auth = yield* CurrentSession;
-          const testimonial = yield* TestimonialService.use((testimonialService) =>
+          const testimonial = yield* Testimonials.use((testimonialService) =>
             testimonialService
               .updateTestimonialApproval(params.id, payload.is_approved)
               .pipe(withAuthContext(auth.session.id)),
           );
           if (testimonial.is_approved) {
-            yield* TestimonialReminderService.use((testimonialReminderService) =>
+            yield* TestimonialReminder.use((testimonialReminderService) =>
               testimonialReminderService.clearReminderState(testimonial.user_id),
             );
           } else if (testimonial.role === "student" || testimonial.role === "parent") {
-            yield* TestimonialReminderService.use((testimonialReminderService) =>
+            yield* TestimonialReminder.use((testimonialReminderService) =>
               testimonialReminderService.scheduleNextReminder(testimonial.user_id),
             );
           }

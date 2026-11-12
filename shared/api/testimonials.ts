@@ -8,11 +8,11 @@ import { signedInErrors, adminErrors } from "../httpApiErrors.js";
 
 export const ReminderIntervalResponse = S.Struct({
   success: S.Literal(true),
-  interval_days: S.Number,
+  interval_days: S.Finite,
 });
 
 export const TestimonialReminderIntervalResponse = S.Struct({
-  interval_days: S.Number,
+  interval_days: S.Finite,
 });
 
 const TestimonialPayload = S.Struct({
@@ -20,7 +20,7 @@ const TestimonialPayload = S.Struct({
 });
 
 const SaveReminderIntervalPayload = S.Struct({
-  interval_days: S.Number.pipe(S.check(S.isBetween({ minimum: 1, maximum: 365 }))),
+  interval_days: S.Finite.pipe(S.check(S.isBetween({ minimum: 1, maximum: 365 }))),
 });
 
 const UpdateTestimonialApprovalPayload = S.Struct({

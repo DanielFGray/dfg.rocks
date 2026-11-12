@@ -16,18 +16,20 @@ import { CourseFormModal } from "../../components/CourseFormModal.js";
 import { Main } from "../../components/ui/Container.js";
 import { runServerEffect } from "../../lib/serverEffect.js";
 import { serializeCourse } from "../../../shared/responseMappers.js";
-import { requireSession, resolveEffectiveStudent } from "../../lib/sessionGuards.server.js";
-import { CourseService } from "../../../server/services/courseService.js";
+import { Sessions, resolveEffectiveStudent } from "../../../server/services/sessions.js";
+import { Courses } from "../../../server/services/courses.js";
 
 type CoursesPageData = Course[];
 
 const getCoursesPageData = createServerFn({ method: "GET" }).handler(() =>
   runServerEffect(
     Effect.gen(function* () {
-      const session = yield* requireSession(getCookie("session"));
+      const session = yield* Sessions.use((sessions) =>
+        sessions.requireSession(getCookie("session")),
+      );
       const effective = resolveEffectiveStudent(session);
       const filterStudentId = effective.isActing ? effective.studentId : undefined;
-      const data = yield* CourseService.use((courseService) =>
+      const data = yield* Courses.use((courseService) =>
         courseService.courses(filterStudentId).pipe(withAuthContext(session.session.id)),
       );
       return data.map(serializeCourse) satisfies CoursesPageData;

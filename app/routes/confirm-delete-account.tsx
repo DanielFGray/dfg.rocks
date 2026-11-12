@@ -8,8 +8,8 @@ import { Card } from "../components/ui/Card.js";
 import { TokenSearch } from "../../shared/schemas.js";
 import { runServerEffect } from "../lib/serverEffect.js";
 import { HttpError } from "../../server/pgErrors.js";
-import { SessionService } from "../../server/services/sessionService.js";
-import { AccountService } from "../../server/services/accountService.js";
+import { Sessions } from "../../server/services/sessions.js";
+import { Account } from "../../server/services/account.js";
 
 const confirmDeleteAccountAction = createServerFn({ method: "POST" })
   .validator((data) => {
@@ -21,7 +21,7 @@ const confirmDeleteAccountAction = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const sessionToken = getCookie("session");
     const auth = await runServerEffect(
-      SessionService.use((sessionService) => sessionService.validateSessionToken(sessionToken)),
+      Sessions.use((sessionService) => sessionService.validateSessionToken(sessionToken)),
     );
     if (!auth) {
       throw redirect({
@@ -31,17 +31,17 @@ const confirmDeleteAccountAction = createServerFn({ method: "POST" })
     }
 
     const deleted = await runServerEffect(
-      AccountService.use((accountService) =>
+      Account.use((accountService) =>
         accountService.confirmDeleteAccount(data.token).pipe(withAuthContext(auth.session.id)),
       ),
     );
 
     if (!deleted) {
-      throw new HttpError(400, "Invalid or expired deletion token");
+      throw new HttpError({ status: 400, message: "Invalid or expired deletion token" });
     }
 
     await runServerEffect(
-      SessionService.use((sessionService) => sessionService.deleteAllUserSessions(auth.user.id)),
+      Sessions.use((sessionService) => sessionService.deleteAllUserSessions(auth.user.id)),
     );
     deleteCookie("session");
     throw redirect({ to: "/" });
@@ -50,7 +50,7 @@ const confirmDeleteAccountAction = createServerFn({ method: "POST" })
 export const Route = createFileRoute("/confirm-delete-account")({
   head: () => ({ meta: [{ title: "Confirm Delete Account | DFG Portal" }] }),
   validateSearch: (search: Record<string, unknown>): S.Schema.Type<typeof TokenSearch> =>
-    S.decodeUnknownSync(TokenSearch)(search),
+    S.decodeSync(TokenSearch)(search),
   loader: async () => decodeAuthState(await getAuthUser()),
   component: ConfirmDeleteAccountPage,
 });

@@ -30,9 +30,9 @@ export type SessionInfo = {
 /** A signed-in caller: the session row and its user. */
 export type SignedIn = { user: SessionUser; session: SessionInfo };
 
-/** The caller of an endpoint guarded by Session. Only the server provides it. */
+/** @perRequest: Session middleware provides the signed-in caller. */
 export class CurrentSession extends Context.Service<CurrentSession, SignedIn>()(
-  "dfg/CurrentSession",
+  "dfg-rocks/guards/CurrentSession",
 ) {}
 
 /** The session cookie, `cookieId.secret`. */

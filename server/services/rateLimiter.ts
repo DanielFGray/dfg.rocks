@@ -8,7 +8,7 @@ import {
 } from "effect/persistence/RateLimiter";
 
 /**
- * The `RateLimiter` that RateLimitService (server/rateLimit.ts) counts against
+ * The `RateLimiter` that RateLimit (server/rateLimit.ts) counts against
  * in production. Counts live in Valkey, so a limit holds across restarts and
  * replicas.
  *

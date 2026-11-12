@@ -5,10 +5,10 @@ import { Contract } from "../../shared/httpApi.js";
 import { CurrentSession } from "../../shared/api/guards.js";
 import { serializeLesson, serializeLessonNote } from "../../shared/responseMappers.js";
 import { HttpError } from "../pgErrors.js";
-import { LessonService } from "../services/lessonService.js";
-import { GoogleCalendarService } from "../services/googleCalendarService.js";
-import { resolveEffectiveStudent } from "../services/sessionService.js";
-import { LessonPolicyService } from "../services/lessonPolicyService.js";
+import { Lessons } from "../services/lessons.js";
+import { GoogleCalendar } from "../services/googleCalendar.js";
+import { resolveEffectiveStudent } from "../services/sessions.js";
+import { LessonPolicy } from "../services/lessonPolicy.js";
 import { adaptSignedInErrors, adaptAdminErrors } from "../httpApiErrors.js";
 
 export const LessonsApiGroupLive = HttpApiBuilder.group(Contract, "lessons", (handlers) =>
@@ -19,7 +19,7 @@ export const LessonsApiGroupLive = HttpApiBuilder.group(Contract, "lessons", (ha
         const auth = yield* CurrentSession;
         const effective = resolveEffectiveStudent(auth);
         const filterStudentId = effective.isActing ? effective.studentId : undefined;
-        const rows = yield* LessonService.use((lessonService) =>
+        const rows = yield* Lessons.use((lessonService) =>
           lessonService
             .myLessons(
               {
@@ -41,7 +41,7 @@ export const LessonsApiGroupLive = HttpApiBuilder.group(Contract, "lessons", (ha
       Effect.fnUntraced(function* ({ params }) {
         const auth = yield* CurrentSession;
         const effective = resolveEffectiveStudent(auth);
-        return yield* LessonService.use((lessonService) =>
+        return yield* Lessons.use((lessonService) =>
           lessonService
             .myLessonCancellationPolicy({
               studentId: effective.studentId,
@@ -56,7 +56,7 @@ export const LessonsApiGroupLive = HttpApiBuilder.group(Contract, "lessons", (ha
       Effect.fnUntraced(function* ({ params, payload }) {
         const auth = yield* CurrentSession;
         const effective = resolveEffectiveStudent(auth);
-        const lesson = yield* LessonService.use((lessonService) =>
+        const lesson = yield* Lessons.use((lessonService) =>
           lessonService
             .cancelMyLesson({
               studentId: effective.studentId,
@@ -73,7 +73,7 @@ export const LessonsApiGroupLive = HttpApiBuilder.group(Contract, "lessons", (ha
       Effect.fnUntraced(function* ({ params, payload }) {
         const auth = yield* CurrentSession;
         const effective = resolveEffectiveStudent(auth);
-        const lesson = yield* LessonService.use((lessonService) =>
+        const lesson = yield* Lessons.use((lessonService) =>
           lessonService
             .rescheduleMyLesson({
               studentId: effective.studentId,
@@ -91,7 +91,7 @@ export const LessonsApiGroupLive = HttpApiBuilder.group(Contract, "lessons", (ha
         const auth = yield* CurrentSession;
         const effective = resolveEffectiveStudent(auth);
         const filterStudentId = effective.isActing ? effective.studentId : undefined;
-        const rows = yield* LessonService.use((lessonService) =>
+        const rows = yield* Lessons.use((lessonService) =>
           lessonService
             .myLessonNotesList(
               {
@@ -112,9 +112,9 @@ export const LessonsApiGroupLive = HttpApiBuilder.group(Contract, "lessons", (ha
       "availableSlots",
       Effect.fnUntraced(function* ({ query }) {
         if (!query.date) {
-          return yield* new HttpError(400, "Missing date");
+          return yield* new HttpError({ status: 400, message: "Missing date" });
         }
-        return yield* GoogleCalendarService.use((googleCalendarService) =>
+        return yield* GoogleCalendar.use((googleCalendarService) =>
           googleCalendarService.getAvailableSlots({
             date: query.date,
             days: query.days ?? 7,
@@ -129,7 +129,7 @@ export const LessonsApiGroupLive = HttpApiBuilder.group(Contract, "lessons", (ha
         const auth = yield* CurrentSession;
         const effective = resolveEffectiveStudent(auth);
         const studentId = payload.student_id ?? effective.studentId;
-        const lesson = yield* LessonService.use((lessonService) =>
+        const lesson = yield* Lessons.use((lessonService) =>
           lessonService
             .bookLesson({
               userId: studentId,
@@ -150,7 +150,7 @@ export const LessonsAdminApiGroupLive = HttpApiBuilder.group(Contract, "lessonsA
       "createLesson",
       Effect.fnUntraced(function* ({ payload }) {
         const auth = yield* CurrentSession;
-        const lesson = yield* LessonService.use((lessonService) =>
+        const lesson = yield* Lessons.use((lessonService) =>
           lessonService
             .createLesson({
               studentId: payload.student_id,
@@ -168,7 +168,7 @@ export const LessonsAdminApiGroupLive = HttpApiBuilder.group(Contract, "lessonsA
       "updateLesson",
       Effect.fnUntraced(function* ({ params, payload }) {
         const auth = yield* CurrentSession;
-        const lesson = yield* LessonService.use((lessonService) =>
+        const lesson = yield* Lessons.use((lessonService) =>
           lessonService
             .updateLesson(params.id, {
               scheduledAt: payload.scheduled_at,
@@ -178,7 +178,7 @@ export const LessonsAdminApiGroupLive = HttpApiBuilder.group(Contract, "lessonsA
             .pipe(withAuthContext(auth.session.id)),
         );
         if (!lesson) {
-          return yield* new HttpError(404, "Lesson not found");
+          return yield* new HttpError({ status: 404, message: "Lesson not found" });
         }
         return serializeLesson(lesson);
       }, adaptAdminErrors),
@@ -188,11 +188,11 @@ export const LessonsAdminApiGroupLive = HttpApiBuilder.group(Contract, "lessonsA
       Effect.fnUntraced(function* (context) {
         const auth = yield* CurrentSession;
         const { params } = context;
-        const lesson = yield* LessonService.use((lessonService) =>
+        const lesson = yield* Lessons.use((lessonService) =>
           lessonService.deleteLesson(params.id).pipe(withAuthContext(auth.session.id)),
         );
         if (!lesson) {
-          return yield* new HttpError(404, "Lesson not found");
+          return yield* new HttpError({ status: 404, message: "Lesson not found" });
         }
         return { success: true as const };
       }, adaptAdminErrors),
@@ -201,7 +201,7 @@ export const LessonsAdminApiGroupLive = HttpApiBuilder.group(Contract, "lessonsA
       "cancelLesson",
       Effect.fnUntraced(function* ({ params, payload }) {
         const auth = yield* CurrentSession;
-        const lesson = yield* LessonService.use((lessonService) =>
+        const lesson = yield* Lessons.use((lessonService) =>
           lessonService
             .cancelLesson(params.id, payload.reason ?? null)
             .pipe(withAuthContext(auth.session.id)),
@@ -213,7 +213,7 @@ export const LessonsAdminApiGroupLive = HttpApiBuilder.group(Contract, "lessonsA
       "completeLesson",
       Effect.fnUntraced(function* ({ params }) {
         const auth = yield* CurrentSession;
-        const lesson = yield* LessonService.use((lessonService) =>
+        const lesson = yield* Lessons.use((lessonService) =>
           lessonService.completeLesson(params.id).pipe(withAuthContext(auth.session.id)),
         );
         return serializeLesson(lesson);
@@ -223,7 +223,7 @@ export const LessonsAdminApiGroupLive = HttpApiBuilder.group(Contract, "lessonsA
       "lessons",
       Effect.fnUntraced(function* ({ query }) {
         const auth = yield* CurrentSession;
-        const lessons = yield* LessonService.use((lessonService) =>
+        const lessons = yield* Lessons.use((lessonService) =>
           lessonService
             .listLessons({
               limit: query.limit ?? 50,
@@ -242,7 +242,7 @@ export const LessonsAdminApiGroupLive = HttpApiBuilder.group(Contract, "lessonsA
       "saveLessonNote",
       Effect.fnUntraced(function* ({ params, payload }) {
         const auth = yield* CurrentSession;
-        const note = yield* LessonService.use((lessonService) =>
+        const note = yield* Lessons.use((lessonService) =>
           lessonService
             .saveLessonNote(params.id, {
               topicsCovered: payload.topics_covered ?? null,
@@ -262,11 +262,11 @@ export const LessonsAdminApiGroupLive = HttpApiBuilder.group(Contract, "lessonsA
       Effect.fnUntraced(function* (context) {
         const auth = yield* CurrentSession;
         const { params } = context;
-        const note = yield* LessonService.use((lessonService) =>
+        const note = yield* Lessons.use((lessonService) =>
           lessonService.getLessonNote(params.id).pipe(withAuthContext(auth.session.id)),
         );
         if (!note) {
-          return yield* new HttpError(404, "Lesson note not found");
+          return yield* new HttpError({ status: 404, message: "Lesson note not found" });
         }
         return serializeLessonNote(note);
       }, adaptAdminErrors),
@@ -276,11 +276,11 @@ export const LessonsAdminApiGroupLive = HttpApiBuilder.group(Contract, "lessonsA
       Effect.fnUntraced(function* (context) {
         const auth = yield* CurrentSession;
         const { params } = context;
-        const note = yield* LessonService.use((lessonService) =>
+        const note = yield* Lessons.use((lessonService) =>
           lessonService.publishLessonNote(params.id).pipe(withAuthContext(auth.session.id)),
         );
         if (!note) {
-          return yield* new HttpError(404, "Lesson note not found");
+          return yield* new HttpError({ status: 404, message: "Lesson note not found" });
         }
         return serializeLessonNote(note);
       }, adaptAdminErrors),
@@ -288,7 +288,7 @@ export const LessonsAdminApiGroupLive = HttpApiBuilder.group(Contract, "lessonsA
     .handle(
       "workingHours",
       Effect.fnUntraced(function* () {
-        return yield* GoogleCalendarService.use((googleCalendarService) =>
+        return yield* GoogleCalendar.use((googleCalendarService) =>
           googleCalendarService.getWorkingHours(),
         );
       }, adaptAdminErrors),
@@ -296,15 +296,13 @@ export const LessonsAdminApiGroupLive = HttpApiBuilder.group(Contract, "lessonsA
     .handle(
       "cancellationPolicySettings",
       Effect.fnUntraced(function* () {
-        return yield* LessonPolicyService.use((lessonPolicyService) =>
-          lessonPolicyService.getSettings(),
-        );
+        return yield* LessonPolicy.use((lessonPolicyService) => lessonPolicyService.getSettings());
       }, adaptAdminErrors),
     )
     .handle(
       "saveCancellationPolicySettings",
       Effect.fnUntraced(function* ({ payload }) {
-        return yield* LessonPolicyService.use((lessonPolicyService) =>
+        return yield* LessonPolicy.use((lessonPolicyService) =>
           lessonPolicyService.saveSettings(payload),
         );
       }, adaptAdminErrors),
@@ -312,7 +310,7 @@ export const LessonsAdminApiGroupLive = HttpApiBuilder.group(Contract, "lessonsA
     .handle(
       "saveWorkingHours",
       Effect.fnUntraced(function* ({ payload }) {
-        yield* GoogleCalendarService.use((googleCalendarService) =>
+        yield* GoogleCalendar.use((googleCalendarService) =>
           googleCalendarService.setWorkingHours(payload),
         );
         return { success: true as const };

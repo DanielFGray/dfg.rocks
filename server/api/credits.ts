@@ -3,7 +3,7 @@ import { Effect } from "effect";
 import { withAuthContext } from "../requestDatabase.js";
 import { Contract } from "../../shared/httpApi.js";
 import { CurrentSession } from "../../shared/api/guards.js";
-import { BillingLedgerService } from "../services/billingLedgerService.js";
+import { BillingLedger } from "../services/billingLedger.js";
 import { adaptAdminErrors } from "../httpApiErrors.js";
 import { serializeCreditApplication } from "./billingResponses.js";
 
@@ -13,7 +13,7 @@ export const CreditsAdminApiGroupLive = HttpApiBuilder.group(Contract, "creditsA
       "createCredit",
       Effect.fnUntraced(function* ({ payload }) {
         const auth = yield* CurrentSession;
-        const result = yield* BillingLedgerService.use((billingLedgerService) =>
+        const result = yield* BillingLedger.use((billingLedgerService) =>
           billingLedgerService
             .issueCredit({
               payerId: payload.payer_id,
@@ -31,7 +31,7 @@ export const CreditsAdminApiGroupLive = HttpApiBuilder.group(Contract, "creditsA
       "applyCredit",
       Effect.fnUntraced(function* ({ payload }) {
         const auth = yield* CurrentSession;
-        const result = yield* BillingLedgerService.use((billingLedgerService) =>
+        const result = yield* BillingLedger.use((billingLedgerService) =>
           billingLedgerService
             .applyCredit({
               creditId: payload.credit_id,

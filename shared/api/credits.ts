@@ -8,7 +8,7 @@ import { adminErrors } from "../httpApiErrors.js";
 const CreateCreditPayload = S.Struct({
   payer_id: S.String,
   student_id: S.optional(S.String),
-  amount_cents: S.Number,
+  amount_cents: S.Finite,
   reason: S.String.pipe(S.check(S.isMinLength(1))),
   expires_at: S.optional(S.DateFromString),
 });
@@ -16,7 +16,7 @@ const CreateCreditPayload = S.Struct({
 const ApplyCreditPayload = S.Struct({
   credit_id: S.String,
   bill_id: S.String,
-  amount_cents: S.Number,
+  amount_cents: S.Finite,
 });
 
 export const creditsAdminGroup = HttpApiGroup.make("creditsAdmin")

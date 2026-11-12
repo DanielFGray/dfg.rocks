@@ -6,7 +6,7 @@ import { HttpError } from "../pgErrors.js";
 import { sql } from "kysely";
 
 /** The material library, student assignments, playback and reviews. */
-export class MaterialService extends Context.Service<MaterialService>()("MaterialService", {
+export class Materials extends Context.Service<Materials>()("dfg-rocks/materials", {
   make: Effect.sync(() => ({
     library: Effect.fn("library")(function* (values: { limit: number; offset: number }) {
       const db = yield* RequestDatabase;
@@ -62,7 +62,10 @@ export class MaterialService extends Context.Service<MaterialService>()("Materia
         )
         .pipe(
           Effect.head,
-          Effect.catchTag("NoSuchElementError", () => new HttpError(404, "Material not found")),
+          Effect.catchTag(
+            "NoSuchElementError",
+            () => new HttpError({ status: 404, message: "Material not found" }),
+          ),
         );
       const assignedTrackIndex = yield* resolveAssignedTrackIndex(
         material.notation_tracks,
@@ -129,7 +132,8 @@ export class MaterialService extends Context.Service<MaterialService>()("Materia
         .pipe(
           Effect.head,
           Effect.catchTags({
-            NoSuchElementError: () => new HttpError(500, "Failed to record assignment playback"),
+            NoSuchElementError: () =>
+              new HttpError({ status: 500, message: "Failed to record assignment playback" }),
           }),
         );
     }),
@@ -150,7 +154,8 @@ export class MaterialService extends Context.Service<MaterialService>()("Materia
         .pipe(
           Effect.head,
           Effect.catchTags({
-            NoSuchElementError: () => new HttpError(404, "Assignment not found"),
+            NoSuchElementError: () =>
+              new HttpError({ status: 404, message: "Assignment not found" }),
           }),
         );
 
@@ -169,7 +174,8 @@ export class MaterialService extends Context.Service<MaterialService>()("Materia
         .pipe(
           Effect.head,
           Effect.catchTags({
-            NoSuchElementError: () => new HttpError(500, "Failed to create assignment review"),
+            NoSuchElementError: () =>
+              new HttpError({ status: 500, message: "Failed to create assignment review" }),
           }),
         );
     }),
@@ -210,7 +216,8 @@ export class MaterialService extends Context.Service<MaterialService>()("Materia
         .pipe(
           Effect.head,
           Effect.catchTags({
-            NoSuchElementError: () => new HttpError(500, "Failed to save assignment notes"),
+            NoSuchElementError: () =>
+              new HttpError({ status: 500, message: "Failed to save assignment notes" }),
           }),
         );
     }),
@@ -229,7 +236,10 @@ export class MaterialService extends Context.Service<MaterialService>()("Materia
         )
         .pipe(
           Effect.head,
-          Effect.catchTag("NoSuchElementError", () => new HttpError(404, "Material not found")),
+          Effect.catchTag(
+            "NoSuchElementError",
+            () => new HttpError({ status: 404, message: "Material not found" }),
+          ),
         );
       const resolvedTrackIndex = yield* resolveAssignedTrackIndex(
         material.notation_tracks,
@@ -269,7 +279,7 @@ export class MaterialService extends Context.Service<MaterialService>()("Materia
         .pipe(
           Effect.head,
           Effect.catchTags({
-            NoSuchElementError: () => new HttpError(404, "Material not found"),
+            NoSuchElementError: () => new HttpError({ status: 404, message: "Material not found" }),
           }),
         );
     }),
@@ -289,7 +299,7 @@ function assertAssignedMaterial(db: Database, materialId: string) {
     .pipe(
       Effect.head,
       Effect.catchTags({
-        NoSuchElementError: () => new HttpError(404, "Assignment not found"),
+        NoSuchElementError: () => new HttpError({ status: 404, message: "Assignment not found" }),
       }),
     );
 }

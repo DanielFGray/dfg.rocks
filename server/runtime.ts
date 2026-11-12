@@ -7,7 +7,7 @@ import * as NodeFileSystem from "@effect/platform-node/NodeFileSystem";
 import * as NodeHttpPlatform from "@effect/platform-node/NodeHttpPlatform";
 import * as NodePath from "@effect/platform-node/NodePath";
 import { Contract } from "../shared/httpApi.js";
-import { makeAuthLayer } from "./api/auth.js";
+import { AuthApiGroupLive } from "./api/auth.js";
 import { CoursesApiGroupLive, CoursesAdminApiGroupLive } from "./api/courses.js";
 import { MaterialsApiGroupLive, MaterialsAdminApiGroupLive } from "./api/materials.js";
 import { PracticeApiGroupLive, PracticeAdminApiGroupLive } from "./api/practice.js";
@@ -26,39 +26,38 @@ import { BillsAdminApiGroupLive } from "./api/bills.js";
 import { PaymentsAdminApiGroupLive } from "./api/payments.js";
 import { CreditsAdminApiGroupLive } from "./api/credits.js";
 import { BillingRatesAdminApiGroupLive } from "./api/billingRates.js";
-import { makeFamilyBillingLayer } from "./api/familyBilling.js";
-import { makeHealthLayer } from "./api/health.js";
-import { makePublicLayer } from "./api/public.js";
+import { FamilyBillingApiGroupLive } from "./api/familyBilling.js";
+import { HealthApiGroupLive } from "./api/health.js";
+import { PublicApiGroupLive } from "./api/public.js";
 import { PgAuthDB, PgRootDB } from "./db.js";
 import { ValkeyReady } from "./dependencies.js";
-import { LessonService } from "./services/lessonService.js";
-import { AuthService } from "./services/authService.js";
+import { Lessons } from "./services/lessons.js";
+import { Auth } from "./services/auth.js";
 import { BackgroundWorker } from "./services/backgroundWorker.js";
-import { BillingLedgerService } from "./services/billingLedgerService.js";
-import { FileService } from "./services/fileService.js";
-import { FamilyBillingService } from "./services/familyBillingService.js";
-import { GeolocationService } from "./services/geolocation.js";
-import { GoogleCalendarService } from "./services/googleCalendarService.js";
-import { LessonPolicyService } from "./services/lessonPolicyService.js";
-import { ContactService } from "./services/contactService.js";
-import { OAuthService } from "./services/oauthService.js";
-import { PdfService } from "./services/pdfService.js";
-import { RateLimitService } from "./rateLimit.js";
-import { RateLimiterValkey } from "./services/rateLimiter.js";
-import { RecurringScheduleService } from "./services/recurringScheduleService.js";
-import { RealtimeService } from "./services/realtimeService.js";
-import { MessageService } from "./services/messageService.js";
-import { PracticeService } from "./services/practiceService.js";
-import { MaterialService } from "./services/materialService.js";
-import { CourseService } from "./services/courseService.js";
-import { FamilyService } from "./services/familyService.js";
-import { AccountService } from "./services/accountService.js";
-import { TestimonialService } from "./services/testimonialService.js";
-import { SessionService } from "./services/sessionService.js";
-import { StorageService } from "./services/storageService.js";
-import { TestimonialReminderService } from "./services/testimonialReminderService.js";
-import { UserService } from "./services/userService.js";
-import { StudentService } from "./services/studentService.js";
+import { BillingLedger } from "./services/billingLedger.js";
+import { Files } from "./services/files.js";
+import { FamilyBilling } from "./services/familyBilling.js";
+import { Geolocation } from "./services/geolocation.js";
+import { GoogleCalendar } from "./services/googleCalendar.js";
+import { LessonPolicy } from "./services/lessonPolicy.js";
+import { Contact } from "./services/contact.js";
+import { OAuth } from "./services/oauth.js";
+import { Pdf } from "./services/pdf.js";
+import { RateLimit } from "./rateLimit.js";
+import { RecurringSchedule } from "./services/recurringSchedule.js";
+import { Realtime } from "./services/realtime.js";
+import { Messages } from "./services/messages.js";
+import { Practice } from "./services/practice.js";
+import { Materials } from "./services/materials.js";
+import { Courses } from "./services/courses.js";
+import { Families } from "./services/families.js";
+import { Account } from "./services/account.js";
+import { Testimonials } from "./services/testimonials.js";
+import { Sessions } from "./services/sessions.js";
+import { Storage } from "./services/storage.js";
+import { TestimonialReminder } from "./services/testimonialReminder.js";
+import { Users } from "./services/users.js";
+import { Students } from "./services/students.js";
 
 const infrastructureLayer = Layer.mergeAll(
   NodeHttpPlatform.layer,
@@ -66,8 +65,8 @@ const infrastructureLayer = Layer.mergeAll(
   NodePath.layer,
   Etag.layer,
   FetchHttpClient.layer,
-  PgRootDB.Live,
-  PgAuthDB.Live,
+  PgRootDB.layer,
+  PgAuthDB.layer,
 );
 
 // By default Bun's client stops after a few reconnect attempts and stays
@@ -81,50 +80,43 @@ const valkeyClient = BunRedis.layerConfig({
   enableOfflineQueue: Config.succeed(false),
 });
 
-const rateLimiterWithValkey = Layer.mergeAll(
-  ValkeyReady,
-  RateLimitService.Live.pipe(Layer.provide(RateLimiterValkey)),
-).pipe(Layer.provide(valkeyClient));
+const rateLimiterWithValkey = Layer.mergeAll(ValkeyReady, RateLimit.layer).pipe(
+  Layer.provide(valkeyClient),
+);
 
-// Outside production, E2E browsers share one address, so a real limiter would throttle the suite.
 const rateLimitLayer = Layer.unwrap(
-  Effect.map(Config.String("NODE_ENV"), (nodeEnv) =>
-    nodeEnv === "production" ? rateLimiterWithValkey : RateLimitService.Test,
+  Effect.map(Config.String("NODE_ENV"), (mode) =>
+    mode === "production" ? rateLimiterWithValkey : RateLimit.layerTest,
   ),
 );
 
-const lessonServicesLayer = Layer.mergeAll(
-  LessonService.layer,
-  RecurringScheduleService.layer,
-).pipe(Layer.provideMerge(LessonPolicyService.layer));
-
-const billingServicesLayer = FamilyBillingService.layer.pipe(
-  Layer.provideMerge(Layer.mergeAll(PdfService.layer, BillingLedgerService.layer)),
-);
-
 const servicesLayer = Layer.mergeAll(
-  RealtimeService.layer,
-  GoogleCalendarService.layer,
-  SessionService.layer,
-  lessonServicesLayer,
-  AuthService.layer,
-  billingServicesLayer,
+  Realtime.layer,
+  GoogleCalendar.layer,
+  Sessions.layer,
+  Lessons.layer,
+  RecurringSchedule.layer,
+  LessonPolicy.layer,
+  Auth.layer,
+  FamilyBilling.layer,
+  Pdf.layer,
+  BillingLedger.layer,
   rateLimitLayer,
-  FileService.layer,
-  GeolocationService.layer,
-  ContactService.layer,
-  OAuthService.layer,
-  TestimonialService.layer,
-  AccountService.layer,
-  FamilyService.layer,
-  CourseService.layer,
-  MaterialService.layer,
-  PracticeService.layer,
-  MessageService.layer,
-  StorageService.layer,
-  TestimonialReminderService.layer,
-  UserService.layer,
-  StudentService.layer,
+  Files.layer,
+  Geolocation.layer,
+  Contact.layer,
+  OAuth.layer,
+  Testimonials.layer,
+  Account.layer,
+  Families.layer,
+  Courses.layer,
+  Materials.layer,
+  Practice.layer,
+  Messages.layer,
+  Storage.layer,
+  TestimonialReminder.layer,
+  Users.layer,
+  Students.layer,
 ).pipe(Layer.provideMerge(infrastructureLayer));
 
 /** The services every request and server function uses, without the job runner. */
@@ -134,9 +126,9 @@ export const applicationLayer = servicesLayer;
 export type AppServices = Layer.Success<typeof applicationLayer> | BackgroundWorker;
 
 const GroupHandlersLive = Layer.mergeAll(
-  makeHealthLayer(),
-  makePublicLayer(),
-  makeAuthLayer(),
+  HealthApiGroupLive,
+  PublicApiGroupLive,
+  AuthApiGroupLive,
   CoursesApiGroupLive,
   CoursesAdminApiGroupLive,
   MaterialsApiGroupLive,
@@ -162,7 +154,7 @@ const GroupHandlersLive = Layer.mergeAll(
   PaymentsAdminApiGroupLive,
   CreditsAdminApiGroupLive,
   BillingRatesAdminApiGroupLive,
-  makeFamilyBillingLayer(),
+  FamilyBillingApiGroupLive,
 );
 
 const ApiLive = HttpApiBuilder.layer(Contract).pipe(

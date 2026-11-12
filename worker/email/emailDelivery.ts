@@ -1,4 +1,4 @@
-import { Effect, Schema } from "effect";
+import { Config, Context, Effect, Layer, Schema } from "effect";
 import { FileSystem } from "effect/FileSystem";
 import { Path } from "effect/Path";
 import { convert } from "html-to-text";
@@ -87,43 +87,52 @@ export class EmailRenderError extends Schema.TaggedError<
  * Mailer. A failure fails the job, so graphile-worker retries it. MJML
  * validation problems are logged and the message is still sent.
  */
-export const sendEmail = Effect.fn("sendEmail")(function* (
-  input: unknown,
-  templateDirectory: string,
-) {
-  const job = yield* Schema.decodeUnknownEffect(QueuedEmail)(input);
-  const fs = yield* FileSystem;
-  const path = yield* Path;
-  const source = yield* fs.readFileString(path.join(templateDirectory, job.template));
-  const rendered = yield* Effect.tryPromise({
-    try: () => {
-      const render = lodash.template(source, { escape: /\[\[([\s\S]+?)\]\]/g });
-      return mjml(
-        render({
-          projectName: packageJson.projectName,
-          legalText: packageJson.legalText,
-          ...job.variables,
-        }),
-      );
-    },
-    catch: (cause) => new EmailRenderError({ template: job.template, cause }),
-  });
-  if (rendered.errors.length > 0) {
-    yield* Effect.logError(
-      `MJML validation errors in ${job.template}`,
-      rendered.errors.map((error) => error.formattedMessage),
+export class EmailDelivery extends Context.Service<EmailDelivery>()("dfg-rocks/emailDelivery", {
+  make: Effect.gen(function* () {
+    const fs = yield* FileSystem;
+    const path = yield* Path;
+    const mailer = yield* Mailer;
+    const workerDirectory = yield* Config.NonEmptyString("WORKER_DIR").pipe(
+      Config.withDefault("worker"),
     );
-  }
-  const mailer = yield* Mailer;
-  yield* mailer.send(
-    new MailMessage({
-      to: typeof job.options.to === "string" ? [job.options.to] : job.options.to,
-      subject: job.options.subject,
-      html: rendered.html,
-      text: convert(rendered.html.replace(/(<\/?)div/g, "$1p"), { wordwrap: 120 }).replace(
-        /\n\s+\n/g,
-        "\n\n",
-      ),
-    }),
-  );
-});
+    const templateDirectory = path.join(workerDirectory, "templates");
+    return {
+      send: Effect.fn("EmailDelivery.send")(function* (job: QueuedEmail) {
+        const source = yield* fs.readFileString(path.join(templateDirectory, job.template));
+        const rendered = yield* Effect.tryPromise({
+          try: () => {
+            const render = lodash.template(source, { escape: /\[\[([\s\S]+?)\]\]/g });
+            return mjml(
+              render({
+                projectName: packageJson.projectName,
+                legalText: packageJson.legalText,
+                ...job.variables,
+              }),
+            );
+          },
+          catch: (cause) => new EmailRenderError({ template: job.template, cause }),
+        });
+        if (rendered.errors.length > 0) {
+          yield* Effect.logError(
+            `MJML validation errors in ${job.template}`,
+            rendered.errors.map((error) => error.formattedMessage),
+          );
+        }
+        yield* mailer.send(
+          new MailMessage({
+            to: typeof job.options.to === "string" ? [job.options.to] : job.options.to,
+            subject: job.options.subject,
+            html: rendered.html,
+            text: convert(rendered.html.replace(/(<\/?)div/g, "$1p"), { wordwrap: 120 }).replace(
+              /\n\s+\n/g,
+              "\n\n",
+            ),
+          }),
+        );
+      }),
+    };
+  }),
+}) {
+  static readonly layerNoDeps = Layer.effect(this, this.make);
+  static readonly layer = this.layerNoDeps.pipe(Layer.provide(Mailer.layer));
+}

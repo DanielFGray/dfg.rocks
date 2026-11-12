@@ -8,7 +8,26 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "types": ["vite/client"],
-    "plugins": [{ "name": "@effect/language-service" }]
+    "plugins": [
+      {
+        "name": "@effect/language-service",
+        "keyPatterns": [
+          {
+            "target": "service",
+            "pattern": "package-identifier"
+          },
+          {
+            "target": "custom",
+            "pattern": "package-identifier"
+          }
+        ],
+        "diagnosticSeverity": {
+          "deterministicKeys": "error",
+          "unstableApiUsage": "off",
+          "leakingRequirements": "off"
+        }
+      }
+    ]
   },
   "include": ["app/**/*.ts", "app/**/*.tsx", "shared/**/*.ts"],
   "exclude": ["app/routeTree.gen.ts"]

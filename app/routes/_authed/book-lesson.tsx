@@ -4,12 +4,12 @@ import { createFileRoute, useNavigate, useRouter } from "@tanstack/react-router"
 import { useMutation } from "@tanstack/react-query";
 import { createServerFn } from "@tanstack/react-start";
 import { getCookie } from "@tanstack/react-start/server";
-import { requireSession } from "../../lib/sessionGuards.server.js";
+import { Sessions } from "../../../server/services/sessions.js";
 import { api } from "../../lib/api.js";
 import { useAuth } from "../../lib/hooks/useAuth.js";
 import type { LocationType, TimeSlot } from "../../../shared/schemas.js";
 import { runServerEffect } from "../../lib/serverEffect.js";
-import { GoogleCalendarService } from "../../../server/services/googleCalendarService.js";
+import { GoogleCalendar } from "../../../server/services/googleCalendar.js";
 import { Button } from "../../components/ui/Button.js";
 import { Select } from "../../components/ui/Select.js";
 import { EmptyState } from "../../components/ui/EmptyState.js";
@@ -40,11 +40,9 @@ const getBookLessonPageData = createServerFn({ method: "GET" })
   })
   .handler(async ({ data }) => {
     const token = getCookie("session");
-    await runServerEffect(
-      requireSession(token).pipe(Effect.catch(() => Effect.fail(new Error("Unauthorized")))),
-    );
+    await runServerEffect(Sessions.use((sessions) => sessions.requireSession(token)));
     return runServerEffect(
-      GoogleCalendarService.use((googleCalendarService) =>
+      GoogleCalendar.use((googleCalendarService) =>
         googleCalendarService.getAvailableSlots({
           date: data.date,
           days: 7,

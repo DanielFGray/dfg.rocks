@@ -3,7 +3,7 @@ import { Effect } from "effect";
 import { withAuthContext } from "../requestDatabase.js";
 import { Contract } from "../../shared/httpApi.js";
 import { CurrentSession } from "../../shared/api/guards.js";
-import { BillingLedgerService } from "../services/billingLedgerService.js";
+import { BillingLedger } from "../services/billingLedger.js";
 import { adaptAdminErrors } from "../httpApiErrors.js";
 import { serializeRefund } from "./billingResponses.js";
 
@@ -16,7 +16,7 @@ export const PaymentsAdminApiGroupLive = HttpApiBuilder.group(
         "recordPayment",
         Effect.fnUntraced(function* ({ payload }) {
           const auth = yield* CurrentSession;
-          const result = yield* BillingLedgerService.use((billingLedgerService) =>
+          const result = yield* BillingLedger.use((billingLedgerService) =>
             billingLedgerService
               .recordPayment({
                 payerId: payload.payer_id,
@@ -41,7 +41,7 @@ export const PaymentsAdminApiGroupLive = HttpApiBuilder.group(
         "refundPayment",
         Effect.fnUntraced(function* ({ params, payload }) {
           const auth = yield* CurrentSession;
-          const result = yield* BillingLedgerService.use((billingLedgerService) =>
+          const result = yield* BillingLedger.use((billingLedgerService) =>
             billingLedgerService
               .processRefund({
                 paymentId: params.id,

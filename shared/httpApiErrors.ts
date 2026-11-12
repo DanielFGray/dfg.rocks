@@ -21,7 +21,10 @@ function wireSchema<Error extends S.Top & { readonly Type: { readonly error: str
   );
 }
 
-export class BadRequestError extends S.TaggedError<BadRequestError>()("BadRequestError", {
+export class BadRequestError extends S.TaggedError<
+  BadRequestError,
+  { readonly brand: unique symbol }
+>()("BadRequestError", {
   error: S.String,
 }) {}
 export const BadRequestErrorSchema = wireSchema(
@@ -30,7 +33,10 @@ export const BadRequestErrorSchema = wireSchema(
   400,
 );
 
-export class UnauthorizedError extends S.TaggedError<UnauthorizedError>()("UnauthorizedError", {
+export class UnauthorizedError extends S.TaggedError<
+  UnauthorizedError,
+  { readonly brand: unique symbol }
+>()("UnauthorizedError", {
   error: S.String,
 }) {}
 export const UnauthorizedErrorSchema = wireSchema(
@@ -39,7 +45,10 @@ export const UnauthorizedErrorSchema = wireSchema(
   401,
 );
 
-export class ForbiddenError extends S.TaggedError<ForbiddenError>()("ForbiddenError", {
+export class ForbiddenError extends S.TaggedError<
+  ForbiddenError,
+  { readonly brand: unique symbol }
+>()("ForbiddenError", {
   error: S.String,
 }) {}
 export const ForbiddenErrorSchema = wireSchema(
@@ -48,7 +57,10 @@ export const ForbiddenErrorSchema = wireSchema(
   403,
 );
 
-export class NotFoundError extends S.TaggedError<NotFoundError>()("NotFoundError", {
+export class NotFoundError extends S.TaggedError<
+  NotFoundError,
+  { readonly brand: unique symbol }
+>()("NotFoundError", {
   error: S.String,
 }) {}
 export const NotFoundErrorSchema = wireSchema(
@@ -57,7 +69,10 @@ export const NotFoundErrorSchema = wireSchema(
   404,
 );
 
-export class ConflictError extends S.TaggedError<ConflictError>()("ConflictError", {
+export class ConflictError extends S.TaggedError<
+  ConflictError,
+  { readonly brand: unique symbol }
+>()("ConflictError", {
   error: S.String,
 }) {}
 export const ConflictErrorSchema = wireSchema(
@@ -66,46 +81,52 @@ export const ConflictErrorSchema = wireSchema(
   409,
 );
 
-export class PayloadTooLargeError extends S.TaggedError<PayloadTooLargeError>()(
-  "PayloadTooLargeError",
-  { error: S.String },
-) {}
+export class PayloadTooLargeError extends S.TaggedError<
+  PayloadTooLargeError,
+  { readonly brand: unique symbol }
+>()("PayloadTooLargeError", { error: S.String }) {}
 export const PayloadTooLargeErrorSchema = wireSchema(
   PayloadTooLargeError,
   (error) => new PayloadTooLargeError({ error }),
   413,
 );
 
-export class LockedError extends S.TaggedError<LockedError>()("LockedError", {
-  error: S.String,
-}) {}
+export class LockedError extends S.TaggedError<LockedError, { readonly brand: unique symbol }>()(
+  "LockedError",
+  {
+    error: S.String,
+  },
+) {}
 export const LockedErrorSchema = wireSchema(
   LockedError,
   (error) => new LockedError({ error }),
   423,
 );
 
-export class TooManyRequestsError extends S.TaggedError<TooManyRequestsError>()(
-  "TooManyRequestsError",
-  { error: S.String },
-) {}
+export class TooManyRequestsError extends S.TaggedError<
+  TooManyRequestsError,
+  { readonly brand: unique symbol }
+>()("TooManyRequestsError", { error: S.String }) {}
 export const TooManyRequestsErrorSchema = wireSchema(
   TooManyRequestsError,
   (error) => new TooManyRequestsError({ error }),
   429,
 );
 
-export class InternalServerError extends S.TaggedError<InternalServerError>()(
-  "InternalServerError",
-  { error: S.String },
-) {}
+export class InternalServerError extends S.TaggedError<
+  InternalServerError,
+  { readonly brand: unique symbol }
+>()("InternalServerError", { error: S.String }) {}
 export const InternalServerErrorSchema = wireSchema(
   InternalServerError,
   (error) => new InternalServerError({ error }),
   500,
 );
 
-export class BadGatewayError extends S.TaggedError<BadGatewayError>()("BadGatewayError", {
+export class BadGatewayError extends S.TaggedError<
+  BadGatewayError,
+  { readonly brand: unique symbol }
+>()("BadGatewayError", {
   error: S.String,
 }) {}
 export const BadGatewayErrorSchema = wireSchema(
@@ -114,10 +135,10 @@ export const BadGatewayErrorSchema = wireSchema(
   502,
 );
 
-export class ServiceUnavailableError extends S.TaggedError<ServiceUnavailableError>()(
-  "ServiceUnavailableError",
-  { error: S.String },
-) {}
+export class ServiceUnavailableError extends S.TaggedError<
+  ServiceUnavailableError,
+  { readonly brand: unique symbol }
+>()("ServiceUnavailableError", { error: S.String }) {}
 export const ServiceUnavailableErrorSchema = wireSchema(
   ServiceUnavailableError,
   (error) => new ServiceUnavailableError({ error }),

@@ -3,15 +3,17 @@ import { Effect, Layer, Ref, Schema } from "effect";
 import { sql } from "kysely";
 import { PgAuthDB, PgRootDB } from "../db.js";
 import { withAuthContext } from "../requestDatabase.js";
-import { GoogleCalendarService } from "../services/googleCalendarService.js";
-import { LessonPolicyService } from "../services/lessonPolicyService.js";
-import { LessonService } from "../services/lessonService.js";
-import { syncLessonEvent } from "../../worker/calendar/syncLessonEvent.js";
+import { GoogleCalendar } from "../services/googleCalendar.js";
+import { LessonPolicy } from "../services/lessonPolicy.js";
+import { Lessons } from "../services/lessons.js";
+import { CalendarSync } from "../../worker/calendar/calendarSync.js";
+import { WorkerTasks } from "../../worker/workerTasks.js";
+import { EmailDelivery } from "../../worker/email/emailDelivery.js";
 import { HttpError } from "../pgErrors.js";
 import * as HttpClient from "effect/http/HttpClient";
 
 const forbidden = () => Effect.die(new Error("Google must not run in a lesson transaction"));
-const forbiddenGoogle: GoogleCalendarService["Service"] = {
+const forbiddenGoogle: GoogleCalendar["Service"] = {
   getGoogleCalendarStatus: forbidden,
   disconnectGoogleCalendar: forbidden,
   handleCallback: forbidden,
@@ -29,10 +31,10 @@ const forbiddenGoogle: GoogleCalendarService["Service"] = {
   createAuthorizationRequest: forbidden,
 };
 
-const database = Layer.mergeAll(PgRootDB.Live, PgAuthDB.Live);
+const database = Layer.mergeAll(PgRootDB.layer, PgAuthDB.layer);
 const services = Layer.mergeAll(
-  LessonService.layer,
-  LessonPolicyService.layer,
+  Lessons.layer,
+  LessonPolicy.layer,
   Layer.succeed(
     HttpClient.HttpClient,
     HttpClient.make(() => Effect.die(new Error("Unexpected HTTP request"))),
@@ -56,7 +58,7 @@ it.layer(services)("lesson calendar queue", (test) => {
     test.effect(`${method} queues synchronization without calling Google`, () =>
       Effect.gen(function* () {
         const fixture = yield* makeFixture;
-        const service = yield* LessonService;
+        const service = yield* Lessons;
         const mutations = {
           create: service.createLesson({
             studentId: fixture.studentId,
@@ -87,7 +89,7 @@ it.layer(services)("lesson calendar queue", (test) => {
         };
         const lesson = yield* mutations[method].pipe(
           withAuthContext(fixture.sessionId),
-          Effect.provideService(GoogleCalendarService, forbiddenGoogle),
+          Effect.provideService(GoogleCalendar, forbiddenGoogle),
         );
         expect(yield* queuedJobs(lesson.id)).toEqual([
           {
@@ -165,7 +167,7 @@ it.layer(services)("lesson calendar queue", (test) => {
   test.effect("a caller rollback removes the calendar job and the lesson change", () =>
     Effect.gen(function* () {
       const fixture = yield* makeFixture;
-      const service = yield* LessonService;
+      const service = yield* Lessons;
       const failure = yield* service
         .updateLesson(fixture.lesson.id, { scheduledAt: fixture.nextTime })
         .pipe(
@@ -215,10 +217,10 @@ it.layer(services)("lesson calendar queue", (test) => {
           scenario === "disconnected"
             ? { ...forbiddenGoogle, isConnected: () => Effect.succeed(false) }
             : recorded.calendar;
-        yield* syncLessonEvent({
+        yield* runCalendarJob({
           lessonId: fixture.lesson.id,
           gcalEventId: fixture.lesson.gcal_event_id,
-        }).pipe(Effect.provideService(GoogleCalendarService, calendar));
+        }).pipe(Effect.provideService(GoogleCalendar, calendar));
         const details = {
           summary: "Lesson: Calendar Student",
           description: "60 min online lesson",
@@ -267,15 +269,15 @@ it.layer(services)("lesson calendar queue", (test) => {
   test.effect("worker failures stay failed for retry", () =>
     Effect.gen(function* () {
       const fixture = yield* makeFixture;
-      const error = new HttpError(503, "Google unavailable");
+      const error = new HttpError({ status: 503, message: "Google unavailable" });
       const calendar = {
         ...forbiddenGoogle,
         isConnected: () => Effect.succeed(true),
         updateEvent: () => Effect.fail(error),
       };
       expect(
-        yield* syncLessonEvent({ lessonId: fixture.lesson.id, gcalEventId: null }).pipe(
-          Effect.provideService(GoogleCalendarService, calendar),
+        yield* runCalendarJob({ lessonId: fixture.lesson.id, gcalEventId: null }).pipe(
+          Effect.provideService(GoogleCalendar, calendar),
           Effect.flip,
         ),
       ).toEqual(error);
@@ -291,8 +293,8 @@ it.layer(services)("lesson calendar queue", (test) => {
         yield* fixture.db.execute(
           fixture.db.deleteFrom("app_public.lessons").where("id", "=", fixture.lesson.id),
         );
-        yield* syncLessonEvent({ lessonId: fixture.lesson.id, gcalEventId: null }).pipe(
-          Effect.provideService(GoogleCalendarService, recorded.calendar),
+        yield* runCalendarJob({ lessonId: fixture.lesson.id, gcalEventId: null }).pipe(
+          Effect.provideService(GoogleCalendar, recorded.calendar),
         );
         expect(yield* recorded.calls).toEqual([
           { method: "delete", id: "df9123e4567e89b12d3a456426614174000" },
@@ -301,8 +303,8 @@ it.layer(services)("lesson calendar queue", (test) => {
   );
 
   test.effect("a malformed lesson UUID fails before calling Google", () =>
-    syncLessonEvent({ lessonId: "not-a-uuid", gcalEventId: null }).pipe(
-      Effect.provideService(GoogleCalendarService, forbiddenGoogle),
+    runCalendarJob({ lessonId: "not-a-uuid", gcalEventId: null }).pipe(
+      Effect.provideService(GoogleCalendar, forbiddenGoogle),
       Effect.flip,
       Effect.tap((error) => Effect.sync(() => expect(error._tag).toBe("SchemaError"))),
     ),
@@ -310,17 +312,17 @@ it.layer(services)("lesson calendar queue", (test) => {
 });
 
 type CalendarCall =
-  | { method: "create"; event: Parameters<GoogleCalendarService["Service"]["createEvent"]>[0] }
+  | { method: "create"; event: Parameters<GoogleCalendar["Service"]["createEvent"]>[0] }
   | {
       method: "update";
       id: string;
-      event: Parameters<GoogleCalendarService["Service"]["updateEvent"]>[1];
+      event: Parameters<GoogleCalendar["Service"]["updateEvent"]>[1];
     }
   | { method: "delete"; id: string };
 
 const recordingCalendar = Effect.gen(function* () {
   const calls = yield* Ref.make<ReadonlyArray<CalendarCall>>([]);
-  const calendar: GoogleCalendarService["Service"] = {
+  const calendar: GoogleCalendar["Service"] = {
     ...forbiddenGoogle,
     isConnected: () => Effect.succeed(true),
     createEvent: (event) =>
@@ -353,7 +355,7 @@ const queuedJobs = Effect.fnUntraced(function* (lessonId: string) {
       .where("task_identifier", "=", "lessons__sync_calendar_event"),
   );
   return yield* Effect.forEach(rows, (row) =>
-    Schema.decodeUnknownEffect(Schema.fromJsonString(CalendarPayload))(row.payload),
+    Schema.decodeEffect(Schema.fromJsonString(CalendarPayload))(row.payload),
   );
 });
 
@@ -441,3 +443,14 @@ const makeFixture = Effect.gen(function* () {
     nextTime: new Date(time.getTime() + 86400000),
   };
 });
+
+/** Invokes the registered job with the calendar dependency supplied by each scenario. */
+const runCalendarJob = (input: unknown) =>
+  WorkerTasks.use((tasks) => tasks.lessons__sync_calendar_event(input)).pipe(
+    Effect.provide(
+      WorkerTasks.layerNoDeps.pipe(
+        Layer.provide(CalendarSync.layerNoDeps),
+        Layer.provide(Layer.succeed(EmailDelivery, { send: () => Effect.void })),
+      ),
+    ),
+  );

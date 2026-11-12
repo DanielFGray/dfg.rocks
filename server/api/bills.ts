@@ -4,7 +4,7 @@ import { withAuthContext } from "../requestDatabase.js";
 import { Contract } from "../../shared/httpApi.js";
 import { CurrentSession } from "../../shared/api/guards.js";
 import { HttpError } from "../pgErrors.js";
-import { BillingLedgerService } from "../services/billingLedgerService.js";
+import { BillingLedger } from "../services/billingLedger.js";
 import { adaptAdminErrors } from "../httpApiErrors.js";
 import { serializeAdjustment, mapBillDetail } from "./billingResponses.js";
 
@@ -14,7 +14,7 @@ export const BillsAdminApiGroupLive = HttpApiBuilder.group(Contract, "billsAdmin
       "lessonBills",
       Effect.fnUntraced(function* ({ query }) {
         const auth = yield* CurrentSession;
-        const bills = yield* BillingLedgerService.use((billingLedgerService) =>
+        const bills = yield* BillingLedger.use((billingLedgerService) =>
           billingLedgerService.listLessonBills(query.month).pipe(withAuthContext(auth.session.id)),
         );
         return bills;
@@ -25,7 +25,7 @@ export const BillsAdminApiGroupLive = HttpApiBuilder.group(Contract, "billsAdmin
       Effect.fnUntraced(function* ({ payload }) {
         const auth = yield* CurrentSession;
         return yield* Effect.gen(function* () {
-          const bill = yield* BillingLedgerService.use((billingLedgerService) =>
+          const bill = yield* BillingLedger.use((billingLedgerService) =>
             billingLedgerService.createBill({
               payerId: payload.payer_id,
               billingPeriodStart: payload.billing_period_start,
@@ -51,7 +51,7 @@ export const BillsAdminApiGroupLive = HttpApiBuilder.group(Contract, "billsAdmin
               notes: payload.notes,
             }),
           );
-          const lineItems = yield* BillingLedgerService.use((billingLedgerService) =>
+          const lineItems = yield* BillingLedger.use((billingLedgerService) =>
             billingLedgerService.billLineItems(bill.id),
           );
           return {
@@ -67,11 +67,11 @@ export const BillsAdminApiGroupLive = HttpApiBuilder.group(Contract, "billsAdmin
       "getBill",
       Effect.fnUntraced(function* ({ params }) {
         const auth = yield* CurrentSession;
-        const result = yield* BillingLedgerService.use((billingLedgerService) =>
+        const result = yield* BillingLedger.use((billingLedgerService) =>
           billingLedgerService.getBill(params.id).pipe(withAuthContext(auth.session.id)),
         );
         if (!result) {
-          return yield* new HttpError(404, "Bill not found");
+          return yield* new HttpError({ status: 404, message: "Bill not found" });
         }
         return mapBillDetail(result, result);
       }, adaptAdminErrors),
@@ -81,14 +81,14 @@ export const BillsAdminApiGroupLive = HttpApiBuilder.group(Contract, "billsAdmin
       Effect.fnUntraced(function* ({ params }) {
         const auth = yield* CurrentSession;
         return yield* Effect.gen(function* () {
-          yield* BillingLedgerService.use((billingLedgerService) =>
+          yield* BillingLedger.use((billingLedgerService) =>
             billingLedgerService.issueBill(params.id),
           );
-          const result = yield* BillingLedgerService.use((billingLedgerService) =>
+          const result = yield* BillingLedger.use((billingLedgerService) =>
             billingLedgerService.getBill(params.id),
           );
           if (!result) {
-            return yield* new HttpError(404, "Bill not found");
+            return yield* new HttpError({ status: 404, message: "Bill not found" });
           }
           return mapBillDetail(result, result);
         }).pipe(withAuthContext(auth.session.id));
@@ -99,14 +99,14 @@ export const BillsAdminApiGroupLive = HttpApiBuilder.group(Contract, "billsAdmin
       Effect.fnUntraced(function* ({ params }) {
         const auth = yield* CurrentSession;
         return yield* Effect.gen(function* () {
-          yield* BillingLedgerService.use((billingLedgerService) =>
+          yield* BillingLedger.use((billingLedgerService) =>
             billingLedgerService.cancelBill(params.id),
           );
-          const result = yield* BillingLedgerService.use((billingLedgerService) =>
+          const result = yield* BillingLedger.use((billingLedgerService) =>
             billingLedgerService.getBill(params.id),
           );
           if (!result) {
-            return yield* new HttpError(404, "Bill not found");
+            return yield* new HttpError({ status: 404, message: "Bill not found" });
           }
           return mapBillDetail(result, result);
         }).pipe(withAuthContext(auth.session.id));
@@ -117,17 +117,17 @@ export const BillsAdminApiGroupLive = HttpApiBuilder.group(Contract, "billsAdmin
       Effect.fnUntraced(function* ({ params, payload }) {
         const auth = yield* CurrentSession;
         return yield* Effect.gen(function* () {
-          yield* BillingLedgerService.use((billingLedgerService) =>
+          yield* BillingLedger.use((billingLedgerService) =>
             billingLedgerService.voidBill({
               billId: params.id,
               reason: payload.reason,
             }),
           );
-          const result = yield* BillingLedgerService.use((billingLedgerService) =>
+          const result = yield* BillingLedger.use((billingLedgerService) =>
             billingLedgerService.getBill(params.id),
           );
           if (!result) {
-            return yield* new HttpError(404, "Bill not found");
+            return yield* new HttpError({ status: 404, message: "Bill not found" });
           }
           return mapBillDetail(result, result);
         }).pipe(withAuthContext(auth.session.id));
@@ -137,7 +137,7 @@ export const BillsAdminApiGroupLive = HttpApiBuilder.group(Contract, "billsAdmin
       "adjustBill",
       Effect.fnUntraced(function* ({ params, payload }) {
         const auth = yield* CurrentSession;
-        const result = yield* BillingLedgerService.use((billingLedgerService) =>
+        const result = yield* BillingLedger.use((billingLedgerService) =>
           billingLedgerService
             .createAdjustment({
               billId: params.id,

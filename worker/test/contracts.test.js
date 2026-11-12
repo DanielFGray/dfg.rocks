@@ -2,7 +2,11 @@
 import { describe, expect, test } from "bun:test";
 import { Glob } from "bun";
 import { basename } from "node:path";
-import { effectTasks } from "../../server/services/backgroundWorker.ts";
+import { Context, Effect } from "effect";
+import { runPlatform } from "../../server/test/framework.ts";
+import { WorkerTasks } from "../workerTasks.ts";
+import { EmailDelivery } from "../email/emailDelivery.ts";
+import { CalendarSync } from "../calendar/calendarSync.ts";
 
 // Every queued job needs a task file or an Effect handler registered by the runner.
 
@@ -31,7 +35,16 @@ describe("worker contracts", () => {
     }
     expect(queued.size).toBeGreaterThan(0);
 
-    const tasks = new Set([...names("worker/tasks/*.js"), ...Object.keys(effectTasks(""))]);
+    const registered = await runPlatform(
+      WorkerTasks.make.pipe(
+        Effect.provideContext(
+          Context.make(EmailDelivery, { send: () => Effect.void }).pipe(
+            Context.add(CalendarSync, { sync: () => Effect.void }),
+          ),
+        ),
+      ),
+    );
+    const tasks = new Set([...names("worker/tasks/*.js"), ...Object.keys(registered)]);
     expect([...queued].filter((name) => !tasks.has(name))).toEqual([]);
   });
 

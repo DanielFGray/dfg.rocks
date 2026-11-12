@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { calculateLessonCancellationPolicy } from "../services/lessonPolicyService.js";
+import { calculateLessonCancellationPolicy } from "../services/lessonPolicy.js";
 
 const settings = {
   cancellation_window_hours: 24,

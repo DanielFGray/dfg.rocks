@@ -5,12 +5,12 @@ import { createFileRoute, redirect, useRouter } from "@tanstack/react-router";
 import { useMutation } from "@tanstack/react-query";
 import { createServerFn } from "@tanstack/react-start";
 import { getCookie } from "@tanstack/react-start/server";
-import { requireSession } from "../../lib/sessionGuards.server.js";
+import { Sessions } from "../../../server/services/sessions.js";
 import { api } from "../../lib/api.js";
 import type { Material } from "../../../shared/schemas.js";
 import { runServerEffect } from "../../lib/serverEffect.js";
 import { serializeLibraryMaterial } from "../../../shared/responseMappers.js";
-import { MaterialService } from "../../../server/services/materialService.js";
+import { Materials } from "../../../server/services/materials.js";
 import { Button } from "../../components/ui/Button.js";
 import { Modal } from "../../components/ui/Modal.js";
 import { ConfirmDialog } from "../../components/ui/ConfirmDialog.js";
@@ -24,11 +24,11 @@ const getLibraryPageData = createServerFn({ method: "GET" }).handler(() =>
   runServerEffect(
     Effect.gen(function* () {
       const token = getCookie("session");
-      const session = yield* requireSession(token);
+      const session = yield* Sessions.use((sessions) => sessions.requireSession(token));
       if (session.user.role !== "admin") {
         return null;
       }
-      const rows = yield* MaterialService.use((materialService) =>
+      const rows = yield* Materials.use((materialService) =>
         materialService
           .library({
             limit: 1000,

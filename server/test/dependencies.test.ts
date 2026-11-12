@@ -4,10 +4,10 @@ import { Redis, RedisError, make as makeRedis } from "effect/persistence/Redis";
 import { TestClock } from "effect/testing";
 
 import { DependencyUnavailable, ValkeyReady, waitFor } from "../dependencies.js";
-import { checkRateLimit, RateLimitService } from "../rateLimit.js";
+import { checkRateLimit, RateLimit } from "../rateLimit.js";
 import { RateLimiterMemory } from "../services/rateLimiter.js";
 
-it.layer(RateLimitService.Live.pipe(Layer.provide(RateLimiterMemory)))((it) => {
+it.layer(RateLimit.layerCounted.pipe(Layer.provide(RateLimiterMemory)))((it) => {
   it.effect("allows the first rate-limited request after dependency readiness", () =>
     Effect.gen(function* () {
       yield* waitFor("valkey")(Effect.succeed("PONG"));

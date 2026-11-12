@@ -3,7 +3,7 @@ import { RequestDatabase } from "../requestDatabase.js";
 import { HttpError } from "../pgErrors.js";
 
 /** Practice logs and their ratings, and contact form submissions for staff. */
-export class PracticeService extends Context.Service<PracticeService>()("PracticeService", {
+export class Practice extends Context.Service<Practice>()("dfg-rocks/practice", {
   make: Effect.sync(() => ({
     practiceLogs: Effect.fn("practiceLogs")(function* (materialId?: string, studentId?: string) {
       const db = yield* RequestDatabase;
@@ -48,7 +48,8 @@ export class PracticeService extends Context.Service<PracticeService>()("Practic
         .pipe(
           Effect.head,
           Effect.catchTags({
-            NoSuchElementError: () => new HttpError(500, "Failed to create practice log"),
+            NoSuchElementError: () =>
+              new HttpError({ status: 500, message: "Failed to create practice log" }),
           }),
         );
     }),
@@ -90,7 +91,8 @@ export class PracticeService extends Context.Service<PracticeService>()("Practic
           .pipe(
             Effect.head,
             Effect.catchTags({
-              NoSuchElementError: () => new HttpError(500, "Failed to update practice log"),
+              NoSuchElementError: () =>
+                new HttpError({ status: 500, message: "Failed to update practice log" }),
             }),
           );
       }
@@ -116,7 +118,8 @@ export class PracticeService extends Context.Service<PracticeService>()("Practic
         .pipe(
           Effect.head,
           Effect.catchTags({
-            NoSuchElementError: () => new HttpError(500, "Failed to create practice log"),
+            NoSuchElementError: () =>
+              new HttpError({ status: 500, message: "Failed to create practice log" }),
           }),
         );
     }),
@@ -147,7 +150,8 @@ export class PracticeService extends Context.Service<PracticeService>()("Practic
         .pipe(
           Effect.head,
           Effect.catchTags({
-            NoSuchElementError: () => new HttpError(404, "Contact submission not found"),
+            NoSuchElementError: () =>
+              new HttpError({ status: 404, message: "Contact submission not found" }),
           }),
         );
     }),

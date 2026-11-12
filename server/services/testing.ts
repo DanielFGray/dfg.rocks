@@ -5,12 +5,14 @@ import { sql } from "kysely";
 import type { LessonStatus, LocationType } from "../../shared/schemas.js";
 import { HttpError } from "../pgErrors.js";
 import { extractNotationTracksFromBytes, resolveAssignedTrackIndex } from "./notationService.js";
-import { SessionService } from "./sessionService.js";
-import { StorageService } from "./storageService.js";
+import { Sessions } from "./sessions.js";
+import { Storage } from "./storage.js";
 import { PgRootDB } from "../db.js";
 
-export class TestingService extends Context.Service<TestingService>()("TestingService", {
+export class Testing extends Context.Service<Testing>()("dfg-rocks/testing", {
   make: Effect.gen(function* () {
+    const storage = yield* Storage;
+    const sessions = yield* Sessions;
     const db = yield* PgRootDB;
 
     const queries = {
@@ -115,9 +117,7 @@ export class TestingService extends Context.Service<TestingService>()("TestingSe
             .where("user_id", "=", userId),
         );
 
-        const session = yield* SessionService.use((sessionService) =>
-          sessionService.createSession(userId),
-        );
+        const session = yield* sessions.createSession(userId);
 
         return {
           user: {
@@ -198,12 +198,12 @@ export class TestingService extends Context.Service<TestingService>()("TestingSe
         yield* Effect.forEach(
           testMaterialFiles.filter((material) => material.storage_backend === "local"),
           (material) =>
-            StorageService.use((storageService) =>
-              storageService.delete({
+            storage
+              .delete({
                 storageBackend: material.storage_backend,
                 storageKey: material.storage_key,
-              }),
-            ).pipe(Effect.ignore),
+              })
+              .pipe(Effect.ignore),
           { discard: true },
         );
       }),
@@ -256,18 +256,13 @@ export class TestingService extends Context.Service<TestingService>()("TestingSe
         const originalFilename =
           body.original_filename ?? `${body.title.toLowerCase().replace(/\s+/g, "-")}.pdf`;
         const bytes = body.source_file_path
-          ? new Uint8Array(
-              yield* Effect.tryPromise({
-                try: () => fs.readFile(body.source_file_path!),
-                catch: (error) => error,
-              }),
-            )
+          ? new Uint8Array(yield* Effect.tryPromise(() => fs.readFile(body.source_file_path!)))
           : Buffer.from(
               `test-material:${body.title}:${originalFilename}:${crypto.randomUUID()}`,
               "utf8",
             );
 
-        const storage = yield* StorageService;
+        const storage = yield* Storage;
         const location = storage.testingLocation(originalFilename);
         yield* storage.put(location, bytes);
 
@@ -431,7 +426,8 @@ export class TestingService extends Context.Service<TestingService>()("TestingSe
             .pipe(
               Effect.head,
               Effect.catchTags({
-                NoSuchElementError: () => new HttpError(500, "No admin user found"),
+                NoSuchElementError: () =>
+                  new HttpError({ status: 500, message: "No admin user found" }),
               }),
             );
 
@@ -514,5 +510,7 @@ export class TestingService extends Context.Service<TestingService>()("TestingSe
     };
   }),
 }) {
-  static readonly layer = Layer.effect(this, this.make);
+  static readonly layer = Layer.effect(this, this.make).pipe(
+    Layer.provide(Layer.mergeAll(Storage.layer, Sessions.layer, PgRootDB.layer)),
+  );
 }

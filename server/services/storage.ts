@@ -6,6 +6,11 @@ import * as FileSystem from "effect/FileSystem";
 import { Config, Context, Effect, Layer, Option, Redacted, Schema as S } from "effect";
 import { createS3Client, makeS3ObjectStore, type S3Settings } from "./s3Objects.js";
 
+export class StorageError extends S.TaggedError<StorageError, { readonly brand: unique symbol }>()(
+  "StorageError",
+  { message: S.String },
+) {}
+
 export type StorageBackend = "local" | "s3";
 
 export type StorageLocation = {
@@ -32,10 +37,10 @@ interface KeyedStore {
 }
 
 /** Some S3 variables are set and some are not. */
-export class StoragePartlyConfiguredError extends S.TaggedError<StoragePartlyConfiguredError>()(
-  "StoragePartlyConfiguredError",
-  { message: S.String },
-) {}
+export class StoragePartlyConfiguredError extends S.TaggedError<
+  StoragePartlyConfiguredError,
+  { readonly brand: unique symbol }
+>()("StoragePartlyConfiguredError", { message: S.String }) {}
 
 const s3Config = Config.all({
   endpoint: Config.option(Config.NonEmptyString("S3_ENDPOINT")),
@@ -87,53 +92,16 @@ function makeLocalStore(fileSystem: FileSystem.FileSystem, uploadsDir: string): 
     },
     delete: (storageKey) => fileSystem.remove(resolveLocalPath(uploadsDir, storageKey)),
     open: (storageKey) =>
-      Effect.try({
-        try: () =>
+      Effect.try(
+        () =>
           Readable.toWeb(
             createReadStream(resolveLocalPath(uploadsDir, storageKey)),
           ) as unknown as ReadableStream<Uint8Array>,
-        catch: (error) => error,
-      }),
+      ),
   };
 }
 
-const makeLive = Effect.gen(function* () {
-  const fileSystem = yield* FileSystem.FileSystem;
-  const uploadsDir = yield* Config.NonEmptyString("UPLOADS_DIR").pipe(
-    Config.withDefault("./uploads"),
-  );
-  const s3Settings = yield* readS3Settings;
-  const localStore = makeLocalStore(fileSystem, uploadsDir);
-  const s3Store = Option.map(s3Settings, (settings) => makeS3ObjectStore(createS3Client(settings)));
-
-  const storeFor = (location: StorageLocation): Effect.Effect<KeyedStore, Error> => {
-    switch (location.storageBackend) {
-      case "local":
-        return Effect.succeed(localStore);
-      case "s3":
-        return Option.match(s3Store, {
-          onNone: () => Effect.fail(new Error("S3 storage is not configured")),
-          onSome: Effect.succeed,
-        });
-      default:
-        return Effect.fail(new Error(`Unsupported storage backend: ${location.storageBackend}`));
-    }
-  };
-
-  return {
-    ...makeLocations(Option.isSome(s3Settings) ? "s3" : "local"),
-    exists: (location) =>
-      storeFor(location).pipe(Effect.flatMap((store) => store.exists(location.storageKey))),
-    put: (location, bytes) =>
-      storeFor(location).pipe(Effect.flatMap((store) => store.put(location.storageKey, bytes))),
-    delete: (location) =>
-      storeFor(location).pipe(Effect.flatMap((store) => store.delete(location.storageKey))),
-    open: (location) =>
-      storeFor(location).pipe(Effect.flatMap((store) => store.open(location.storageKey))),
-  } satisfies StorageServiceShape;
-});
-
-const makeTest = Effect.sync(() => {
+const memoryStorage = Effect.sync(() => {
   const files = new Map<string, Uint8Array>();
   const keyOf = (location: StorageLocation) => `${location.storageBackend}:${location.storageKey}`;
 
@@ -152,7 +120,9 @@ const makeTest = Effect.sync(() => {
       Effect.suspend(() => {
         const bytes = files.get(keyOf(location));
         if (bytes === undefined) {
-          return Effect.fail(new Error(`Stored file not found: ${location.storageKey}`));
+          return Effect.fail(
+            new StorageError({ message: `Stored file not found: ${location.storageKey}` }),
+          );
         }
         return Effect.succeed(
           new ReadableStream<Uint8Array>({
@@ -169,11 +139,50 @@ const makeTest = Effect.sync(() => {
 /**
  * Replaceable storage I/O. Provide either layer or layerTest at the application boundary.
  */
-export class StorageService extends Context.Service<StorageService, StorageServiceShape>()(
-  "StorageService",
-) {
-  static readonly layer = Layer.effect(this, makeLive);
-  static readonly layerTest = Layer.effect(this, makeTest);
+export class Storage extends Context.Service<Storage, StorageServiceShape>()("dfg-rocks/storage", {
+  make: Effect.gen(function* () {
+    const fileSystem = yield* FileSystem.FileSystem;
+    const uploadsDir = yield* Config.NonEmptyString("UPLOADS_DIR").pipe(
+      Config.withDefault("./uploads"),
+    );
+    const s3Settings = yield* readS3Settings;
+    const localStore = makeLocalStore(fileSystem, uploadsDir);
+    const s3Store = Option.map(s3Settings, (settings) =>
+      makeS3ObjectStore(createS3Client(settings)),
+    );
+
+    const storeFor = (location: StorageLocation): Effect.Effect<KeyedStore, StorageError> => {
+      switch (location.storageBackend) {
+        case "local":
+          return Effect.succeed(localStore);
+        case "s3":
+          return Effect.fromOption(s3Store).pipe(
+            Effect.mapError(() => new StorageError({ message: "S3 storage is not configured" })),
+          );
+        default:
+          return Effect.fail(
+            new StorageError({
+              message: `Unsupported storage backend: ${location.storageBackend}`,
+            }),
+          );
+      }
+    };
+
+    return {
+      ...makeLocations(Option.isSome(s3Settings) ? "s3" : "local"),
+      exists: (location) =>
+        storeFor(location).pipe(Effect.flatMap((store) => store.exists(location.storageKey))),
+      put: (location, bytes) =>
+        storeFor(location).pipe(Effect.flatMap((store) => store.put(location.storageKey, bytes))),
+      delete: (location) =>
+        storeFor(location).pipe(Effect.flatMap((store) => store.delete(location.storageKey))),
+      open: (location) =>
+        storeFor(location).pipe(Effect.flatMap((store) => store.open(location.storageKey))),
+    } satisfies StorageServiceShape;
+  }),
+}) {
+  static readonly layer = Layer.effect(this, this.make);
+  static readonly layerTest = Layer.effect(this, memoryStorage);
 
   static hashBytes(bytes: Uint8Array): string {
     return createHash("sha256").update(bytes).digest("hex");

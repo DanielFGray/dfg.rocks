@@ -3,7 +3,7 @@ import { Effect } from "effect";
 import { withAuthContext } from "../requestDatabase.js";
 import { Contract } from "../../shared/httpApi.js";
 import { CurrentSession } from "../../shared/api/guards.js";
-import { BillingLedgerService } from "../services/billingLedgerService.js";
+import { BillingLedger } from "../services/billingLedger.js";
 import { adaptAdminErrors } from "../httpApiErrors.js";
 import { serializeDiscount, serializeTaxRate } from "./billingResponses.js";
 
@@ -16,7 +16,7 @@ export const BillingRatesAdminApiGroupLive = HttpApiBuilder.group(
         "createDiscount",
         Effect.fnUntraced(function* ({ payload }) {
           const auth = yield* CurrentSession;
-          const result = yield* BillingLedgerService.use((billingLedgerService) =>
+          const result = yield* BillingLedger.use((billingLedgerService) =>
             billingLedgerService
               .createDiscount({
                 payerId: payload.payer_id,
@@ -36,7 +36,7 @@ export const BillingRatesAdminApiGroupLive = HttpApiBuilder.group(
         "updateDiscount",
         Effect.fnUntraced(function* ({ params, payload }) {
           const auth = yield* CurrentSession;
-          const result = yield* BillingLedgerService.use((billingLedgerService) =>
+          const result = yield* BillingLedger.use((billingLedgerService) =>
             billingLedgerService
               .updateDiscount(params.id, {
                 label: payload.label,
@@ -56,7 +56,7 @@ export const BillingRatesAdminApiGroupLive = HttpApiBuilder.group(
         "listTaxRates",
         Effect.fnUntraced(function* () {
           const auth = yield* CurrentSession;
-          const rates = yield* BillingLedgerService.use((billingLedgerService) =>
+          const rates = yield* BillingLedger.use((billingLedgerService) =>
             billingLedgerService.listTaxRates().pipe(withAuthContext(auth.session.id)),
           );
           return rates.map(serializeTaxRate);
@@ -66,7 +66,7 @@ export const BillingRatesAdminApiGroupLive = HttpApiBuilder.group(
         "createTaxRate",
         Effect.fnUntraced(function* ({ payload }) {
           const auth = yield* CurrentSession;
-          const result = yield* BillingLedgerService.use((billingLedgerService) =>
+          const result = yield* BillingLedger.use((billingLedgerService) =>
             billingLedgerService
               .createTaxRate({
                 label: payload.label,
@@ -85,7 +85,7 @@ export const BillingRatesAdminApiGroupLive = HttpApiBuilder.group(
         "createTaxExemption",
         Effect.fnUntraced(function* ({ payload }) {
           const auth = yield* CurrentSession;
-          return yield* BillingLedgerService.use((billingLedgerService) =>
+          return yield* BillingLedger.use((billingLedgerService) =>
             billingLedgerService
               .createTaxExemption({
                 payerId: payload.payer_id,

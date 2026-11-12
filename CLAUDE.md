@@ -98,20 +98,20 @@ Both are a `Database`: a Kysely instance that only builds queries. Run a query w
 
 ```typescript
 // Service method: queries as the visitor, with RLS
-listCourses: Effect.fn("CourseService.listCourses")(function* () {
+listCourses: Effect.fn("listCourses")(function* () {
   const db = yield* RequestDatabase
   return yield* db.execute(db.selectFrom("app_public.courses").select([...]))
 }),
 
 // Handler: one visitor transaction for the call
-courseService.listCourses().pipe(withAuthContext(auth.session.id))
+courses.listCourses().pipe(withAuthContext(auth.session.id))
 ```
 
 **Don't filter by user_id in TypeScript** — RLS handles it.
 
 **Effect auth/layer flow**:
 
-- Session validation via `sessionService.validateSessionToken(cookie)`
+- Session validation via `sessions.validateSessionToken(cookie)`
 - Auth guard throws `HttpError(401)` if no session
 - Admin guard checks role + CSRF header (`x-requested-with`)
 
@@ -129,7 +129,7 @@ RLS policies derive user context from `current_setting('my.session_id')` joined 
 
 ### Testing
 
-- Rate limits count in Valkey only when `NODE_ENV=production`; other environments get `RateLimitService.Test`, which allows every request. `server/rateLimit.ts` holds each rule's limit, window, and what to do when Valkey cannot answer.
+- Rate limits count in Valkey only when `NODE_ENV=production`; other environments get `RateLimit.layerTest`, which allows every request. `server/rateLimit.ts` holds each rule's limit, window, and what to do when Valkey cannot answer.
 - Testing API (`/api/testing/*`) creates users, seeds data, clears state — only loaded when `NODE_ENV !== "production"`
 - Playwright fixtures: `testing.login()`, `testing.clear()`, `testing.seedCourse()`, `testing.enroll()`
 
@@ -185,9 +185,9 @@ Benign warning, no functionality impact.
 | `server/api/auth.ts`                       | Auth endpoints (login, logout, me, password)          |
 | `server/api/<feature>.ts`                  | One handler group per feature                         |
 | `server/api/testing.ts`                    | Test data seeding (non-production)                    |
-| `server/services/sessionService.ts`        | Session CRUD (PG)                                     |
-| `server/services/authService.ts`           | Login, password reset                                 |
-| `server/services/googleCalendarService.ts` | Google Calendar integration                           |
+| `server/services/sessions.ts`              | Session CRUD (PG)                                     |
+| `server/services/auth.ts`                  | Login, password reset                                 |
+| `server/services/googleCalendar.ts`        | Google Calendar integration                           |
 | `server/pgErrors.ts`                       | HttpError class, PG errcode mapping                   |
 | `migrations/current/`                      | SQL schema (graphile-migrate)                         |
 

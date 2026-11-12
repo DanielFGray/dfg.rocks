@@ -16,9 +16,9 @@ const CreateBillLineItemPayload = S.Struct({
     S.Literal("credit"),
   ]),
   description: S.String,
-  quantity: S.Number,
-  unit_price_cents: S.Number,
-  amount_cents: S.Number,
+  quantity: S.Finite,
+  unit_price_cents: S.Finite,
+  amount_cents: S.Finite,
 });
 
 const CreateBillPayload = S.Struct({
@@ -35,7 +35,7 @@ const VoidBillPayload = S.Struct({
 });
 
 const AdjustBillPayload = S.Struct({
-  amount_cents: S.Number,
+  amount_cents: S.Finite,
   reason: S.String.pipe(S.check(S.isMinLength(1))),
 });
 

@@ -3,7 +3,7 @@ import {
   isFirstOfMonth,
   isIsoDate,
   validateRecurringSchedule,
-} from "../services/recurringScheduleService.js";
+} from "../services/recurringSchedule.js";
 
 const validSchedule = {
   studentRateId: "rate-1",

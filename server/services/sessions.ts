@@ -1,3 +1,4 @@
+import { HttpError } from "../pgErrors.js";
 import crypto from "crypto";
 import { Effect, Option, Context, Layer } from "effect";
 import * as S from "effect/Schema";
@@ -67,16 +68,19 @@ export function resolveEffectiveStudent(auth: NonNullable<SessionResult>): Effec
   return { studentId: auth.user.id, isActing: false };
 }
 
-class SessionUserNotFoundError extends S.TaggedError<SessionUserNotFoundError>()(
-  "SessionUserNotFoundError",
-  { userId: S.String },
-) {
+class SessionUserNotFoundError extends S.TaggedError<
+  SessionUserNotFoundError,
+  { readonly brand: unique symbol }
+>()("SessionUserNotFoundError", { userId: S.String }) {
   get message(): string {
     return `User ${this.userId} not found`;
   }
 }
 
-class SessionNotFoundError extends S.TaggedError<SessionNotFoundError>()("SessionNotFoundError", {
+class SessionNotFoundError extends S.TaggedError<
+  SessionNotFoundError,
+  { readonly brand: unique symbol }
+>()("SessionNotFoundError", {
   sessionId: S.String,
 }) {
   get message(): string {
@@ -96,36 +100,93 @@ type LiveSessionRecord = {
   active_student_id: string | null;
 };
 
-const loadLiveSessionByCookieIdEffect = Effect.fnUntraced(function* (cookieId: string) {
-  const rootDb = yield* PgRootDB;
-  return yield* rootDb
-    .execute(
-      rootDb
-        .selectFrom("app_private.sessions as s")
-        .innerJoin("app_public.users as u", "u.id", "s.user_id")
-        .select([
-          "s.id as session_id",
-          "s.cookie_id",
-          "s.user_id",
-          "s.expires_at",
-          "s.active_student_id",
-          "u.username",
-          "u.name",
-          "u.role",
-        ])
-        .select(sql<string>`encode(${sql.ref("s.secret_hash")}, 'hex')`.as("secret_hash_hex"))
-        .where("s.cookie_id", "=", cookieId),
-    )
-    .pipe(
-      Effect.head,
-      Effect.option,
-      Effect.map((row) => Option.getOrNull(row) as LiveSessionRecord | null),
-    );
-});
-
-export class SessionService extends Context.Service<SessionService>()("SessionService", {
+export class Sessions extends Context.Service<Sessions>()("dfg-rocks/sessions", {
   make: Effect.gen(function* () {
     const db = yield* PgRootDB;
+    const loadLiveSessionByCookieIdEffect = Effect.fnUntraced(function* (cookieId: string) {
+      const rootDb = db;
+      return yield* rootDb
+        .execute(
+          rootDb
+            .selectFrom("app_private.sessions as s")
+            .innerJoin("app_public.users as u", "u.id", "s.user_id")
+            .select([
+              "s.id as session_id",
+              "s.cookie_id",
+              "s.user_id",
+              "s.expires_at",
+              "s.active_student_id",
+              "u.username",
+              "u.name",
+              "u.role",
+            ])
+            .select(sql<string>`encode(${sql.ref("s.secret_hash")}, 'hex')`.as("secret_hash_hex"))
+            .where("s.cookie_id", "=", cookieId),
+        )
+        .pipe(
+          Effect.head,
+          Effect.option,
+          Effect.map((row) => Option.getOrNull(row) as LiveSessionRecord | null),
+        );
+    });
+    const validateSessionToken = Effect.fnUntraced(function* (token?: string) {
+      const parsed = parseSessionToken(token);
+      if (!parsed) {
+        return null;
+      }
+
+      const liveSession = yield* loadLiveSessionByCookieIdEffect(parsed.cookieId);
+      if (!liveSession) {
+        return null;
+      }
+
+      if (
+        !constantTimeEqual(
+          hashSecret(parsed.secret),
+          Buffer.from(liveSession.secret_hash_hex, "hex"),
+        )
+      ) {
+        return null;
+      }
+
+      if (liveSession.expires_at <= new Date()) {
+        yield* db.execute(
+          db.deleteFrom("app_private.sessions").where("id", "=", liveSession.session_id),
+        );
+        return null;
+      }
+
+      return {
+        user: {
+          id: liveSession.user_id,
+          username: liveSession.username,
+          name: liveSession.name ?? "",
+          role: decodeUserRole(liveSession.role),
+        },
+        session: {
+          id: liveSession.session_id,
+          cookie_id: liveSession.cookie_id,
+          user_id: liveSession.user_id,
+          active_student_id: liveSession.active_student_id,
+        },
+      } satisfies Exclude<SessionResult, null>;
+    });
+    const requireSession = Effect.fnUntraced(function* (token: string | undefined) {
+      const session = yield* validateSessionToken(token);
+      if (!session) {
+        return yield* new HttpError({ status: 401, message: "Unauthorized" });
+      }
+      return session;
+    });
+
+    const requireAdminSession = Effect.fnUntraced(function* (token: string | undefined) {
+      const session = yield* requireSession(token);
+      if (session.user.role !== "admin") {
+        return yield* new HttpError({ status: 403, message: "Forbidden" });
+      }
+      return session;
+    });
+
     return {
       createSession: Effect.fnUntraced(function* (userId: string) {
         const user = yield* db
@@ -133,7 +194,7 @@ export class SessionService extends Context.Service<SessionService>()("SessionSe
           .pipe(Effect.head, Effect.option);
 
         if (Option.isNone(user)) {
-          return yield* Effect.fail(new SessionUserNotFoundError({ userId }));
+          return yield* new SessionUserNotFoundError({ userId });
         }
 
         const { cookieId, secret, secretHash, expiresAt } = buildToken();
@@ -167,53 +228,14 @@ export class SessionService extends Context.Service<SessionService>()("SessionSe
           .pipe(Effect.head, Effect.option);
 
         if (Option.isNone(row)) {
-          return yield* Effect.fail(new SessionNotFoundError({ sessionId }));
+          return yield* new SessionNotFoundError({ sessionId });
         }
 
         return { token: `${cookieId}.${secret}`, expiresAt };
       }),
-      validateSessionToken: Effect.fnUntraced(function* (token?: string) {
-        const parsed = parseSessionToken(token);
-        if (!parsed) {
-          return null;
-        }
-
-        const liveSession = yield* loadLiveSessionByCookieIdEffect(parsed.cookieId);
-        if (!liveSession) {
-          return null;
-        }
-
-        if (
-          !constantTimeEqual(
-            hashSecret(parsed.secret),
-            Buffer.from(liveSession.secret_hash_hex, "hex"),
-          )
-        ) {
-          return null;
-        }
-
-        if (liveSession.expires_at <= new Date()) {
-          yield* db.execute(
-            db.deleteFrom("app_private.sessions").where("id", "=", liveSession.session_id),
-          );
-          return null;
-        }
-
-        return {
-          user: {
-            id: liveSession.user_id,
-            username: liveSession.username,
-            name: liveSession.name ?? "",
-            role: decodeUserRole(liveSession.role),
-          },
-          session: {
-            id: liveSession.session_id,
-            cookie_id: liveSession.cookie_id,
-            user_id: liveSession.user_id,
-            active_student_id: liveSession.active_student_id,
-          },
-        } satisfies Exclude<SessionResult, null>;
-      }),
+      validateSessionToken,
+      requireSession,
+      requireAdminSession,
 
       updateActiveStudent: Effect.fnUntraced(function* (
         sessionId: string,
@@ -237,5 +259,5 @@ export class SessionService extends Context.Service<SessionService>()("SessionSe
     };
   }),
 }) {
-  static readonly layer = Layer.effect(this, this.make);
+  static readonly layer = Layer.effect(this, this.make).pipe(Layer.provide(PgRootDB.layer));
 }

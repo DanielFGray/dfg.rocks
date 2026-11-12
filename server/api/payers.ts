@@ -3,7 +3,7 @@ import { Effect } from "effect";
 import { withAuthContext } from "../requestDatabase.js";
 import { Contract } from "../../shared/httpApi.js";
 import { CurrentSession } from "../../shared/api/guards.js";
-import { BillingLedgerService } from "../services/billingLedgerService.js";
+import { BillingLedger } from "../services/billingLedger.js";
 import { adaptAdminErrors } from "../httpApiErrors.js";
 import { serializeDiscount } from "./billingResponses.js";
 
@@ -14,14 +14,12 @@ export const PayersAdminApiGroupLive = HttpApiBuilder.group(Contract, "payersAdm
       Effect.fnUntraced(function* () {
         const auth = yield* CurrentSession;
         return yield* Effect.gen(function* () {
-          const summaries = yield* BillingLedgerService.use((billingLedgerService) =>
+          const summaries = yield* BillingLedger.use((billingLedgerService) =>
             billingLedgerService.listPayers(),
           );
-          const balances = yield* Effect.all(
-            summaries.map((summary) =>
-              BillingLedgerService.use((billingLedgerService) =>
-                billingLedgerService.getPayerBalance(summary.payer_id),
-              ),
+          const balances = yield* Effect.forEach(summaries, (summary) =>
+            BillingLedger.use((billingLedgerService) =>
+              billingLedgerService.getPayerBalance(summary.payer_id),
             ),
           );
           return summaries.map((summary, index) => ({
@@ -38,7 +36,7 @@ export const PayersAdminApiGroupLive = HttpApiBuilder.group(Contract, "payersAdm
       "billingPayer",
       Effect.fnUntraced(function* ({ params }) {
         const auth = yield* CurrentSession;
-        return yield* BillingLedgerService.use((billingLedgerService) =>
+        return yield* BillingLedger.use((billingLedgerService) =>
           billingLedgerService
             .getPayerBillingDetail(params.payerId)
             .pipe(withAuthContext(auth.session.id)),
@@ -49,7 +47,7 @@ export const PayersAdminApiGroupLive = HttpApiBuilder.group(Contract, "payersAdm
       "billingPayerBills",
       Effect.fnUntraced(function* ({ params }) {
         const auth = yield* CurrentSession;
-        return yield* BillingLedgerService.use((billingLedgerService) =>
+        return yield* BillingLedger.use((billingLedgerService) =>
           billingLedgerService
             .listPayerBills(params.payerId)
             .pipe(withAuthContext(auth.session.id)),
@@ -60,7 +58,7 @@ export const PayersAdminApiGroupLive = HttpApiBuilder.group(Contract, "payersAdm
       "billingPayerPayments",
       Effect.fnUntraced(function* ({ params }) {
         const auth = yield* CurrentSession;
-        const payments = yield* BillingLedgerService.use((billingLedgerService) =>
+        const payments = yield* BillingLedger.use((billingLedgerService) =>
           billingLedgerService
             .listPayerPayments(params.payerId)
             .pipe(withAuthContext(auth.session.id)),
@@ -72,7 +70,7 @@ export const PayersAdminApiGroupLive = HttpApiBuilder.group(Contract, "payersAdm
       "billingPayerCredits",
       Effect.fnUntraced(function* ({ params }) {
         const auth = yield* CurrentSession;
-        const credits = yield* BillingLedgerService.use((billingLedgerService) =>
+        const credits = yield* BillingLedger.use((billingLedgerService) =>
           billingLedgerService
             .listPayerCredits(params.payerId)
             .pipe(withAuthContext(auth.session.id)),
@@ -84,7 +82,7 @@ export const PayersAdminApiGroupLive = HttpApiBuilder.group(Contract, "payersAdm
       "payerDiscounts",
       Effect.fnUntraced(function* ({ params }) {
         const auth = yield* CurrentSession;
-        const discounts = yield* BillingLedgerService.use((billingLedgerService) =>
+        const discounts = yield* BillingLedger.use((billingLedgerService) =>
           billingLedgerService
             .listPayerDiscounts(params.payerId)
             .pipe(withAuthContext(auth.session.id)),
@@ -96,7 +94,7 @@ export const PayersAdminApiGroupLive = HttpApiBuilder.group(Contract, "payersAdm
       "payerTaxExemptions",
       Effect.fnUntraced(function* ({ params }) {
         const auth = yield* CurrentSession;
-        return yield* BillingLedgerService.use((billingLedgerService) =>
+        return yield* BillingLedger.use((billingLedgerService) =>
           billingLedgerService
             .listPayerTaxExemptions(params.payerId)
             .pipe(withAuthContext(auth.session.id)),

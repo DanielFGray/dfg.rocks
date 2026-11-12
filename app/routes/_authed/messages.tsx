@@ -14,17 +14,19 @@ import { groupByPartner } from "../../components/messages/helpers.js";
 import { MessageThread } from "../../components/messages/MessageThread.js";
 import { ConversationList } from "../../components/messages/ConversationList.js";
 import { runServerEffect } from "../../lib/serverEffect.js";
-import { MessageService } from "../../../server/services/messageService.js";
-import { StudentService } from "../../../server/services/studentService.js";
+import { Messages } from "../../../server/services/messages.js";
+import { Students } from "../../../server/services/students.js";
 import { serializeMessage, normalizeStudents } from "../../../shared/responseMappers.js";
-import { requireSession, resolveEffectiveStudent } from "../../lib/sessionGuards.server.js";
+import { Sessions, resolveEffectiveStudent } from "../../../server/services/sessions.js";
 
 const getMessagesPageData = createServerFn({ method: "GET" }).handler(() =>
   runServerEffect(
     Effect.gen(function* () {
-      const session = yield* requireSession(getCookie("session"));
+      const session = yield* Sessions.use((sessions) =>
+        sessions.requireSession(getCookie("session")),
+      );
       return yield* Effect.gen(function* () {
-        const messageService = yield* MessageService;
+        const messageService = yield* Messages;
 
         const effective = resolveEffectiveStudent(session);
         const filterStudentId = effective.isActing ? effective.studentId : undefined;
@@ -41,7 +43,7 @@ const getMessagesPageData = createServerFn({ method: "GET" }).handler(() =>
 
         let students: ReturnType<typeof normalizeStudents> | null = null;
         if (session.user.role === "admin") {
-          const studentSvc = yield* StudentService;
+          const studentSvc = yield* Students;
           students = normalizeStudents(yield* studentSvc.listStudents());
         }
 

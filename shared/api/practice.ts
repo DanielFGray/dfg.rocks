@@ -16,13 +16,13 @@ const UpdateSubmissionPayload = S.Struct({
 
 export const CreatePracticeLogPayload = S.Struct({
   material_id: S.String,
-  rating: S.optional(S.Number.pipe(S.check(S.isBetween({ minimum: 1, maximum: 5 })))),
-  duration_minutes: S.optional(S.Number),
+  rating: S.optional(S.Finite.pipe(S.check(S.isBetween({ minimum: 1, maximum: 5 })))),
+  duration_minutes: S.optional(S.Finite),
 });
 
 export const RatePracticeLogPayload = S.Struct({
   material_id: S.String,
-  rating: S.Number.pipe(S.check(S.isBetween({ minimum: 1, maximum: 5 }))),
+  rating: S.Finite.pipe(S.check(S.isBetween({ minimum: 1, maximum: 5 }))),
 });
 
 export const practiceGroup = HttpApiGroup.make("practice")

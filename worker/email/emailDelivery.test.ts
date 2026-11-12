@@ -1,9 +1,11 @@
+import { WorkerTasks } from "../workerTasks.js";
+import { CalendarSync } from "../calendar/calendarSync.js";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { describe, expect, it } from "@effect/vitest";
 import { vi } from "vitest";
-import { ConfigProvider, Effect, Layer, Ref } from "effect";
-import { Mailer, mailProvider } from "./mailer.js";
-import { sendEmail } from "./sendEmail.js";
+import { Context, ConfigProvider, Effect, Layer } from "effect";
+import { MailCapture, Mailer, mailProvider } from "./mailer.js";
+import { EmailDelivery } from "./emailDelivery.js";
 
 // nodemailer is replaced, so no test here opens a connection to Cloudflare.
 const smtp = vi.hoisted(() => ({
@@ -97,7 +99,6 @@ const jobs = [
 ] as const;
 
 const contact = { options: to, ...jobs[8][0] };
-const templates = `${import.meta.dirname}/../templates`;
 
 const withConfig = (env: Record<string, string>) =>
   ConfigProvider.layer(ConfigProvider.fromUnknown(env));
@@ -105,11 +106,16 @@ const withConfig = (env: Record<string, string>) =>
 describe("queued email delivery", () => {
   it.live("renders every template with the variables its enqueuer sends", () =>
     Effect.gen(function* () {
-      const { layer, sent } = yield* Mailer.makeCapture;
-      yield* Effect.forEach(jobs, ([job]) => sendEmail({ options: to, ...job }, templates)).pipe(
-        Effect.provide(Layer.mergeAll(layer, NodeServices.layer)),
+      const capture = yield* Layer.build(MailCapture.layer);
+      const mailCapture = Context.get(capture, MailCapture);
+      const delivery = yield* EmailDelivery.make.pipe(
+        Effect.provideService(Mailer, { send: mailCapture.record }),
+        Effect.provide(NodeServices.layer),
       );
-      const delivered = yield* Ref.get(sent);
+      yield* Effect.forEach(jobs, ([job]) => delivery.send({ options: to, ...job })).pipe(
+        Effect.provide(NodeServices.layer),
+      );
+      const delivered = yield* mailCapture.sent;
       expect(delivered.map((mail) => mail.to)).toEqual(jobs.map(() => ["player@example.invalid"]));
       jobs.forEach(([, expected], index) => {
         expect(delivered[index]?.text).toContain(expected);
@@ -119,15 +125,18 @@ describe("queued email delivery", () => {
 
   it.live("escapes variables in the HTML", () =>
     Effect.gen(function* () {
-      const { layer, sent } = yield* Mailer.makeCapture;
-      yield* sendEmail(
-        {
+      const mailCapture = yield* MailCapture.make;
+      const delivery = yield* EmailDelivery.make.pipe(
+        Effect.provideService(Mailer, { send: mailCapture.record }),
+        Effect.provide(NodeServices.layer),
+      );
+      yield* delivery
+        .send({
           ...contact,
           variables: { ...contact.variables, name: "<script>x</script>" },
-        },
-        templates,
-      ).pipe(Effect.provide(Layer.mergeAll(layer, NodeServices.layer)));
-      const [mail] = yield* Ref.get(sent);
+        })
+        .pipe(Effect.provide(NodeServices.layer));
+      const [mail] = yield* mailCapture.sent;
       expect(mail?.html).toContain("&lt;script&gt;");
       expect(mail?.html).not.toContain("<script>x");
     }),
@@ -135,20 +144,27 @@ describe("queued email delivery", () => {
 
   it.live("rejects a payload that does not match its template before delivery", () =>
     Effect.gen(function* () {
-      const { layer, sent } = yield* Mailer.makeCapture;
-      const error = yield* sendEmail(
-        { ...contact, variables: { name: "Visitor" } },
-        templates,
-      ).pipe(Effect.provide(Layer.mergeAll(layer, NodeServices.layer)), Effect.flip);
+      const mailCapture = yield* MailCapture.make;
+      const delivery = yield* EmailDelivery.make.pipe(
+        Effect.provideService(Mailer, { send: mailCapture.record }),
+        Effect.provide(NodeServices.layer),
+      );
+      const jobs = yield* WorkerTasks.make.pipe(
+        Effect.provideService(EmailDelivery, delivery),
+        Effect.provideService(CalendarSync, { sync: () => Effect.void }),
+      );
+      const error = yield* jobs
+        .send_email({ ...contact, variables: { name: "Visitor" } })
+        .pipe(Effect.flip);
       expect(error._tag).toBe("SchemaError");
-      expect(yield* Ref.get(sent)).toHaveLength(0);
+      expect(yield* mailCapture.sent).toHaveLength(0);
     }),
   );
 });
 
 describe("the cloudflare provider", () => {
   const cloudflare = Layer.mergeAll(
-    Mailer.layer.pipe(
+    EmailDelivery.layer.pipe(
       Layer.provide(
         Layer.mergeAll(
           withConfig({
@@ -166,7 +182,9 @@ describe("the cloudflare provider", () => {
   it.live("submits the message over Cloudflare SMTP with the API token", () =>
     Effect.gen(function* () {
       smtp.sendMail.mockResolvedValue({ rejected: [], accepted: ["admin@example.invalid"] });
-      yield* sendEmail(contact, templates).pipe(Effect.provide(cloudflare));
+      yield* EmailDelivery.use((delivery) => delivery.send(contact)).pipe(
+        Effect.provide(cloudflare),
+      );
 
       expect(smtp.createTransport).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -188,7 +206,7 @@ describe("the cloudflare provider", () => {
   it.live("fails the job, so graphile-worker retries, when the provider rejects a recipient", () =>
     Effect.gen(function* () {
       smtp.sendMail.mockResolvedValue({ rejected: ["player@example.invalid"], accepted: [] });
-      const error = yield* sendEmail(contact, templates).pipe(
+      const error = yield* EmailDelivery.use((delivery) => delivery.send(contact)).pipe(
         Effect.provide(cloudflare),
         Effect.flip,
       );

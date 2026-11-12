@@ -17,16 +17,16 @@ const IpApiResponse = S.Struct({
   region: S.NullishOr(S.String),
   regionName: S.NullishOr(S.String),
   city: S.NullishOr(S.String),
-  lat: S.NullishOr(S.Number),
-  lon: S.NullishOr(S.Number),
+  lat: S.NullishOr(S.Finite),
+  lon: S.NullishOr(S.Finite),
 });
 
-export class GeolocationService extends Context.Service<GeolocationService>()(
-  "GeolocationService",
-  {
-    make: Effect.succeed({
+export class Geolocation extends Context.Service<Geolocation>()("dfg-rocks/geolocation", {
+  make: Effect.gen(function* () {
+    const client = yield* HttpClient.HttpClient;
+    return {
       lookupIp: Effect.fnUntraced(function* (ip: string) {
-        const res = yield* HttpClient.get(
+        const res = yield* client.get(
           `http://ip-api.com/json/${encodeURIComponent(ip)}?fields=status,message,country,countryCode,region,regionName,city,lat,lon`,
         );
         if (!res || res.status !== 200) return null;
@@ -45,8 +45,8 @@ export class GeolocationService extends Context.Service<GeolocationService>()(
           lon: data.lon ?? 0,
         } as GeoLocation;
       }),
-    }),
-  },
-) {
+    };
+  }),
+}) {
   static readonly layer = Layer.effect(this, this.make);
 }

@@ -8,24 +8,26 @@ import { EmailSection } from "../../components/settings/EmailSection.js";
 import { DeleteAccountSection } from "../../components/settings/DeleteAccountSection.js";
 import { TestimonialEditor } from "../../components/testimonials/TestimonialEditor.js";
 import { runServerEffect } from "../../lib/serverEffect.js";
-import { AccountService } from "../../../server/services/accountService.js";
-import { TestimonialService } from "../../../server/services/testimonialService.js";
-import { GoogleCalendarService } from "../../../server/services/googleCalendarService.js";
-import { TestimonialReminderService } from "../../../server/services/testimonialReminderService.js";
+import { Account } from "../../../server/services/account.js";
+import { Testimonials } from "../../../server/services/testimonials.js";
+import { GoogleCalendar } from "../../../server/services/googleCalendar.js";
+import { TestimonialReminder } from "../../../server/services/testimonialReminder.js";
 import { serializeUserEmail, serializeTestimonial } from "../../../shared/responseMappers.js";
-import { requireSession } from "../../lib/sessionGuards.server.js";
+import { Sessions } from "../../../server/services/sessions.js";
 
 const getSettingsPageData = createServerFn({ method: "GET" }).handler(() =>
   runServerEffect(
     Effect.gen(function* () {
-      const session = yield* requireSession(getCookie("session"));
+      const session = yield* Sessions.use((sessions) =>
+        sessions.requireSession(getCookie("session")),
+      );
       return yield* Effect.gen(function* () {
-        const emailsEffect = AccountService.use((accountService) => accountService.myEmails());
+        const emailsEffect = Account.use((accountService) => accountService.myEmails());
 
         if (session.user.role !== "admin") {
           const [emails, testimonial] = yield* Effect.all([
             emailsEffect,
-            TestimonialService.use((testimonialService) =>
+            Testimonials.use((testimonialService) =>
               testimonialService.testimonial(session.user.id),
             ),
           ]);
@@ -43,16 +45,14 @@ const getSettingsPageData = createServerFn({ method: "GET" }).handler(() =>
         const [emails, gcalStatus, workingHours, intervalDays, adminTestimonials] =
           yield* Effect.all([
             emailsEffect,
-            GoogleCalendarService.use((googleCalendarService) =>
+            GoogleCalendar.use((googleCalendarService) =>
               googleCalendarService.getGoogleCalendarStatus(),
             ),
-            GoogleCalendarService.use((googleCalendarService) =>
-              googleCalendarService.getWorkingHours(),
-            ),
-            TestimonialReminderService.use((testimonialReminderService) =>
+            GoogleCalendar.use((googleCalendarService) => googleCalendarService.getWorkingHours()),
+            TestimonialReminder.use((testimonialReminderService) =>
               testimonialReminderService.getIntervalDays(),
             ),
-            TestimonialService.use((testimonialService) => testimonialService.listTestimonials()),
+            Testimonials.use((testimonialService) => testimonialService.listTestimonials()),
           ]);
 
         return {

@@ -5,7 +5,7 @@ import { RequestDatabase } from "../requestDatabase.js";
 import { catchPgErrors, HttpError } from "../pgErrors.js";
 import { settleSingleBookingCancellation, singleBookingObligation } from "./singleBookingBills.js";
 import { calculateDepositAmount } from "./billingCalculation.js";
-import { LessonPolicyService } from "./lessonPolicyService.js";
+import { LessonPolicy } from "./lessonPolicy.js";
 
 const lessonColumns = [
   "id",
@@ -38,8 +38,9 @@ const lessonNoteColumns = [
   "updated_at",
 ] as const;
 
-export class LessonService extends Context.Service<LessonService>()("LessonService", {
-  make: Effect.sync(() => {
+export class Lessons extends Context.Service<Lessons>()("dfg-rocks/lessons", {
+  make: Effect.gen(function* () {
+    const lessonPolicy = yield* LessonPolicy;
     return {
       createLesson: Effect.fn("createLesson")(function* (values: {
         studentId: string;
@@ -66,7 +67,8 @@ export class LessonService extends Context.Service<LessonService>()("LessonServi
               .pipe(
                 Effect.head,
                 Effect.catchTags({
-                  NoSuchElementError: () => new HttpError(500, "Failed to create lesson"),
+                  NoSuchElementError: () =>
+                    new HttpError({ status: 500, message: "Failed to create lesson" }),
                 }),
               );
             // A lesson the admin schedules is billed like a booked one, but holds no deposit.
@@ -107,7 +109,8 @@ export class LessonService extends Context.Service<LessonService>()("LessonServi
             .pipe(
               Effect.head,
               Effect.catchTags({
-                NoSuchElementError: () => new HttpError(404, "Lesson not found"),
+                NoSuchElementError: () =>
+                  new HttpError({ status: 404, message: "Lesson not found" }),
               }),
             ),
         );
@@ -130,7 +133,8 @@ export class LessonService extends Context.Service<LessonService>()("LessonServi
               .pipe(
                 Effect.head,
                 Effect.catchTags({
-                  NoSuchElementError: () => new HttpError(404, "Lesson not found"),
+                  NoSuchElementError: () =>
+                    new HttpError({ status: 404, message: "Lesson not found" }),
                 }),
               );
           }),
@@ -153,11 +157,15 @@ export class LessonService extends Context.Service<LessonService>()("LessonServi
               .pipe(
                 Effect.head,
                 Effect.catchTags({
-                  NoSuchElementError: () => new HttpError(404, "Lesson not found"),
+                  NoSuchElementError: () =>
+                    new HttpError({ status: 404, message: "Lesson not found" }),
                 }),
               );
             if (existing.status !== "scheduled") {
-              return yield* new HttpError(409, "Only scheduled lessons can be cancelled");
+              return yield* new HttpError({
+                status: 409,
+                message: "Only scheduled lessons can be cancelled",
+              });
             }
             yield* db.execute(
               db
@@ -203,11 +211,15 @@ export class LessonService extends Context.Service<LessonService>()("LessonServi
               .pipe(
                 Effect.head,
                 Effect.catchTags({
-                  NoSuchElementError: () => new HttpError(404, "Lesson not found"),
+                  NoSuchElementError: () =>
+                    new HttpError({ status: 404, message: "Lesson not found" }),
                 }),
               );
             if (existing.status !== "scheduled") {
-              return yield* new HttpError(409, "Only scheduled lessons can be completed");
+              return yield* new HttpError({
+                status: 409,
+                message: "Only scheduled lessons can be completed",
+              });
             }
             const rate = yield* db
               .execute(
@@ -221,7 +233,10 @@ export class LessonService extends Context.Service<LessonService>()("LessonServi
                 Effect.head,
                 Effect.catchTags({
                   NoSuchElementError: () =>
-                    new HttpError(409, "Set a student rate before completing this lesson"),
+                    new HttpError({
+                      status: 409,
+                      message: "Set a student rate before completing this lesson",
+                    }),
                 }),
               );
             const deposit = yield* db
@@ -392,7 +407,8 @@ export class LessonService extends Context.Service<LessonService>()("LessonServi
             .pipe(
               Effect.head,
               Effect.catchTags({
-                NoSuchElementError: () => new HttpError(500, "Failed to save lesson note"),
+                NoSuchElementError: () =>
+                  new HttpError({ status: 500, message: "Failed to save lesson note" }),
               }),
             ),
         );
@@ -410,7 +426,8 @@ export class LessonService extends Context.Service<LessonService>()("LessonServi
             .pipe(
               Effect.head,
               Effect.catchTags({
-                NoSuchElementError: () => new HttpError(404, "Lesson note not found"),
+                NoSuchElementError: () =>
+                  new HttpError({ status: 404, message: "Lesson note not found" }),
               }),
             ),
         );
@@ -429,7 +446,8 @@ export class LessonService extends Context.Service<LessonService>()("LessonServi
             .pipe(
               Effect.head,
               Effect.catchTags({
-                NoSuchElementError: () => new HttpError(404, "Lesson note not found"),
+                NoSuchElementError: () =>
+                  new HttpError({ status: 404, message: "Lesson note not found" }),
               }),
             ),
         );
@@ -511,7 +529,8 @@ export class LessonService extends Context.Service<LessonService>()("LessonServi
               .pipe(
                 Effect.head,
                 Effect.catchTags({
-                  NoSuchElementError: () => new HttpError(404, "Lesson not found"),
+                  NoSuchElementError: () =>
+                    new HttpError({ status: 404, message: "Lesson not found" }),
                 }),
               );
           }),
@@ -542,7 +561,8 @@ export class LessonService extends Context.Service<LessonService>()("LessonServi
               .pipe(
                 Effect.head,
                 Effect.catchTags({
-                  NoSuchElementError: () => new HttpError(404, "Lesson note not found"),
+                  NoSuchElementError: () =>
+                    new HttpError({ status: 404, message: "Lesson note not found" }),
                 }),
               );
           }),
@@ -603,16 +623,23 @@ export class LessonService extends Context.Service<LessonService>()("LessonServi
             .pipe(
               Effect.head,
               Effect.catchTags({
-                NoSuchElementError: () => new HttpError(404, "Lesson not found"),
+                NoSuchElementError: () =>
+                  new HttpError({ status: 404, message: "Lesson not found" }),
               }),
             ),
         );
         if (row.status !== "scheduled") {
-          return yield* new HttpError(409, "Only scheduled lessons can be cancelled");
+          return yield* new HttpError({
+            status: 409,
+            message: "Only scheduled lessons can be cancelled",
+          });
         }
         const now = new Date(yield* Clock.currentTimeMillis);
         if (new Date(row.scheduled_at).getTime() <= now.getTime()) {
-          return yield* new HttpError(409, "Only future lessons can be cancelled");
+          return yield* new HttpError({
+            status: 409,
+            message: "Only future lessons can be cancelled",
+          });
         }
         const deposit = yield* RequestDatabase.use((db) =>
           db
@@ -625,15 +652,13 @@ export class LessonService extends Context.Service<LessonService>()("LessonServi
             )
             .pipe(Effect.head, Effect.option),
         );
-        return yield* LessonPolicyService.use((lessonPolicyService) =>
-          lessonPolicyService.evaluate({
-            billingModel: row.billing_model,
-            scheduledAt: new Date(row.scheduled_at),
-            rateCents: row.rate_cents,
-            heldDepositCents: Option.getOrNull(deposit)?.amount_cents ?? null,
-            now,
-          }),
-        );
+        return yield* lessonPolicy.evaluate({
+          billingModel: row.billing_model,
+          scheduledAt: new Date(row.scheduled_at),
+          rateCents: row.rate_cents,
+          heldDepositCents: Option.getOrNull(deposit)?.amount_cents ?? null,
+          now,
+        });
       }),
 
       cancelMyLesson: Effect.fn("cancelMyLesson")(function* (values: {
@@ -641,9 +666,7 @@ export class LessonService extends Context.Service<LessonService>()("LessonServi
         lessonId: string;
         reason: string | null;
       }) {
-        const settings = yield* LessonPolicyService.use((lessonPolicyService) =>
-          lessonPolicyService.getSettings(),
-        );
+        const settings = yield* lessonPolicy.getSettings();
         const now = new Date(yield* Clock.currentTimeMillis);
         const lesson = yield* RequestDatabase.use(
           Effect.fnUntraced(function* (db) {
@@ -670,14 +693,21 @@ export class LessonService extends Context.Service<LessonService>()("LessonServi
               .pipe(
                 Effect.head,
                 Effect.catchTags({
-                  NoSuchElementError: () => new HttpError(404, "Lesson not found"),
+                  NoSuchElementError: () =>
+                    new HttpError({ status: 404, message: "Lesson not found" }),
                 }),
               );
             if (row.status !== "scheduled") {
-              return yield* new HttpError(409, "Only scheduled lessons can be cancelled");
+              return yield* new HttpError({
+                status: 409,
+                message: "Only scheduled lessons can be cancelled",
+              });
             }
             if (new Date(row.scheduled_at).getTime() <= now.getTime()) {
-              return yield* new HttpError(409, "Only future lessons can be cancelled");
+              return yield* new HttpError({
+                status: 409,
+                message: "Only future lessons can be cancelled",
+              });
             }
             const deposit = yield* db
               .execute(
@@ -690,16 +720,14 @@ export class LessonService extends Context.Service<LessonService>()("LessonServi
               )
               .pipe(Effect.head, Effect.option);
             const heldDeposit = Option.getOrNull(deposit);
-            const policy = yield* LessonPolicyService.use((lessonPolicyService) =>
-              lessonPolicyService.evaluate({
-                billingModel: row.billing_model,
-                scheduledAt: new Date(row.scheduled_at),
-                rateCents: row.rate_cents,
-                heldDepositCents: heldDeposit?.amount_cents ?? null,
-                settings,
-                now,
-              }),
-            );
+            const policy = yield* lessonPolicy.evaluate({
+              billingModel: row.billing_model,
+              scheduledAt: new Date(row.scheduled_at),
+              rateCents: row.rate_cents,
+              heldDepositCents: heldDeposit?.amount_cents ?? null,
+              settings,
+              now,
+            });
             if (heldDeposit && policy.deposit_outcome !== "none") {
               yield* db.execute(
                 db
@@ -746,7 +774,10 @@ export class LessonService extends Context.Service<LessonService>()("LessonServi
       }) {
         const now = new Date(yield* Clock.currentTimeMillis);
         if (!Number.isFinite(values.scheduledAt.getTime()) || values.scheduledAt <= now) {
-          return yield* new HttpError(400, "The new lesson time must be in the future");
+          return yield* new HttpError({
+            status: 400,
+            message: "The new lesson time must be in the future",
+          });
         }
         const existing = yield* RequestDatabase.use((db) =>
           db
@@ -760,30 +791,33 @@ export class LessonService extends Context.Service<LessonService>()("LessonServi
             .pipe(
               Effect.head,
               Effect.catchTags({
-                NoSuchElementError: () => new HttpError(404, "Lesson not found"),
+                NoSuchElementError: () =>
+                  new HttpError({ status: 404, message: "Lesson not found" }),
               }),
             ),
         );
         if (existing.status !== "scheduled" || new Date(existing.scheduled_at) <= now) {
-          return yield* new HttpError(409, "Only future scheduled lessons can be rescheduled");
+          return yield* new HttpError({
+            status: 409,
+            message: "Only future scheduled lessons can be rescheduled",
+          });
         }
         if (
-          yield* LessonPolicyService.use((lessonPolicyService) =>
-            lessonPolicyService.hasScheduledOverlap({
-              lessonId: values.lessonId,
-              scheduledAt: values.scheduledAt,
-              durationMinutes: existing.duration_minutes,
-            }),
-          )
+          yield* lessonPolicy.hasScheduledOverlap({
+            lessonId: values.lessonId,
+            scheduledAt: values.scheduledAt,
+            durationMinutes: existing.duration_minutes,
+          })
         ) {
-          return yield* new HttpError(409, "The new lesson time overlaps another lesson");
+          return yield* new HttpError({
+            status: 409,
+            message: "The new lesson time overlaps another lesson",
+          });
         }
 
         const oldStart = new Date(existing.scheduled_at);
 
-        const settings = yield* LessonPolicyService.use((lessonPolicyService) =>
-          lessonPolicyService.getSettings(),
-        );
+        const settings = yield* lessonPolicy.getSettings();
         return yield* RequestDatabase.use(
           Effect.fnUntraced(function* (db) {
             const row = yield* db
@@ -811,7 +845,10 @@ export class LessonService extends Context.Service<LessonService>()("LessonServi
               row.status !== "scheduled" ||
               new Date(row.scheduled_at).getTime() !== oldStart.getTime()
             ) {
-              return yield* new HttpError(409, "Lesson changed while it was being rescheduled");
+              return yield* new HttpError({
+                status: 409,
+                message: "Lesson changed while it was being rescheduled",
+              });
             }
             if (row.billing_model === "single_booking") {
               const deposit = yield* db
@@ -825,16 +862,14 @@ export class LessonService extends Context.Service<LessonService>()("LessonServi
                 )
                 .pipe(Effect.head, Effect.option);
               const heldDeposit = Option.getOrNull(deposit);
-              const policy = yield* LessonPolicyService.use((lessonPolicyService) =>
-                lessonPolicyService.evaluate({
-                  billingModel: row.billing_model,
-                  scheduledAt: oldStart,
-                  rateCents: row.rate_cents,
-                  heldDepositCents: heldDeposit?.amount_cents ?? null,
-                  settings,
-                  now,
-                }),
-              );
+              const policy = yield* lessonPolicy.evaluate({
+                billingModel: row.billing_model,
+                scheduledAt: oldStart,
+                rateCents: row.rate_cents,
+                heldDepositCents: heldDeposit?.amount_cents ?? null,
+                settings,
+                now,
+              });
               if (heldDeposit && policy.deposit_outcome !== "none") {
                 yield* db.execute(
                   db
@@ -918,7 +953,10 @@ export class LessonService extends Context.Service<LessonService>()("LessonServi
               .pipe(Effect.head);
 
             if (preflight.overlap_count > 0) {
-              return yield* new HttpError(400, "This time slot is no longer available");
+              return yield* new HttpError({
+                status: 400,
+                message: "This time slot is no longer available",
+              });
             }
 
             if (
@@ -926,10 +964,10 @@ export class LessonService extends Context.Service<LessonService>()("LessonServi
               preflight.lesson_duration_minutes == null ||
               preflight.billing_model == null
             ) {
-              return yield* new HttpError(
-                404,
-                "No rate configured for this location type. Please contact your teacher.",
-              );
+              return yield* new HttpError({
+                status: 404,
+                message: "No rate configured for this location type. Please contact your teacher.",
+              });
             }
 
             const rate = {
@@ -968,7 +1006,8 @@ export class LessonService extends Context.Service<LessonService>()("LessonServi
               .pipe(
                 Effect.head,
                 Effect.catchTags({
-                  NoSuchElementError: () => new HttpError(500, "Failed to create lesson"),
+                  NoSuchElementError: () =>
+                    new HttpError({ status: 500, message: "Failed to create lesson" }),
                 }),
               );
 
@@ -992,5 +1031,5 @@ export class LessonService extends Context.Service<LessonService>()("LessonServi
     };
   }),
 }) {
-  static readonly layer = Layer.effect(this, this.make);
+  static readonly layer = Layer.effect(this, this.make).pipe(Layer.provide(LessonPolicy.layer));
 }

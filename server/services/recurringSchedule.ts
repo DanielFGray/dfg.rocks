@@ -113,8 +113,8 @@ export function validateRecurringSchedule(input: SaveRecurringScheduleInput): st
   return errors;
 }
 
-export class RecurringScheduleService extends Context.Service<RecurringScheduleService>()(
-  "RecurringScheduleService",
+export class RecurringSchedule extends Context.Service<RecurringSchedule>()(
+  "dfg-rocks/recurringSchedule",
   {
     make: Effect.succeed({
       listSchedules: Effect.fn("listRecurringSchedulesForStudent")(function* (studentId: string) {
@@ -144,7 +144,7 @@ export class RecurringScheduleService extends Context.Service<RecurringScheduleS
         };
         const validationErrors = validateRecurringSchedule(input);
         if (validationErrors.length > 0) {
-          return yield* new HttpError(400, validationErrors.join("; "));
+          return yield* new HttpError({ status: 400, message: validationErrors.join("; ") });
         }
         return yield* RequestDatabase.use(
           Effect.fnUntraced(function* (baseDb) {
@@ -160,13 +160,13 @@ export class RecurringScheduleService extends Context.Service<RecurringScheduleS
               .pipe(Effect.head, Effect.option);
             const studentRate = Option.getOrNull(rate);
             if (!studentRate) {
-              return yield* new HttpError(404, "Student rate not found");
+              return yield* new HttpError({ status: 404, message: "Student rate not found" });
             }
             if (studentRate.billing_model !== "monthly_prepaid") {
-              return yield* new HttpError(
-                409,
-                "Recurring schedules require a monthly prepaid rate",
-              );
+              return yield* new HttpError({
+                status: 409,
+                message: "Recurring schedules require a monthly prepaid rate",
+              });
             }
 
             const values = {
@@ -191,7 +191,10 @@ export class RecurringScheduleService extends Context.Service<RecurringScheduleS
                 )
                 .pipe(Effect.head, Effect.option);
               if (Option.isNone(existing)) {
-                return yield* new HttpError(404, "Recurring schedule not found");
+                return yield* new HttpError({
+                  status: 404,
+                  message: "Recurring schedule not found",
+                });
               }
               yield* db.execute(
                 db
@@ -235,7 +238,10 @@ export class RecurringScheduleService extends Context.Service<RecurringScheduleS
 
       listMonth: Effect.fn("listMonthlyPaymentStatus")(function* (billingMonth: string) {
         if (!isFirstOfMonth(billingMonth)) {
-          return yield* new HttpError(400, "month must be the first day of a month (YYYY-MM-01)");
+          return yield* new HttpError({
+            status: 400,
+            message: "month must be the first day of a month (YYYY-MM-01)",
+          });
         }
         const rows = yield* RequestDatabase.use((baseDb) => {
           const db = baseDb as unknown as Database<RecurringDB>;
@@ -295,16 +301,22 @@ export class RecurringScheduleService extends Context.Service<RecurringScheduleS
         input: RecordMonthlyPaymentInput,
       ) {
         if (!isFirstOfMonth(input.billingMonth)) {
-          return yield* new HttpError(
-            400,
-            "billing_month must be the first day of a month (YYYY-MM-01)",
-          );
+          return yield* new HttpError({
+            status: 400,
+            message: "billing_month must be the first day of a month (YYYY-MM-01)",
+          });
         }
         if (!Number.isInteger(input.amountCents) || input.amountCents <= 0) {
-          return yield* new HttpError(400, "amount_cents must be a positive integer");
+          return yield* new HttpError({
+            status: 400,
+            message: "amount_cents must be a positive integer",
+          });
         }
         if (Number.isNaN(input.paidAt.getTime())) {
-          return yield* new HttpError(400, "paid_at must be a valid timestamp");
+          return yield* new HttpError({
+            status: 400,
+            message: "paid_at must be a valid timestamp",
+          });
         }
 
         return yield* RequestDatabase.use(
@@ -318,10 +330,11 @@ export class RecurringScheduleService extends Context.Service<RecurringScheduleS
               )
               .pipe(Effect.head, Effect.option);
             if (Option.isNone(eligible)) {
-              return yield* new HttpError(
-                409,
-                "Student has no active monthly prepaid recurring schedule for this billing month",
-              );
+              return yield* new HttpError({
+                status: 409,
+                message:
+                  "Student has no active monthly prepaid recurring schedule for this billing month",
+              });
             }
 
             const inserted = yield* db
@@ -364,10 +377,11 @@ export class RecurringScheduleService extends Context.Service<RecurringScheduleS
                 payment.paid_at.getTime() !== input.paidAt.getTime() ||
                 (payment.notes ?? null) !== input.notes
               ) {
-                return yield* new HttpError(
-                  409,
-                  "A payment already exists for this month with different immutable details",
-                );
+                return yield* new HttpError({
+                  status: 409,
+                  message:
+                    "A payment already exists for this month with different immutable details",
+                });
               }
               if (payment.generation_status === "failed") {
                 payment = yield* db

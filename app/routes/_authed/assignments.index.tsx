@@ -18,9 +18,9 @@ import {
 } from "../../components/assignments/StudentAssignmentDetail.js";
 import { categorize, categoryColor, categoryLabel } from "../../components/library/helpers.js";
 import { runServerEffect } from "../../lib/serverEffect.js";
-import { MaterialService } from "../../../server/services/materialService.js";
-import { StudentService } from "../../../server/services/studentService.js";
-import { SessionService } from "../../../server/services/sessionService.js";
+import { Materials } from "../../../server/services/materials.js";
+import { Students } from "../../../server/services/students.js";
+import { Sessions } from "../../../server/services/sessions.js";
 import { getCookie } from "@tanstack/react-start/server";
 import { serializeMaterial, normalizeStudents } from "../../../shared/responseMappers.js";
 import { Button } from "../../components/ui/Button.js";
@@ -35,7 +35,7 @@ const getAssignmentsPageData = createServerFn({ method: "GET" }).handler(() =>
   runServerEffect(
     Effect.gen(function* () {
       const token = yield* Effect.sync(() => getCookie("session"));
-      const session = yield* SessionService.use((sessionService) =>
+      const session = yield* Sessions.use((sessionService) =>
         sessionService.validateSessionToken(token),
       );
       if (!session) throw new Error("Unauthorized");
@@ -46,10 +46,10 @@ const getAssignmentsPageData = createServerFn({ method: "GET" }).handler(() =>
             : null;
         const filterStudentId = effectiveStudentId ?? undefined;
 
-        const materialService = yield* MaterialService;
+        const materialService = yield* Materials;
 
         if (session.user.role === "admin" || session.user.role === "teacher") {
-          const studentSvc = yield* StudentService;
+          const studentSvc = yield* Students;
           const [studentsResult, libraryResult] = yield* Effect.all([
             studentSvc.listStudents(),
             materialService.library({

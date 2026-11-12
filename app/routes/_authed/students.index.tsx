@@ -10,10 +10,10 @@ import { api } from "../../lib/api.js";
 import { requiredValidator, emailValidator } from "../../lib/validators.js";
 import { fieldError } from "../../lib/form.js";
 import { runServerEffect } from "../../lib/serverEffect.js";
-import { StudentService } from "../../../server/services/studentService.js";
-import { FamilyService } from "../../../server/services/familyService.js";
+import { Students } from "../../../server/services/students.js";
+import { Families } from "../../../server/services/families.js";
 import { normalizeStudents, serializeFamily } from "../../../shared/responseMappers.js";
-import { requireAdminSession } from "../../lib/sessionGuards.server.js";
+import { Sessions } from "../../../server/services/sessions.js";
 import { FamilyInviteRole, type Family } from "../../../shared/schemas.js";
 import { Button } from "../../components/ui/Button.js";
 import { Card } from "../../components/ui/Card.js";
@@ -33,10 +33,12 @@ type StudentsPageData = {
 const getStudentsPageData = createServerFn({ method: "GET" }).handler(() =>
   runServerEffect(
     Effect.gen(function* () {
-      const session = yield* requireAdminSession(getCookie("session"));
+      const session = yield* Sessions.use((sessions) =>
+        sessions.requireAdminSession(getCookie("session")),
+      );
       const [students, families] = yield* Effect.all([
-        StudentService.use((studentService) => studentService.listStudents()),
-        FamilyService.use((familyService) => familyService.listFamilies()),
+        Students.use((studentService) => studentService.listStudents()),
+        Families.use((familyService) => familyService.listFamilies()),
       ]).pipe(withAuthContext(session.session.id));
       return {
         students: normalizeStudents(students),

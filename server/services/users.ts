@@ -1,7 +1,7 @@
 import { Effect, Context, Layer } from "effect";
 import type { User } from "../../shared/schemas.js";
 import { PgRootDB } from "../db.js";
-import { SessionService } from "./sessionService.js";
+import { Sessions } from "./sessions.js";
 
 export type UserRow = Readonly<Pick<User, "id" | "username" | "name" | "role" | "is_verified">>;
 export type UserResponse = Pick<
@@ -9,8 +9,9 @@ export type UserResponse = Pick<
   "id" | "username" | "name" | "email" | "role" | "is_verified"
 >;
 
-export class UserService extends Context.Service<UserService>()("UserService", {
+export class Users extends Context.Service<Users>()("dfg-rocks/users", {
   make: Effect.gen(function* () {
+    const sessions = yield* Sessions;
     const db = yield* PgRootDB;
 
     const primaryEmailForUser = (userId: string) =>
@@ -49,9 +50,7 @@ export class UserService extends Context.Service<UserService>()("UserService", {
       }, Effect.head),
 
       sessionFromUser: Effect.fn("sessionFromUser")(function* (user: UserRow) {
-        const { token, expiresAt } = yield* SessionService.use((sessionService) =>
-          sessionService.createSession(user.id),
-        );
+        const { token, expiresAt } = yield* sessions.createSession(user.id);
         const emailResult = yield* primaryEmailForUser(user.id).pipe(
           Effect.head,
           Effect.catchTags({
@@ -76,5 +75,7 @@ export class UserService extends Context.Service<UserService>()("UserService", {
     };
   }),
 }) {
-  static readonly layer = Layer.effect(this, this.make);
+  static readonly layer = Layer.effect(this, this.make).pipe(
+    Layer.provide(Layer.mergeAll(Sessions.layer, PgRootDB.layer)),
+  );
 }

@@ -10,7 +10,7 @@ import {
   checkRateLimit,
   clientIdentifierFromHeaders,
   RateLimitError,
-  RateLimitService,
+  RateLimit,
 } from "../rateLimit.js";
 import { RateLimiterMemory, rateLimiterWithStore, storeTimeout } from "../services/rateLimiter.js";
 
@@ -35,7 +35,7 @@ describe("rateLimit", () => {
     ).toBeUndefined();
   });
 
-  it.layer(RateLimitService.Live.pipe(Layer.provide(RateLimiterMemory)))((it) => {
+  it.layer(RateLimit.layerCounted.pipe(Layer.provide(RateLimiterMemory)))((it) => {
     it.effect("counts each rule per address and resets with the rule's window", () =>
       Effect.gen(function* () {
         for (let request = 0; request < 10; request++) {
@@ -43,7 +43,7 @@ describe("rateLimit", () => {
         }
 
         const exceeded = yield* Effect.exit(checkRateLimit("login", headers));
-        expect(exceeded).toStrictEqual(Exit.fail(new RateLimitError()));
+        expect(exceeded).toStrictEqual(Exit.fail(RateLimitError.new()));
         yield* checkRateLimit("login", { "x-real-ip": "198.51.100.8" });
         yield* checkRateLimit("reset-password", headers);
 
@@ -60,7 +60,7 @@ describe("rateLimit", () => {
         }
 
         const exceeded = yield* Effect.exit(checkRateLimit("magic-link", {}));
-        expect(exceeded).toStrictEqual(Exit.fail(new RateLimitError()));
+        expect(exceeded).toStrictEqual(Exit.fail(RateLimitError.new()));
       }),
     );
   });
@@ -70,7 +70,7 @@ describe("rateLimit", () => {
     ["fails", Effect.fail(storeFailure())],
     ["does not answer", Effect.never],
   ])("when the store %s", (_, answer) => {
-    it.layer(RateLimitService.Live.pipe(Layer.provide(storeAnswering(answer))))((it) => {
+    it.layer(RateLimit.layerCounted.pipe(Layer.provide(storeAnswering(answer))))((it) => {
       it.effect("allows a rule that allows when the store is down", () =>
         Effect.gen(function* () {
           const fiber = yield* Effect.forkChild(checkRateLimit("login", headers));
@@ -85,13 +85,13 @@ describe("rateLimit", () => {
           const fiber = yield* Effect.forkChild(checkRateLimit("forgot-password", headers));
           yield* TestClock.adjust(storeTimeout);
 
-          expect(yield* Fiber.await(fiber)).toStrictEqual(Exit.fail(new RateLimitError()));
+          expect(yield* Fiber.await(fiber)).toStrictEqual(Exit.fail(RateLimitError.new()));
         }),
       );
     });
   });
 
-  it.layer(RateLimitService.Test)((it) => {
+  it.layer(RateLimit.layerTest)((it) => {
     it.effect("allows every request outside production", () =>
       Effect.gen(function* () {
         for (let request = 0; request < 20; request++) {

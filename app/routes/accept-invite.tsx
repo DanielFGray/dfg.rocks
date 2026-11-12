@@ -10,7 +10,7 @@ import { Input } from "../components/ui/Input.js";
 import { acceptInvitation } from "../lib/authForms.js";
 import { InviteSearch } from "../../shared/schemas.js";
 import { runServerEffect } from "../lib/serverEffect.js";
-import { FamilyService } from "../../server/services/familyService.js";
+import { Families } from "../../server/services/families.js";
 
 const getInvitationPageData = createServerFn({ method: "GET" })
   .validator((data: unknown) => S.decodeUnknownSync(InviteSearch)(data))
@@ -22,7 +22,7 @@ const getInvitationPageData = createServerFn({ method: "GET" })
 
     try {
       const invitation = await runServerEffect(
-        FamilyService.use((familyService) => familyService.invitation(id, data.code ?? "")),
+        Families.use((familyService) => familyService.invitation(id, data.code ?? "")),
       );
       return { invitation, error: null };
     } catch (error) {
@@ -37,7 +37,7 @@ const getInvitationPageData = createServerFn({ method: "GET" })
 export const Route = createFileRoute("/accept-invite")({
   head: () => ({ meta: [{ title: "Accept Invitation | DFG Portal" }] }),
   validateSearch: (search: Record<string, unknown>) => ({
-    ...S.decodeUnknownSync(InviteSearch)(search),
+    ...S.decodeSync(InviteSearch)(search),
     ...(typeof search.error === "string" ? { error: search.error } : {}),
   }),
   loaderDeps: ({ search }) => ({ id: search.id, code: search.code }),

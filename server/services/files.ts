@@ -6,7 +6,7 @@ import { Effect, Option, Context, Layer } from "effect";
 import { RequestDatabase } from "../requestDatabase.js";
 import { HttpError } from "../pgErrors.js";
 import { extractNotationTracksFromBytes } from "./notationService.js";
-import { StorageService, type StorageLocation } from "./storageService.js";
+import { Storage, type StorageLocation } from "./storage.js";
 
 const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
 const ALLOWED_MIME_PATTERNS = ["application/pdf", /^image\//, /^audio\//, /^video\//] as const;
@@ -79,22 +79,22 @@ const findMaterialByContentHashEffect = Effect.fnUntraced(function* (contentHash
   );
 });
 
-const ensureStoredBlobEffect = Effect.fnUntraced(function* (
-  material: StoredMaterialRecord,
-  bytes: Uint8Array,
-) {
-  const location = toStorageLocation(material);
-  const exists = yield* StorageService.use((storageService) => storageService.exists(location));
-  if (!exists) {
-    yield* StorageService.use((storageService) => storageService.put(location, bytes));
-  }
-});
-
 /**
  * File upload / download service.
  */
-export class FileService extends Context.Service<FileService>()("FileService", {
+export class Files extends Context.Service<Files>()("dfg-rocks/files", {
   make: Effect.gen(function* () {
+    const storage = yield* Storage;
+    const ensureStoredBlobEffect = Effect.fnUntraced(function* (
+      material: StoredMaterialRecord,
+      bytes: Uint8Array,
+    ) {
+      const location = toStorageLocation(material);
+      const exists = yield* storage.exists(location);
+      if (!exists) {
+        yield* storage.put(location, bytes);
+      }
+    });
     const fileSystem = yield* FileSystem.FileSystem;
     return {
       upload: Effect.fn("fileUpload")(function* (
@@ -110,40 +110,49 @@ export class FileService extends Context.Service<FileService>()("FileService", {
           fileSize = Number(
             (yield* fileSystem
               .stat(file.path)
-              .pipe(Effect.mapError(() => new HttpError(400, "Failed to inspect uploaded file"))))
-              .size,
+              .pipe(
+                Effect.mapError(
+                  () => new HttpError({ status: 400, message: "Failed to inspect uploaded file" }),
+                ),
+              )).size,
           );
           mimeType = file.contentType;
           bytes = yield* fileSystem
             .readFile(file.path)
-            .pipe(Effect.mapError(() => new HttpError(400, "Failed to read uploaded file")));
+            .pipe(
+              Effect.mapError(
+                () => new HttpError({ status: 400, message: "Failed to read uploaded file" }),
+              ),
+            );
         } else {
           fileSize = file.size;
           mimeType = file.type;
           bytes = new Uint8Array(
             yield* Effect.tryPromise({
               try: () => file.arrayBuffer(),
-              catch: () => new HttpError(400, "Failed to read uploaded file"),
+              catch: () => new HttpError({ status: 400, message: "Failed to read uploaded file" }),
             }),
           );
         }
         if (fileSize > MAX_FILE_SIZE) {
-          return yield* new HttpError(413, "File too large. Maximum size is 50MB.");
+          return yield* new HttpError({
+            status: 413,
+            message: "File too large. Maximum size is 50MB.",
+          });
         }
         if (!isFileAllowed(mimeType, file.name)) {
-          return yield* new HttpError(
-            400,
-            `File type "${mimeType}" is not allowed. Allowed: PDF, images, audio, video, notation files.`,
-          );
+          return yield* new HttpError({
+            status: 400,
+            message: `File type "${mimeType}" is not allowed. Allowed: PDF, images, audio, video, notation files.`,
+          });
         }
-        const contentHash = StorageService.hashBytes(bytes);
+        const contentHash = Storage.hashBytes(bytes);
         const notationTracks = yield* extractNotationTracksFromBytes(bytes, file.name);
         const existingMaterial = yield* findMaterialByContentHashEffect(contentHash);
         if (existingMaterial) {
           yield* ensureStoredBlobEffect(existingMaterial, bytes);
           return yield* Effect.succeed(toMaterialResponse(existingMaterial));
         }
-        const storage = yield* StorageService;
         const location = storage.materialLocation(contentHash);
         yield* storage.put(location, bytes);
         // Handle concurrent uploads with the same content hash (unique constraint race)
@@ -222,7 +231,8 @@ export class FileService extends Context.Service<FileService>()("FileService", {
             .pipe(
               Effect.head,
               Effect.catchTags({
-                NoSuchElementError: () => new HttpError(404, "Material not found"),
+                NoSuchElementError: () =>
+                  new HttpError({ status: 404, message: "Material not found" }),
               }),
             ),
         );
@@ -234,7 +244,7 @@ export class FileService extends Context.Service<FileService>()("FileService", {
             .pipe(
               Effect.head,
               Effect.catchTags({
-                NoSuchElementError: () => new HttpError(404, "User not found"),
+                NoSuchElementError: () => new HttpError({ status: 404, message: "User not found" }),
               }),
             ),
         );
@@ -267,17 +277,18 @@ export class FileService extends Context.Service<FileService>()("FileService", {
             if (enrolledRows[0]) hasAccess = true;
           }
           if (!hasAccess) {
-            return yield* new HttpError(403, "Access denied");
+            return yield* new HttpError({ status: 403, message: "Access denied" });
           }
         }
         const location = toStorageLocation(material);
-        const exists = yield* StorageService.use((storageService) =>
-          storageService.exists(location),
-        );
+        const exists = yield* storage.exists(location);
         if (!exists) {
-          return yield* new HttpError(500, "Material blob missing from storage");
+          return yield* new HttpError({
+            status: 500,
+            message: "Material blob missing from storage",
+          });
         }
-        const stream = yield* StorageService.use((storageService) => storageService.open(location));
+        const stream = yield* storage.open(location);
         return {
           stream,
           filename: material.original_filename,
@@ -287,5 +298,5 @@ export class FileService extends Context.Service<FileService>()("FileService", {
     };
   }),
 }) {
-  static readonly layer = Layer.effect(this, this.make);
+  static readonly layer = Layer.effect(this, this.make).pipe(Layer.provide(Storage.layer));
 }

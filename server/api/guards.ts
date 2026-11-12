@@ -5,24 +5,23 @@ import { BadRequestError, ForbiddenError, UnauthorizedError } from "../../shared
 import type { UserRole } from "../../shared/schemas.js";
 import { adaptHttpApiErrors } from "../httpApiErrors.js";
 import { PgRootDB } from "../db.js";
-import { SessionService } from "../services/sessionService.js";
+import { Sessions } from "../services/sessions.js";
 
 /** The server side of the contract's guards (shared/api/guards.ts). */
 export const GuardsLive = Layer.mergeAll(
   Layer.effect(
     Session,
     Effect.gen(function* () {
-      const sessions = yield* SessionService;
+      const sessions = yield* Sessions;
       // Middleware may need only request services, so the lookup gets the pool now.
       const rootDb = yield* PgRootDB;
       return {
         session: (httpEffect, { credential }) =>
           sessions.validateSessionToken(Redacted.value(credential)).pipe(
             Effect.provideService(PgRootDB, rootDb),
-            Effect.flatMap((session) =>
-              session === null
-                ? Effect.fail(new UnauthorizedError({ error: "Unauthorized" }))
-                : Effect.succeed(session),
+            Effect.filterOrFail(
+              (session) => session !== null,
+              () => new UnauthorizedError({ error: "Unauthorized" }),
             ),
             // A lookup that fails for another reason is logged and answers 500.
             (lookup) => adaptHttpApiErrors(lookup, [401, 500] as const),

@@ -3,7 +3,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { TokenSearch } from "../../shared/schemas.js";
 import { runServerEffect } from "../lib/serverEffect.js";
-import { AccountService } from "../../server/services/accountService.js";
+import { Account } from "../../server/services/account.js";
 
 const verifyEmailPageData = createServerFn({ method: "GET" })
   .validator((data: unknown) => S.decodeUnknownSync(TokenSearch)(data))
@@ -14,9 +14,7 @@ const verifyEmailPageData = createServerFn({ method: "GET" })
     }
 
     try {
-      await runServerEffect(
-        AccountService.use((accountService) => accountService.verifyEmail(token)),
-      );
+      await runServerEffect(Account.use((accountService) => accountService.verifyEmail(token)));
       return { status: "verified" as const, error: null };
     } catch (error) {
       return {
@@ -29,7 +27,7 @@ const verifyEmailPageData = createServerFn({ method: "GET" })
 export const Route = createFileRoute("/verify-email")({
   head: () => ({ meta: [{ title: "Verify Email | DFG Portal" }] }),
   validateSearch: (search: Record<string, unknown>): S.Schema.Type<typeof TokenSearch> =>
-    S.decodeUnknownSync(TokenSearch)(search),
+    S.decodeSync(TokenSearch)(search),
   loaderDeps: ({ search }) => ({ token: search.token }),
   loader: ({ deps }) => verifyEmailPageData({ data: deps }),
   component: VerifyEmailPage,

@@ -1,13 +1,13 @@
+import { runPlatform, testClient } from "./framework.js";
 import { it, expect, describe, beforeAll, afterAll } from "@effect/vitest";
 import * as FileSystem from "effect/FileSystem";
-import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as HttpClient from "effect/http/HttpClient";
 import * as HttpClientError from "effect/http/HttpClientError";
 import * as HttpClientRequest from "effect/http/HttpClientRequest";
 import * as HttpClientResponse from "effect/http/HttpClientResponse";
 import * as HttpBody from "effect/http/HttpBody";
 import * as Cookies from "effect/http/Cookies";
-import { Effect, ManagedRuntime, Layer, Option } from "effect";
+import { Effect, Option } from "effect";
 import pg from "pg";
 
 let testDb: pg.Pool;
@@ -18,7 +18,7 @@ let payerId: string;
 let otherPayerId: string;
 let studentId: string;
 let adminUserId: string;
-let rt: ManagedRuntime.ManagedRuntime<any, any>;
+let rt: ReturnType<typeof testClient>;
 
 const TEST_ROOT_URL = "http://127.0.0.1:3000";
 
@@ -32,10 +32,6 @@ function forceIpv4(urlString: string): string {
   const url = new URL(urlString);
   if (url.hostname === "localhost" || url.hostname === "::1") url.hostname = "127.0.0.1";
   return url.toString();
-}
-
-function runPlatform<A, E>(effect: Effect.Effect<A, E, NodeServices.NodeServices>): Promise<A> {
-  return Effect.runPromise(effect.pipe(Effect.provide(NodeServices.layer)));
 }
 
 function makeTestRequest(
@@ -65,11 +61,11 @@ async function req(
   path: string,
   opts: { body?: unknown; cookie?: string; csrf?: boolean } = {},
 ): Promise<HttpClientResponse.HttpClientResponse> {
-  return rt.runPromise(HttpClient.execute(makeTestRequest(method, path, opts)));
+  return rt.request(makeTestRequest(method, path, opts));
 }
 
 async function resJson(res: HttpClientResponse.HttpClientResponse): Promise<any> {
-  return rt.runPromise(res.json);
+  return rt.json(res);
 }
 
 describe("Admin Billing API", () => {
@@ -168,7 +164,7 @@ describe("Admin Billing API", () => {
       }),
     );
 
-    rt = ManagedRuntime.make(Layer.succeed(HttpClient.HttpClient, httpClient));
+    rt = testClient(httpClient);
 
     const adminLoginRes = await req("POST", "/api/login", {
       body: { id: "billing_api_admin", password: "admin123" },
@@ -176,7 +172,7 @@ describe("Admin Billing API", () => {
     adminCookie = getCookie(adminLoginRes)!;
     if (!adminCookie)
       throw new Error(
-        `Admin login failed (${adminLoginRes.status}): ${await rt.runPromise(adminLoginRes.text)}`,
+        `Admin login failed (${adminLoginRes.status}): ${await rt.text(adminLoginRes)}`,
       );
 
     const studentLoginRes = await req("POST", "/api/login", {

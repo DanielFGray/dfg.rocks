@@ -65,7 +65,7 @@ function dedupe(values: Iterable<string>): string[] {
   return [...new Set([...values].filter((value) => value.length > 0))];
 }
 
-export class RealtimeService extends Context.Service<RealtimeService>()("RealtimeService", {
+export class Realtime extends Context.Service<Realtime>()("dfg-rocks/realtime", {
   make: Effect.gen(function* () {
     const databaseUrl = yield* Config.Redacted("DATABASE_URL");
     const db = yield* PgRootDB;
@@ -315,7 +315,7 @@ export class RealtimeService extends Context.Service<RealtimeService>()("Realtim
     };
   }),
 }) {
-  static readonly layer = Layer.effect(this, this.make);
+  static readonly layer = Layer.effect(this, this.make).pipe(Layer.provide(PgRootDB.layer));
 }
 
 const toSqlError = (message: string) => (cause: unknown) =>

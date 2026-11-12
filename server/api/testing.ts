@@ -16,7 +16,7 @@ import {
   NotFoundErrorSchema,
 } from "../../shared/httpApiErrors.js";
 import { adaptHttpApiErrors } from "../httpApiErrors.js";
-import { TestingService } from "../services/testingService.js";
+import { Testing } from "../services/testing.js";
 import {
   BooleanFromString,
   FamilyInviteRole,
@@ -49,7 +49,7 @@ const SeedCoursePayload = S.Struct({
     S.Array(
       S.Struct({
         title: S.String,
-        sort_order: S.optional(S.Number),
+        sort_order: S.optional(S.Finite),
       }),
     ),
   ),
@@ -59,7 +59,7 @@ const SeedMaterialPayload = S.Struct({
   title: S.String,
   original_filename: S.optional(S.String),
   mime_type: S.optional(S.String),
-  file_size: S.optional(S.Number),
+  file_size: S.optional(S.Finite),
   is_global: S.optional(S.Boolean),
   source_file_path: S.optional(S.String),
 });
@@ -102,7 +102,7 @@ const TestingSeedDeleteAccountQuery = S.Struct({
 const TestingSeedLessonQuery = S.Struct({
   username: S.String,
   scheduled_at: S.optional(S.String),
-  duration_minutes: S.optional(S.NumberFromString),
+  duration_minutes: S.optional(S.FiniteFromString),
   location_type: S.optional(LocationType),
   status: S.optional(LessonStatus),
 });
@@ -193,177 +193,171 @@ const adaptTestingHandler = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
   adaptHttpApiErrors(effect, testingErrorStatuses).pipe(Effect.map(normalizeToResponse));
 
 /** The testing API as its own router layer. app.ts imports this module only outside production. */
-export const TestingHttpApiLive = HttpApiBuilder.layer(testingApi).pipe(
-  Layer.provide(makeTestingLayer()),
-  HttpRouter.provideRequest(TestingService.layer),
+
+export class TestingApiInProductionError extends S.TaggedError<
+  TestingApiInProductionError,
+  { readonly brand: unique symbol }
+>()("TestingApiInProductionError", {}) {}
+
+export const TestingApiGroupLive = HttpApiBuilder.group(testingApi, "testing", (handlers) =>
+  handlers
+    .handle(
+      "login",
+      Effect.fnUntraced(function* ({ query }) {
+        const session = yield* Testing.use((testingService) =>
+          testingService.login({
+            username: query.username,
+            password: query.password,
+            role: query.role,
+            name: query.name,
+            email: query.email,
+          }),
+        );
+        let response = HttpServerResponse.redirect("/dashboard");
+        response = yield* setSessionCookie(response, session.token, session.expiresAt);
+        return response;
+      }, adaptTestingHandler),
+    )
+    .handle(
+      "testimonialReminder",
+      Effect.fnUntraced(function* ({ query }) {
+        yield* Testing.use((testingService) =>
+          testingService.setTestimonialReminder({
+            username: query.username,
+            promptEnabled: query.prompt_enabled ?? false,
+            nextPromptAt: query.next_prompt_at ? new Date(query.next_prompt_at) : null,
+          }),
+        );
+        return HttpServerResponse.redirect("/dashboard");
+      }, adaptTestingHandler),
+    )
+    .handle(
+      "clear",
+      Effect.fnUntraced(function* () {
+        yield* Testing.use((testingService) => testingService.clear());
+        return HttpServerResponse.redirect("/login");
+      }, adaptTestingHandler),
+    )
+    .handle(
+      "seedCourse",
+      Effect.fnUntraced(function* ({ payload }) {
+        const courseId = yield* Testing.use((testingService) => testingService.seedCourse(payload));
+        return HttpServerResponse.jsonUnsafe({ success: true, courseId });
+      }, adaptTestingHandler),
+    )
+    .handle(
+      "seedMaterial",
+      Effect.fnUntraced(function* ({ payload }) {
+        const materialId = yield* Testing.use((testingService) =>
+          testingService.seedMaterial(payload),
+        );
+        return HttpServerResponse.jsonUnsafe({ success: true, materialId });
+      }, adaptTestingHandler),
+    )
+    .handle(
+      "assignMaterial",
+      Effect.fnUntraced(function* ({ query }) {
+        const materialId = yield* Testing.use((testingService) =>
+          testingService.assignMaterial({
+            username: query.username,
+            materialTitle: query.material_title,
+            assignedTrackIndex: query.assigned_track_index,
+          }),
+        );
+        return HttpServerResponse.jsonUnsafe({ success: true, materialId });
+      }, adaptTestingHandler),
+    )
+    .handle(
+      "enroll",
+      Effect.fnUntraced(function* ({ query }) {
+        const courseId = yield* Testing.use((testingService) =>
+          testingService.enroll({
+            username: query.username,
+            courseTitle: query.course_title,
+          }),
+        );
+        return HttpServerResponse.jsonUnsafe({ success: true, courseId });
+      }, adaptTestingHandler),
+    )
+    .handle(
+      "seedFamily",
+      Effect.fnUntraced(function* ({ query }) {
+        yield* Testing.use((testingService) =>
+          testingService.seedFamily({
+            slug: query.slug,
+            name: query.name,
+            ownerUsername: query.owner_username,
+          }),
+        );
+        return HttpServerResponse.jsonUnsafe({ success: true });
+      }, adaptTestingHandler),
+    )
+    .handle(
+      "seedFamilyMembership",
+      Effect.fnUntraced(function* ({ query }) {
+        yield* Testing.use((testingService) =>
+          testingService.seedFamilyMembership({
+            username: query.username,
+            familySlug: query.family_slug,
+            isOwner: query.is_owner ?? false,
+            isBillingContact: query.is_billing_contact ?? false,
+          }),
+        );
+        return HttpServerResponse.jsonUnsafe({ success: true });
+      }, adaptTestingHandler),
+    )
+    .handle(
+      "seedInvitation",
+      Effect.fnUntraced(function* ({ query }) {
+        const invitation = yield* Testing.use((testingService) =>
+          testingService.seedInvitation({
+            email: query.email,
+            familySlug: query.family_slug,
+            invitedRole: query.invited_role,
+            expiresAt: query.expires_at ? new Date(query.expires_at) : undefined,
+          }),
+        );
+        return HttpServerResponse.redirect(
+          `/accept-invite?id=${invitation.invitationId}&code=${invitation.code}`,
+        );
+      }, adaptTestingHandler),
+    )
+    .handle(
+      "seedDeleteAccount",
+      Effect.fnUntraced(function* ({ query }) {
+        const token = yield* Testing.use((testingService) =>
+          testingService.seedDeleteAccount(query.username),
+        );
+        return HttpServerResponse.redirect(`/confirm-delete-account?token=${token}`);
+      }, adaptTestingHandler),
+    )
+    .handle(
+      "seedLesson",
+      Effect.fnUntraced(function* ({ query }) {
+        yield* Testing.use((testingService) =>
+          testingService.seedLesson({
+            username: query.username,
+            scheduledAt: query.scheduled_at,
+            durationMinutes: query.duration_minutes ?? 60,
+            locationType: query.location_type ?? "online",
+            status: query.status ?? "scheduled",
+          }),
+        );
+        return HttpServerResponse.jsonUnsafe({ success: true });
+      }, adaptTestingHandler),
+    ),
 );
 
 /** The testing routes create users and sessions at will, so they refuse to build in production. */
-export class TestingApiInProductionError extends S.TaggedError<TestingApiInProductionError>()(
-  "TestingApiInProductionError",
-  {},
-) {}
+export const TestingLive = Layer.unwrap(
+  Effect.gen(function* () {
+    if ((yield* Config.String("NODE_ENV")) === "production")
+      return yield* new TestingApiInProductionError();
+    return TestingApiGroupLive;
+  }),
+);
 
-export function makeTestingLayer() {
-  return Layer.unwrap(
-    Effect.gen(function* () {
-      if ((yield* Config.String("NODE_ENV")) === "production") {
-        return yield* new TestingApiInProductionError();
-      }
-      return makeTestingGroupLayer();
-    }),
-  );
-}
-
-function makeTestingGroupLayer() {
-  return HttpApiBuilder.group(testingApi, "testing", (handlers) =>
-    handlers
-      .handle(
-        "login",
-        Effect.fnUntraced(function* ({ query }) {
-          const session = yield* TestingService.use((testingService) =>
-            testingService.login({
-              username: query.username,
-              password: query.password,
-              role: query.role,
-              name: query.name,
-              email: query.email,
-            }),
-          );
-          let response = HttpServerResponse.redirect("/dashboard");
-          response = yield* setSessionCookie(response, session.token, session.expiresAt);
-          return response;
-        }, adaptTestingHandler),
-      )
-      .handle(
-        "testimonialReminder",
-        Effect.fnUntraced(function* ({ query }) {
-          yield* TestingService.use((testingService) =>
-            testingService.setTestimonialReminder({
-              username: query.username,
-              promptEnabled: query.prompt_enabled ?? false,
-              nextPromptAt: query.next_prompt_at ? new Date(query.next_prompt_at) : null,
-            }),
-          );
-          return HttpServerResponse.redirect("/dashboard");
-        }, adaptTestingHandler),
-      )
-      .handle(
-        "clear",
-        Effect.fnUntraced(function* () {
-          yield* TestingService.use((testingService) => testingService.clear());
-          return HttpServerResponse.redirect("/login");
-        }, adaptTestingHandler),
-      )
-      .handle(
-        "seedCourse",
-        Effect.fnUntraced(function* ({ payload }) {
-          const courseId = yield* TestingService.use((testingService) =>
-            testingService.seedCourse(payload),
-          );
-          return HttpServerResponse.jsonUnsafe({ success: true, courseId });
-        }, adaptTestingHandler),
-      )
-      .handle(
-        "seedMaterial",
-        Effect.fnUntraced(function* ({ payload }) {
-          const materialId = yield* TestingService.use((testingService) =>
-            testingService.seedMaterial(payload),
-          );
-          return HttpServerResponse.jsonUnsafe({ success: true, materialId });
-        }, adaptTestingHandler),
-      )
-      .handle(
-        "assignMaterial",
-        Effect.fnUntraced(function* ({ query }) {
-          const materialId = yield* TestingService.use((testingService) =>
-            testingService.assignMaterial({
-              username: query.username,
-              materialTitle: query.material_title,
-              assignedTrackIndex: query.assigned_track_index,
-            }),
-          );
-          return HttpServerResponse.jsonUnsafe({ success: true, materialId });
-        }, adaptTestingHandler),
-      )
-      .handle(
-        "enroll",
-        Effect.fnUntraced(function* ({ query }) {
-          const courseId = yield* TestingService.use((testingService) =>
-            testingService.enroll({
-              username: query.username,
-              courseTitle: query.course_title,
-            }),
-          );
-          return HttpServerResponse.jsonUnsafe({ success: true, courseId });
-        }, adaptTestingHandler),
-      )
-      .handle(
-        "seedFamily",
-        Effect.fnUntraced(function* ({ query }) {
-          yield* TestingService.use((testingService) =>
-            testingService.seedFamily({
-              slug: query.slug,
-              name: query.name,
-              ownerUsername: query.owner_username,
-            }),
-          );
-          return HttpServerResponse.jsonUnsafe({ success: true });
-        }, adaptTestingHandler),
-      )
-      .handle(
-        "seedFamilyMembership",
-        Effect.fnUntraced(function* ({ query }) {
-          yield* TestingService.use((testingService) =>
-            testingService.seedFamilyMembership({
-              username: query.username,
-              familySlug: query.family_slug,
-              isOwner: query.is_owner ?? false,
-              isBillingContact: query.is_billing_contact ?? false,
-            }),
-          );
-          return HttpServerResponse.jsonUnsafe({ success: true });
-        }, adaptTestingHandler),
-      )
-      .handle(
-        "seedInvitation",
-        Effect.fnUntraced(function* ({ query }) {
-          const invitation = yield* TestingService.use((testingService) =>
-            testingService.seedInvitation({
-              email: query.email,
-              familySlug: query.family_slug,
-              invitedRole: query.invited_role,
-              expiresAt: query.expires_at ? new Date(query.expires_at) : undefined,
-            }),
-          );
-          return HttpServerResponse.redirect(
-            `/accept-invite?id=${invitation.invitationId}&code=${invitation.code}`,
-          );
-        }, adaptTestingHandler),
-      )
-      .handle(
-        "seedDeleteAccount",
-        Effect.fnUntraced(function* ({ query }) {
-          const token = yield* TestingService.use((testingService) =>
-            testingService.seedDeleteAccount(query.username),
-          );
-          return HttpServerResponse.redirect(`/confirm-delete-account?token=${token}`);
-        }, adaptTestingHandler),
-      )
-      .handle(
-        "seedLesson",
-        Effect.fnUntraced(function* ({ query }) {
-          yield* TestingService.use((testingService) =>
-            testingService.seedLesson({
-              username: query.username,
-              scheduledAt: query.scheduled_at,
-              durationMinutes: query.duration_minutes ?? 60,
-              locationType: query.location_type ?? "online",
-              status: query.status ?? "scheduled",
-            }),
-          );
-          return HttpServerResponse.jsonUnsafe({ success: true });
-        }, adaptTestingHandler),
-      ),
-  );
-}
+export const TestingHttpApiLive = HttpApiBuilder.layer(testingApi).pipe(
+  Layer.provide(TestingLive),
+  HttpRouter.provideRequest(Testing.layer),
+);

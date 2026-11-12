@@ -3,7 +3,7 @@ import { Effect } from "effect";
 import { withAuthContext } from "../requestDatabase.js";
 import { Contract } from "../../shared/httpApi.js";
 import { CurrentSession } from "../../shared/api/guards.js";
-import { StudentService } from "../services/studentService.js";
+import { Students } from "../services/students.js";
 import { adaptAdminErrors } from "../httpApiErrors.js";
 
 export const StudentsStaffApiGroupLive = HttpApiBuilder.group(
@@ -15,7 +15,7 @@ export const StudentsStaffApiGroupLive = HttpApiBuilder.group(
         "students",
         Effect.fnUntraced(function* () {
           const auth = yield* CurrentSession;
-          const rows = yield* StudentService.use((studentService) =>
+          const rows = yield* Students.use((studentService) =>
             studentService.listStudents().pipe(withAuthContext(auth.session.id)),
           );
           return rows.map((row) => ({
@@ -31,7 +31,7 @@ export const StudentsStaffApiGroupLive = HttpApiBuilder.group(
         Effect.fnUntraced(function* (context) {
           const auth = yield* CurrentSession;
           const { params } = context;
-          const raw = yield* StudentService.use((studentService) =>
+          const raw = yield* Students.use((studentService) =>
             studentService.getStudent(params.id).pipe(withAuthContext(auth.session.id)),
           );
           return {
@@ -53,7 +53,7 @@ export const StudentsAdminApiGroupLive = HttpApiBuilder.group(
         "saveStudentRate",
         Effect.fnUntraced(function* ({ payload }) {
           const auth = yield* CurrentSession;
-          const rate = yield* StudentService.use((studentService) =>
+          const rate = yield* Students.use((studentService) =>
             studentService
               .saveStudentRate({
                 studentId: payload.student_id,
@@ -72,7 +72,7 @@ export const StudentsAdminApiGroupLive = HttpApiBuilder.group(
         "studentRates",
         Effect.fnUntraced(function* ({ params, query }) {
           const auth = yield* CurrentSession;
-          return yield* StudentService.use((studentService) =>
+          return yield* Students.use((studentService) =>
             studentService
               .listStudentRates(params.studentId, query.location_type)
               .pipe(withAuthContext(auth.session.id)),

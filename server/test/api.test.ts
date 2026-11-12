@@ -1,6 +1,6 @@
+import { runPlatform, testClient } from "./framework.js";
 import { it, expect, describe, beforeAll, afterAll, vi } from "@effect/vitest";
 import * as FileSystem from "effect/FileSystem";
-import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as NodeFileSystem from "@effect/platform-node/NodeFileSystem";
 import * as HttpClient from "effect/http/HttpClient";
 import * as HttpClientError from "effect/http/HttpClientError";
@@ -8,11 +8,11 @@ import * as HttpClientRequest from "effect/http/HttpClientRequest";
 import * as HttpClientResponse from "effect/http/HttpClientResponse";
 import * as HttpBody from "effect/http/HttpBody";
 import * as Cookies from "effect/http/Cookies";
-import { Effect, ManagedRuntime, Layer, Option, Schedule, Stream } from "effect";
+import { Effect, Layer, Option, Schedule, Stream } from "effect";
 import { Logger, consoleLogFactory } from "graphile-worker";
 import pg from "pg";
 import generatePrepaidPeriodTask from "../../worker/tasks/lessons__generate_prepaid_period.js";
-import { StorageService } from "../services/storageService.js";
+import { Storage } from "../services/storage.js";
 import { withAuthContext } from "../requestDatabase.js";
 import type { MonthlyPaymentStatus } from "../../shared/schemas.js";
 
@@ -20,7 +20,7 @@ let testDb: pg.Pool;
 let adminCookie: string;
 let studentCookie: string;
 let studentId: string;
-let rt: ManagedRuntime.ManagedRuntime<any, any>;
+let rt: ReturnType<typeof testClient>;
 
 const testApplePrivateKey = "-----BEGIN PRIVATE KEY-----\\nAQAB\\n-----END PRIVATE KEY-----";
 
@@ -34,10 +34,6 @@ function forceIpv4(urlString: string): string {
   const url = new URL(urlString);
   if (url.hostname === "localhost" || url.hostname === "::1") url.hostname = "127.0.0.1";
   return url.toString();
-}
-
-function runPlatform<A, E>(effect: Effect.Effect<A, E, NodeServices.NodeServices>): Promise<A> {
-  return Effect.runPromise(effect.pipe(Effect.provide(NodeServices.layer)));
 }
 
 const TEST_ROOT_URL = "http://127.0.0.1:3000";
@@ -86,13 +82,11 @@ function reqEffect(
   path: string,
   opts: { body?: unknown; cookie?: string; csrf?: boolean } = {},
 ) {
-  return Effect.tryPromise(() =>
-    rt.runPromise(HttpClient.execute(makeTestRequest(method, path, opts))),
-  );
+  return Effect.tryPromise(() => rt.request(makeTestRequest(method, path, opts)));
 }
 
 function resJson(res: HttpClientResponse.HttpClientResponse): Effect.Effect<any, Error> {
-  return Effect.tryPromise(() => rt.runPromise(res.json));
+  return res.json;
 }
 
 describe("DFG Portal API", () => {
@@ -168,9 +162,9 @@ describe("DFG Portal API", () => {
       }),
     );
 
-    rt = ManagedRuntime.make(Layer.succeed(HttpClient.HttpClient, httpClient));
+    rt = testClient(httpClient);
 
-    const adminLoginRes = await Effect.runPromise(
+    const adminLoginRes = await runPlatform(
       reqEffect("POST", "/api/login", {
         body: { id: "admin", password: "admin123" },
       }),
@@ -178,7 +172,7 @@ describe("DFG Portal API", () => {
     adminCookie = getCookie(adminLoginRes)!;
     if (!adminCookie)
       throw new Error(
-        `Admin login failed (${adminLoginRes.status}): ${await rt.runPromise(adminLoginRes.text)}`,
+        `Admin login failed (${adminLoginRes.status}): ${await rt.text(adminLoginRes)}`,
       );
 
     const studentResult = await testDb.query(
@@ -187,7 +181,7 @@ describe("DFG Portal API", () => {
     );
     studentId = studentResult.rows[0].id;
 
-    const studentLoginRes = await Effect.runPromise(
+    const studentLoginRes = await runPlatform(
       reqEffect("POST", "/api/login", {
         body: { id: "student1", password: "student123" },
       }),
@@ -195,7 +189,7 @@ describe("DFG Portal API", () => {
     studentCookie = getCookie(studentLoginRes)!;
     if (!studentCookie)
       throw new Error(
-        `Student login failed (${studentLoginRes.status}): ${await rt.runPromise(studentLoginRes.text)}`,
+        `Student login failed (${studentLoginRes.status}): ${await rt.text(studentLoginRes)}`,
       );
   }, 120_000);
 
@@ -471,12 +465,12 @@ describe("DFG Portal API", () => {
       )).rows[0];
       expect(firstRow.content_hash).toBeTruthy();
 
-      yield* StorageService.use((storageService) =>
+      yield* Storage.use((storageService) =>
         storageService.delete({
           storageBackend: firstRow.storage_backend,
           storageKey: firstRow.storage_key,
         }),
-      ).pipe(Effect.provide(StorageService.layer), Effect.provide(NodeFileSystem.layer));
+      ).pipe(Effect.provide(Storage.layer.pipe(Layer.provide(NodeFileSystem.layer))));
 
       const missingDownload = yield* reqEffect(
         "GET",
@@ -504,12 +498,12 @@ describe("DFG Portal API", () => {
       );
       expect(matchingRows.rows[0]?.count).toBe(1);
       expect(
-        yield* StorageService.use((storageService) =>
+        yield* Storage.use((storageService) =>
           storageService.exists({
             storageBackend: firstRow.storage_backend,
             storageKey: firstRow.storage_key,
           }),
-        ).pipe(Effect.provide(StorageService.layer), Effect.provide(NodeFileSystem.layer)),
+        ).pipe(Effect.provide(Storage.layer.pipe(Layer.provide(NodeFileSystem.layer)))),
       ).toBe(true);
     }),
   );
@@ -1241,12 +1235,12 @@ describe("DFG Portal API", () => {
           cookieIdFromToken(parentCookie),
         ]),
       );
-      const [{ testRuntime }, { AuthService }] = yield* Effect.promise(() =>
-        Promise.all([import("./apiHandler.js"), import("../services/authService.js")]),
+      const [{ runApiEffect }, { Auth }] = yield* Effect.promise(() =>
+        Promise.all([import("./apiHandler.js"), import("../services/auth.js")]),
       );
       const directMe = yield* Effect.promise(() =>
-        testRuntime.runPromise(
-          AuthService.use((authService) =>
+        runApiEffect(
+          Auth.use((authService) =>
             authService
               .me(sessionResult.rows[0].id, parentId, childId)
               .pipe(withAuthContext(sessionResult.rows[0].id)),

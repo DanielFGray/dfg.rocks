@@ -19,7 +19,22 @@
     "types": ["bun", "node"],
     "plugins": [
       {
-        "name": "@effect/language-service"
+        "name": "@effect/language-service",
+        "keyPatterns": [
+          {
+            "target": "service",
+            "pattern": "package-identifier"
+          },
+          {
+            "target": "custom",
+            "pattern": "package-identifier"
+          }
+        ],
+        "diagnosticSeverity": {
+          "deterministicKeys": "error",
+          "unstableApiUsage": "off",
+          "leakingRequirements": "off"
+        }
       }
     ]
   },

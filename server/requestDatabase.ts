@@ -3,8 +3,9 @@ import { sql } from "kysely";
 import { type Database, PgAuthDB } from "./db.js";
 
 /** The visitor database connection inside the caller's transaction. */
+/** @perRequest: request middleware supplies this value. */
 export class RequestDatabase extends Context.Service<RequestDatabase, Database>()(
-  "RequestDatabase",
+  "dfg-rocks/requestDatabase",
 ) {}
 
 /** Binds the visitor role and session for this transaction only. */

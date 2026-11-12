@@ -25,15 +25,15 @@ import { params, PaginationQuery } from "./fields.js";
 
 const AssignStudentMaterialPayload = S.Struct({
   material_id: S.String,
-  assigned_track_index: S.optional(S.NullishOr(S.Number)),
+  assigned_track_index: S.optional(S.NullishOr(S.Finite)),
 });
 
 const RecordAssignmentPlaybackPayload = S.Struct({
-  seconds: S.Number,
+  seconds: S.Finite,
 });
 
 const CreateAssignmentReviewPayload = S.Struct({
-  stars: S.Number,
+  stars: S.Finite,
 });
 
 const AssignmentNotePayload = S.Struct({

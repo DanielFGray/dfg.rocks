@@ -246,7 +246,7 @@ async function getValidAccessToken(pgClient, logger) {
 
   const tokens = /** @type {{ access_token: string, expires_in: number }} */ (await res.json());
 
-  // Store refreshed tokens (matching googleCalendarService.ts storage format)
+  // Store refreshed tokens (matching googleCalendar.ts storage format)
   await pgClient.query(
     `insert into app_private.admin_settings (key, value)
      values ('gcal_access_token', $1::jsonb)

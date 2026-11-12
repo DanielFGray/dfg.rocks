@@ -3,9 +3,9 @@ import { redirect } from "@tanstack/react-router";
 import { setCookie } from "@tanstack/react-start/server";
 import { Effect, Schema as S } from "effect";
 import { runServerEffect } from "./serverEffect.js";
-import { AuthService } from "../../server/services/authService.js";
-import { FamilyService } from "../../server/services/familyService.js";
-import { UserService } from "../../server/services/userService.js";
+import { Auth } from "../../server/services/auth.js";
+import { Families } from "../../server/services/families.js";
+import { Users } from "../../server/services/users.js";
 import { normalizeLoginRedirect } from "./loginRedirect.js";
 
 const SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 30;
@@ -23,7 +23,7 @@ function formDataToObject(formData: FormData): Record<string, unknown> {
 }
 
 function validateFormData<A>(schema: S.ConstraintDecoder<A>, formData: FormData): A {
-  return S.decodeUnknownSync(schema)(formDataToObject(formData));
+  return S.decodeSync(schema)(formDataToObject(formData));
 }
 
 const PasswordLoginSchema = S.Struct({
@@ -40,12 +40,10 @@ export const loginWithPassword = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const result = await runServerEffect(
       Effect.gen(function* () {
-        const login = yield* AuthService.use((authService) =>
+        const login = yield* Auth.use((authService) =>
           authService.login({ id: data.id, password: data.password }),
         );
-        yield* UserService.use((userService) =>
-          userService.primaryEmailForUser(login.user.user_id),
-        );
+        yield* Users.use((userService) => userService.primaryEmailForUser(login.user.user_id));
         return {
           token: login.token,
           expiresAt: login.expiresAt,
@@ -84,9 +82,7 @@ export const requestMagicLink = createServerFn({ method: "POST" })
     return validateFormData(MagicLinkSchema, data);
   })
   .handler(async ({ data }) => {
-    await runServerEffect(
-      AuthService.use((authService) => authService.generateMagicLink(data.email)),
-    );
+    await runServerEffect(Auth.use((authService) => authService.generateMagicLink(data.email)));
     throw redirect({
       to: "/login",
       search: {
@@ -108,7 +104,7 @@ export const forgotPassword = createServerFn({ method: "POST" })
   })
   .handler(async ({ data }) => {
     await runServerEffect(
-      AuthService.use((authService) => authService.forgotPassword({ email: data.email })),
+      Auth.use((authService) => authService.forgotPassword({ email: data.email })),
     );
     throw redirect({ to: "/forgot-password", search: { sent: true as const } });
   });
@@ -125,7 +121,7 @@ export const resetPassword = createServerFn({ method: "POST" })
   })
   .handler(async ({ data }) => {
     const result = await runServerEffect(
-      AuthService.use((authService) =>
+      Auth.use((authService) =>
         authService.resetPassword({
           token: data.token,
           password: data.password,
@@ -167,7 +163,7 @@ export const acceptInvitation = createServerFn({ method: "POST" })
   })
   .handler(async ({ data }) => {
     const session = await runServerEffect(
-      FamilyService.use((familyService) =>
+      Families.use((familyService) =>
         familyService.acceptInvitation({
           invitationId: data.id,
           code: data.code,

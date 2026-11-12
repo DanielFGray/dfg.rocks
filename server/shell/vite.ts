@@ -1,11 +1,11 @@
-import { Config, Effect, Layer, Schema } from "effect";
+import { Config, Effect, Schema } from "effect";
 import * as HttpServerRequest from "effect/http/HttpServerRequest";
 import * as HttpServerResponse from "effect/http/HttpServerResponse";
 import * as Path from "effect/Path";
 import * as ScopedRef from "effect/ScopedRef";
 import * as Semaphore from "effect/Semaphore";
 import type { Connect } from "vite";
-import { Site, startPage, type ServerEntry } from "./site.js";
+import { startPage, type ServerEntry } from "./site.js";
 
 type AppModule = typeof import("../app.js");
 
@@ -23,76 +23,71 @@ type AppModule = typeof import("../app.js");
  * without releasing the job runner. After an edit to server/dev.ts or server/shell/, stop the
  * process with Ctrl-C and start it again.
  */
-export const ViteSite = Layer.effect(
-  Site,
-  Effect.gen(function* () {
-    const path = yield* Path.Path;
-    const root = yield* path.fromFileUrl(new URL("../..", import.meta.url));
-    const workerDirectory = path.join(root, "worker");
-    const port = yield* Config.Port("PORT").pipe(Config.withDefault(3000));
-    // Loaded here so production never loads Vite.
-    const { createServer, isRunnableDevEnvironment } = yield* Effect.promise(() => import("vite"));
-    const node = {
-      http: yield* Effect.promise(() => import("node:http")),
-      net: yield* Effect.promise(() => import("node:net")),
-    };
-    const vite = yield* Effect.acquireRelease(
-      Effect.tryPromise({
-        try: () =>
-          createServer({
-            root,
-            server: { middlewareMode: true, hmr: { port: port + 1 } },
-            appType: "custom",
-          }),
-        catch: (cause) => new ViteError({ message: `Vite did not start: ${String(cause)}` }),
-      }),
-      (server) => Effect.promise(() => server.close()),
-    );
-    const ssr = vite.environments.ssr;
-    if (!isRunnableDevEnvironment(ssr)) {
-      return yield* new ViteError({ message: "The SSR environment has no module runner" });
-    }
-    const importApp = Effect.promise(() => ssr.runner.import<AppModule>("/server/app.ts"));
-    const importEntry = Effect.promise(() =>
-      ssr.runner.import<{ readonly default: ServerEntry }>("virtual:tanstack-start-server-entry"),
-    );
-    const build = (module: AppModule) =>
-      Effect.map(module.makeApp(workerDirectory), (app) => ({ module, app }));
-
-    const current = yield* ScopedRef.fromAcquire(Effect.flatMap(importApp, build));
-    const rebuild = yield* Semaphore.make(1);
-    const app = Effect.flatMap(importApp, (module) =>
-      rebuild.withPermit(
-        Effect.gen(function* () {
-          const live = yield* ScopedRef.get(current);
-          if (live.module === module) return live.app;
-          yield* Effect.logInfo("Server code changed; building the application again");
-          // A failed build keeps the old application, and the request answers 500.
-          yield* ScopedRef.set(current, build(module)).pipe(
-            Effect.tapCause((cause) => Effect.logError("The application did not build", cause)),
-            Effect.orDie,
-          );
-          return (yield* ScopedRef.get(current)).app;
+export const viteSite = Effect.gen(function* () {
+  const path = yield* Path.Path;
+  const root = yield* path.fromFileUrl(new URL("../..", import.meta.url));
+  const port = yield* Config.Port("PORT").pipe(Config.withDefault(3000));
+  // Loaded here so production never loads Vite.
+  const { createServer, isRunnableDevEnvironment } = yield* Effect.promise(() => import("vite"));
+  const node = {
+    http: yield* Effect.promise(() => import("node:http")),
+    net: yield* Effect.promise(() => import("node:net")),
+  };
+  const vite = yield* Effect.acquireRelease(
+    Effect.tryPromise({
+      try: () =>
+        createServer({
+          root,
+          server: { middlewareMode: true, hmr: { port: port + 1 } },
+          appType: "custom",
         }),
-      ),
-    );
+      catch: (cause) => new ViteError({ message: `Vite did not start: ${String(cause)}` }),
+    }),
+    (server) => Effect.promise(() => server.close()),
+  );
+  const ssr = vite.environments.ssr;
+  if (!isRunnableDevEnvironment(ssr)) {
+    return yield* new ViteError({ message: "The SSR environment has no module runner" });
+  }
+  const importApp = Effect.promise(() => ssr.runner.import<AppModule>("/server/app.ts"));
+  const importEntry = Effect.promise(() =>
+    ssr.runner.import<{ readonly default: ServerEntry }>("virtual:tanstack-start-server-entry"),
+  );
+  const build = (module: AppModule) => Effect.map(module.App.make, (app) => ({ module, app }));
 
-    return {
-      api: Effect.flatMap(app, ({ api }) => api),
-      pages: Effect.gen(function* () {
-        const request = yield* HttpServerRequest.HttpServerRequest;
-        // Vite serves files only. Other methods go straight to TanStack Start with their body.
-        if (request.method === "GET" || request.method === "HEAD") {
-          const served = yield* runViteMiddleware(node, vite.middlewares, request);
-          if (served !== undefined) return served;
-        }
-        const { services } = yield* app;
-        const entry = yield* importEntry;
-        return yield* startPage(entry.default.fetch, services);
+  const current = yield* ScopedRef.fromAcquire(Effect.flatMap(importApp, build));
+  const rebuild = yield* Semaphore.make(1);
+  const app = Effect.flatMap(importApp, (module) =>
+    rebuild.withPermit(
+      Effect.gen(function* () {
+        const live = yield* ScopedRef.get(current);
+        if (live.module === module) return live.app;
+        yield* Effect.logInfo("Server code changed; building the application again");
+        // A failed build keeps the old application, and the request answers 500.
+        yield* ScopedRef.set(current, build(module)).pipe(
+          Effect.tapCause((cause) => Effect.logError("The application did not build", cause)),
+          Effect.orDie,
+        );
+        return (yield* ScopedRef.get(current)).app;
       }),
-    };
-  }),
-);
+    ),
+  );
+
+  return {
+    api: Effect.flatMap(app, ({ api }) => api),
+    pages: Effect.gen(function* () {
+      const request = yield* HttpServerRequest.HttpServerRequest;
+      // Vite serves files only. Other methods go straight to TanStack Start with their body.
+      if (request.method === "GET" || request.method === "HEAD") {
+        const served = yield* runViteMiddleware(node, vite.middlewares, request);
+        if (served !== undefined) return served;
+      }
+      const { services } = yield* app;
+      const entry = yield* importEntry;
+      return yield* startPage(entry.default.fetch, services);
+    }),
+  };
+});
 
 class ViteError extends Schema.TaggedError<ViteError, { readonly brand: unique symbol }>()(
   "ViteError",

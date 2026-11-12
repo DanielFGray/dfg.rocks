@@ -1,22 +1,20 @@
+import { runPlatform } from "./framework.js";
 import { it, expect, describe, beforeAll, afterAll } from "@effect/vitest";
 import * as FileSystem from "effect/FileSystem";
-import * as NodeServices from "@effect/platform-node/NodeServices";
 import { Effect, Layer } from "effect";
 import pg from "pg";
 import { PgAuthDB, PgRootDB } from "../db.js";
-import { BillingLedgerService } from "../services/billingLedgerService.js";
-import { FamilyBillingService } from "../services/familyBillingService.js";
+import { BillingLedger } from "../services/billingLedger.js";
+import { FamilyBilling } from "../services/familyBilling.js";
 import { withAuthContext } from "../requestDatabase.js";
-import { PdfService } from "../services/pdfService.js";
+import { Pdf } from "../services/pdf.js";
 
 const familyBillingTestLayer = Layer.mergeAll(
-  PgRootDB.Live,
-  PgAuthDB.Live,
-  BillingLedgerService.layer,
-  PdfService.layer,
-  FamilyBillingService.layer.pipe(
-    Layer.provide(Layer.mergeAll(PdfService.layer, BillingLedgerService.layer)),
-  ),
+  PgRootDB.layer,
+  PgAuthDB.layer,
+  BillingLedger.layer,
+  Pdf.layer,
+  FamilyBilling.layer.pipe(Layer.provide(Layer.mergeAll(Pdf.layer, BillingLedger.layer))),
 );
 
 import { execSync } from "child_process";
@@ -45,10 +43,6 @@ function forceIpv4(urlString: string): string {
   const url = new URL(urlString);
   if (url.hostname === "localhost" || url.hostname === "::1") url.hostname = "127.0.0.1";
   return url.toString();
-}
-
-function runPlatform<A, E>(effect: Effect.Effect<A, E, NodeServices.NodeServices>): Promise<A> {
-  return Effect.runPromise(effect.pipe(Effect.provide(NodeServices.layer)));
 }
 
 function extractPdfText(pdfBuffer: Buffer): string {
@@ -192,7 +186,7 @@ describe("PDF Service", () => {
   it.layer(familyBillingTestLayer)("family billing services", (effectIt) => {
     effectIt.effect("renders bill and receipt PDFs", () =>
       Effect.gen(function* () {
-        const pdf = yield* PdfService;
+        const pdf = yield* Pdf;
         const billBuffer = yield* pdf.generateBillPdf({
           payerName: "Test Payer",
           billNumber: 42,
@@ -236,7 +230,7 @@ describe("PDF Service", () => {
 
     effectIt.effect("parent reads their own billing overview and lists", () =>
       Effect.gen(function* () {
-        const svc = yield* FamilyBillingService;
+        const svc = yield* FamilyBilling;
         const overview = yield* svc.overview().pipe(withAuthContext(parentSessionId));
         expect(overview.balance.gross_outstanding_cents).toBeGreaterThanOrEqual(19000);
         const bills = yield* svc.bills().pipe(withAuthContext(parentSessionId));
@@ -256,7 +250,7 @@ describe("PDF Service", () => {
 
     effectIt.effect("a family member who is not the payer sees the billing contact's bills", () =>
       Effect.gen(function* () {
-        const svc = yield* FamilyBillingService;
+        const svc = yield* FamilyBilling;
         const bills = yield* svc.bills().pipe(withAuthContext(studentSessionId));
         expect(bills.map((bill) => bill.id)).toContain(seededBillId);
       }),
@@ -264,7 +258,7 @@ describe("PDF Service", () => {
 
     effectIt.effect("parent can download their bill and payment receipt", () =>
       Effect.gen(function* () {
-        const svc = yield* FamilyBillingService;
+        const svc = yield* FamilyBilling;
         const billPdf = yield* svc.billPdf(seededBillId).pipe(withAuthContext(parentSessionId));
         expect(billPdf.slice(0, 4).toString()).toBe("%PDF");
         expect(extractPdfText(billPdf)).toContain("Payer: FB Parent");
@@ -279,7 +273,7 @@ describe("PDF Service", () => {
 
     effectIt.effect("admin can download billing documents", () =>
       Effect.gen(function* () {
-        const svc = yield* FamilyBillingService;
+        const svc = yield* FamilyBilling;
         const payments = yield* svc.payments().pipe(withAuthContext(parentSessionId));
         expect(
           (yield* svc.billPdf(seededBillId).pipe(withAuthContext(adminSessionId)))
@@ -296,7 +290,7 @@ describe("PDF Service", () => {
 
     effectIt.effect("teacher and another family cannot access billing documents", () =>
       Effect.gen(function* () {
-        const svc = yield* FamilyBillingService;
+        const svc = yield* FamilyBilling;
         const teacherError = yield* Effect.flip(
           svc.billPdf(seededBillId).pipe(withAuthContext(teacherSessionId)),
         );

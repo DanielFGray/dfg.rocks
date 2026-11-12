@@ -5,11 +5,12 @@ import { HttpError, catchPgErrors } from "../pgErrors.js";
 import { sql } from "kysely";
 import * as S from "effect/Schema";
 import { UserRole, FamilyInviteRole } from "../../shared/schemas.js";
-import { type UserRow, UserService } from "./userService.js";
+import { type UserRow, Users } from "./users.js";
 
 /** Families, their members and invitations. */
-export class FamilyService extends Context.Service<FamilyService>()("FamilyService", {
+export class Families extends Context.Service<Families>()("dfg-rocks/families", {
   make: Effect.gen(function* () {
+    const users = yield* Users;
     const rootDb = yield* PgRootDB;
     const invitationById = (invitationId: string) =>
       rootDb
@@ -28,14 +29,18 @@ export class FamilyService extends Context.Service<FamilyService>()("FamilyServi
         );
 
         if (memberships.length === 0) {
-          return yield* new HttpError(400, "You must belong to a family to add a student");
+          return yield* new HttpError({
+            status: 400,
+            message: "You must belong to a family to add a student",
+          });
         }
 
         if (memberships.length > 1) {
-          return yield* new HttpError(
-            400,
-            "You belong to multiple families. Please contact an admin to choose which family this student should join.",
-          );
+          return yield* new HttpError({
+            status: 400,
+            message:
+              "You belong to multiple families. Please contact an admin to choose which family this student should join.",
+          });
         }
 
         const familyId = memberships[0]!.family_id;
@@ -60,7 +65,7 @@ export class FamilyService extends Context.Service<FamilyService>()("FamilyServi
           id: child.id,
           username: child.username,
           name: child.name ?? "",
-          role: S.decodeUnknownSync(UserRole)(child.role),
+          role: yield* S.decodeUnknownEffect(UserRole)(child.role),
           is_verified: child.is_verified,
         };
       }),
@@ -86,7 +91,7 @@ export class FamilyService extends Context.Service<FamilyService>()("FamilyServi
           .pipe(
             Effect.head,
             Effect.catchTags({
-              NoSuchElementError: () => new HttpError(404, "Family not found"),
+              NoSuchElementError: () => new HttpError({ status: 404, message: "Family not found" }),
             }),
           );
 
@@ -155,7 +160,7 @@ export class FamilyService extends Context.Service<FamilyService>()("FamilyServi
             Effect.head,
             Effect.catchTags({
               NoSuchElementError: () =>
-                new HttpError(403, "Only the family owner can remove members"),
+                new HttpError({ status: 403, message: "Only the family owner can remove members" }),
             }),
           );
 
@@ -189,7 +194,7 @@ export class FamilyService extends Context.Service<FamilyService>()("FamilyServi
             Effect.head,
             Effect.catchTags({
               NoSuchElementError: () =>
-                new HttpError(403, "Only the family owner can invite members"),
+                new HttpError({ status: 403, message: "Only the family owner can invite members" }),
             }),
           );
 
@@ -341,7 +346,8 @@ export class FamilyService extends Context.Service<FamilyService>()("FamilyServi
           .pipe(
             Effect.head,
             Effect.catchTags({
-              NoSuchElementError: () => new HttpError(500, "Failed to create family"),
+              NoSuchElementError: () =>
+                new HttpError({ status: 500, message: "Failed to create family" }),
             }),
             catchPgErrors,
           );
@@ -371,7 +377,8 @@ export class FamilyService extends Context.Service<FamilyService>()("FamilyServi
             catchPgErrors,
             Effect.head,
             Effect.catchTags({
-              NoSuchElementError: () => new HttpError(500, "Failed to create QR invite"),
+              NoSuchElementError: () =>
+                new HttpError({ status: 500, message: "Failed to create QR invite" }),
             }),
           );
       }),
@@ -397,14 +404,15 @@ export class FamilyService extends Context.Service<FamilyService>()("FamilyServi
         const invitation = yield* rootDb.execute(invitationById(invitationId)).pipe(
           Effect.head,
           Effect.catchTags({
-            NoSuchElementError: () => new HttpError(404, "Invitation not found"),
+            NoSuchElementError: () =>
+              new HttpError({ status: 404, message: "Invitation not found" }),
           }),
         );
         if (invitation.code && invitation.code !== code) {
-          return yield* new HttpError(404, "Invalid invitation code");
+          return yield* new HttpError({ status: 404, message: "Invalid invitation code" });
         }
         if (invitation.expires_at && new Date(String(invitation.expires_at)) < new Date()) {
-          return yield* new HttpError(400, "This invitation has expired");
+          return yield* new HttpError({ status: 400, message: "This invitation has expired" });
         }
 
         const family = yield* rootDb
@@ -417,14 +425,15 @@ export class FamilyService extends Context.Service<FamilyService>()("FamilyServi
           .pipe(
             Effect.head,
             Effect.catchTags({
-              NoSuchElementError: () => new HttpError(404, "Invitation family not found"),
+              NoSuchElementError: () =>
+                new HttpError({ status: 404, message: "Invitation family not found" }),
             }),
           );
         return {
           ...family,
           email: invitation.email ?? "",
           invited_role: invitation.invited_role
-            ? S.decodeUnknownSync(FamilyInviteRole)(invitation.invited_role)
+            ? yield* S.decodeUnknownEffect(FamilyInviteRole)(invitation.invited_role)
             : undefined,
         };
       }),
@@ -443,14 +452,15 @@ export class FamilyService extends Context.Service<FamilyService>()("FamilyServi
               .pipe(
                 Effect.head,
                 Effect.catchTags({
-                  NoSuchElementError: () => new HttpError(400, "Invitation not found"),
+                  NoSuchElementError: () =>
+                    new HttpError({ status: 400, message: "Invitation not found" }),
                 }),
               );
             if (invitation.code && invitation.code !== (values.code ?? "")) {
-              return yield* new HttpError(400, "Invalid invitation code");
+              return yield* new HttpError({ status: 400, message: "Invalid invitation code" });
             }
             if (invitation.expires_at && new Date(String(invitation.expires_at)) < new Date()) {
-              return yield* new HttpError(400, "This invitation has expired");
+              return yield* new HttpError({ status: 400, message: "This invitation has expired" });
             }
             let user: UserRow = yield* rootDb
               .execute(
@@ -471,7 +481,8 @@ export class FamilyService extends Context.Service<FamilyService>()("FamilyServi
                 catchPgErrors,
                 Effect.head,
                 Effect.catchTags({
-                  NoSuchElementError: () => new HttpError(500, "Failed to create user"),
+                  NoSuchElementError: () =>
+                    new HttpError({ status: 500, message: "Failed to create user" }),
                 }),
               );
             const invitedRole = invitation.invited_role;
@@ -494,12 +505,14 @@ export class FamilyService extends Context.Service<FamilyService>()("FamilyServi
             yield* rootDb.execute(
               rootDb.deleteFrom("app_public.family_invitations").where("id", "=", invitation.id),
             );
-            return yield* UserService.use((userService) => userService.sessionFromUser(user));
+            return yield* users.sessionFromUser(user);
           }),
         );
       }),
     };
   }),
 }) {
-  static readonly layer = Layer.effect(this, this.make);
+  static readonly layer = Layer.effect(this, this.make).pipe(
+    Layer.provide(Layer.mergeAll(Users.layer, PgRootDB.layer)),
+  );
 }

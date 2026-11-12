@@ -7,8 +7,8 @@ import { params } from "./fields.js";
 import { signedInErrors } from "../httpApiErrors.js";
 
 const MessageListQuery = S.Struct({
-  limit: S.optional(S.NumberFromString),
-  offset: S.optional(S.NumberFromString),
+  limit: S.optional(S.FiniteFromString),
+  offset: S.optional(S.FiniteFromString),
   with: S.optional(S.String),
 });
 

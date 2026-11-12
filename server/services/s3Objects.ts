@@ -32,15 +32,11 @@ export function createS3Client(settings: S3Settings): ObjectClient {
 /** Keyed object operations over an S3 bucket. Keys are passed through unchanged. */
 export function makeS3ObjectStore(client: ObjectClient) {
   return {
-    exists: (key: string) =>
-      Effect.tryPromise({ try: () => client.file(key).exists(), catch: (error) => error }),
+    exists: (key: string) => Effect.tryPromise(() => client.file(key).exists()),
     put: (key: string, bytes: Uint8Array) =>
-      Effect.tryPromise({ try: () => client.file(key).write(bytes), catch: (error) => error }).pipe(
-        Effect.asVoid,
-      ),
-    delete: (key: string) =>
-      Effect.tryPromise({ try: () => client.file(key).delete(), catch: (error) => error }),
+      Effect.tryPromise(() => client.file(key).write(bytes)).pipe(Effect.asVoid),
+    delete: (key: string) => Effect.tryPromise(() => client.file(key).delete()),
     // stream() does not contact the store. A missing key fails when the stream is read.
-    open: (key: string) => Effect.try({ try: () => client.file(key).stream(), catch: (error) => error }),
+    open: (key: string) => Effect.try(() => client.file(key).stream()),
   };
 }

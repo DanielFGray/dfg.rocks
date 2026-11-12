@@ -56,7 +56,7 @@ const seedAdmin = Effect.gen(function* () {
   yield* Effect.log(`Created admin user '${username}' (${email})`);
 });
 
-Effect.runPromise(seedAdmin.pipe(Effect.provide(PgRootDB.Live))).catch((e) => {
+Effect.runPromise(seedAdmin.pipe(Effect.provide(PgRootDB.layer))).catch((e) => {
   console.error("seed-admin failed:", e);
   process.exit(1);
 });

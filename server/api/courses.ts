@@ -4,8 +4,8 @@ import { withAuthContext } from "../requestDatabase.js";
 import { Contract } from "../../shared/httpApi.js";
 import { CurrentSession } from "../../shared/api/guards.js";
 import { HttpError } from "../pgErrors.js";
-import { CourseService } from "../services/courseService.js";
-import { resolveEffectiveStudent } from "../services/sessionService.js";
+import { Courses } from "../services/courses.js";
+import { resolveEffectiveStudent } from "../services/sessions.js";
 import { adaptSignedInErrors, adaptAdminErrors } from "../httpApiErrors.js";
 
 export const CoursesApiGroupLive = HttpApiBuilder.group(Contract, "courses", (handlers) =>
@@ -16,7 +16,7 @@ export const CoursesApiGroupLive = HttpApiBuilder.group(Contract, "courses", (ha
         const auth = yield* CurrentSession;
         const effective = resolveEffectiveStudent(auth);
         const filterStudentId = effective.isActing ? effective.studentId : undefined;
-        return yield* CourseService.use((courseService) =>
+        return yield* Courses.use((courseService) =>
           courseService.courses(filterStudentId).pipe(withAuthContext(auth.session.id)),
         );
       }, adaptSignedInErrors),
@@ -25,7 +25,7 @@ export const CoursesApiGroupLive = HttpApiBuilder.group(Contract, "courses", (ha
       "courseById",
       Effect.fnUntraced(function* ({ params }) {
         const auth = yield* CurrentSession;
-        return yield* CourseService.use((courseService) =>
+        return yield* Courses.use((courseService) =>
           courseService.courseById(params.id).pipe(withAuthContext(auth.session.id)),
         );
       }, adaptSignedInErrors),
@@ -38,7 +38,7 @@ export const CoursesAdminApiGroupLive = HttpApiBuilder.group(Contract, "coursesA
       "courses",
       Effect.fnUntraced(function* () {
         const auth = yield* CurrentSession;
-        return yield* CourseService.use((courseService) =>
+        return yield* Courses.use((courseService) =>
           courseService.listCourses().pipe(withAuthContext(auth.session.id)),
         );
       }, adaptAdminErrors),
@@ -48,7 +48,7 @@ export const CoursesAdminApiGroupLive = HttpApiBuilder.group(Contract, "coursesA
       Effect.fnUntraced(function* (context) {
         const auth = yield* CurrentSession;
         const { params } = context;
-        const rows = yield* CourseService.use((courseService) =>
+        const rows = yield* Courses.use((courseService) =>
           courseService.listCourseStudents(params.id).pipe(withAuthContext(auth.session.id)),
         );
         return rows.map((row) => ({
@@ -65,7 +65,7 @@ export const CoursesAdminApiGroupLive = HttpApiBuilder.group(Contract, "coursesA
       "createCourse",
       Effect.fnUntraced(function* ({ payload }) {
         const auth = yield* CurrentSession;
-        return yield* CourseService.use((courseService) =>
+        return yield* Courses.use((courseService) =>
           courseService
             .createCourse({
               title: payload.title,
@@ -87,11 +87,11 @@ export const CoursesAdminApiGroupLive = HttpApiBuilder.group(Contract, "coursesA
         if (title !== undefined) updates.title = title;
         if (description !== undefined) updates.description = description;
         if (instrument !== undefined) updates.instrument = instrument;
-        const course = yield* CourseService.use((courseService) =>
+        const course = yield* Courses.use((courseService) =>
           courseService.updateCourse(params.id, updates).pipe(withAuthContext(auth.session.id)),
         );
         if (!course) {
-          return yield* new HttpError(404, "Course not found");
+          return yield* new HttpError({ status: 404, message: "Course not found" });
         }
         return course;
       }, adaptAdminErrors),
@@ -101,7 +101,7 @@ export const CoursesAdminApiGroupLive = HttpApiBuilder.group(Contract, "coursesA
       Effect.fnUntraced(function* (context) {
         const auth = yield* CurrentSession;
         const { params } = context;
-        yield* CourseService.use((courseService) =>
+        yield* Courses.use((courseService) =>
           courseService.deleteCourse(params.id).pipe(withAuthContext(auth.session.id)),
         );
         return { success: true as const };
@@ -111,7 +111,7 @@ export const CoursesAdminApiGroupLive = HttpApiBuilder.group(Contract, "coursesA
       "createModule",
       Effect.fnUntraced(function* ({ params, payload }) {
         const auth = yield* CurrentSession;
-        return yield* CourseService.use((courseService) =>
+        return yield* Courses.use((courseService) =>
           courseService
             .createModule(params.id, {
               title: payload.title,
@@ -125,7 +125,7 @@ export const CoursesAdminApiGroupLive = HttpApiBuilder.group(Contract, "coursesA
       "updateModule",
       Effect.fnUntraced(function* ({ params, payload }) {
         const auth = yield* CurrentSession;
-        return yield* CourseService.use((courseService) =>
+        return yield* Courses.use((courseService) =>
           courseService.updateModule(params.id, payload).pipe(withAuthContext(auth.session.id)),
         );
       }, adaptAdminErrors),
@@ -135,7 +135,7 @@ export const CoursesAdminApiGroupLive = HttpApiBuilder.group(Contract, "coursesA
       Effect.fnUntraced(function* (context) {
         const auth = yield* CurrentSession;
         const { params } = context;
-        yield* CourseService.use((courseService) =>
+        yield* Courses.use((courseService) =>
           courseService.deleteModule(params.id).pipe(withAuthContext(auth.session.id)),
         );
         return { success: true as const };
@@ -145,7 +145,7 @@ export const CoursesAdminApiGroupLive = HttpApiBuilder.group(Contract, "coursesA
       "enrollStudent",
       Effect.fnUntraced(function* ({ params, payload }) {
         const auth = yield* CurrentSession;
-        yield* CourseService.use((courseService) =>
+        yield* Courses.use((courseService) =>
           courseService
             .enrollStudent(params.id, payload.course_id)
             .pipe(withAuthContext(auth.session.id)),
@@ -158,7 +158,7 @@ export const CoursesAdminApiGroupLive = HttpApiBuilder.group(Contract, "coursesA
       Effect.fnUntraced(function* (context) {
         const auth = yield* CurrentSession;
         const { params } = context;
-        yield* CourseService.use((courseService) =>
+        yield* Courses.use((courseService) =>
           courseService
             .unenrollStudent(params.id, params.courseId)
             .pipe(withAuthContext(auth.session.id)),

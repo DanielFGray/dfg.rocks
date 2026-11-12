@@ -2,12 +2,13 @@ import { Effect, Option, Context, Layer } from "effect";
 import { PgRootDB } from "../db.js";
 import { RequestDatabase } from "../requestDatabase.js";
 import { HttpError, catchPgErrors } from "../pgErrors.js";
-import { SessionService } from "./sessionService.js";
+import { Sessions } from "./sessions.js";
 import { sql } from "kysely";
 
 /** A signed-in user's own account: email addresses, deletion, and the active student. */
-export class AccountService extends Context.Service<AccountService>()("AccountService", {
+export class Account extends Context.Service<Account>()("dfg-rocks/account", {
   make: Effect.gen(function* () {
+    const sessions = yield* Sessions;
     const rootDb = yield* PgRootDB;
     return {
       requestDeleteAccount: Effect.fn("requestDeleteAccount")(function* () {
@@ -59,7 +60,8 @@ export class AccountService extends Context.Service<AccountService>()("AccountSe
               .pipe(
                 Effect.head,
                 Effect.catchTags({
-                  NoSuchElementError: () => new HttpError(500, "Failed to add email"),
+                  NoSuchElementError: () =>
+                    new HttpError({ status: 500, message: "Failed to add email" }),
                 }),
               );
           }),
@@ -78,11 +80,12 @@ export class AccountService extends Context.Service<AccountService>()("AccountSe
               .pipe(
                 Effect.head,
                 Effect.catchTags({
-                  NoSuchElementError: () => new HttpError(404, "Email not found"),
+                  NoSuchElementError: () =>
+                    new HttpError({ status: 404, message: "Email not found" }),
                 }),
               );
             if (email.is_primary) {
-              return yield* new HttpError(400, "Cannot delete primary email");
+              return yield* new HttpError({ status: 400, message: "Cannot delete primary email" });
             }
             yield* db.execute(db.deleteFrom("app_public.user_emails").where("id", "=", emailId));
           }),
@@ -98,7 +101,8 @@ export class AccountService extends Context.Service<AccountService>()("AccountSe
               .pipe(
                 Effect.head,
                 Effect.catchTags({
-                  NoSuchElementError: () => new HttpError(404, "Email not found"),
+                  NoSuchElementError: () =>
+                    new HttpError({ status: 404, message: "Email not found" }),
                 }),
               );
             yield* db.execute(
@@ -118,7 +122,8 @@ export class AccountService extends Context.Service<AccountService>()("AccountSe
               .pipe(
                 Effect.head,
                 Effect.catchTags({
-                  NoSuchElementError: () => new HttpError(404, "Email not found"),
+                  NoSuchElementError: () =>
+                    new HttpError({ status: 404, message: "Email not found" }),
                 }),
               );
             return updated;
@@ -138,11 +143,12 @@ export class AccountService extends Context.Service<AccountService>()("AccountSe
               .pipe(
                 Effect.head,
                 Effect.catchTags({
-                  NoSuchElementError: () => new HttpError(404, "Email not found"),
+                  NoSuchElementError: () =>
+                    new HttpError({ status: 404, message: "Email not found" }),
                 }),
               );
             if (email.is_verified) {
-              return yield* new HttpError(400, "Email is already verified");
+              return yield* new HttpError({ status: 400, message: "Email is already verified" });
             }
             yield* db.execute(
               db.selectNoFrom((eb) =>
@@ -178,12 +184,10 @@ export class AccountService extends Context.Service<AccountService>()("AccountSe
         );
 
         if (Option.isNone(familyMembership)) {
-          return yield* new HttpError(403, "Student is not in your family");
+          return yield* new HttpError({ status: 403, message: "Student is not in your family" });
         }
 
-        yield* SessionService.use((sessionService) =>
-          sessionService.updateActiveStudent(sessionId, studentId),
-        );
+        yield* sessions.updateActiveStudent(sessionId, studentId);
       }),
       verifyEmail: Effect.fn("verifyEmail")(function* (token: string) {
         const secret = yield* rootDb
@@ -196,7 +200,8 @@ export class AccountService extends Context.Service<AccountService>()("AccountSe
           .pipe(
             Effect.head,
             Effect.catchTags({
-              NoSuchElementError: () => new HttpError(400, "Invalid or expired verification link"),
+              NoSuchElementError: () =>
+                new HttpError({ status: 400, message: "Invalid or expired verification link" }),
             }),
           );
         yield* rootDb
@@ -215,5 +220,7 @@ export class AccountService extends Context.Service<AccountService>()("AccountSe
     };
   }),
 }) {
-  static readonly layer = Layer.effect(this, this.make);
+  static readonly layer = Layer.effect(this, this.make).pipe(
+    Layer.provide(Layer.mergeAll(Sessions.layer, PgRootDB.layer)),
+  );
 }

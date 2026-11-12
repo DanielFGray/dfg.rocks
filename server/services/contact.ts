@@ -2,7 +2,7 @@ import { Effect, Config, Context, Layer } from "effect";
 import { addJob, PgRootDB } from "../db.js";
 
 /** The site's contact form. */
-export class ContactService extends Context.Service<ContactService>()("ContactService", {
+export class Contact extends Context.Service<Contact>()("dfg-rocks/contact", {
   make: Effect.gen(function* () {
     const rootDb = yield* PgRootDB;
     const adminEmail = yield* Config.NonEmptyString("ADMIN_EMAIL");
@@ -61,5 +61,5 @@ export class ContactService extends Context.Service<ContactService>()("ContactSe
     };
   }),
 }) {
-  static readonly layer = Layer.effect(this, this.make);
+  static readonly layer = Layer.effect(this, this.make).pipe(Layer.provide(PgRootDB.layer));
 }

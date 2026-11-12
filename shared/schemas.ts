@@ -13,7 +13,7 @@ export const BooleanFromString = S.Literals(["true", "false"]).pipe(
 );
 
 /** Attribute values the module editor's nodes and marks use (heading level, link href, material id). */
-const RichTextAttrs = S.Record(S.String, S.NullOr(S.Union([S.String, S.Number, S.Boolean])));
+const RichTextAttrs = S.Record(S.String, S.NullOr(S.Union([S.String, S.Finite, S.Boolean])));
 
 export const RichTextMark = S.Struct({
   type: S.String,
@@ -89,13 +89,13 @@ export const Module = S.Struct({
   course_id: S.String,
   title: S.String,
   content: S.NullishOr(RichTextDocument),
-  sort_order: S.Number,
+  sort_order: S.Finite,
 });
 
 export type Module = S.Schema.Type<typeof Module>;
 
 export const MaterialNotationTrack = S.Struct({
-  index: S.Number,
+  index: S.Finite,
   name: S.String,
   short_name: S.String,
   is_percussion: S.Boolean,
@@ -106,7 +106,7 @@ export const Material = S.Struct({
   title: S.String,
   original_filename: S.String,
   mime_type: S.String,
-  file_size: S.Number,
+  file_size: S.Finite,
   is_global: S.Boolean,
   notation_tracks: S.NullishOr(S.Array(MaterialNotationTrack)),
 });
@@ -120,11 +120,11 @@ export const AssignedMaterial = S.Struct({
   title: S.String,
   original_filename: S.String,
   mime_type: S.String,
-  file_size: S.Number,
+  file_size: S.Finite,
   is_global: S.Boolean,
   notation_tracks: S.NullishOr(S.Array(MaterialNotationTrack)),
-  assigned_track_index: S.NullishOr(S.Number),
-  listened_seconds: S.optional(S.Number),
+  assigned_track_index: S.NullishOr(S.Finite),
+  listened_seconds: S.optional(S.Finite),
 });
 
 export type AssignedMaterial = S.Schema.Type<typeof AssignedMaterial>;
@@ -134,7 +134,7 @@ export const ModuleWithMaterials = S.Struct({
   course_id: S.String,
   title: S.String,
   content: S.NullishOr(RichTextDocument),
-  sort_order: S.Number,
+  sort_order: S.Finite,
   materials: S.Array(Material),
 });
 
@@ -193,8 +193,8 @@ export const PracticeLog = S.Struct({
   id: S.String,
   student_id: S.String,
   material_id: S.String,
-  rating: S.NullishOr(S.Number.pipe(S.check(S.isBetween({ minimum: 1, maximum: 5 })))),
-  duration_minutes: S.NullishOr(S.Number),
+  rating: S.NullishOr(S.Finite.pipe(S.check(S.isBetween({ minimum: 1, maximum: 5 })))),
+  duration_minutes: S.NullishOr(S.Finite),
   logged_at: S.DateFromString,
 });
 
@@ -202,7 +202,7 @@ export type PracticeLog = S.Schema.Type<typeof PracticeLog>;
 
 export const AssignmentProgress = S.Struct({
   material_id: S.String,
-  listened_seconds: S.Number,
+  listened_seconds: S.Finite,
   updated_at: S.DateFromString,
 });
 
@@ -222,8 +222,8 @@ export type AssignmentNote = S.Schema.Type<typeof AssignmentNote>;
 export const AssignmentReview = S.Struct({
   id: S.String,
   material_id: S.String,
-  stars: S.Number.pipe(S.check(S.isBetween({ minimum: 1, maximum: 5 }))),
-  listened_seconds: S.Number,
+  stars: S.Finite.pipe(S.check(S.isBetween({ minimum: 1, maximum: 5 }))),
+  listened_seconds: S.Finite,
   created_at: S.DateFromString,
 });
 
@@ -306,18 +306,18 @@ export type FeePolicyOutcome = S.Schema.Type<typeof FeePolicyOutcome>;
 
 export const LessonCancellationPolicy = S.Struct({
   billing_model: BillingModel,
-  hours_until_lesson: S.Number,
+  hours_until_lesson: S.Finite,
   is_late: S.Boolean,
   deposit_outcome: DepositPolicyOutcome,
   fee_outcome: FeePolicyOutcome,
-  amount_cents: S.Number,
+  amount_cents: S.Finite,
 });
 
 export type LessonCancellationPolicy = S.Schema.Type<typeof LessonCancellationPolicy>;
 
 export const CancellationPolicySettings = S.Struct({
-  cancellation_window_hours: S.Number,
-  late_cancel_charge_percent: S.Number,
+  cancellation_window_hours: S.Finite,
+  late_cancel_charge_percent: S.Finite,
 });
 
 export type CancellationPolicySettings = S.Schema.Type<typeof CancellationPolicySettings>;
@@ -327,14 +327,14 @@ export const Lesson = S.Struct({
   student_id: S.String,
   gcal_event_id: S.NullishOr(S.String),
   scheduled_at: S.DateFromString,
-  duration_minutes: S.Number,
+  duration_minutes: S.Finite,
   location_type: LocationType,
   status: LessonStatus,
   cancellation_reason: S.NullishOr(S.String),
   cancelled_at: S.NullishOr(S.DateFromString),
   completed_at: S.NullishOr(S.DateFromString),
-  cancellation_fee_cents: S.Number,
-  remainder_due_cents: S.Number,
+  cancellation_fee_cents: S.Finite,
+  remainder_due_cents: S.Finite,
   recurring_schedule_id: S.NullishOr(S.String),
   recurrence_date: S.NullishOr(S.String),
   created_at: S.DateFromString,
@@ -345,8 +345,8 @@ export type Lesson = S.Schema.Type<typeof Lesson>;
 export const StudentRate = S.Struct({
   id: S.String,
   student_id: S.String,
-  rate_cents: S.Number,
-  lesson_duration_minutes: S.Number,
+  rate_cents: S.Finite,
+  lesson_duration_minutes: S.Finite,
   location_type: LocationType,
   billing_model: BillingModel,
   notes: S.NullishOr(S.String),
@@ -382,7 +382,7 @@ export const MonthlyPayment = S.Struct({
   id: S.String,
   student_id: S.String,
   billing_month: S.String,
-  amount_cents: S.Number,
+  amount_cents: S.Finite,
   paid_at: S.DateFromString,
   notes: S.NullishOr(S.String),
   generation_status: PaymentGenerationStatus,
@@ -404,7 +404,7 @@ export type MonthlyPaymentStatus = S.Schema.Type<typeof MonthlyPaymentStatus>;
 export const LessonDeposit = S.Struct({
   id: S.String,
   lesson_id: S.String,
-  amount_cents: S.Number,
+  amount_cents: S.Finite,
   status: DepositStatus,
   created_at: S.DateFromString,
 });
@@ -532,15 +532,15 @@ export type LineItemType = S.Schema.Type<typeof LineItemType>;
 export const Bill = S.Struct({
   id: S.String,
   payer_id: S.String,
-  bill_number: S.Number,
+  bill_number: S.Finite,
   status: BillStatus,
   billing_period_start: S.String,
   billing_period_end: S.String,
   due_date: S.NullOr(S.String),
-  subtotal_cents: S.Number,
-  discount_cents: S.Number,
-  tax_cents: S.Number,
-  total_cents: S.Number,
+  subtotal_cents: S.Finite,
+  discount_cents: S.Finite,
+  tax_cents: S.Finite,
+  total_cents: S.Finite,
   notes: S.NullOr(S.String),
   created_at: S.DateFromString,
   updated_at: S.DateFromString,
@@ -555,7 +555,7 @@ export type Bill = S.Schema.Type<typeof Bill>;
 /** A single-booking bill with the lesson it charges for and what is still owed on it. */
 export const LessonBill = S.Struct({
   bill_id: S.String,
-  bill_number: S.Number,
+  bill_number: S.Finite,
   status: BillStatus,
   lesson_id: S.String,
   scheduled_at: S.DateFromString,
@@ -563,8 +563,8 @@ export const LessonBill = S.Struct({
   student_name: S.String,
   payer_id: S.String,
   payer_name: S.String,
-  total_cents: S.Number,
-  outstanding_cents: S.Number,
+  total_cents: S.Finite,
+  outstanding_cents: S.Finite,
 });
 
 export type LessonBill = S.Schema.Type<typeof LessonBill>;
@@ -572,8 +572,8 @@ export type LessonBill = S.Schema.Type<typeof LessonBill>;
 export const Payment = S.Struct({
   id: S.String,
   payer_id: S.String,
-  payment_number: S.Number,
-  amount_cents: S.Number,
+  payment_number: S.Finite,
+  amount_cents: S.Finite,
   method: PaymentMethod,
   reference: S.NullOr(S.String),
   received_at: S.DateFromString,
@@ -588,15 +588,15 @@ export type Payment = S.Schema.Type<typeof Payment>;
 export const FamilyBill = S.Struct({
   id: S.String,
   payer_id: S.String,
-  bill_number: S.Number,
+  bill_number: S.Finite,
   status: BillStatus,
   billing_period_start: S.String,
   billing_period_end: S.String,
   due_date: S.NullOr(S.String),
-  subtotal_cents: S.Number,
-  discount_cents: S.Number,
-  tax_cents: S.Number,
-  total_cents: S.Number,
+  subtotal_cents: S.Finite,
+  discount_cents: S.Finite,
+  tax_cents: S.Finite,
+  total_cents: S.Finite,
   created_at: S.DateFromString,
   updated_at: S.DateFromString,
   issued_at: S.NullOr(S.DateFromString),
@@ -609,8 +609,8 @@ export type FamilyBill = S.Schema.Type<typeof FamilyBill>;
 export const FamilyPayment = S.Struct({
   id: S.String,
   payer_id: S.String,
-  payment_number: S.Number,
-  amount_cents: S.Number,
+  payment_number: S.Finite,
+  amount_cents: S.Finite,
   method: PaymentMethod,
   reference: S.NullOr(S.String),
   received_at: S.DateFromString,
@@ -623,7 +623,7 @@ export const Credit = S.Struct({
   id: S.String,
   payer_id: S.String,
   student_id: S.NullOr(S.String),
-  amount_cents: S.Number,
+  amount_cents: S.Finite,
   reason: S.String,
   expires_at: S.NullOr(S.DateFromString),
   consumed_at: S.NullOr(S.DateFromString),
@@ -636,7 +636,7 @@ export const AdminCredit = S.Struct({
   id: S.String,
   payer_id: S.String,
   student_id: S.NullOr(S.String),
-  amount_cents: S.Number,
+  amount_cents: S.Finite,
   reason: S.String,
   created_by: S.String,
   expires_at: S.NullOr(S.DateFromString),
@@ -648,15 +648,15 @@ export type AdminCredit = S.Schema.Type<typeof AdminCredit>;
 export const FamilyBillDetailResponse = S.Struct({
   id: S.String,
   payer_id: S.String,
-  bill_number: S.Number,
+  bill_number: S.Finite,
   status: BillStatus,
   billing_period_start: S.String,
   billing_period_end: S.String,
   due_date: S.NullOr(S.String),
-  subtotal_cents: S.Number,
-  discount_cents: S.Number,
-  tax_cents: S.Number,
-  total_cents: S.Number,
+  subtotal_cents: S.Finite,
+  discount_cents: S.Finite,
+  tax_cents: S.Finite,
+  total_cents: S.Finite,
   created_at: S.DateFromString,
   updated_at: S.DateFromString,
   issued_at: S.NullOr(S.DateFromString),
@@ -670,9 +670,9 @@ export const FamilyBillDetailResponse = S.Struct({
       student_id: S.String,
       line_type: LineItemType,
       description: S.String,
-      quantity: S.Number,
-      unit_price_cents: S.Number,
-      amount_cents: S.Number,
+      quantity: S.Finite,
+      unit_price_cents: S.Finite,
+      amount_cents: S.Finite,
       created_at: S.DateFromString,
     }),
   ),
@@ -680,7 +680,7 @@ export const FamilyBillDetailResponse = S.Struct({
     S.Struct({
       id: S.String,
       bill_id: S.String,
-      amount_cents: S.Number,
+      amount_cents: S.Finite,
       created_at: S.DateFromString,
     }),
   ),
@@ -689,7 +689,7 @@ export const FamilyBillDetailResponse = S.Struct({
       id: S.String,
       credit_id: S.String,
       bill_id: S.String,
-      amount_cents: S.Number,
+      amount_cents: S.Finite,
       created_at: S.DateFromString,
     }),
   ),
@@ -703,7 +703,7 @@ export const FamilyPaymentDetail = S.Struct({
       id: S.String,
       payment_id: S.String,
       bill_id: S.String,
-      amount_cents: S.Number,
+      amount_cents: S.Finite,
       created_at: S.DateFromString,
     }),
   ),
@@ -713,15 +713,15 @@ export type FamilyPaymentDetail = S.Schema.Type<typeof FamilyPaymentDetail>;
 export const BillDetailResponse = S.Struct({
   id: S.String,
   payer_id: S.String,
-  bill_number: S.Number,
+  bill_number: S.Finite,
   status: BillStatus,
   billing_period_start: S.String,
   billing_period_end: S.String,
   due_date: S.NullOr(S.String),
-  subtotal_cents: S.Number,
-  discount_cents: S.Number,
-  tax_cents: S.Number,
-  total_cents: S.Number,
+  subtotal_cents: S.Finite,
+  discount_cents: S.Finite,
+  tax_cents: S.Finite,
+  total_cents: S.Finite,
   notes: S.NullOr(S.String),
   created_at: S.DateFromString,
   updated_at: S.DateFromString,
@@ -736,9 +736,9 @@ export const BillDetailResponse = S.Struct({
       student_id: S.String,
       line_type: LineItemType,
       description: S.String,
-      quantity: S.Number,
-      unit_price_cents: S.Number,
-      amount_cents: S.Number,
+      quantity: S.Finite,
+      unit_price_cents: S.Finite,
+      amount_cents: S.Finite,
       created_at: S.DateFromString,
     }),
   ),
@@ -746,7 +746,7 @@ export const BillDetailResponse = S.Struct({
     S.Struct({
       id: S.String,
       bill_id: S.String,
-      amount_cents: S.Number,
+      amount_cents: S.Finite,
       reason: S.String,
       created_at: S.DateFromString,
     }),
@@ -756,7 +756,7 @@ export const BillDetailResponse = S.Struct({
       id: S.String,
       credit_id: S.String,
       bill_id: S.String,
-      amount_cents: S.Number,
+      amount_cents: S.Finite,
       created_at: S.DateFromString,
     }),
   ),
@@ -767,8 +767,8 @@ export type BillDetailResponse = S.Schema.Type<typeof BillDetailResponse>;
 export const PaymentDetail = S.Struct({
   id: S.String,
   payer_id: S.String,
-  payment_number: S.Number,
-  amount_cents: S.Number,
+  payment_number: S.Finite,
+  amount_cents: S.Finite,
   method: PaymentMethod,
   reference: S.NullOr(S.String),
   received_at: S.DateFromString,
@@ -780,7 +780,7 @@ export const PaymentDetail = S.Struct({
       id: S.String,
       payment_id: S.String,
       bill_id: S.String,
-      amount_cents: S.Number,
+      amount_cents: S.Finite,
       created_at: S.DateFromString,
     }),
   ),
@@ -789,12 +789,12 @@ export const PaymentDetail = S.Struct({
 export type PaymentDetail = S.Schema.Type<typeof PaymentDetail>;
 
 export const FamilyBillingBalance = S.Struct({
-  outstanding_cents: S.Number,
-  credit_balance_cents: S.Number,
-  available_credit_cents: S.Number,
-  overdue_cents: S.Number,
-  gross_outstanding_cents: S.Number,
-  net_due_cents: S.Number,
+  outstanding_cents: S.Finite,
+  credit_balance_cents: S.Finite,
+  available_credit_cents: S.Finite,
+  overdue_cents: S.Finite,
+  gross_outstanding_cents: S.Finite,
+  net_due_cents: S.Finite,
 });
 
 export type FamilyBillingBalance = S.Schema.Type<typeof FamilyBillingBalance>;
@@ -814,20 +814,20 @@ export const PayerBillingSummary = S.Struct({
   payer_id: S.String,
   payer_name: S.String,
   students: S.Array(S.Struct({ id: S.String, name: S.String })),
-  bill_count: S.Number,
-  total_billed_cents: S.Number,
-  total_paid_cents: S.Number,
-  outstanding_cents: S.Number,
-  overdue_cents: S.Number,
-  credit_balance_cents: S.Number,
+  bill_count: S.Finite,
+  total_billed_cents: S.Finite,
+  total_paid_cents: S.Finite,
+  outstanding_cents: S.Finite,
+  overdue_cents: S.Finite,
+  credit_balance_cents: S.Finite,
 });
 
 export type PayerBillingSummary = S.Schema.Type<typeof PayerBillingSummary>;
 
 export const PayerBillingBalance = S.Struct({
-  outstanding_cents: S.Number,
-  overdue_cents: S.Number,
-  credit_balance_cents: S.Number,
+  outstanding_cents: S.Finite,
+  overdue_cents: S.Finite,
+  credit_balance_cents: S.Finite,
 });
 
 export type PayerBillingBalance = S.Schema.Type<typeof PayerBillingBalance>;
@@ -848,7 +848,7 @@ export const Discount = S.Struct({
   payer_id: S.String,
   label: S.String,
   discount_type: S.Literals(["percentage", "fixed"]),
-  discount_value: S.Number,
+  discount_value: S.Finite,
   applies_to: S.Union([S.Literal("all"), S.Literal("tuition"), S.Literal("fees")]),
   effective_from: S.String,
   effective_until: S.NullOr(S.String),
@@ -864,7 +864,7 @@ export const TaxRate = S.Struct({
   id: S.String,
   label: S.String,
   jurisdiction: S.String,
-  rate_percent: S.Number,
+  rate_percent: S.Finite,
   applies_to: S.Union([S.Literal("all"), S.Literal("tuition"), S.Literal("fees")]),
   effective_from: S.String,
   effective_until: S.NullOr(S.String),
@@ -892,7 +892,7 @@ export type TaxExemption = S.Schema.Type<typeof TaxExemption>;
 export const Refund = S.Struct({
   id: S.String,
   payment_id: S.String,
-  amount_cents: S.Number,
+  amount_cents: S.Finite,
   reason: S.String,
   created_by: S.String,
   refunded_at: S.DateFromString,
@@ -905,7 +905,7 @@ export type Refund = S.Schema.Type<typeof Refund>;
 export const Adjustment = S.Struct({
   id: S.String,
   bill_id: S.String,
-  amount_cents: S.Number,
+  amount_cents: S.Finite,
   reason: S.String,
   created_at: S.DateFromString,
 });
@@ -916,7 +916,7 @@ export const CreditApplication = S.Struct({
   id: S.String,
   credit_id: S.String,
   bill_id: S.String,
-  amount_cents: S.Number,
+  amount_cents: S.Finite,
   created_at: S.DateFromString,
 });
 

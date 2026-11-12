@@ -114,21 +114,22 @@ const clientLayer = (urlKey: string) =>
     ),
   );
 
-const databaseLayer = <Self>(tag: Context.Key<Self, Database>) =>
-  Layer.effect(
-    tag,
-    Effect.map(SqlClient.SqlClient, (client) => new Database(client)),
-  );
-
 /** The API login used for transactions under the visitor role. */
-export class PgAuthDB extends Context.Service<PgAuthDB, Database>()("PgAuthDB") {
-  static Live = databaseLayer(this).pipe(Layer.provide(clientLayer("AUTH_DATABASE_URL")));
+export class PgAuthDB extends Context.Service<PgAuthDB, Database>()("dfg-rocks/db/PgAuthDB", {
+  make: Effect.map(SqlClient.SqlClient, (client) => new Database(client)),
+}) {
+  static readonly layer = Layer.effect(this, this.make).pipe(
+    Layer.provide(clientLayer("AUTH_DATABASE_URL")),
+  );
 }
-
 /** The migration login, which owns the schema and bypasses row-level security. */
-export class PgRootDB extends Context.Service<PgRootDB, Database>()("PgRootDB") {
-  // Also exposes its PgClient, so scoped services such as RealtimeService share this pool.
-  static Live = databaseLayer(this).pipe(Layer.provideMerge(clientLayer("DATABASE_URL")));
+export class PgRootDB extends Context.Service<PgRootDB, Database>()("dfg-rocks/db/PgRootDB", {
+  make: Effect.map(SqlClient.SqlClient, (client) => new Database(client)),
+}) {
+  // Realtime shares this pool's SQL client.
+  static readonly layer = Layer.effect(this, this.make).pipe(
+    Layer.provideMerge(clientLayer("DATABASE_URL")),
+  );
 }
 
 /**

@@ -13,7 +13,7 @@ import {
 } from "../../shared/schemas.js";
 import { adaptHttpApiErrors } from "../httpApiErrors.js";
 import { HttpError } from "../pgErrors.js";
-import { FamilyBillingService } from "../services/familyBillingService.js";
+import { FamilyBilling } from "../services/familyBilling.js";
 import type { Selectable } from "kysely";
 import type {
   AppPublicBills,
@@ -92,17 +92,19 @@ function serializeCredit(c: Selectable<AppPublicCredits>): Credit {
   };
 }
 
-export function makeFamilyBillingLayer() {
-  return HttpApiBuilder.group(Contract, "familyBilling", (handlers) =>
+export const FamilyBillingApiGroupLive = HttpApiBuilder.group(
+  Contract,
+  "familyBilling",
+  (handlers) =>
     handlers
       .handle(
         "overview",
         Effect.fnUntraced(function* () {
           const auth = yield* CurrentSession;
           if (auth.user.role === "teacher") {
-            return yield* new HttpError(403, "Forbidden");
+            return yield* new HttpError({ status: 403, message: "Forbidden" });
           }
-          const raw = yield* FamilyBillingService.use((familyBillingService) =>
+          const raw = yield* FamilyBilling.use((familyBillingService) =>
             familyBillingService.overview().pipe(withAuthContext(auth.session.id)),
           );
           return {
@@ -119,9 +121,9 @@ export function makeFamilyBillingLayer() {
         Effect.fnUntraced(function* () {
           const auth = yield* CurrentSession;
           if (auth.user.role === "teacher") {
-            return yield* new HttpError(403, "Forbidden");
+            return yield* new HttpError({ status: 403, message: "Forbidden" });
           }
-          const bills = yield* FamilyBillingService.use((familyBillingService) =>
+          const bills = yield* FamilyBilling.use((familyBillingService) =>
             familyBillingService.bills().pipe(withAuthContext(auth.session.id)),
           );
           return bills.map(serializeFamilyBill);
@@ -132,9 +134,9 @@ export function makeFamilyBillingLayer() {
         Effect.fnUntraced(function* ({ params }) {
           const auth = yield* CurrentSession;
           if (auth.user.role === "teacher") {
-            return yield* new HttpError(403, "Forbidden");
+            return yield* new HttpError({ status: 403, message: "Forbidden" });
           }
-          const result = yield* FamilyBillingService.use((familyBillingService) =>
+          const result = yield* FamilyBilling.use((familyBillingService) =>
             familyBillingService.billDetail(params.id).pipe(withAuthContext(auth.session.id)),
           );
           result.lineItems = result.lineItems ?? [];
@@ -158,9 +160,9 @@ export function makeFamilyBillingLayer() {
         Effect.fnUntraced(function* () {
           const auth = yield* CurrentSession;
           if (auth.user.role === "teacher") {
-            return yield* new HttpError(403, "Forbidden");
+            return yield* new HttpError({ status: 403, message: "Forbidden" });
           }
-          const payments = yield* FamilyBillingService.use((familyBillingService) =>
+          const payments = yield* FamilyBilling.use((familyBillingService) =>
             familyBillingService.payments().pipe(withAuthContext(auth.session.id)),
           );
           return payments.map(serializeFamilyPayment);
@@ -171,9 +173,9 @@ export function makeFamilyBillingLayer() {
         Effect.fnUntraced(function* ({ params }) {
           const auth = yield* CurrentSession;
           if (auth.user.role === "teacher") {
-            return yield* new HttpError(403, "Forbidden");
+            return yield* new HttpError({ status: 403, message: "Forbidden" });
           }
-          const result = yield* FamilyBillingService.use((familyBillingService) =>
+          const result = yield* FamilyBilling.use((familyBillingService) =>
             familyBillingService.paymentDetail(params.id).pipe(withAuthContext(auth.session.id)),
           );
           return {
@@ -187,9 +189,9 @@ export function makeFamilyBillingLayer() {
         Effect.fnUntraced(function* () {
           const auth = yield* CurrentSession;
           if (auth.user.role === "teacher") {
-            return yield* new HttpError(403, "Forbidden");
+            return yield* new HttpError({ status: 403, message: "Forbidden" });
           }
-          const credits = yield* FamilyBillingService.use((familyBillingService) =>
+          const credits = yield* FamilyBilling.use((familyBillingService) =>
             familyBillingService.credits().pipe(withAuthContext(auth.session.id)),
           );
           return credits.map(serializeCredit);
@@ -200,9 +202,9 @@ export function makeFamilyBillingLayer() {
         Effect.fnUntraced(function* ({ params }) {
           const auth = yield* CurrentSession;
           if (auth.user.role === "teacher") {
-            return yield* new HttpError(403, "Forbidden");
+            return yield* new HttpError({ status: 403, message: "Forbidden" });
           }
-          const buffer = yield* FamilyBillingService.use((familyBillingService) =>
+          const buffer = yield* FamilyBilling.use((familyBillingService) =>
             familyBillingService.billPdf(params.id).pipe(withAuthContext(auth.session.id)),
           );
           return HttpServerResponse.fromWeb(
@@ -220,9 +222,9 @@ export function makeFamilyBillingLayer() {
         Effect.fnUntraced(function* ({ params }) {
           const auth = yield* CurrentSession;
           if (auth.user.role === "teacher") {
-            return yield* new HttpError(403, "Forbidden");
+            return yield* new HttpError({ status: 403, message: "Forbidden" });
           }
-          const buffer = yield* FamilyBillingService.use((familyBillingService) =>
+          const buffer = yield* FamilyBilling.use((familyBillingService) =>
             familyBillingService.paymentReceipt(params.id).pipe(withAuthContext(auth.session.id)),
           );
           return HttpServerResponse.fromWeb(
@@ -235,5 +237,4 @@ export function makeFamilyBillingLayer() {
           );
         }, adaptPdfErrors),
       ),
-  );
-}
+);

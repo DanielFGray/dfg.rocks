@@ -19,27 +19,29 @@ import { EditLessonModal } from "../../components/lessons/EditLessonModal.js";
 import { NewLessonModal } from "../../components/lessons/NewLessonModal.js";
 import { LessonCard } from "../../components/lessons/LessonCard.js";
 import { runServerEffect } from "../../lib/serverEffect.js";
-import { StudentService } from "../../../server/services/studentService.js";
-import { LessonService } from "../../../server/services/lessonService.js";
+import { Students } from "../../../server/services/students.js";
+import { Lessons } from "../../../server/services/lessons.js";
 import {
   serializeLesson,
   serializeLessonNote,
   normalizeStudents,
 } from "../../../shared/responseMappers.js";
-import { requireAdminSession } from "../../lib/sessionGuards.server.js";
+import { Sessions } from "../../../server/services/sessions.js";
 
 const getLessonsPageData = createServerFn({ method: "GET" }).handler(() =>
   runServerEffect(
     Effect.gen(function* () {
-      const session = yield* requireAdminSession(getCookie("session"));
+      const session = yield* Sessions.use((sessions) =>
+        sessions.requireAdminSession(getCookie("session")),
+      );
       const [lessons, students] = yield* Effect.all([
-        LessonService.use((lessonService) =>
+        Lessons.use((lessonService) =>
           lessonService.listLessons({
             limit: 50,
             offset: 0,
           }),
         ),
-        StudentService.use((studentService) => studentService.listStudents()),
+        Students.use((studentService) => studentService.listStudents()),
       ]).pipe(withAuthContext(session.session.id));
 
       return {
@@ -58,8 +60,10 @@ const getLessonNote = createServerFn({ method: "GET" })
   .handler(({ data }) =>
     runServerEffect(
       Effect.gen(function* () {
-        const session = yield* requireAdminSession(getCookie("session"));
-        const note = yield* LessonService.use((lessonService) =>
+        const session = yield* Sessions.use((sessions) =>
+          sessions.requireAdminSession(getCookie("session")),
+        );
+        const note = yield* Lessons.use((lessonService) =>
           lessonService.getLessonNote(data.lessonId).pipe(withAuthContext(session.session.id)),
         );
         return serializeLessonNote(note);

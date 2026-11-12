@@ -11,19 +11,19 @@ import {
 } from "../../shared/schemas.js";
 import { adaptHttpApiErrors, adaptSignedInErrors, adaptAdminErrors } from "../httpApiErrors.js";
 import { HttpError } from "../pgErrors.js";
-import { MaterialService } from "../services/materialService.js";
-import { resolveEffectiveStudent } from "../services/sessionService.js";
-import { FileService } from "../services/fileService.js";
+import { Materials } from "../services/materials.js";
+import { resolveEffectiveStudent } from "../services/sessions.js";
+import { Files } from "../services/files.js";
 
 const assertCanManageAssignments = Effect.fnUntraced(function* (auth: SignedIn) {
   if (auth.user.role !== "admin" && auth.user.role !== "teacher") {
-    return yield* new HttpError(403, "Forbidden");
+    return yield* new HttpError({ status: 403, message: "Forbidden" });
   }
 });
 
 const assertCanTrackOwnAssignments = Effect.fnUntraced(function* (auth: SignedIn) {
   if (auth.user.role !== "student" && auth.user.role !== "parent") {
-    return yield* new HttpError(403, "Forbidden");
+    return yield* new HttpError({ status: 403, message: "Forbidden" });
   }
 });
 
@@ -38,7 +38,7 @@ export const MaterialsApiGroupLive = HttpApiBuilder.group(Contract, "materials",
       "library",
       Effect.fnUntraced(function* ({ query }) {
         const auth = yield* CurrentSession;
-        const rows = yield* MaterialService.use((materialService) =>
+        const rows = yield* Materials.use((materialService) =>
           materialService
             .library({
               limit: query.limit ?? 50,
@@ -55,7 +55,7 @@ export const MaterialsApiGroupLive = HttpApiBuilder.group(Contract, "materials",
         const auth = yield* CurrentSession;
         const effective = resolveEffectiveStudent(auth);
         const filterStudentId = effective.isActing ? effective.studentId : undefined;
-        const rows = yield* MaterialService.use((materialService) =>
+        const rows = yield* Materials.use((materialService) =>
           materialService.assignments(filterStudentId).pipe(withAuthContext(auth.session.id)),
         );
         return yield* S.decodeUnknownEffect(S.Array(AssignedMaterial))(rows);
@@ -66,7 +66,7 @@ export const MaterialsApiGroupLive = HttpApiBuilder.group(Contract, "materials",
       Effect.fnUntraced(function* ({ params, payload }) {
         const auth = yield* CurrentSession;
         yield* assertCanManageAssignments(auth);
-        yield* MaterialService.use((materialService) =>
+        yield* Materials.use((materialService) =>
           materialService
             .assignStudentMaterial({
               studentId: params.studentId,
@@ -83,7 +83,7 @@ export const MaterialsApiGroupLive = HttpApiBuilder.group(Contract, "materials",
       Effect.fnUntraced(function* ({ params }) {
         const auth = yield* CurrentSession;
         yield* assertCanManageAssignments(auth);
-        yield* MaterialService.use((materialService) =>
+        yield* Materials.use((materialService) =>
           materialService
             .unassignStudentMaterial(params.studentId, params.materialId)
             .pipe(withAuthContext(auth.session.id)),
@@ -97,7 +97,7 @@ export const MaterialsApiGroupLive = HttpApiBuilder.group(Contract, "materials",
         const auth = yield* CurrentSession;
         yield* assertCanTrackOwnAssignments(auth);
         const effective = resolveEffectiveStudent(auth);
-        const row = yield* MaterialService.use((materialService) =>
+        const row = yield* Materials.use((materialService) =>
           materialService
             .recordAssignmentPlayback({
               studentId: effective.studentId,
@@ -115,7 +115,7 @@ export const MaterialsApiGroupLive = HttpApiBuilder.group(Contract, "materials",
         const auth = yield* CurrentSession;
         yield* assertCanTrackOwnAssignments(auth);
         const effective = resolveEffectiveStudent(auth);
-        const row = yield* MaterialService.use((materialService) =>
+        const row = yield* Materials.use((materialService) =>
           materialService
             .createAssignmentReview({
               studentId: effective.studentId,
@@ -131,7 +131,7 @@ export const MaterialsApiGroupLive = HttpApiBuilder.group(Contract, "materials",
       "assignmentNotes",
       Effect.fnUntraced(function* ({ params }) {
         const auth = yield* CurrentSession;
-        const row = yield* MaterialService.use((materialService) =>
+        const row = yield* Materials.use((materialService) =>
           materialService.assignmentNotes(params.materialId).pipe(withAuthContext(auth.session.id)),
         );
         if (!row) {
@@ -145,7 +145,7 @@ export const MaterialsApiGroupLive = HttpApiBuilder.group(Contract, "materials",
       Effect.fnUntraced(function* ({ params, payload }) {
         const auth = yield* CurrentSession;
         const effective = resolveEffectiveStudent(auth);
-        const row = yield* MaterialService.use((materialService) =>
+        const row = yield* Materials.use((materialService) =>
           materialService
             .upsertAssignmentNotes({
               studentId: effective.studentId,
@@ -162,7 +162,7 @@ export const MaterialsApiGroupLive = HttpApiBuilder.group(Contract, "materials",
       Effect.fnUntraced(function* (context) {
         const auth = yield* CurrentSession;
         const { params } = context;
-        const fileInfo = yield* FileService.use((fileService) =>
+        const fileInfo = yield* Files.use((fileService) =>
           fileService.download(params.id, auth.user.id).pipe(withAuthContext(auth.session.id)),
         );
         return HttpServerResponse.fromWeb(
@@ -189,7 +189,7 @@ export const MaterialsAdminApiGroupLive = HttpApiBuilder.group(
         "assignMaterial",
         Effect.fnUntraced(function* ({ params, payload }) {
           const auth = yield* CurrentSession;
-          yield* MaterialService.use((materialService) =>
+          yield* Materials.use((materialService) =>
             materialService
               .assignMaterial({
                 studentId: params.id,
@@ -206,7 +206,7 @@ export const MaterialsAdminApiGroupLive = HttpApiBuilder.group(
         Effect.fnUntraced(function* (context) {
           const auth = yield* CurrentSession;
           const { params } = context;
-          yield* MaterialService.use((materialService) =>
+          yield* Materials.use((materialService) =>
             materialService
               .unassignMaterial(params.id, params.materialId)
               .pipe(withAuthContext(auth.session.id)),
@@ -219,11 +219,11 @@ export const MaterialsAdminApiGroupLive = HttpApiBuilder.group(
         Effect.fnUntraced(function* (context) {
           const auth = yield* CurrentSession;
           const { params } = context;
-          const row = yield* MaterialService.use((materialService) =>
+          const row = yield* Materials.use((materialService) =>
             materialService.deleteMaterial(params.id).pipe(withAuthContext(auth.session.id)),
           );
           if (!row) {
-            return yield* new HttpError(404, "Material not found");
+            return yield* new HttpError({ status: 404, message: "Material not found" });
           }
           return { success: true as const };
         }, adaptAdminErrors),
@@ -232,7 +232,7 @@ export const MaterialsAdminApiGroupLive = HttpApiBuilder.group(
         "uploadMaterial",
         Effect.fnUntraced(function* ({ payload }) {
           const auth = yield* CurrentSession;
-          return (yield* FileService.use((fileService) =>
+          return (yield* Files.use((fileService) =>
             fileService
               .upload(payload.file, payload.title, payload.is_global, auth.user.id)
               .pipe(withAuthContext(auth.session.id)),

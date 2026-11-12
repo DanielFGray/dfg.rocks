@@ -19,15 +19,13 @@ import { Textarea } from "../components/ui/Textarea.js";
 
 import { createServerFn } from "@tanstack/react-start";
 import { runServerEffect } from "../lib/serverEffect.js";
-import { TestimonialService } from "../../server/services/testimonialService.js";
-import { ContactService } from "../../server/services/contactService.js";
+import { Testimonials } from "../../server/services/testimonials.js";
+import { Contact } from "../../server/services/contact.js";
 
 const [logoBefore, logoAfter] = site.logo.split(site.logoDot);
 
 export const getHomePageData = createServerFn({ method: "GET" }).handler(() =>
-  runServerEffect(
-    TestimonialService.use((testimonialService) => testimonialService.homePageData()),
-  ),
+  runServerEffect(Testimonials.use((testimonialService) => testimonialService.homePageData())),
 );
 
 const ContactFormSchema = S.Struct({
@@ -52,7 +50,7 @@ export const submitContact = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     if (data.website) throw new Error("Invalid submission");
     await runServerEffect(
-      ContactService.use((contactService) =>
+      Contact.use((contactService) =>
         contactService.submitContact({
           name: data.name,
           email: data.email,
@@ -121,8 +119,8 @@ function HomePage() {
       <Hero />
       <About />
       <LessonsSection />
-      <Testimonials />
-      <Contact />
+      <TestimonialSection />
+      <ContactSection />
       <Footer />
     </>
   );
@@ -300,7 +298,7 @@ function LessonsSection() {
   );
 }
 
-function Testimonials() {
+function TestimonialSection() {
   const { testimonials } = Route.useLoaderData();
   return testimonials.length > 0 ? (
     <section
@@ -333,7 +331,7 @@ function Testimonials() {
   ) : null;
 }
 
-function Contact() {
+function ContactSection() {
   const { sent } = Route.useSearch();
   const contactFn = useServerFn(submitContact);
   const [name, setName] = useState("");

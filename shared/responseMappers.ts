@@ -48,7 +48,7 @@ export function serializeMaterial<
     title: material.title,
     original_filename: material.original_filename,
     mime_type: material.mime_type,
-    file_size: S.decodeUnknownSync(S.Number)(material.file_size),
+    file_size: S.decodeUnknownSync(S.Finite)(material.file_size),
     is_global: material.is_global,
     notation_tracks: S.decodeUnknownSync(S.NullishOr(S.Array(Schemas.MaterialNotationTrack)))(
       material.notation_tracks,
@@ -66,9 +66,9 @@ export function serializeLibraryMaterial(material: {
   is_global: boolean;
   notation_tracks: unknown;
 }): Material {
-  return S.decodeUnknownSync(Schemas.Material)({
+  return S.decodeSync(Schemas.Material)({
     ...material,
-    file_size: S.decodeUnknownSync(S.Number)(material.file_size),
+    file_size: S.decodeUnknownSync(S.Finite)(material.file_size),
     notation_tracks: S.decodeUnknownSync(S.NullishOr(S.Array(Schemas.MaterialNotationTrack)))(
       material.notation_tracks,
     ),
@@ -86,7 +86,7 @@ export function serializeAssignedMaterial(material: {
   assigned_track_index: number | null;
   listened_seconds?: number;
 }): AssignedMaterial {
-  return S.decodeUnknownSync(Schemas.AssignedMaterial)({
+  return S.decodeSync(Schemas.AssignedMaterial)({
     ...serializeMaterial(material),
     listened_seconds: material.listened_seconds,
   });
@@ -98,7 +98,7 @@ export function serializeCourse(course: {
   description: string;
   instrument: string;
 }): Course {
-  return S.decodeUnknownSync(Schemas.Course)(course);
+  return S.decodeSync(Schemas.Course)(course);
 }
 
 export function serializeCourseDetail(course: unknown): CourseDetail {
@@ -116,7 +116,7 @@ export function serializeFamily(family: {
   description: string | null;
   created_at: Date;
 }): Family {
-  return S.decodeUnknownSync(S.toType(Schemas.Family))(family);
+  return S.decodeSync(S.toType(Schemas.Family))(family);
 }
 
 export function serializeLesson(lesson: {
@@ -136,7 +136,7 @@ export function serializeLesson(lesson: {
   recurrence_date?: string | null;
   created_at: Date;
 }): Lesson {
-  return S.decodeUnknownSync(S.toType(Schemas.Lesson))({
+  return S.decodeSync(S.toType(Schemas.Lesson))({
     ...lesson,
     recurring_schedule_id: lesson.recurring_schedule_id ?? null,
     recurrence_date: lesson.recurrence_date ?? null,
@@ -155,7 +155,7 @@ export function serializeLessonNote(note: {
   created_at: Date;
   updated_at: Date;
 }): LessonNote {
-  return S.decodeUnknownSync(S.toType(Schemas.LessonNote))({
+  return S.decodeSync(S.toType(Schemas.LessonNote))({
     ...note,
     material_ids: S.decodeUnknownSync(S.NullishOr(S.Array(S.String)))(note.material_ids),
   });
@@ -169,7 +169,7 @@ export function serializeMessage(message: {
   is_read: boolean;
   created_at: Date;
 }): Message {
-  return S.decodeUnknownSync(S.toType(Schemas.Message))(message);
+  return S.decodeSync(S.toType(Schemas.Message))(message);
 }
 
 export function serializeUserEmail(email: {
@@ -179,7 +179,7 @@ export function serializeUserEmail(email: {
   is_primary: boolean;
   created_at: Date;
 }): UserEmail {
-  return S.decodeUnknownSync(S.toType(Schemas.UserEmail))(email);
+  return S.decodeSync(S.toType(Schemas.UserEmail))(email);
 }
 
 export function serializeTestimonial(testimonial: {
@@ -193,7 +193,7 @@ export function serializeTestimonial(testimonial: {
   created_at: Date;
   updated_at: Date;
 }): Testimonial {
-  return S.decodeUnknownSync(S.toType(Schemas.Testimonial))({
+  return S.decodeSync(S.toType(Schemas.Testimonial))({
     id: testimonial.id,
     user_id: testimonial.user_id,
     body: testimonial.body,
@@ -207,7 +207,7 @@ export function serializeTestimonial(testimonial: {
 
 export function normalizeStudents(rows: readonly UserRecord[]): User[] {
   return rows.map((student) =>
-    S.decodeUnknownSync(Schemas.User)({
+    S.decodeSync(Schemas.User)({
       ...student,
       name: student.name ?? "",
       email: student.email ?? "",

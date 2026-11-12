@@ -1,4 +1,4 @@
-/** @typedef {import("../email/sendEmail").QueuedEmail} SendEmailPayload */
+/** @typedef {import("../email/emailDelivery").QueuedEmail} SendEmailPayload */
 /** @typedef {import("graphile-worker").Task} Task */
 
 /** @typedef {{

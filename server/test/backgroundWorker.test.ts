@@ -4,11 +4,11 @@ import * as FetchHttpClient from "effect/http/FetchHttpClient";
 import { NodeServices } from "@effect/platform-node";
 import { PgRootDB } from "../db.js";
 import { BackgroundWorker } from "../services/backgroundWorker.js";
-import { GoogleCalendarService } from "../services/googleCalendarService.js";
+import { GoogleCalendar } from "../services/googleCalendar.js";
 
 it.effect("fails the layer when the worker runner cannot start", () =>
   Effect.gen(function* () {
-    const rootDatabase = PgRootDB.Live.pipe(
+    const rootDatabase = PgRootDB.layer.pipe(
       Layer.provide(
         ConfigProvider.layer(
           ConfigProvider.fromUnknown({
@@ -17,11 +17,16 @@ it.effect("fails the layer when the worker runner cannot start", () =>
         ),
       ),
     );
-    const worker = BackgroundWorker.layer("worker").pipe(
+    const worker = BackgroundWorker.layer.pipe(
       Layer.provideMerge(rootDatabase),
       Layer.provide(NodeServices.layer),
       Layer.provide(FetchHttpClient.layer),
-      Layer.provide(GoogleCalendarService.layer.pipe(Layer.provide(rootDatabase))),
+      Layer.provide(
+        GoogleCalendar.layer.pipe(
+          Layer.provide(rootDatabase),
+          Layer.provide(FetchHttpClient.layer),
+        ),
+      ),
       Layer.provide(
         ConfigProvider.layer(
           ConfigProvider.fromUnknown({

@@ -23,9 +23,9 @@ import { EmptyState } from "../../components/ui/EmptyState.js";
 import { Input } from "../../components/ui/Input.js";
 import { runServerEffect } from "../../lib/serverEffect.js";
 import { normalizeStudents, serializeCourseDetail } from "../../../shared/responseMappers.js";
-import { requireSession } from "../../lib/sessionGuards.server.js";
-import { CourseService } from "../../../server/services/courseService.js";
-import { StudentService } from "../../../server/services/studentService.js";
+import { Sessions } from "../../../server/services/sessions.js";
+import { Courses } from "../../../server/services/courses.js";
+import { Students } from "../../../server/services/students.js";
 
 type CourseDetailPageData = {
   course: CourseDetail & { modules: readonly ModuleWithMaterials[] };
@@ -38,9 +38,11 @@ const getCourseDetailData = createServerFn({ method: "GET" })
   .handler(({ data }) =>
     runServerEffect(
       Effect.gen(function* () {
-        const session = yield* requireSession(getCookie("session"));
+        const session = yield* Sessions.use((sessions) =>
+          sessions.requireSession(getCookie("session")),
+        );
         return yield* Effect.gen(function* () {
-          const course = yield* CourseService.use((courseService) =>
+          const course = yield* Courses.use((courseService) =>
             courseService.courseById(data.courseId),
           );
 
@@ -53,8 +55,8 @@ const getCourseDetailData = createServerFn({ method: "GET" })
           }
 
           const [enrolledStudents, allStudents] = yield* Effect.all([
-            CourseService.use((courseService) => courseService.listCourseStudents(data.courseId)),
-            StudentService.use((studentService) => studentService.listStudents()),
+            Courses.use((courseService) => courseService.listCourseStudents(data.courseId)),
+            Students.use((studentService) => studentService.listStudents()),
           ]);
 
           return {

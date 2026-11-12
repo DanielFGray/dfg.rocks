@@ -3,13 +3,13 @@ import { Effect, Layer } from "effect";
 import { sql } from "kysely";
 import pg from "pg";
 import { PgAuthDB, PgRootDB } from "../db.js";
-import { BillingLedgerService } from "../services/billingLedgerService.js";
+import { BillingLedger } from "../services/billingLedger.js";
 import { withAuthContext } from "../requestDatabase.js";
 
 const financialAuditServiceLayer = Layer.mergeAll(
-  BillingLedgerService.layer,
-  PgRootDB.Live,
-  PgAuthDB.Live,
+  BillingLedger.layer,
+  PgRootDB.layer,
+  PgAuthDB.layer,
 );
 
 let pool: pg.Pool;
@@ -96,7 +96,7 @@ describe("Financial audit", () => {
   it.layer(financialAuditServiceLayer)("financial audit service behavior", (effectIt) => {
     effectIt.effect("creates an audit row on bill insert", () =>
       Effect.gen(function* () {
-        const svc = yield* BillingLedgerService;
+        const svc = yield* BillingLedger;
         const db = yield* PgRootDB;
         const bill = yield* svc
           .createBill({
@@ -133,7 +133,7 @@ describe("Financial audit", () => {
 
     effectIt.effect("creates an audit row on bill update", () =>
       Effect.gen(function* () {
-        const svc = yield* BillingLedgerService;
+        const svc = yield* BillingLedger;
         const db = yield* PgRootDB;
         const bill = yield* svc
           .createBill({
@@ -171,7 +171,7 @@ describe("Financial audit", () => {
 
     effectIt.effect("creates audit rows for payment creation and allocation", () =>
       Effect.gen(function* () {
-        const svc = yield* BillingLedgerService;
+        const svc = yield* BillingLedger;
         const db = yield* PgRootDB;
         const bill = yield* svc
           .createBill({
@@ -331,7 +331,7 @@ describe("Financial audit", () => {
     (effectIt) => {
       effectIt.effect("bill number is consumed when createBill aborts", () =>
         Effect.gen(function* () {
-          const svc = yield* BillingLedgerService;
+          const svc = yield* BillingLedger;
           const db = yield* PgRootDB;
           const nextNumber = () =>
             db

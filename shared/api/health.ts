@@ -7,10 +7,10 @@ import { Schema as S, SchemaTransformation } from "effect";
 // outside the "/api" prefix because the platform requests the root path, /healthz.
 export const HealthResponse = S.Struct({ status: S.Literal("ok"), commit: S.String });
 
-export class HealthUnavailableError extends S.TaggedError<HealthUnavailableError>()(
-  "HealthUnavailableError",
-  { commit: S.String, failed: S.Array(S.String) },
-) {}
+export class HealthUnavailableError extends S.TaggedError<
+  HealthUnavailableError,
+  { readonly brand: unique symbol }
+>()("HealthUnavailableError", { commit: S.String, failed: S.Array(S.String) }) {}
 
 // The wire body is the contract's 503 shape; `_tag` stays off the wire.
 export const HealthUnavailableErrorSchema = S.Struct({

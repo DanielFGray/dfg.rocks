@@ -10,8 +10,8 @@ import { getCookie } from "@tanstack/react-start/server";
 import { api } from "../../lib/api.js";
 import { getErrorMessage } from "../../lib/errors.js";
 import { runServerEffect } from "../../lib/serverEffect.js";
-import { MaterialService } from "../../../server/services/materialService.js";
-import { CourseService } from "../../../server/services/courseService.js";
+import { Materials } from "../../../server/services/materials.js";
+import { Courses } from "../../../server/services/courses.js";
 import type {
   CourseDetail,
   Material,
@@ -22,7 +22,7 @@ import {
   serializeCourseDetail,
   serializeLibraryMaterial,
 } from "../../../shared/responseMappers.js";
-import { requireSession } from "../../lib/sessionGuards.server.js";
+import { Sessions } from "../../../server/services/sessions.js";
 import { Input } from "../../components/ui/Input.js";
 import { Button } from "../../components/ui/Button.js";
 import { ModuleEditor } from "../../components/editor/ModuleEditor.js";
@@ -37,12 +37,12 @@ const getModuleEditPageData = createServerFn({ method: "GET" })
   .handler(({ data }) =>
     runServerEffect(
       Effect.gen(function* () {
-        const session = yield* requireSession(getCookie("session"));
+        const session = yield* Sessions.use((sessions) =>
+          sessions.requireSession(getCookie("session")),
+        );
         const [course, allMaterials] = yield* Effect.all([
-          CourseService.use((courseService) => courseService.courseById(data.courseId)),
-          MaterialService.use((materialService) =>
-            materialService.library({ limit: 1000, offset: 0 }),
-          ),
+          Courses.use((courseService) => courseService.courseById(data.courseId)),
+          Materials.use((materialService) => materialService.library({ limit: 1000, offset: 0 })),
         ]).pipe(withAuthContext(session.session.id));
         return {
           course: serializeCourseDetail(course),

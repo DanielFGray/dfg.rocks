@@ -3,7 +3,7 @@ import { RequestDatabase } from "../requestDatabase.js";
 import { HttpError } from "../pgErrors.js";
 
 /** Messages between students and staff. */
-export class MessageService extends Context.Service<MessageService>()("MessageService", {
+export class Messages extends Context.Service<Messages>()("dfg-rocks/messages", {
   make: Effect.sync(() => ({
     messages: Effect.fn("messages")(function* (
       values: {
@@ -54,7 +54,8 @@ export class MessageService extends Context.Service<MessageService>()("MessageSe
           .pipe(
             Effect.head,
             Effect.catchTags({
-              NoSuchElementError: () => new HttpError(400, "No staff user found"),
+              NoSuchElementError: () =>
+                new HttpError({ status: 400, message: "No staff user found" }),
             }),
           );
         recipientId = admin.id;
@@ -72,7 +73,8 @@ export class MessageService extends Context.Service<MessageService>()("MessageSe
         ),
       ).pipe(
         Effect.catchTags({
-          NoSuchElementError: () => new HttpError(500, "Failed to send message"),
+          NoSuchElementError: () =>
+            new HttpError({ status: 500, message: "Failed to send message" }),
         }),
       );
     }),

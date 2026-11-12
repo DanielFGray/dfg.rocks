@@ -13,15 +13,15 @@ import { fieldError } from "../../lib/form.js";
 import type { AssignedMaterial, Course, Material, StudentDetail } from "../../../shared/schemas.js";
 import { findNotationTrack, formatNotationTrackLabel } from "../../../shared/notationTracks.js";
 import { runServerEffect } from "../../lib/serverEffect.js";
-import { StudentService } from "../../../server/services/studentService.js";
-import { MaterialService } from "../../../server/services/materialService.js";
-import { CourseService } from "../../../server/services/courseService.js";
+import { Students } from "../../../server/services/students.js";
+import { Materials } from "../../../server/services/materials.js";
+import { Courses } from "../../../server/services/courses.js";
 import {
   serializeCourse,
   serializeLibraryMaterial,
   serializeStudentDetail,
 } from "../../../shared/responseMappers.js";
-import { requireAdminSession } from "../../lib/sessionGuards.server.js";
+import { Sessions } from "../../../server/services/sessions.js";
 import { Button } from "../../components/ui/Button.js";
 import { Card } from "../../components/ui/Card.js";
 import { ComboBox } from "../../components/ui/ComboBox.js";
@@ -41,11 +41,13 @@ const getStudentDetailPageData = createServerFn({ method: "GET" })
   .handler(({ data }) =>
     runServerEffect(
       Effect.gen(function* () {
-        const session = yield* requireAdminSession(getCookie("session"));
+        const session = yield* Sessions.use((sessions) =>
+          sessions.requireAdminSession(getCookie("session")),
+        );
         const [student, allCourses, allMaterials] = yield* Effect.all([
-          StudentService.use((studentService) => studentService.getStudent(data.studentId)),
-          CourseService.use((courseService) => courseService.listCourses()),
-          MaterialService.use((materialService) =>
+          Students.use((studentService) => studentService.getStudent(data.studentId)),
+          Courses.use((courseService) => courseService.listCourses()),
+          Materials.use((materialService) =>
             materialService.library({
               limit: 1000,
               offset: 0,

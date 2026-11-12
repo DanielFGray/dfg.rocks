@@ -12,7 +12,7 @@ import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "@effect/vitest";
 import {
   BadRequestError,
   BadRequestErrorSchema,
@@ -25,100 +25,122 @@ import { HttpError } from "../pgErrors.js";
 const statuses = [400, 401, 403, 404, 409, 413, 423, 429, 500, 502, 503] as const;
 
 describe("HTTP API error schemas", () => {
-  it("encodes a tagged variant with the existing wire body", async () => {
-    const encoded = await Effect.runPromise(
-      Schema.encodeEffect(BadRequestErrorSchema)(new BadRequestError({ error: "Invalid request" })),
-    );
+  it.effect("encodes a tagged variant with the existing wire body", () =>
+    Effect.gen(function* () {
+      const encoded = yield* Schema.encodeEffect(BadRequestErrorSchema)(
+        new BadRequestError({ error: "Invalid request" }),
+      );
 
-    expect(encoded).toEqual({ error: "Invalid request" });
-    expect(encoded).not.toHaveProperty("_tag");
-  });
+      expect(encoded).toEqual({ error: "Invalid request" });
+      expect(encoded).not.toHaveProperty("_tag");
+    }),
+  );
 
-  it("decodes the wire body into the status-specific tagged variant", async () => {
-    const decoded = await Effect.runPromise(
-      Schema.decodeUnknownEffect(BadRequestErrorSchema)({ error: "Invalid request" }),
-    );
+  it.effect("decodes the wire body into the status-specific tagged variant", () =>
+    Effect.gen(function* () {
+      const decoded = yield* Schema.decodeEffect(BadRequestErrorSchema)({
+        error: "Invalid request",
+      });
 
-    expect(decoded).toBeInstanceOf(BadRequestError);
-    expect(decoded).toMatchObject({ _tag: "BadRequestError", error: "Invalid request" });
-  });
+      expect(decoded).toBeInstanceOf(BadRequestError);
+      expect(decoded).toMatchObject({ _tag: "BadRequestError", error: "Invalid request" });
+    }),
+  );
 });
 
 describe("HTTP API error adapter", () => {
   it.each(statuses)("adapts HttpError status %i", async (status) => {
-    const apiError = httpErrorToHttpApiError(new HttpError(status, `status ${status}`));
+    const apiError = httpErrorToHttpApiError(
+      new HttpError({ status: status, message: `status ${status}` }),
+    );
 
     expect(apiError).toMatchObject({
       error: status === 500 ? "Internal Server Error" : `status ${status}`,
     });
   });
 
-  it("converts a disallowed HttpError status to a sanitized 500", async () => {
-    const exit = await Effect.runPromiseExit(
-      adaptHttpApiErrors(Effect.fail(new HttpError(403, "private details")), [400]),
-    );
+  it.effect("converts a disallowed HttpError status to a sanitized 500", () =>
+    Effect.gen(function* () {
+      const exit = yield* Effect.exit(
+        adaptHttpApiErrors(
+          Effect.fail(new HttpError({ status: 403, message: "private details" })),
+          [400],
+        ),
+      );
 
-    expect(Exit.isFailure(exit)).toBe(true);
-    if (Exit.isFailure(exit)) {
-      expect(Cause.findErrorOption(exit.cause)).toMatchObject({
-        _tag: "Some",
-        value: new InternalServerError({ error: "Internal Server Error" }),
-      });
-    }
-  });
+      expect(Exit.isFailure(exit)).toBe(true);
+      if (Exit.isFailure(exit)) {
+        expect(Cause.findErrorOption(exit.cause)).toMatchObject({
+          _tag: "Some",
+          value: new InternalServerError({ error: "Internal Server Error" }),
+        });
+      }
+    }),
+  );
 
-  it("preserves an already-adapted HttpApiError failure", async () => {
-    const error = new BadRequestError({ error: "Already adapted" });
-    const exit = await Effect.runPromiseExit(adaptHttpApiErrors(Effect.fail(error), [400]));
+  it.effect("preserves an already-adapted HttpApiError failure", () =>
+    Effect.gen(function* () {
+      const error = new BadRequestError({ error: "Already adapted" });
+      const exit = yield* Effect.exit(adaptHttpApiErrors(Effect.fail(error), [400]));
 
-    expect(Exit.isFailure(exit)).toBe(true);
-    if (Exit.isFailure(exit)) {
-      expect(Cause.findErrorOption(exit.cause)).toMatchObject({ _tag: "Some", value: error });
-    }
-  });
+      expect(Exit.isFailure(exit)).toBe(true);
+      if (Exit.isFailure(exit)) {
+        expect(Cause.findErrorOption(exit.cause)).toMatchObject({ _tag: "Some", value: error });
+      }
+    }),
+  );
 
-  it("sanitizes an allowed HttpError status 500", async () => {
-    const exit = await Effect.runPromiseExit(
-      adaptHttpApiErrors(Effect.fail(new HttpError(500, "database password")), [500]),
-    );
+  it.effect("sanitizes an allowed HttpError status 500", () =>
+    Effect.gen(function* () {
+      const exit = yield* Effect.exit(
+        adaptHttpApiErrors(
+          Effect.fail(new HttpError({ status: 500, message: "database password" })),
+          [500],
+        ),
+      );
 
-    expect(Exit.isFailure(exit)).toBe(true);
-    if (Exit.isFailure(exit)) {
-      expect(Cause.findErrorOption(exit.cause)).toMatchObject({
-        _tag: "Some",
-        value: new InternalServerError({ error: "Internal Server Error" }),
-      });
-    }
-  });
+      expect(Exit.isFailure(exit)).toBe(true);
+      if (Exit.isFailure(exit)) {
+        expect(Cause.findErrorOption(exit.cause)).toMatchObject({
+          _tag: "Some",
+          value: new InternalServerError({ error: "Internal Server Error" }),
+        });
+      }
+    }),
+  );
 
-  it("logs and sanitizes an unknown defect", async () => {
-    const exit = await Effect.runPromiseExit(
-      adaptHttpApiErrors(Effect.die("database password"), statuses),
-    );
+  it.effect("logs and sanitizes an unknown defect", () =>
+    Effect.gen(function* () {
+      const exit = yield* Effect.exit(
+        adaptHttpApiErrors(Effect.die("database password"), statuses),
+      );
 
-    expect(Exit.isFailure(exit)).toBe(true);
-    if (Exit.isFailure(exit)) {
-      expect(Cause.findErrorOption(exit.cause)).toMatchObject({
-        _tag: "Some",
-        value: new InternalServerError({ error: "Internal Server Error" }),
-      });
-    }
-  });
+      expect(Exit.isFailure(exit)).toBe(true);
+      if (Exit.isFailure(exit)) {
+        expect(Cause.findErrorOption(exit.cause)).toMatchObject({
+          _tag: "Some",
+          value: new InternalServerError({ error: "Internal Server Error" }),
+        });
+      }
+    }),
+  );
 
-  it("preserves interruption", async () => {
-    const exit = await Effect.runPromiseExit(adaptHttpApiErrors(Effect.interrupt, statuses));
+  it.effect("preserves interruption", () =>
+    Effect.gen(function* () {
+      const exit = yield* Effect.exit(adaptHttpApiErrors(Effect.interrupt, statuses));
 
-    expect(Exit.isFailure(exit)).toBe(true);
-    if (Exit.isFailure(exit)) {
-      expect(Cause.hasInterrupts(exit.cause)).toBe(true);
-      expect(Cause.findErrorOption(exit.cause)._tag).toBe("None");
-    }
-  });
+      expect(Exit.isFailure(exit)).toBe(true);
+      if (Exit.isFailure(exit)) {
+        expect(Cause.hasInterrupts(exit.cause)).toBe(true);
+        expect(Cause.findErrorOption(exit.cause)._tag).toBe("None");
+      }
+    }),
+  );
 });
 
 describe("HttpApiBuilder status encoding", () => {
   it("uses every declared status and preserves the JSON body", async () => {
-    const path = Schema.Struct({ status: Schema.NumberFromString });
+    const path = Schema.Struct({ status: Schema.FiniteFromString });
     const [
       badRequest,
       unauthorized,
@@ -155,7 +177,7 @@ describe("HttpApiBuilder status encoding", () => {
     const routes = HttpApiBuilder.group(api, "errors", (handlers) =>
       handlers.handle("fail", ({ params }) =>
         adaptHttpApiErrors(
-          Effect.fail(new HttpError(params.status, `status ${params.status}`)),
+          Effect.fail(new HttpError({ status: params.status, message: `status ${params.status}` })),
           allowedStatuses,
         ),
       ),

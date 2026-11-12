@@ -12,7 +12,7 @@ import { resetPassword } from "../lib/authForms.js";
 export const Route = createFileRoute("/reset-password")({
   head: () => ({ meta: [{ title: "Reset Password | DFG Portal" }] }),
   validateSearch: (search: Record<string, unknown>) => ({
-    ...S.decodeUnknownSync(TokenSearch)(search),
+    ...S.decodeSync(TokenSearch)(search),
     ...(typeof search.error === "string" ? { error: search.error } : {}),
   }),
   component: ResetPasswordPage,

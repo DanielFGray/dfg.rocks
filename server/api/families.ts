@@ -4,8 +4,8 @@ import { withAuthContext } from "../requestDatabase.js";
 import { Contract } from "../../shared/httpApi.js";
 import { CurrentSession } from "../../shared/api/guards.js";
 import { HttpError } from "../pgErrors.js";
-import { FamilyService } from "../services/familyService.js";
-import { SessionService } from "../services/sessionService.js";
+import { Families } from "../services/families.js";
+import { Sessions } from "../services/sessions.js";
 import { adaptSignedInErrors, adaptAdminErrors } from "../httpApiErrors.js";
 
 export const FamiliesApiGroupLive = HttpApiBuilder.group(Contract, "families", (handlers) =>
@@ -15,15 +15,18 @@ export const FamiliesApiGroupLive = HttpApiBuilder.group(Contract, "families", (
       Effect.fnUntraced(function* ({ payload }) {
         const auth = yield* CurrentSession;
         if (auth.user.role !== "parent") {
-          return yield* new HttpError(403, "Only parents can create child accounts");
+          return yield* new HttpError({
+            status: 403,
+            message: "Only parents can create child accounts",
+          });
         }
-        const child = yield* FamilyService.use((familyService) =>
+        const child = yield* Families.use((familyService) =>
           familyService
             .createChild(auth.user.id, payload.name)
             .pipe(withAuthContext(auth.session.id)),
         );
         // The owner connection can reference the child only after the visitor transaction commits.
-        yield* SessionService.use((sessionService) =>
+        yield* Sessions.use((sessionService) =>
           sessionService.updateActiveStudent(auth.session.id, child.id),
         );
         return child;
@@ -33,7 +36,7 @@ export const FamiliesApiGroupLive = HttpApiBuilder.group(Contract, "families", (
       "family",
       Effect.fnUntraced(function* () {
         const auth = yield* CurrentSession;
-        return yield* FamilyService.use((familyService) =>
+        return yield* Families.use((familyService) =>
           familyService.family(auth.user.id).pipe(withAuthContext(auth.session.id)),
         );
       }, adaptSignedInErrors),
@@ -42,7 +45,7 @@ export const FamiliesApiGroupLive = HttpApiBuilder.group(Contract, "families", (
       "removeFamilyMember",
       Effect.fnUntraced(function* ({ payload }) {
         const auth = yield* CurrentSession;
-        yield* FamilyService.use((familyService) =>
+        yield* Families.use((familyService) =>
           familyService
             .removeFamilyMember(auth.user.id, payload.user_id)
             .pipe(withAuthContext(auth.session.id)),
@@ -54,7 +57,7 @@ export const FamiliesApiGroupLive = HttpApiBuilder.group(Contract, "families", (
       "inviteFamilyMember",
       Effect.fnUntraced(function* ({ payload }) {
         const auth = yield* CurrentSession;
-        yield* FamilyService.use((familyService) =>
+        yield* Families.use((familyService) =>
           familyService
             .inviteFamilyMember(auth.user.id, payload.email)
             .pipe(withAuthContext(auth.session.id)),
@@ -67,9 +70,12 @@ export const FamiliesApiGroupLive = HttpApiBuilder.group(Contract, "families", (
       Effect.fnUntraced(function* ({ params, payload }) {
         const auth = yield* CurrentSession;
         if (auth.user.role !== "parent") {
-          return yield* new HttpError(403, "Only parents can manage child accounts");
+          return yield* new HttpError({
+            status: 403,
+            message: "Only parents can manage child accounts",
+          });
         }
-        yield* FamilyService.use((familyService) =>
+        yield* Families.use((familyService) =>
           familyService.setChildEmail(auth.session.id, auth.user.id, params.childId, payload.email),
         );
         return { success: true as const };
@@ -80,9 +86,12 @@ export const FamiliesApiGroupLive = HttpApiBuilder.group(Contract, "families", (
       Effect.fnUntraced(function* ({ params }) {
         const auth = yield* CurrentSession;
         if (auth.user.role !== "parent") {
-          return yield* new HttpError(403, "Only parents can manage child accounts");
+          return yield* new HttpError({
+            status: 403,
+            message: "Only parents can manage child accounts",
+          });
         }
-        return yield* FamilyService.use((familyService) =>
+        return yield* Families.use((familyService) =>
           familyService.requestChildPasswordSet(auth.session.id, auth.user.id, params.childId),
         );
       }, adaptSignedInErrors),
@@ -91,7 +100,7 @@ export const FamiliesApiGroupLive = HttpApiBuilder.group(Contract, "families", (
       "setChildPassword",
       Effect.fnUntraced(function* ({ params, payload }) {
         const auth = yield* CurrentSession;
-        yield* FamilyService.use((familyService) =>
+        yield* Families.use((familyService) =>
           familyService.setChildPassword(
             auth.session.id,
             params.childId,
@@ -113,7 +122,7 @@ export const FamiliesAdminApiGroupLive = HttpApiBuilder.group(
         "createFamily",
         Effect.fnUntraced(function* ({ payload }) {
           const auth = yield* CurrentSession;
-          const familyResult = yield* FamilyService.use((familyService) =>
+          const familyResult = yield* Families.use((familyService) =>
             familyService
               .createFamily({
                 slug: payload.slug,
@@ -123,7 +132,7 @@ export const FamiliesAdminApiGroupLive = HttpApiBuilder.group(
           );
           const family = Array.isArray(familyResult) ? familyResult[0] : familyResult;
           if (!family) {
-            return yield* new HttpError(500, "Failed to create family");
+            return yield* new HttpError({ status: 500, message: "Failed to create family" });
           }
           return family;
         }, adaptAdminErrors),
@@ -132,7 +141,7 @@ export const FamiliesAdminApiGroupLive = HttpApiBuilder.group(
         "families",
         Effect.fnUntraced(function* () {
           const auth = yield* CurrentSession;
-          const rows = yield* FamilyService.use((familyService) =>
+          const rows = yield* Families.use((familyService) =>
             familyService.listFamilies().pipe(withAuthContext(auth.session.id)),
           );
           return rows;
@@ -142,7 +151,7 @@ export const FamiliesAdminApiGroupLive = HttpApiBuilder.group(
         "inviteFamily",
         Effect.fnUntraced(function* ({ params, payload }) {
           const auth = yield* CurrentSession;
-          yield* FamilyService.use((familyService) =>
+          yield* Families.use((familyService) =>
             familyService
               .inviteFamily(params.familyId, {
                 username: payload.username,
@@ -163,12 +172,12 @@ export const FamiliesAdminApiGroupLive = HttpApiBuilder.group(
             const name = payload.name;
             const slug = payload.slug;
             if (!name || !slug) {
-              return yield* new HttpError(
-                400,
-                "Name and slug are required when creating a new family",
-              );
+              return yield* new HttpError({
+                status: 400,
+                message: "Name and slug are required when creating a new family",
+              });
             }
-            const family = yield* FamilyService.use((familyService) =>
+            const family = yield* Families.use((familyService) =>
               familyService
                 .createQrInviteFamily({
                   name,
@@ -178,7 +187,7 @@ export const FamiliesAdminApiGroupLive = HttpApiBuilder.group(
             );
             familyId = family.id;
           }
-          const invitation = yield* FamilyService.use((familyService) =>
+          const invitation = yield* Families.use((familyService) =>
             familyService.createQrInvite(familyId, payload.invited_role),
           );
           const rootUrl = yield* Config.String("VITE_ROOT_URL");
@@ -195,7 +204,7 @@ export const FamiliesAdminApiGroupLive = HttpApiBuilder.group(
         Effect.fnUntraced(function* (context) {
           const auth = yield* CurrentSession;
           const { params } = context;
-          return (yield* FamilyService.use((familyService) =>
+          return (yield* Families.use((familyService) =>
             familyService
               .listFamilyInvitations(params.familyId)
               .pipe(withAuthContext(auth.session.id)),

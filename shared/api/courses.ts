@@ -27,13 +27,13 @@ const UpdateCoursePayload = S.Struct({
 
 const CreateModulePayload = S.Struct({
   title: S.String,
-  sort_order: S.optional(S.Number),
+  sort_order: S.optional(S.Finite),
 });
 
 const UpdateModulePayload = S.Struct({
   title: S.optional(S.String),
   content: S.optional(S.NullOr(RichTextDocument)),
-  sort_order: S.optional(S.Number),
+  sort_order: S.optional(S.Finite),
 });
 
 const EnrollStudentPayload = S.Struct({

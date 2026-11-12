@@ -4,9 +4,9 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
 import { getCookie } from "@tanstack/react-start/server";
 import { runServerEffect } from "../../lib/serverEffect.js";
-import { MaterialService } from "../../../server/services/materialService.js";
+import { Materials } from "../../../server/services/materials.js";
 import { serializeMaterial } from "../../../shared/responseMappers.js";
-import { requireSession } from "../../lib/sessionGuards.server.js";
+import { Sessions } from "../../../server/services/sessions.js";
 import {
   StudentAssignmentDetail,
   getAssignedTrackLabel,
@@ -18,8 +18,10 @@ import { Main } from "../../components/ui/Container.js";
 const getAssignmentPageData = createServerFn({ method: "GET" }).handler(() =>
   runServerEffect(
     Effect.gen(function* () {
-      const session = yield* requireSession(getCookie("session"));
-      const materialService = yield* MaterialService;
+      const session = yield* Sessions.use((sessions) =>
+        sessions.requireSession(getCookie("session")),
+      );
+      const materialService = yield* Materials;
       const assignments = yield* materialService
         .assignments()
         .pipe(withAuthContext(session.session.id));

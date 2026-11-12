@@ -3,8 +3,8 @@ import * as HttpServerResponse from "effect/http/HttpServerResponse";
 import { Effect, Schedule, Stream } from "effect";
 import { Contract } from "../../shared/httpApi.js";
 import { CurrentSession } from "../../shared/api/guards.js";
-import { RealtimeService } from "../services/realtimeService.js";
-import { resolveEffectiveStudent } from "../services/sessionService.js";
+import { Realtime } from "../services/realtime.js";
+import { resolveEffectiveStudent } from "../services/sessions.js";
 import { adaptSignedInErrors } from "../httpApiErrors.js";
 
 export const RealtimeApiGroupLive = HttpApiBuilder.group(Contract, "realtime", (handlers) =>
@@ -17,7 +17,7 @@ export const RealtimeApiGroupLive = HttpApiBuilder.group(Contract, "realtime", (
       const listenerIds = effective.isActing ? [userId, effective.studentId] : [userId];
       const encoder = new TextEncoder();
 
-      const { messages: eventStream } = yield* RealtimeService;
+      const { messages: eventStream } = yield* Realtime;
 
       const heartbeat = Stream.fromEffectRepeat(
         Effect.succeed(encoder.encode(":heartbeat\n\n")),

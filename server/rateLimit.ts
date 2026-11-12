@@ -1,8 +1,8 @@
 import net from "node:net";
-import { Context, Duration, Effect, Layer, Match } from "effect";
+import { Config, Context, Duration, Effect, Layer, Match } from "effect";
 import { RateLimiter } from "effect/persistence/RateLimiter";
 import { HttpError } from "./pgErrors.js";
-import { storeTimeout } from "./services/rateLimiter.js";
+import { RateLimiterValkey, storeTimeout } from "./services/rateLimiter.js";
 
 /**
  * Per-address limits on the endpoints that send email, check a secret or cost
@@ -31,61 +31,59 @@ const rules = {
 export type RateLimitRule = keyof typeof rules;
 
 export class RateLimitError extends HttpError {
-  constructor() {
-    super(429, "Too many requests");
+  static new() {
+    return new RateLimitError({ status: 429, message: "Too many requests" });
   }
 }
-
-export class RateLimitService extends Context.Service<
-  RateLimitService,
-  {
-    readonly check: (
-      rule: RateLimitRule,
-      headers: Record<string, string | undefined>,
-    ) => Effect.Effect<void, RateLimitError>;
-  }
->()("RateLimitService") {
-  /** Counts against the `RateLimiter` in context: `RateLimiterValkey` in production. */
-  static readonly Live = Layer.effect(
-    this,
-    Effect.gen(function* () {
-      const limiter = yield* RateLimiter;
+const countedRateLimit = Effect.gen(function* () {
+  const limiter = yield* RateLimiter;
+  return {
+    check: (name: RateLimitRule, headers: Record<string, string | undefined>) => {
+      const rule: Rule = rules[name];
+      // Requests without a proxy-set address share one bucket, so they are limited rather than exempt.
+      const caller = clientIdentifierFromHeaders(headers) ?? "unknown";
+      return limiter
+        .consume({
+          key: `${name}:${caller}`,
+          algorithm: "fixed-window",
+          window: rule.window,
+          limit: rule.limit,
+          onExceeded: "fail",
+        })
+        .pipe(
+          Effect.timeout(storeTimeout),
+          Effect.catchTags({
+            RateLimiterError: (error) =>
+              Match.value(error.reason).pipe(
+                Match.tag("RateLimitExceeded", () => Effect.fail(RateLimitError.new())),
+                Match.tag("RateLimitStoreError", (failure) => storeDown(rule, failure.message)),
+                Match.exhaustive,
+              ),
+            TimeoutError: () => storeDown(rule, "timed out"),
+          }),
+          Effect.asVoid,
+        );
+    },
+  };
+});
+export class RateLimit extends Context.Service<RateLimit>()("dfg-rocks/rateLimit", {
+  make: Effect.gen(function* () {
+    if ((yield* Config.String("NODE_ENV")) !== "production")
       return {
-        check: (name, headers) => {
-          const rule: Rule = rules[name];
-          // Requests without a proxy-set address share one bucket, so they are limited rather than exempt.
-          const caller = clientIdentifierFromHeaders(headers) ?? "unknown";
-          return limiter
-            .consume({
-              key: `${name}:${caller}`,
-              algorithm: "fixed-window",
-              window: rule.window,
-              limit: rule.limit,
-              onExceeded: "fail",
-            })
-            .pipe(
-              Effect.timeout(storeTimeout),
-              Effect.catchTags({
-                RateLimiterError: (error) =>
-                  Match.value(error.reason).pipe(
-                    Match.tag("RateLimitExceeded", () => Effect.fail(new RateLimitError())),
-                    Match.tag("RateLimitStoreError", (failure) => storeDown(rule, failure.message)),
-                    Match.exhaustive,
-                  ),
-                TimeoutError: () => storeDown(rule, "timed out"),
-              }),
-              Effect.asVoid,
-            );
-        },
+        check: (_rule: RateLimitRule, _headers: Record<string, string | undefined>) => Effect.void,
       };
-    }),
-  );
-
-  static readonly Test = Layer.succeed(this, { check: () => Effect.void });
+    return yield* countedRateLimit;
+  }),
+}) {
+  static readonly layer = Layer.effect(this, this.make).pipe(Layer.provide(RateLimiterValkey));
+  static readonly layerCounted = Layer.effect(this, countedRateLimit);
+  static readonly layerTest = Layer.succeed(this, {
+    check: (_rule: RateLimitRule, _headers: Record<string, string | undefined>) => Effect.void,
+  });
 }
 
 export const checkRateLimit = (rule: RateLimitRule, headers: Record<string, string | undefined>) =>
-  RateLimitService.use((rateLimit) => rateLimit.check(rule, headers));
+  RateLimit.use((rateLimit) => rateLimit.check(rule, headers));
 
 // The ingress proxy (Traefik) discards any client-sent X-Real-Ip and sets it from the connection.
 // Every other client-IP header passes through it unchanged, so a client could forge it.
@@ -99,6 +97,6 @@ export function clientIdentifierFromHeaders(
 const storeDown = (rule: Rule, reason: string) =>
   Effect.logWarning("Rate limiter store unavailable", reason).pipe(
     Effect.andThen(
-      rule.whenStoreDown === "allow" ? Effect.void : Effect.fail(new RateLimitError()),
+      rule.whenStoreDown === "allow" ? Effect.void : Effect.fail(RateLimitError.new()),
     ),
   );

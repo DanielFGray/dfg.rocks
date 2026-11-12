@@ -2,34 +2,36 @@ import { Effect, Option, Context, Layer } from "effect";
 import { addJob, PgRootDB } from "../db.js";
 import { RequestDatabase } from "../requestDatabase.js";
 import { sql } from "kysely";
-import type { UserRow } from "./userService.js";
-import { UserService } from "./userService.js";
+import type { UserRow } from "./users.js";
+import { Users } from "./users.js";
 import { catchPgErrors, HttpError } from "../pgErrors.js";
-import { SessionService } from "./sessionService.js";
+import { Sessions } from "./sessions.js";
 
 export class InvalidCredentialsError extends HttpError {
-  constructor() {
-    super(401, "Invalid credentials");
+  static new() {
+    return new InvalidCredentialsError({ status: 401, message: "Invalid credentials" });
   }
 }
 
 export class InvalidTokenError extends HttpError {
-  constructor() {
-    super(400, "Invalid or expired token");
+  static new() {
+    return new InvalidTokenError({ status: 400, message: "Invalid or expired token" });
   }
 }
 
 export class AccountLockedError extends HttpError {
-  constructor(message: string) {
-    super(423, message);
+  static new(message: string) {
+    return new AccountLockedError({ status: 423, message: message });
   }
 }
 
 /**
  * Authentication service.
  */
-export class AuthService extends Context.Service<AuthService>()("AuthService", {
+export class Auth extends Context.Service<Auth>()("dfg-rocks/auth", {
   make: Effect.gen(function* () {
+    const users = yield* Users;
+    const sessions = yield* Sessions;
     const rootDb = yield* PgRootDB;
     const db = rootDb;
     const me = Effect.fn("me")(function* (
@@ -188,12 +190,10 @@ export class AuthService extends Context.Service<AuthService>()("AuthService", {
           )
           .pipe(catchPgErrors, Effect.head, Effect.catchNoSuchElement);
         if (Option.isNone(session)) {
-          return yield* new InvalidCredentialsError();
+          return yield* InvalidCredentialsError.new();
         }
 
-        const createdSession = yield* SessionService.use((sessionService) =>
-          sessionService.issueTokenForSession(session.value.id),
-        );
+        const createdSession = yield* sessions.issueTokenForSession(session.value.id);
 
         return { user: session.value, ...createdSession };
       }),
@@ -203,7 +203,7 @@ export class AuthService extends Context.Service<AuthService>()("AuthService", {
           return;
         }
 
-        yield* SessionService.use((sessionService) => sessionService.deleteSession(cookieId));
+        yield* sessions.deleteSession(cookieId);
       }),
 
       forgotPassword: Effect.fnUntraced(function* ({ email }: { email: string }) {
@@ -252,12 +252,10 @@ export class AuthService extends Context.Service<AuthService>()("AuthService", {
           )
           .pipe(catchPgErrors, Effect.head, Effect.catchNoSuchElement);
         if (Option.isNone(session)) {
-          return yield* new InvalidTokenError();
+          return yield* InvalidTokenError.new();
         }
 
-        const freshSession = yield* SessionService.use((sessionService) =>
-          sessionService.issueTokenForSession(session.value.id),
-        );
+        const freshSession = yield* sessions.issueTokenForSession(session.value.id);
 
         return { token: freshSession.token, expiresAt: freshSession.expiresAt };
       }),
@@ -283,7 +281,8 @@ export class AuthService extends Context.Service<AuthService>()("AuthService", {
               .pipe(
                 Effect.head,
                 Effect.catchTags({
-                  NoSuchElementError: () => new HttpError(400, "Invalid or expired magic link"),
+                  NoSuchElementError: () =>
+                    new HttpError({ status: 400, message: "Invalid or expired magic link" }),
                 }),
               );
             yield* db.execute(
@@ -300,12 +299,10 @@ export class AuthService extends Context.Service<AuthService>()("AuthService", {
                 .where("id", "=", user.id)
                 .where("is_verified", "=", false),
             );
-            return yield* UserService.use((userService) =>
-              userService.sessionFromUser({
-                ...user,
-                is_verified: true,
-              }),
-            );
+            return yield* users.sessionFromUser({
+              ...user,
+              is_verified: true,
+            });
           }),
         );
       }),
@@ -334,5 +331,7 @@ export class AuthService extends Context.Service<AuthService>()("AuthService", {
     };
   }),
 }) {
-  static readonly layer = Layer.effect(this, this.make);
+  static readonly layer = Layer.effect(this, this.make).pipe(
+    Layer.provide(Layer.mergeAll(Users.layer, Sessions.layer, PgRootDB.layer)),
+  );
 }

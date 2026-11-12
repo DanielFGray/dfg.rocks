@@ -1,4 +1,5 @@
 #!/usr/bin/env bun
+// @entrypoint: process entry.
 /**
  * The production process: serves the build and runs the job runner, as one Effect layer graph.
  * runMain closes the graph on SIGTERM and SIGINT.
@@ -10,10 +11,9 @@ import * as BunRuntime from "@effect/platform-bun/BunRuntime";
 import * as BunServices from "@effect/platform-bun/BunServices";
 import * as BunHttpPlatform from "@effect/platform-bun/BunHttpPlatform";
 import { Layer } from "effect";
-import { BuiltSite } from "./shell/built.js";
-import { serveSite } from "./shell/site.js";
+import { Site, serveSite } from "./shell/site.js";
 
-const site = BuiltSite.pipe(
+const site = Site.layerBuilt.pipe(
   Layer.provide(Layer.mergeAll(BunServices.layer, BunHttpPlatform.layer)),
 );
 

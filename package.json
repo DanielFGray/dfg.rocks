@@ -20,7 +20,7 @@
     "db:setup": "run-s db:up db:reset",
     "env:init": "bun scripts/generateEnvFile.ts",
     "init": "NOCONFIRM=1 run-s env:init db:setup",
-    "lint": "oxlint .",
+    "lint": "ast-grep scan server worker shared app/lib --globs 'server/**' --globs 'worker/**' --globs 'shared/**' --globs 'app/lib/*.server.ts' --globs 'app/lib/serverEffect.ts' && oxlint .",
     "test": "run-s typecheck lint test:unit test:worker test:bun test:e2e",
     "test:unit": "vitest run",
     "test:worker": "bun test worker/test/bills.test.js worker/test/contracts.test.js",
@@ -29,7 +29,7 @@
     "e2e:server": "bun scripts/e2eServer.ts",
     "migrate": "bun --cwd=worker graphile-worker --schema-only && graphile-migrate migrate",
     "db:stop": "ops dev db down",
-    "prepare": "git rev-parse --git-dir >/dev/null 2>&1 || exit 0; lefthook install --reset-hooks-path"
+    "prepare": "effect-tsgo patch --typescript && (git rev-parse --git-dir >/dev/null 2>&1 || exit 0; lefthook install --reset-hooks-path)"
   },
   "dependencies": {
     "@coderline/alphatab": "^1.9.0",
@@ -72,6 +72,7 @@
   },
   "devDependencies": {
     "@effect/language-service": "^0.87.5",
+    "@effect/tsgo": "0.67.7",
     "@effect/vitest": "4.1.3",
     "@tailwindcss/vite": "^4.3.5",
     "@types/bun": "^1.4.4",

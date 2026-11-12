@@ -1,3 +1,4 @@
+// @entrypoint: the in-process API test bridge shares its runtime with request callbacks.
 import { Effect, Layer, ManagedRuntime } from "effect";
 import * as HttpRouter from "effect/http/HttpRouter";
 import { applicationLayer, HttpApiLive } from "../runtime.js";
@@ -21,3 +22,7 @@ const web = HttpRouter.toWebHandler(HttpApiLive.pipe(Layer.provideMerge(testServ
 
 /** Answers a request as the server's /api routes do. */
 export const handleApiRequest = (request: Request): Promise<Response> => web.handler(request);
+
+export const runApiEffect = <A, E>(
+  effect: Effect.Effect<A, E, Layer.Success<typeof testServices>>,
+) => testRuntime.runPromise(effect);

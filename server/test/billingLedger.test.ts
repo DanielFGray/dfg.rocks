@@ -1,17 +1,13 @@
+import { runPlatform } from "./framework.js";
 import { it, expect, describe, beforeAll, afterAll } from "@effect/vitest";
 import * as FileSystem from "effect/FileSystem";
-import * as NodeServices from "@effect/platform-node/NodeServices";
 import { Effect, Layer } from "effect";
 import pg from "pg";
 import { PgAuthDB, PgRootDB } from "../db.js";
-import { BillingLedgerService } from "../services/billingLedgerService.js";
+import { BillingLedger } from "../services/billingLedger.js";
 import { withAuthContext } from "../requestDatabase.js";
 
-const billingLedgerTestLayer = Layer.mergeAll(
-  BillingLedgerService.layer,
-  PgRootDB.Live,
-  PgAuthDB.Live,
-);
+const billingLedgerTestLayer = Layer.mergeAll(BillingLedger.layer, PgRootDB.layer, PgAuthDB.layer);
 
 let testDb: pg.Pool;
 let adminSessionId: string;
@@ -34,10 +30,6 @@ function forceIpv4(urlString: string): string {
   const url = new URL(urlString);
   if (url.hostname === "localhost" || url.hostname === "::1") url.hostname = "127.0.0.1";
   return url.toString();
-}
-
-function runPlatform<A, E>(effect: Effect.Effect<A, E, NodeServices.NodeServices>): Promise<A> {
-  return Effect.runPromise(effect.pipe(Effect.provide(NodeServices.layer)));
 }
 
 describe("Billing ledger foundation", () => {
@@ -144,7 +136,7 @@ describe("Billing ledger foundation", () => {
   it.layer(billingLedgerTestLayer)("Effect-native ledger service coverage", (effectIt) => {
     effectIt.effect("rolls back composed service calls when the caller fails", () =>
       Effect.gen(function* () {
-        const svc = yield* BillingLedgerService;
+        const svc = yield* BillingLedger;
         const db = yield* PgRootDB;
         const result = yield* Effect.gen(function* () {
           const bill = yield* svc.createBill({
@@ -185,7 +177,7 @@ describe("Billing ledger foundation", () => {
 
     effectIt.effect("creates a bill with line items and issues it", () =>
       Effect.gen(function* () {
-        const svc = yield* BillingLedgerService;
+        const svc = yield* BillingLedger;
         const bill = yield* svc
           .createBill({
             payerId,
@@ -223,7 +215,7 @@ describe("Billing ledger foundation", () => {
 
     effectIt.effect("prevents issuing an already-issued bill", () =>
       Effect.gen(function* () {
-        const svc = yield* BillingLedgerService;
+        const svc = yield* BillingLedger;
         const bill = yield* svc
           .createBill({
             payerId,
@@ -252,7 +244,7 @@ describe("Billing ledger foundation", () => {
 
     effectIt.effect("bill stores due_date correctly", () =>
       Effect.gen(function* () {
-        const svc = yield* BillingLedgerService;
+        const svc = yield* BillingLedger;
         const bill = yield* svc
           .createBill({
             payerId,
@@ -277,7 +269,7 @@ describe("Billing ledger foundation", () => {
     );
     effectIt.effect("records a payment with allocation", () =>
       Effect.gen(function* () {
-        const svc = yield* BillingLedgerService;
+        const svc = yield* BillingLedger;
         const bill = yield* svc
           .createBill({
             payerId,
@@ -318,7 +310,7 @@ describe("Billing ledger foundation", () => {
 
     effectIt.effect("materializes payment excess as one credit", () =>
       Effect.gen(function* () {
-        const svc = yield* BillingLedgerService;
+        const svc = yield* BillingLedger;
         const db = yield* PgRootDB;
         const bill = yield* svc
           .createBill({
@@ -367,7 +359,7 @@ describe("Billing ledger foundation", () => {
 
     effectIt.effect("auto-allocates the remainder after an explicit allocation", () =>
       Effect.gen(function* () {
-        const svc = yield* BillingLedgerService;
+        const svc = yield* BillingLedger;
         const db = yield* PgRootDB;
         const bill = yield* svc
           .createBill({
@@ -407,7 +399,7 @@ describe("Billing ledger foundation", () => {
 
     effectIt.effect("prevents cross-payer allocation", () =>
       Effect.gen(function* () {
-        const svc = yield* BillingLedgerService;
+        const svc = yield* BillingLedger;
         const bill = yield* svc
           .createBill({
             payerId,
@@ -442,7 +434,7 @@ describe("Billing ledger foundation", () => {
 
     effectIt.effect("applies a credit to a bill", () =>
       Effect.gen(function* () {
-        const svc = yield* BillingLedgerService;
+        const svc = yield* BillingLedger;
         const db = yield* PgRootDB;
         const bill = yield* svc
           .createBill({
@@ -489,7 +481,7 @@ describe("Billing ledger foundation", () => {
 
     effectIt.effect("prevents applying more than credit remaining", () =>
       Effect.gen(function* () {
-        const svc = yield* BillingLedgerService;
+        const svc = yield* BillingLedger;
         const db = yield* PgRootDB;
         const bill = yield* svc
           .createBill({
@@ -536,7 +528,7 @@ describe("Billing ledger foundation", () => {
 
     effectIt.effect("creates an adjustment on an issued bill", () =>
       Effect.gen(function* () {
-        const svc = yield* BillingLedgerService;
+        const svc = yield* BillingLedger;
         const bill = yield* svc
           .createBill({
             payerId,
@@ -572,7 +564,7 @@ describe("Billing ledger foundation", () => {
 
     effectIt.effect("prevents adjustment on draft bill", () =>
       Effect.gen(function* () {
-        const svc = yield* BillingLedgerService;
+        const svc = yield* BillingLedger;
         const bill = yield* svc
           .createBill({
             payerId,
@@ -605,7 +597,7 @@ describe("Billing ledger foundation", () => {
 
     effectIt.effect("processes a refund and rejects excess refund", () =>
       Effect.gen(function* () {
-        const svc = yield* BillingLedgerService;
+        const svc = yield* BillingLedger;
         const bill = yield* svc
           .createBill({
             payerId,
@@ -658,7 +650,7 @@ describe("Billing ledger foundation", () => {
 
     effectIt.effect("calculates payer balance and enforces billing RLS", () =>
       Effect.gen(function* () {
-        const svc = yield* BillingLedgerService;
+        const svc = yield* BillingLedger;
         const balance = yield* svc.getPayerBalance(payerId).pipe(withAuthContext(parentSessionId));
         expect(balance.outstandingCents).toBeGreaterThanOrEqual(0);
         expect(balance.creditBalanceCents).toBeGreaterThanOrEqual(0);
@@ -690,7 +682,7 @@ describe("Billing ledger foundation", () => {
 
     effectIt.effect("bill amounts are immutable after issue", () =>
       Effect.gen(function* () {
-        const svc = yield* BillingLedgerService;
+        const svc = yield* BillingLedger;
         const db = yield* PgRootDB;
         const bill = yield* svc
           .createBill({
@@ -724,7 +716,7 @@ describe("Billing ledger foundation", () => {
 
     effectIt.effect("bill numbers are sequential and never reused", () =>
       Effect.gen(function* () {
-        const svc = yield* BillingLedgerService;
+        const svc = yield* BillingLedger;
         const first = yield* svc
           .createBill({
             payerId,

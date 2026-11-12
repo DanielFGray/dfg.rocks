@@ -6,7 +6,7 @@ import type { BillingModel, LocationType } from "../../shared/schemas.js";
 import { RequestDatabase } from "../requestDatabase.js";
 import { HttpError } from "../pgErrors.js";
 
-export class StudentService extends Context.Service<StudentService>()("StudentService", {
+export class Students extends Context.Service<Students>()("dfg-rocks/students", {
   make: Effect.succeed({
     listStudents: Effect.fn("listStudents")(function* () {
       const db = yield* RequestDatabase;
@@ -100,7 +100,7 @@ export class StudentService extends Context.Service<StudentService>()("StudentSe
         .pipe(
           Effect.head,
           Effect.catchTags({
-            NoSuchElementError: () => new HttpError(404, "Student not found"),
+            NoSuchElementError: () => new HttpError({ status: 404, message: "Student not found" }),
           }),
         );
       const enrolledCourses = yield* S.decodeUnknownEffect(S.Array(EnrolledCourse))(
@@ -158,7 +158,8 @@ export class StudentService extends Context.Service<StudentService>()("StudentSe
         .pipe(
           Effect.head,
           Effect.catchTags({
-            NoSuchElementError: () => new HttpError(500, "Failed to save student rate"),
+            NoSuchElementError: () =>
+              new HttpError({ status: 500, message: "Failed to save student rate" }),
           }),
         );
     }),

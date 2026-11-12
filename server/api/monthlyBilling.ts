@@ -3,7 +3,7 @@ import { Effect } from "effect";
 import { withAuthContext } from "../requestDatabase.js";
 import { Contract } from "../../shared/httpApi.js";
 import { CurrentSession } from "../../shared/api/guards.js";
-import { RecurringScheduleService } from "../services/recurringScheduleService.js";
+import { RecurringSchedule } from "../services/recurringSchedule.js";
 import { adaptAdminErrors } from "../httpApiErrors.js";
 
 export const MonthlyBillingAdminApiGroupLive = HttpApiBuilder.group(
@@ -15,7 +15,7 @@ export const MonthlyBillingAdminApiGroupLive = HttpApiBuilder.group(
         "recurringSchedules",
         Effect.fnUntraced(function* ({ params }) {
           const auth = yield* CurrentSession;
-          return yield* RecurringScheduleService.use((recurringScheduleService) =>
+          return yield* RecurringSchedule.use((recurringScheduleService) =>
             recurringScheduleService
               .listSchedules(params.studentId)
               .pipe(withAuthContext(auth.session.id)),
@@ -26,7 +26,7 @@ export const MonthlyBillingAdminApiGroupLive = HttpApiBuilder.group(
         "saveRecurringSchedule",
         Effect.fnUntraced(function* ({ params, payload }) {
           const auth = yield* CurrentSession;
-          return yield* RecurringScheduleService.use((recurringScheduleService) =>
+          return yield* RecurringSchedule.use((recurringScheduleService) =>
             recurringScheduleService
               .saveSchedule({
                 studentId: params.studentId,
@@ -49,7 +49,7 @@ export const MonthlyBillingAdminApiGroupLive = HttpApiBuilder.group(
         "monthlyPayments",
         Effect.fnUntraced(function* ({ params }) {
           const auth = yield* CurrentSession;
-          return yield* RecurringScheduleService.use((recurringScheduleService) =>
+          return yield* RecurringSchedule.use((recurringScheduleService) =>
             recurringScheduleService
               .listPayments(params.studentId)
               .pipe(withAuthContext(auth.session.id)),
@@ -60,7 +60,7 @@ export const MonthlyBillingAdminApiGroupLive = HttpApiBuilder.group(
         "monthlyPaymentStatus",
         Effect.fnUntraced(function* ({ query }) {
           const auth = yield* CurrentSession;
-          return yield* RecurringScheduleService.use((recurringScheduleService) =>
+          return yield* RecurringSchedule.use((recurringScheduleService) =>
             recurringScheduleService.listMonth(query.month).pipe(withAuthContext(auth.session.id)),
           );
         }, adaptAdminErrors),
@@ -69,7 +69,7 @@ export const MonthlyBillingAdminApiGroupLive = HttpApiBuilder.group(
         "recordMonthlyPayment",
         Effect.fnUntraced(function* ({ params, payload }) {
           const auth = yield* CurrentSession;
-          return yield* RecurringScheduleService.use((recurringScheduleService) =>
+          return yield* RecurringSchedule.use((recurringScheduleService) =>
             recurringScheduleService
               .recordPayment({
                 studentId: params.studentId,

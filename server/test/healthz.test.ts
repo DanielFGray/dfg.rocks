@@ -14,7 +14,7 @@ import { Database, PgAuthDB } from "../db.js";
 import { BackgroundWorker } from "../services/backgroundWorker.js";
 import * as HttpApi from "effect/http-api/HttpApi";
 import { healthGroup } from "../../shared/api/health.js";
-import { makeHealthLayer } from "../api/health.js";
+import { HealthApiGroupLive } from "../api/health.js";
 
 // Serves /healthz through the real HttpApi layer. The database is a stub client: `Database.execute`
 // reaches only `unsafe`, so the stub answers that one call. The worker stub reports its running state.
@@ -25,7 +25,7 @@ function healthHandler(unsafe: (...args: never[]) => unknown, workerRunning = tr
   const database = new Database({ unsafe } as unknown as SqlClient.SqlClient);
   const worker = { isRunning: Effect.succeed(workerRunning) };
   const layer = HttpApiBuilder.layer(healthApi).pipe(
-    Layer.provide(makeHealthLayer()),
+    Layer.provide(HealthApiGroupLive),
     Layer.provide(
       Layer.mergeAll(NodeFileSystem.layer, NodeHttpPlatform.layer, NodePath.layer, Etag.layer),
     ),

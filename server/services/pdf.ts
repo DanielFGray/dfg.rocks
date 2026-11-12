@@ -1,7 +1,7 @@
 import { Effect, Context, Layer } from "effect";
 import PDFDocument from "pdfkit";
 
-export class PdfService extends Context.Service<PdfService>()("PdfService", {
+export class Pdf extends Context.Service<Pdf>()("dfg-rocks/pdf", {
   make: Effect.sync(() => {
     function renderPdf(doc: PDFKit.PDFDocument): Effect.Effect<Buffer, Error> {
       return Effect.callback<Buffer, Error>((resume) => {

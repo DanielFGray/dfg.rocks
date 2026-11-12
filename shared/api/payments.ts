@@ -8,12 +8,12 @@ import { adminErrors } from "../httpApiErrors.js";
 
 const PaymentAllocationPayload = S.Struct({
   bill_id: S.String,
-  amount_cents: S.Number,
+  amount_cents: S.Finite,
 });
 
 const RecordPaymentPayload = S.Struct({
   payer_id: S.String,
-  amount_cents: S.Number,
+  amount_cents: S.Finite,
   method: PaymentMethod,
   reference: S.optional(S.String),
   received_at: S.optional(S.DateFromString),
@@ -22,7 +22,7 @@ const RecordPaymentPayload = S.Struct({
 });
 
 const RefundPaymentPayload = S.Struct({
-  amount_cents: S.Number,
+  amount_cents: S.Finite,
   reason: S.String.pipe(S.check(S.isMinLength(1))),
 });
 

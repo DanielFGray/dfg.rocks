@@ -14,10 +14,10 @@ import { Modal } from "../../components/ui/Modal.js";
 import { api } from "../../lib/api.js";
 import { getErrorMessage } from "../../lib/errors.js";
 import { runServerEffect } from "../../lib/serverEffect.js";
-import { LessonService } from "../../../server/services/lessonService.js";
+import { Lessons } from "../../../server/services/lessons.js";
 import { serializeLesson, serializeLessonNote } from "../../../shared/responseMappers.js";
 import { formatDateTime } from "../../components/lessons/helpers.js";
-import { requireSession, resolveEffectiveStudent } from "../../lib/sessionGuards.server.js";
+import { Sessions, resolveEffectiveStudent } from "../../../server/services/sessions.js";
 
 type MyLessonsPageData = {
   lessons: Lesson[];
@@ -27,8 +27,10 @@ type MyLessonsPageData = {
 const getMyLessonsPageData = createServerFn({ method: "GET" }).handler(() =>
   runServerEffect(
     Effect.gen(function* () {
-      const session = yield* requireSession(getCookie("session"));
-      const lessonService = yield* LessonService;
+      const session = yield* Sessions.use((sessions) =>
+        sessions.requireSession(getCookie("session")),
+      );
+      const lessonService = yield* Lessons;
 
       const effective = resolveEffectiveStudent(session);
       const filterStudentId = effective.isActing ? effective.studentId : undefined;

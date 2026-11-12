@@ -1,3 +1,4 @@
+// @entrypoint: framework callbacks run with the request context.
 import { getGlobalStartContext } from "@tanstack/react-start";
 import { Effect, type Context } from "effect";
 import type { AppServices } from "../../server/runtime.js";

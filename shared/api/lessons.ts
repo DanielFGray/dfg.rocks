@@ -17,8 +17,8 @@ import { params, PaginationQuery } from "./fields.js";
 import { signedInErrors, adminErrors } from "../httpApiErrors.js";
 
 const MyLessonsQuery = S.Struct({
-  limit: S.optional(S.NumberFromString),
-  offset: S.optional(S.NumberFromString),
+  limit: S.optional(S.FiniteFromString),
+  offset: S.optional(S.FiniteFromString),
   status: S.optional(LessonStatus),
   from: S.optional(S.String),
   to: S.optional(S.String),
@@ -26,13 +26,13 @@ const MyLessonsQuery = S.Struct({
 
 const AvailableSlotsQuery = S.Struct({
   date: S.String,
-  days: S.optional(S.NumberFromString),
-  duration: S.optional(S.NumberFromString),
+  days: S.optional(S.FiniteFromString),
+  duration: S.optional(S.FiniteFromString),
 });
 
 const BookLessonPayload = S.Struct({
   scheduled_at: S.DateFromString,
-  duration_minutes: S.Number,
+  duration_minutes: S.Finite,
   location_type: LocationType,
   student_id: S.optional(S.String),
 });
@@ -40,19 +40,19 @@ const BookLessonPayload = S.Struct({
 const CreateLessonPayload = S.Struct({
   student_id: S.String,
   scheduled_at: S.DateFromString,
-  duration_minutes: S.Number,
+  duration_minutes: S.Finite,
   location_type: LocationType,
 });
 
 const UpdateLessonPayload = S.Struct({
   scheduled_at: S.optional(S.DateFromString),
-  duration_minutes: S.optional(S.Number),
+  duration_minutes: S.optional(S.Finite),
   location_type: S.optional(LocationType),
 });
 
 const AdminLessonsQuery = S.Struct({
-  limit: S.optional(S.NumberFromString),
-  offset: S.optional(S.NumberFromString),
+  limit: S.optional(S.FiniteFromString),
+  offset: S.optional(S.FiniteFromString),
   student_id: S.optional(S.String),
   status: S.optional(LessonStatus),
   from: S.optional(S.String),
@@ -77,8 +77,8 @@ export const RescheduleLessonPayload = S.Struct({
 });
 
 export const SaveCancellationPolicySettingsPayload = S.Struct({
-  cancellation_window_hours: S.Number.pipe(S.check(S.isBetween({ minimum: 0, maximum: 720 }))),
-  late_cancel_charge_percent: S.Number.pipe(S.check(S.isBetween({ minimum: 0, maximum: 100 }))),
+  cancellation_window_hours: S.Finite.pipe(S.check(S.isBetween({ minimum: 0, maximum: 720 }))),
+  late_cancel_charge_percent: S.Finite.pipe(S.check(S.isBetween({ minimum: 0, maximum: 100 }))),
 });
 
 export const lessonsGroup = HttpApiGroup.make("lessons")

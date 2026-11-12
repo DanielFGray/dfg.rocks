@@ -13,17 +13,14 @@ import { StudentDashboard } from "../../components/dashboard/StudentDashboard.js
 import { ParentOnboarding } from "../../components/dashboard/ParentOnboarding.js";
 import { ParentDashboard } from "../../components/dashboard/ParentDashboard.js";
 import { runServerEffect } from "../../lib/serverEffect.js";
-import { StudentService } from "../../../server/services/studentService.js";
-import { MessageService } from "../../../server/services/messageService.js";
-import { MaterialService } from "../../../server/services/materialService.js";
-import { CourseService } from "../../../server/services/courseService.js";
-import { TestimonialService } from "../../../server/services/testimonialService.js";
-import { TestimonialReminderService } from "../../../server/services/testimonialReminderService.js";
-import {
-  SessionService,
-  resolveEffectiveStudent,
-} from "../../../server/services/sessionService.js";
-import { LessonService } from "../../../server/services/lessonService.js";
+import { Students } from "../../../server/services/students.js";
+import { Messages } from "../../../server/services/messages.js";
+import { Materials } from "../../../server/services/materials.js";
+import { Courses } from "../../../server/services/courses.js";
+import { Testimonials } from "../../../server/services/testimonials.js";
+import { TestimonialReminder } from "../../../server/services/testimonialReminder.js";
+import { Sessions, resolveEffectiveStudent } from "../../../server/services/sessions.js";
+import { Lessons } from "../../../server/services/lessons.js";
 import * as SharedSchemas from "../../../shared/schemas.js";
 import {
   serializeMessage,
@@ -38,7 +35,7 @@ const getDashboardPageData = createServerFn({ method: "GET" }).handler(() =>
   runServerEffect(
     Effect.gen(function* () {
       const token = yield* Effect.sync(() => getCookie("session"));
-      const session = yield* SessionService.use((sessionService) =>
+      const session = yield* Sessions.use((sessionService) =>
         sessionService.validateSessionToken(token),
       );
       if (!session) throw new Error("Unauthorized");
@@ -50,14 +47,14 @@ const getDashboardPageData = createServerFn({ method: "GET" }).handler(() =>
           const today = todayRange();
           const week = weekRange();
           const data = yield* Effect.all({
-            students: StudentService.use((studentService) => studentService.listStudents()),
-            messages: MessageService.use((messageService) =>
+            students: Students.use((studentService) => studentService.listStudents()),
+            messages: Messages.use((messageService) =>
               messageService.messages({
                 limit: 50,
                 offset: 0,
               }),
             ),
-            todayLessons: LessonService.use((lessonService) =>
+            todayLessons: Lessons.use((lessonService) =>
               lessonService.listLessons({
                 limit: 50,
                 offset: 0,
@@ -65,7 +62,7 @@ const getDashboardPageData = createServerFn({ method: "GET" }).handler(() =>
                 to: today.to,
               }),
             ),
-            weekLessons: LessonService.use((lessonService) =>
+            weekLessons: Lessons.use((lessonService) =>
               lessonService.listLessons({
                 limit: 50,
                 offset: 0,
@@ -73,7 +70,7 @@ const getDashboardPageData = createServerFn({ method: "GET" }).handler(() =>
                 to: week.to,
               }),
             ),
-            courses: CourseService.use((courseService) => courseService.listCourses()),
+            courses: Courses.use((courseService) => courseService.listCourses()),
           });
           const adminMessages: ReturnType<typeof serializeMessage>[] =
             data.messages.map(serializeMessage);
@@ -87,30 +84,30 @@ const getDashboardPageData = createServerFn({ method: "GET" }).handler(() =>
             messages: adminMessages,
             todayLessons: adminTodayLessons,
             weekLessons: adminWeekLessons,
-            courses: [...S.decodeUnknownSync(S.Array(SharedSchemas.Course))(data.courses)],
+            courses: [...(yield* S.decodeEffect(S.Array(SharedSchemas.Course))(data.courses))],
           };
         }
 
         const [data, canShowTestimonialPrompt] = yield* Effect.all([
           Effect.all({
-            messages: MessageService.use((messageService) =>
+            messages: Messages.use((messageService) =>
               messageService.messages({ limit: 50, offset: 0 }, filterStudentId),
             ),
-            assignments: MaterialService.use((materialService) =>
+            assignments: Materials.use((materialService) =>
               materialService.assignments(filterStudentId),
             ),
-            scheduledLessons: LessonService.use((lessonService) =>
+            scheduledLessons: Lessons.use((lessonService) =>
               lessonService.myLessons(
                 { status: "scheduled", limit: 5, offset: 0 },
                 filterStudentId,
               ),
             ),
-            courses: CourseService.use((courseService) => courseService.courses(filterStudentId)),
-            testimonial: TestimonialService.use((testimonialService) =>
+            courses: Courses.use((courseService) => courseService.courses(filterStudentId)),
+            testimonial: Testimonials.use((testimonialService) =>
               testimonialService.testimonial(session.user.id),
             ),
           }),
-          TestimonialReminderService.use((testimonialReminderService) =>
+          TestimonialReminder.use((testimonialReminderService) =>
             testimonialReminderService.getPromptEnabled(session.user.id),
           ),
         ]);
@@ -125,7 +122,7 @@ const getDashboardPageData = createServerFn({ method: "GET" }).handler(() =>
           messages: studentMessages,
           assignments: studentAssignments,
           scheduledLessons: studentScheduledLessons,
-          courses: [...S.decodeUnknownSync(S.Array(SharedSchemas.Course))(data.courses)],
+          courses: [...(yield* S.decodeEffect(S.Array(SharedSchemas.Course))(data.courses))],
           testimonial: data.testimonial ? serializeTestimonial(data.testimonial) : null,
           canShowTestimonialPrompt,
         };

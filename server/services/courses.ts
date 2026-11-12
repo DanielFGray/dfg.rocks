@@ -8,7 +8,7 @@ import { extractMaterialIds } from "../../shared/content.js";
 import * as Struct from "effect/Struct";
 
 /** Courses, their modules and enrollments. */
-export class CourseService extends Context.Service<CourseService>()("CourseService", {
+export class Courses extends Context.Service<Courses>()("dfg-rocks/courses", {
   make: Effect.sync(() => ({
     courses: Effect.fn("courses")(function* (studentId?: string) {
       const db = yield* RequestDatabase;
@@ -81,7 +81,7 @@ export class CourseService extends Context.Service<CourseService>()("CourseServi
         .pipe(
           Effect.head,
           Effect.catchTags({
-            NoSuchElementError: () => new HttpError(404, "Course not found"),
+            NoSuchElementError: () => new HttpError({ status: 404, message: "Course not found" }),
           }),
         );
 
@@ -145,7 +145,8 @@ export class CourseService extends Context.Service<CourseService>()("CourseServi
         .pipe(
           Effect.head,
           Effect.catchTags({
-            NoSuchElementError: () => new HttpError(500, "Failed to create course"),
+            NoSuchElementError: () =>
+              new HttpError({ status: 500, message: "Failed to create course" }),
           }),
         );
     }),
@@ -184,7 +185,7 @@ export class CourseService extends Context.Service<CourseService>()("CourseServi
         .pipe(
           Effect.head,
           Effect.catchTags({
-            NoSuchElementError: () => new HttpError(404, "Module not found"),
+            NoSuchElementError: () => new HttpError({ status: 404, message: "Module not found" }),
           }),
           Effect.flatMap(S.decodeUnknownEffect(Module)),
         );
@@ -211,7 +212,8 @@ export class CourseService extends Context.Service<CourseService>()("CourseServi
         .pipe(
           Effect.head,
           Effect.catchTags({
-            NoSuchElementError: () => new HttpError(500, "Failed to create module"),
+            NoSuchElementError: () =>
+              new HttpError({ status: 500, message: "Failed to create module" }),
           }),
           Effect.flatMap(S.decodeUnknownEffect(Module)),
         );
@@ -246,7 +248,7 @@ export class CourseService extends Context.Service<CourseService>()("CourseServi
         .pipe(
           Effect.head,
           Effect.catchTags({
-            NoSuchElementError: () => new HttpError(404, "Module not found"),
+            NoSuchElementError: () => new HttpError({ status: 404, message: "Module not found" }),
           }),
           Effect.flatMap(S.decodeUnknownEffect(Module)),
         );
@@ -314,6 +316,6 @@ export class CourseService extends Context.Service<CourseService>()("CourseServi
 const CourseMaterial = Material.mapFields(
   Struct.assign({
     module_id: S.String,
-    sort_order: S.Number,
+    sort_order: S.Finite,
   }),
 );
