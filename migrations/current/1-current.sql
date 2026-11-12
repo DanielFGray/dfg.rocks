@@ -16,11 +16,11 @@
 
 -- Membership rules ----------------------------------------------------------
 
-create unique index family_memberships_one_billing_contact
+create unique index if not exists family_memberships_one_billing_contact
   on app_public.family_memberships (family_id)
   where is_billing_contact;
 
-create function app_private.assert_student_in_one_family(p_user_id uuid) returns void as $$
+create or replace function app_private.assert_student_in_one_family(p_user_id uuid) returns void as $$
 begin
   -- Lock the user row so two concurrent joins for one student cannot both pass.
   perform 1 from app_public.users where id = p_user_id for update;
@@ -31,24 +31,26 @@ begin
 end;
 $$ language plpgsql volatile security definer set search_path to pg_catalog;
 
-create function app_private.tg_family_memberships__one_family_per_student() returns trigger as $$
+create or replace function app_private.tg_family_memberships__one_family_per_student() returns trigger as $$
 begin
   perform app_private.assert_student_in_one_family(NEW.user_id);
   return null;
 end;
 $$ language plpgsql volatile security definer set search_path to pg_catalog;
 
+drop trigger if exists _200_one_family_per_student on app_public.family_memberships;
 create constraint trigger _200_one_family_per_student
   after insert or update of user_id on app_public.family_memberships
   for each row execute function app_private.tg_family_memberships__one_family_per_student();
 
-create function app_private.tg_users__one_family_per_student() returns trigger as $$
+create or replace function app_private.tg_users__one_family_per_student() returns trigger as $$
 begin
   perform app_private.assert_student_in_one_family(NEW.id);
   return null;
 end;
 $$ language plpgsql volatile security definer set search_path to pg_catalog;
 
+drop trigger if exists _200_one_family_per_student on app_public.users;
 create constraint trigger _200_one_family_per_student
   after update of role on app_public.users
   for each row when (NEW.role = 'student' and OLD.role <> 'student')
@@ -120,7 +122,7 @@ $$ language plpgsql volatile set search_path to pg_catalog, public, pg_temp;
 -- An admin creates a family with no members and invites its parents. The
 -- first parent to join takes the roles nobody holds yet, so the family's
 -- students always have a payer.
-create function app_private.join_family(p_family_id uuid, p_user_id uuid) returns void as $$
+create or replace function app_private.join_family(p_family_id uuid, p_user_id uuid) returns void as $$
   insert into app_public.family_memberships (family_id, user_id, is_owner, is_billing_contact)
   select
     p_family_id,
@@ -153,13 +155,14 @@ $$ language plpgsql volatile security definer set search_path to pg_catalog, pub
 
 -- Admins manage families, and student_payers reads memberships with the
 -- caller's rights, so admins must see every membership.
+drop policy if exists select_admin on app_public.family_memberships;
 create policy select_admin on app_public.family_memberships for select using (
   app_public.current_user_role() = 'admin'
 );
 
 -- Runs with the caller's row security. Only a caller who can see a student's
 -- family membership gets the student's real payer; admins see all of them.
-create view app_public.student_payers with (security_invoker = true) as
+create or replace view app_public.student_payers with (security_invoker = true) as
   select
     u.id as student_id,
     case
@@ -179,7 +182,7 @@ comment on view app_public.student_payers is
 
 grant select on app_public.student_payers to :DATABASE_VISITOR;
 
-create function app_public.payer_id_for_student(p_student_id uuid) returns uuid as $$
+create or replace function app_public.payer_id_for_student(p_student_id uuid) returns uuid as $$
 declare
   v_found boolean;
   v_payer_id uuid;
@@ -197,7 +200,7 @@ begin
 end;
 $$ language plpgsql stable security definer set search_path to pg_catalog;
 
-create function app_public.current_user_visible_payer_ids() returns setof uuid as $$
+create or replace function app_public.current_user_visible_payer_ids() returns setof uuid as $$
   select app_public.current_user_id()
   union
   select fm.user_id
@@ -211,152 +214,397 @@ comment on function app_public.current_user_visible_payer_ids() is
 
 -- Tables ----------------------------------------------------------------------
 
-drop function app_public.current_user_is_billing_contact_for(uuid);
-drop function app_public.next_bill_number(uuid);
-drop function app_public.next_payment_number(uuid);
-drop table app_public.bill_number_sequences;
-drop table app_public.payment_number_sequences;
+drop function if exists app_public.current_user_is_billing_contact_for(uuid);
+drop function if exists app_public.next_bill_number(uuid);
+drop function if exists app_public.next_payment_number(uuid);
+drop table if exists app_public.bill_number_sequences;
+drop table if exists app_public.payment_number_sequences;
 
-create function app_public.next_bill_number() returns integer as $$
+create or replace function app_public.next_bill_number() returns integer as $$
   select nextval('app_public.bill_number_seq')::integer;
 $$ language sql volatile security definer set search_path to pg_catalog;
 
-create function app_public.next_payment_number() returns integer as $$
+create or replace function app_public.next_payment_number() returns integer as $$
   select nextval('app_public.payment_number_seq')::integer;
 $$ language sql volatile security definer set search_path to pg_catalog;
 
-alter table app_public.bills drop constraint bills_family_id_fkey;
-alter table app_public.bills rename column family_id to payer_id;
-alter table app_public.bills
-  add constraint bills_payer_id_fkey foreign key (payer_id) references app_public.users(id) on delete restrict;
-alter table app_public.bills rename constraint bills_family_id_bill_number_key to bills_payer_id_bill_number_key;
-alter index app_public.bills_family_status rename to bills_payer_status;
+alter table app_public.bills drop constraint if exists bills_family_id_fkey;
+do $$
+begin
+  if exists (select 1 from pg_attribute where attrelid = 'app_public.bills'::regclass and attname = 'family_id' and not attisdropped) then
+    alter table app_public.bills rename column family_id to payer_id;
+  end if;
+end;
+$$;
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conrelid = 'app_public.bills'::regclass and conname = 'bills_payer_id_fkey') then
+    alter table app_public.bills
+      add constraint bills_payer_id_fkey foreign key (payer_id) references app_public.users(id) on delete restrict;
+  end if;
+end;
+$$;
+do $$
+begin
+  if exists (select 1 from pg_constraint where conrelid = 'app_public.bills'::regclass and conname = 'bills_family_id_bill_number_key') then
+    alter table app_public.bills rename constraint bills_family_id_bill_number_key to bills_payer_id_bill_number_key;
+  end if;
+end;
+$$;
+do $$
+begin
+  if to_regclass('app_public.bills_family_status') is not null then
+    alter index app_public.bills_family_status rename to bills_payer_status;
+  end if;
+end;
+$$;
 
-alter table app_public.payments drop constraint payments_family_id_fkey;
-alter table app_public.payments rename column family_id to payer_id;
-alter table app_public.payments
-  add constraint payments_payer_id_fkey foreign key (payer_id) references app_public.users(id) on delete restrict;
-alter table app_public.payments rename constraint payments_family_id_payment_number_key to payments_payer_id_payment_number_key;
-alter index app_public.payments_family rename to payments_payer;
+alter table app_public.payments drop constraint if exists payments_family_id_fkey;
+do $$
+begin
+  if exists (select 1 from pg_attribute where attrelid = 'app_public.payments'::regclass and attname = 'family_id' and not attisdropped) then
+    alter table app_public.payments rename column family_id to payer_id;
+  end if;
+end;
+$$;
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conrelid = 'app_public.payments'::regclass and conname = 'payments_payer_id_fkey') then
+    alter table app_public.payments
+      add constraint payments_payer_id_fkey foreign key (payer_id) references app_public.users(id) on delete restrict;
+  end if;
+end;
+$$;
+do $$
+begin
+  if exists (select 1 from pg_constraint where conrelid = 'app_public.payments'::regclass and conname = 'payments_family_id_payment_number_key') then
+    alter table app_public.payments rename constraint payments_family_id_payment_number_key to payments_payer_id_payment_number_key;
+  end if;
+end;
+$$;
+do $$
+begin
+  if to_regclass('app_public.payments_family') is not null then
+    alter index app_public.payments_family rename to payments_payer;
+  end if;
+end;
+$$;
 
-alter table app_public.family_credits rename to credits;
-alter table app_public.credits drop constraint family_credits_family_id_fkey;
-alter table app_public.credits rename column family_id to payer_id;
-alter table app_public.credits
-  add constraint credits_payer_id_fkey foreign key (payer_id) references app_public.users(id) on delete restrict;
-alter index app_public.family_credits_pkey rename to credits_pkey;
-alter index app_public.family_credits_family rename to credits_payer;
-alter index app_public.family_credits_unconsumed rename to credits_unconsumed;
-alter index app_public.family_credits_source_payment rename to credits_source_payment;
+do $$
+begin
+  if to_regclass('app_public.family_credits') is not null then
+    alter table app_public.family_credits rename to credits;
+  end if;
+end;
+$$;
+alter table app_public.credits drop constraint if exists family_credits_family_id_fkey;
+do $$
+begin
+  if exists (select 1 from pg_attribute where attrelid = 'app_public.credits'::regclass and attname = 'family_id' and not attisdropped) then
+    alter table app_public.credits rename column family_id to payer_id;
+  end if;
+end;
+$$;
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conrelid = 'app_public.credits'::regclass and conname = 'credits_payer_id_fkey') then
+    alter table app_public.credits
+      add constraint credits_payer_id_fkey foreign key (payer_id) references app_public.users(id) on delete restrict;
+  end if;
+end;
+$$;
+do $$
+begin
+  if to_regclass('app_public.family_credits_pkey') is not null then
+    alter index app_public.family_credits_pkey rename to credits_pkey;
+  end if;
+end;
+$$;
+do $$
+begin
+  if to_regclass('app_public.family_credits_family') is not null then
+    alter index app_public.family_credits_family rename to credits_payer;
+  end if;
+end;
+$$;
+do $$
+begin
+  if to_regclass('app_public.family_credits_unconsumed') is not null then
+    alter index app_public.family_credits_unconsumed rename to credits_unconsumed;
+  end if;
+end;
+$$;
+do $$
+begin
+  if to_regclass('app_public.family_credits_source_payment') is not null then
+    alter index app_public.family_credits_source_payment rename to credits_source_payment;
+  end if;
+end;
+$$;
 
-alter table app_public.family_credit_applications rename to credit_applications;
-alter index app_public.family_credit_applications_pkey rename to credit_applications_pkey;
-alter table app_public.credit_applications
-  rename constraint family_credit_applications_credit_id_bill_id_key to credit_applications_credit_id_bill_id_key;
-alter table app_public.credit_applications
-  rename constraint family_credit_applications_credit_id_fkey to credit_applications_credit_id_fkey;
+do $$
+begin
+  if to_regclass('app_public.family_credit_applications') is not null then
+    alter table app_public.family_credit_applications rename to credit_applications;
+  end if;
+end;
+$$;
+do $$
+begin
+  if to_regclass('app_public.family_credit_applications_pkey') is not null then
+    alter index app_public.family_credit_applications_pkey rename to credit_applications_pkey;
+  end if;
+end;
+$$;
+do $$
+begin
+  if exists (select 1 from pg_constraint where conrelid = 'app_public.credit_applications'::regclass and conname = 'family_credit_applications_credit_id_bill_id_key') then
+    alter table app_public.credit_applications
+      rename constraint family_credit_applications_credit_id_bill_id_key to credit_applications_credit_id_bill_id_key;
+  end if;
+end;
+$$;
+do $$
+begin
+  if exists (select 1 from pg_constraint where conrelid = 'app_public.credit_applications'::regclass and conname = 'family_credit_applications_credit_id_fkey') then
+    alter table app_public.credit_applications
+      rename constraint family_credit_applications_credit_id_fkey to credit_applications_credit_id_fkey;
+  end if;
+end;
+$$;
 
-alter table app_public.family_discounts rename to discounts;
-alter table app_public.discounts drop constraint family_discounts_family_id_fkey;
-alter table app_public.discounts rename column family_id to payer_id;
-alter table app_public.discounts
-  add constraint discounts_payer_id_fkey foreign key (payer_id) references app_public.users(id) on delete cascade;
-alter index app_public.family_discounts_pkey rename to discounts_pkey;
-alter index app_public.family_discounts_family_active rename to discounts_payer_active;
+do $$
+begin
+  if to_regclass('app_public.family_discounts') is not null then
+    alter table app_public.family_discounts rename to discounts;
+  end if;
+end;
+$$;
+alter table app_public.discounts drop constraint if exists family_discounts_family_id_fkey;
+do $$
+begin
+  if exists (select 1 from pg_attribute where attrelid = 'app_public.discounts'::regclass and attname = 'family_id' and not attisdropped) then
+    alter table app_public.discounts rename column family_id to payer_id;
+  end if;
+end;
+$$;
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conrelid = 'app_public.discounts'::regclass and conname = 'discounts_payer_id_fkey') then
+    alter table app_public.discounts
+      add constraint discounts_payer_id_fkey foreign key (payer_id) references app_public.users(id) on delete cascade;
+  end if;
+end;
+$$;
+do $$
+begin
+  if to_regclass('app_public.family_discounts_pkey') is not null then
+    alter index app_public.family_discounts_pkey rename to discounts_pkey;
+  end if;
+end;
+$$;
+do $$
+begin
+  if to_regclass('app_public.family_discounts_family_active') is not null then
+    alter index app_public.family_discounts_family_active rename to discounts_payer_active;
+  end if;
+end;
+$$;
 
-alter table app_public.family_tax_exemptions rename to tax_exemptions;
-alter table app_public.tax_exemptions drop constraint family_tax_exemptions_family_id_fkey;
-alter table app_public.tax_exemptions rename column family_id to payer_id;
-alter table app_public.tax_exemptions
-  add constraint tax_exemptions_payer_id_fkey foreign key (payer_id) references app_public.users(id) on delete cascade;
-alter table app_public.tax_exemptions
-  rename constraint family_tax_exemptions_family_id_tax_rate_id_key to tax_exemptions_payer_id_tax_rate_id_key;
-alter index app_public.family_tax_exemptions_pkey rename to tax_exemptions_pkey;
-alter index app_public.family_tax_exemptions_family rename to tax_exemptions_payer;
+do $$
+begin
+  if to_regclass('app_public.family_tax_exemptions') is not null then
+    alter table app_public.family_tax_exemptions rename to tax_exemptions;
+  end if;
+end;
+$$;
+alter table app_public.tax_exemptions drop constraint if exists family_tax_exemptions_family_id_fkey;
+do $$
+begin
+  if exists (select 1 from pg_attribute where attrelid = 'app_public.tax_exemptions'::regclass and attname = 'family_id' and not attisdropped) then
+    alter table app_public.tax_exemptions rename column family_id to payer_id;
+  end if;
+end;
+$$;
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conrelid = 'app_public.tax_exemptions'::regclass and conname = 'tax_exemptions_payer_id_fkey') then
+    alter table app_public.tax_exemptions
+      add constraint tax_exemptions_payer_id_fkey foreign key (payer_id) references app_public.users(id) on delete cascade;
+  end if;
+end;
+$$;
+do $$
+begin
+  if exists (select 1 from pg_constraint where conrelid = 'app_public.tax_exemptions'::regclass and conname = 'family_tax_exemptions_family_id_tax_rate_id_key') then
+    alter table app_public.tax_exemptions
+      rename constraint family_tax_exemptions_family_id_tax_rate_id_key to tax_exemptions_payer_id_tax_rate_id_key;
+  end if;
+end;
+$$;
+do $$
+begin
+  if to_regclass('app_public.family_tax_exemptions_pkey') is not null then
+    alter index app_public.family_tax_exemptions_pkey rename to tax_exemptions_pkey;
+  end if;
+end;
+$$;
+do $$
+begin
+  if to_regclass('app_public.family_tax_exemptions_family') is not null then
+    alter index app_public.family_tax_exemptions_family rename to tax_exemptions_payer;
+  end if;
+end;
+$$;
 
 -- A billing run's payer is the payer of its bill.
-drop policy select_monthly_billing_runs on app_public.monthly_billing_runs;
-alter table app_public.monthly_billing_runs drop column family_id;
+drop policy if exists select_monthly_billing_runs on app_public.monthly_billing_runs;
+alter table app_public.monthly_billing_runs drop column if exists family_id;
 
 -- Policies --------------------------------------------------------------------
 
-drop policy select_bills on app_public.bills;
+drop policy if exists select_bills on app_public.bills;
 create policy select_bills on app_public.bills for select using (
   app_public.current_user_role() = 'admin'
   or payer_id in (select app_public.current_user_visible_payer_ids())
 );
 
-drop policy select_payments on app_public.payments;
+drop policy if exists select_payments on app_public.payments;
 create policy select_payments on app_public.payments for select using (
   app_public.current_user_role() = 'admin'
   or payer_id in (select app_public.current_user_visible_payer_ids())
 );
 
-drop policy select_family_credits on app_public.credits;
-alter policy insert_family_credits on app_public.credits rename to insert_credits;
-alter policy update_family_credits on app_public.credits rename to update_credits;
-alter policy delete_family_credits on app_public.credits rename to delete_credits;
+drop policy if exists select_family_credits on app_public.credits;
+do $$
+begin
+  if exists (select 1 from pg_policy where polrelid = 'app_public.credits'::regclass and polname = 'insert_family_credits') then
+    alter policy insert_family_credits on app_public.credits rename to insert_credits;
+  end if;
+end;
+$$;
+do $$
+begin
+  if exists (select 1 from pg_policy where polrelid = 'app_public.credits'::regclass and polname = 'update_family_credits') then
+    alter policy update_family_credits on app_public.credits rename to update_credits;
+  end if;
+end;
+$$;
+do $$
+begin
+  if exists (select 1 from pg_policy where polrelid = 'app_public.credits'::regclass and polname = 'delete_family_credits') then
+    alter policy delete_family_credits on app_public.credits rename to delete_credits;
+  end if;
+end;
+$$;
+drop policy if exists select_credits on app_public.credits;
 create policy select_credits on app_public.credits for select using (
   app_public.current_user_role() = 'admin'
   or payer_id in (select app_public.current_user_visible_payer_ids())
 );
 
-drop policy select_family_discounts on app_public.discounts;
-alter policy insert_family_discounts on app_public.discounts rename to insert_discounts;
-alter policy update_family_discounts on app_public.discounts rename to update_discounts;
-alter policy delete_family_discounts on app_public.discounts rename to delete_discounts;
+drop policy if exists select_family_discounts on app_public.discounts;
+do $$
+begin
+  if exists (select 1 from pg_policy where polrelid = 'app_public.discounts'::regclass and polname = 'insert_family_discounts') then
+    alter policy insert_family_discounts on app_public.discounts rename to insert_discounts;
+  end if;
+end;
+$$;
+do $$
+begin
+  if exists (select 1 from pg_policy where polrelid = 'app_public.discounts'::regclass and polname = 'update_family_discounts') then
+    alter policy update_family_discounts on app_public.discounts rename to update_discounts;
+  end if;
+end;
+$$;
+do $$
+begin
+  if exists (select 1 from pg_policy where polrelid = 'app_public.discounts'::regclass and polname = 'delete_family_discounts') then
+    alter policy delete_family_discounts on app_public.discounts rename to delete_discounts;
+  end if;
+end;
+$$;
+drop policy if exists select_discounts on app_public.discounts;
 create policy select_discounts on app_public.discounts for select using (
   app_public.current_user_role() = 'admin'
   or payer_id in (select app_public.current_user_visible_payer_ids())
 );
 
-drop policy select_family_tax_exemptions on app_public.tax_exemptions;
-alter policy insert_family_tax_exemptions on app_public.tax_exemptions rename to insert_tax_exemptions;
-alter policy update_family_tax_exemptions on app_public.tax_exemptions rename to update_tax_exemptions;
-alter policy delete_family_tax_exemptions on app_public.tax_exemptions rename to delete_tax_exemptions;
+drop policy if exists select_family_tax_exemptions on app_public.tax_exemptions;
+do $$
+begin
+  if exists (select 1 from pg_policy where polrelid = 'app_public.tax_exemptions'::regclass and polname = 'insert_family_tax_exemptions') then
+    alter policy insert_family_tax_exemptions on app_public.tax_exemptions rename to insert_tax_exemptions;
+  end if;
+end;
+$$;
+do $$
+begin
+  if exists (select 1 from pg_policy where polrelid = 'app_public.tax_exemptions'::regclass and polname = 'update_family_tax_exemptions') then
+    alter policy update_family_tax_exemptions on app_public.tax_exemptions rename to update_tax_exemptions;
+  end if;
+end;
+$$;
+do $$
+begin
+  if exists (select 1 from pg_policy where polrelid = 'app_public.tax_exemptions'::regclass and polname = 'delete_family_tax_exemptions') then
+    alter policy delete_family_tax_exemptions on app_public.tax_exemptions rename to delete_tax_exemptions;
+  end if;
+end;
+$$;
+drop policy if exists select_tax_exemptions on app_public.tax_exemptions;
 create policy select_tax_exemptions on app_public.tax_exemptions for select using (
   app_public.current_user_role() = 'admin'
   or payer_id in (select app_public.current_user_visible_payer_ids())
 );
 
-drop policy select_family_credit_applications on app_public.credit_applications;
-alter policy insert_family_credit_applications on app_public.credit_applications rename to insert_credit_applications;
+drop policy if exists select_family_credit_applications on app_public.credit_applications;
+do $$
+begin
+  if exists (select 1 from pg_policy where polrelid = 'app_public.credit_applications'::regclass and polname = 'insert_family_credit_applications') then
+    alter policy insert_family_credit_applications on app_public.credit_applications rename to insert_credit_applications;
+  end if;
+end;
+$$;
+drop policy if exists select_credit_applications on app_public.credit_applications;
 create policy select_credit_applications on app_public.credit_applications for select using (
   app_public.current_user_role() = 'admin'
   or bill_id in (select id from app_public.bills)
 );
 
-drop policy select_bill_adjustments on app_public.bill_adjustments;
+drop policy if exists select_bill_adjustments on app_public.bill_adjustments;
 create policy select_bill_adjustments on app_public.bill_adjustments for select using (
   app_public.current_user_role() = 'admin'
   or bill_id in (select id from app_public.bills)
 );
 
-drop policy select_bill_line_items on app_public.bill_line_items;
+drop policy if exists select_bill_line_items on app_public.bill_line_items;
 create policy select_bill_line_items on app_public.bill_line_items for select using (
   app_public.current_user_role() = 'admin'
   or bill_id in (select id from app_public.bills)
 );
 
-drop policy select_bill_notifications on app_public.bill_notifications;
+drop policy if exists select_bill_notifications on app_public.bill_notifications;
 create policy select_bill_notifications on app_public.bill_notifications for select using (
   app_public.current_user_role() = 'admin'
   or bill_id in (select id from app_public.bills)
 );
 
-drop policy select_payment_allocations on app_public.payment_allocations;
+drop policy if exists select_payment_allocations on app_public.payment_allocations;
 create policy select_payment_allocations on app_public.payment_allocations for select using (
   app_public.current_user_role() = 'admin'
   or bill_id in (select id from app_public.bills)
   or payment_id in (select id from app_public.payments)
 );
 
-drop policy select_refunds on app_public.refunds;
+drop policy if exists select_refunds on app_public.refunds;
 create policy select_refunds on app_public.refunds for select using (
   app_public.current_user_role() = 'admin'
   or payment_id in (select id from app_public.payments)
 );
 
+drop policy if exists select_monthly_billing_runs on app_public.monthly_billing_runs;
 create policy select_monthly_billing_runs on app_public.monthly_billing_runs for select using (
   app_public.current_user_role() = 'admin'
   or bill_id in (select id from app_public.bills)
@@ -364,8 +612,8 @@ create policy select_monthly_billing_runs on app_public.monthly_billing_runs for
 
 -- Billing functions -----------------------------------------------------------
 
-drop function app_public.get_effective_discount(uuid, date);
-create function app_public.get_effective_discount(p_payer_id uuid, p_on_date date) returns jsonb as $$
+drop function if exists app_public.get_effective_discount(uuid, date);
+create or replace function app_public.get_effective_discount(p_payer_id uuid, p_on_date date) returns jsonb as $$
   select jsonb_build_object(
     'label', d.label,
     'discount_type', d.discount_type,
@@ -381,8 +629,8 @@ create function app_public.get_effective_discount(p_payer_id uuid, p_on_date dat
   limit 1;
 $$ language sql stable security definer set search_path to pg_catalog;
 
-drop function app_public.get_effective_tax_rate(uuid, date);
-create function app_public.get_effective_tax_rate(p_payer_id uuid, p_on_date date) returns jsonb as $$
+drop function if exists app_public.get_effective_tax_rate(uuid, date);
+create or replace function app_public.get_effective_tax_rate(p_payer_id uuid, p_on_date date) returns jsonb as $$
   select jsonb_build_object(
     'tax_rate_id', tr.id,
     'label', tr.label,
@@ -406,8 +654,8 @@ create function app_public.get_effective_tax_rate(p_payer_id uuid, p_on_date dat
   limit 1;
 $$ language sql stable security definer set search_path to pg_catalog;
 
-drop function app_public.monthly_billing_eligible(date);
-create function app_public.monthly_billing_eligible(p_billing_month date)
+drop function if exists app_public.monthly_billing_eligible(date);
+create or replace function app_public.monthly_billing_eligible(p_billing_month date)
 returns table(
   student_id uuid, student_rate_id uuid, rate_cents integer, lesson_duration_minutes integer,
   location_type app_public.location_type, schedule_id uuid, day_of_week smallint,
@@ -727,8 +975,8 @@ $$ language plpgsql volatile security definer set search_path to pg_catalog;
 -- The bill for one single-booking lesson. The price is the student's rate for
 -- the lesson's location; a lesson under any other billing model, or with no
 -- rate, gets no bill here (monthly prepaid lessons are billed per month).
-drop function app_public.create_single_booking_obligation(uuid, integer);
-create function app_public.create_single_booking_obligation(p_lesson_id uuid)
+drop function if exists app_public.create_single_booking_obligation(uuid, integer);
+create or replace function app_public.create_single_booking_obligation(p_lesson_id uuid)
 returns uuid as $$
 declare
   v_student_id uuid;
@@ -800,10 +1048,10 @@ begin
 end;
 $$ language plpgsql volatile security definer set search_path to pg_catalog;
 
-drop function app_public.settle_single_booking_cancellation(uuid, integer, boolean);
+drop function if exists app_public.settle_single_booking_cancellation(uuid, integer, boolean);
 -- Cancels a lesson's open single-booking bill; a captured deposit becomes a
 -- credit for the payer.
-create function app_public.settle_single_booking_cancellation(
+create or replace function app_public.settle_single_booking_cancellation(
   p_lesson_id uuid, p_captured_deposit_cents integer default 0
 ) returns void as $$
 declare
@@ -973,6 +1221,6 @@ $$ language plpgsql volatile security definer set search_path to pg_catalog;
 -- key with "on delete set null" updates audit rows, which the append-only
 -- trigger refuses, so no user with financial history could be deleted.
 alter table app_public.financial_audit_events
-  drop constraint financial_audit_events_actor_id_fkey;
+  drop constraint if exists financial_audit_events_actor_id_fkey;
 comment on column app_public.financial_audit_events.actor_id is
   'The user who made the change. Not a foreign key: the id stays after that user is deleted.';
