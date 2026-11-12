@@ -21,13 +21,9 @@ bun run test:e2e         # Playwright E2E tests
 
 Local Postgres is the shared cluster from `ops dev db` (container `ops-dev-pg17`, 127.0.0.1:5417), declared by `cartridge.json`. `ops dev db up` creates `dfg_rocks`, `dfg_rocks_shadow` and `dfg_rocks_test` with the same roles and extensions as production, and writes `DATABASE_URL`, `AUTH_DATABASE_URL`, `SHADOW_DATABASE_URL` and `TEST_DATABASE_URL` to `.env`. It writes no root URL. Unit, worker and E2E tests use `dfg_rocks_test` through `scripts/testDatabase.ts`, which resets it with `ops dev db reset`. `bun -b` does not load `.env`, so scripts that run a binary pass `--env-file=.env`.
 
-## Deploy
+## Deploy and boot
 
-Production runs on the server-ansible platform (`~/build/server-ansible`), described by `cartridge.json`. `ops release` builds the Dockerfile from committed HEAD, so the image never sees `.env` or `generated/`. Traefik ends TLS and sets `X-Real-Ip`, the only client-address header the rate limiter trusts. `cartridge.json` asks for Valkey, and the platform sets `VALKEY_URL` and `VALKEY_KEY_PREFIX` (`dfg-rocks:`, the only keys the app's Valkey user may touch). The platform creates `dfg_rocks_owner` and `dfg_rocks_visitor` group roles, a migration login in the owner role, and a NOINHERIT API login in the visitor role. The server prestart runs `bun run migrate`, which installs the graphile-worker schema and applies committed migrations.
-
-The server reads each setting with Effect `Config` where it uses it. Worker tasks read `process.env`, and the graphile-worker CLI takes `DATABASE_URL` from the environment.
-
-**Boot.** The server waits for both Postgres pools, and in production for Valkey (a PING), before it starts the worker or opens its port (`server/dependencies.ts`). Each retries for about 78 s, then startup fails with `DependencyUnavailable` naming it. The worker runner starts while its layer builds (`server/services/backgroundWorker.ts`), and a runner that cannot start stops the server. After boot, a Valkey outage does not stop the server: each rate-limit rule applies its `whenStoreDown` policy, and `/healthz` reports a worker that stopped.
+Before you change deployment, configuration or boot, read [docs/design/runtime.md](docs/design/runtime.md).
 
 ## Backend reference
 
@@ -52,9 +48,7 @@ server/main.ts (production) / server/dev.ts (development)
               ├── server/api/health.ts
               ├── server/api/public.ts
               ├── server/api/auth.ts
-              ├── server/api/authenticated.ts
-              ├── server/api/admin.ts
-              ├── server/api/materialDownload.ts
+              ├── server/api/<feature>.ts  one handler group per feature
               ├── server/api/testing.ts (non-production)
               └── app/        TanStack Start pages; server functions use runServerEffect
 ```
@@ -126,6 +120,7 @@ courseService.listCourses().pipe(withAuthContext(auth.session.id))
 Three-schema separation:
 
 - `app_public` — user-facing tables with RLS policies
+- `app_hidden` — internal tables; the visitor role has USAGE on it
 - `app_private` — secrets, sessions, auth functions (SECURITY DEFINER)
 
 RLS policies derive user context from `current_setting('my.session_id')` joined through `app_private.sessions`.
@@ -188,9 +183,7 @@ Benign warning, no functionality impact.
 | `server/api/health.ts`                     | GET /healthz (database and worker)                    |
 | `server/api/public.ts`                     | Public endpoints (contact, OAuth)                     |
 | `server/api/auth.ts`                       | Auth endpoints (login, logout, me, password)          |
-| `server/api/authenticated.ts`              | Authed endpoints (courses, messages, lessons)         |
-| `server/api/admin.ts`                      | Admin endpoints (CRUD, gcal, settings)                |
-| `server/api/materialDownload.ts`           | Material file download                                |
+| `server/api/<feature>.ts`                  | One handler group per feature                         |
 | `server/api/testing.ts`                    | Test data seeding (non-production)                    |
 | `server/services/sessionService.ts`        | Session CRUD (PG)                                     |
 | `server/services/authService.ts`           | Login, password reset                                 |

@@ -1,0 +1,7 @@
+# Runtime behavior and deployment
+
+Production runs on the server-ansible platform (`~/build/server-ansible`), described by `cartridge.json`. `ops release` builds the Dockerfile from committed HEAD, so the image never sees `.env` or `generated/`. Traefik ends TLS and sets `X-Real-Ip`, the only client-address header the rate limiter trusts. `cartridge.json` asks for Valkey, and the platform sets `VALKEY_URL` and `VALKEY_KEY_PREFIX` (`dfg-rocks:`, the only keys the app's Valkey user may touch). The platform creates `dfg_rocks_owner` and `dfg_rocks_visitor` group roles, a migration login in the owner role, and a NOINHERIT API login in the visitor role. The server prestart runs `bun run migrate`, which installs the graphile-worker schema and applies committed migrations.
+
+The server reads each setting with Effect `Config` where it uses it. Worker tasks read `process.env`, and the graphile-worker CLI takes `DATABASE_URL` from the environment.
+
+The server waits for both Postgres pools, and in production for Valkey (a PING), before it starts the worker or opens its port (`server/dependencies.ts`). Each retries for about 78 s, then startup fails with `DependencyUnavailable` naming it. The worker runner starts while its layer builds (`server/services/backgroundWorker.ts`), and a runner that cannot start stops the server. After boot, a Valkey outage does not stop the server: each rate-limit rule applies its `whenStoreDown` policy, and `/healthz` reports a worker that stopped.
