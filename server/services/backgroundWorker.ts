@@ -16,8 +16,7 @@ export const effectTasks = (templateDirectory: string) => ({
 });
 
 export interface BackgroundWorkerShape {
-  // True once the runner has failed to start, or has stopped before its layer closed.
-  readonly failed: Effect.Effect<boolean>;
+  readonly isRunning: Effect.Effect<boolean>;
 }
 
 /**
@@ -32,29 +31,23 @@ export class BackgroundWorker extends Context.Service<BackgroundWorker, Backgrou
    * `workerDirectory` holds the runner's files: tasks/, crontab and templates/. The caller passes
    * it, because inside the server bundle no module sits next to those files.
    *
-   * A runner that fails to start is logged and reported through `failed`, and the layer is still
-   * built, so the HTTP server keeps serving.
+   * A runner that fails to start fails this layer, so the HTTP server does not bind.
    */
   static readonly layer = (workerDirectory: string) =>
     Layer.effect(this, makeBackgroundWorker(workerDirectory));
 }
 
 const makeBackgroundWorker = Effect.fnUntraced(function* (workerDirectory: string) {
-  const failedRef = yield* Ref.make(false);
-  const markFailed = Ref.set(failedRef, true);
-  yield* startRunner(workerDirectory, failedRef).pipe(
-    Effect.catch((cause) =>
-      Effect.logError("Worker failed to start", cause).pipe(Effect.andThen(markFailed)),
-    ),
-  );
-  return { failed: Ref.get(failedRef) } satisfies BackgroundWorkerShape;
+  const runningRef = yield* Ref.make(false);
+  yield* startRunner(workerDirectory, runningRef);
+  return { isRunning: Ref.get(runningRef) } satisfies BackgroundWorkerShape;
 });
 
 // Everything the runner holds is released in reverse order when the scope closes: the watcher,
 // then the runner, then the task files and the Mailer the runner uses.
 const startRunner = Effect.fnUntraced(function* (
   workerDirectory: string,
-  failedRef: Ref.Ref<boolean>,
+  runningRef: Ref.Ref<boolean>,
 ) {
   const connectionString = Redacted.value(yield* Config.Redacted("DATABASE_URL"));
   const files = yield* Effect.context<
@@ -94,22 +87,24 @@ const startRunner = Effect.fnUntraced(function* (
         taskList: { ...loaded.tasks, ...registered },
       }),
     ),
-    stopRunner(failedRef),
+    stopRunner(runningRef),
   );
+  yield* Ref.set(runningRef, true);
   // Interrupted when the scope closes, before the runner is stopped, so a normal shutdown does not
-  // mark the runner failed.
+  // log the runner's planned stop as an error.
   yield* Effect.tryPromise({ try: () => runner.promise, catch: (cause) => cause }).pipe(
     Effect.catch((cause) => Effect.logError("Worker stopped with an error", cause)),
-    Effect.andThen(Ref.set(failedRef, true)),
+    Effect.andThen(Ref.set(runningRef, false)),
     Effect.forkScoped,
   );
 });
 
 // A runner that has settled stopped itself, and `stop` throws on a stopped runner, so it is skipped.
-const stopRunner = (failedRef: Ref.Ref<boolean>) => (runner: Runner) =>
+const stopRunner = (runningRef: Ref.Ref<boolean>) => (runner: Runner) =>
   Effect.gen(function* () {
-    if (yield* Ref.get(failedRef)) return;
+    if (!(yield* Ref.get(runningRef))) return;
     yield* Effect.tryPromise({ try: () => runner.stop(), catch: (cause) => cause }).pipe(
       Effect.catch((cause) => Effect.logError("Worker failed to stop", cause)),
     );
+    yield* Ref.set(runningRef, false);
   });

@@ -23,10 +23,10 @@ export function makeHealthLayer() {
             ),
           );
           const worker = yield* BackgroundWorker;
-          const workerFailed = yield* worker.failed;
+          const workerRunning = yield* worker.isRunning;
           const failed = [
             ...(databaseDown ? ["database"] : []),
-            ...(workerFailed ? ["worker"] : []),
+            ...(!workerRunning ? ["worker"] : []),
           ];
           if (failed.length > 0) {
             return yield* new HealthUnavailableError({ commit, failed });
