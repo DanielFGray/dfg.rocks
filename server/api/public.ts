@@ -7,6 +7,7 @@ import { HttpError } from "../pgErrors.js";
 import {
   decodeOAuthRedirect,
   decodeOAuthState,
+  emailVerifiedClaim,
   encodeOAuthRedirect,
   encodeOAuthState,
   getOAuthCookieName,
@@ -46,6 +47,7 @@ const fetchGoogleUserInfo = Effect.fnUntraced(function* (accessToken: string) {
   return {
     ...userInfo,
     sub: userInfo.sub,
+    email_verified: emailVerifiedClaim(userInfo.email_verified),
   };
 });
 
@@ -246,9 +248,13 @@ export const PublicApiGroupLive = HttpApiBuilder.group(Contract, "public", (hand
         }
         const firstName = user?.name?.firstName;
         const lastName = user?.name?.lastName;
+        // The id token's email is the provider-verified one. The form-post `user.email`
+        // is not signed by Apple, so it never counts as verified.
+        const claimEmail = typeof claims.email === "string" ? claims.email : undefined;
         const profile = {
           sub,
-          email: typeof claims.email === "string" ? claims.email : user?.email,
+          email: claimEmail ?? user?.email,
+          email_verified: claimEmail !== undefined && emailVerifiedClaim(claims.email_verified),
           name: [firstName, lastName].filter(Boolean).join(" ").trim() || undefined,
         };
         const linkedUser = yield* OAuth.use((oauthService) =>

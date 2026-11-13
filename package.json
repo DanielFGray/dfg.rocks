@@ -24,7 +24,7 @@
     "test": "run-s typecheck lint test:unit test:worker test:bun test:e2e",
     "test:unit": "vitest run",
     "test:worker": "bun test worker/test",
-    "test:bun": "bun test server/test/s3Objects.bun.test.ts",
+    "test:bun": "bun test server/test/s3Objects.bun.test.ts server/test/oauthLink.bun.test.ts",
     "test:e2e": "playwright test",
     "e2e:server": "bun scripts/e2eServer.ts",
     "migrate": "bun --cwd=worker graphile-worker --schema-only && graphile-migrate migrate",

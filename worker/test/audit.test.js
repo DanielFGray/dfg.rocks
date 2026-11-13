@@ -65,7 +65,7 @@ describe("security audit mail", () => {
   test("OAuth sign-in that links a verified email queues an audit event for that user", async () => {
     const identifier = `audit_${crypto.randomUUID()}`;
     await pool.query(
-      "select app_private.link_or_register_user(null, 'google', $1, json_build_object('email', $2::text), '{}'::json)",
+      "select app_private.link_or_register_user(null, 'google', $1, json_build_object('email', $2::text, 'email_verified', true), '{}'::json)",
       [identifier, email],
     );
     const queued = await pool.query(

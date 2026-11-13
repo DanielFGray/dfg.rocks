@@ -13,6 +13,7 @@ import { catchPgErrors, HttpError } from "../pgErrors.js";
 import { sql } from "kysely";
 import { type UserRow } from "./users.js";
 import { PgRootDB } from "../db.js";
+import { BooleanFromString } from "../../shared/schemas.js";
 
 /** Accounts that sign in through an OAuth provider. */
 export class OAuth extends Context.Service<OAuth>()("dfg-rocks/oauth", {
@@ -133,6 +134,16 @@ export class OAuth extends Context.Service<OAuth>()("dfg-rocks/oauth", {
 }) {
   static readonly layer = Layer.effect(this, this.make).pipe(Layer.provide(PgRootDB.layer));
 }
+
+/**
+ * Reads a provider's `email_verified` claim. Apple sends it as a boolean or as the
+ * string "true" / "false", so both forms decode. A missing or unreadable claim counts
+ * as unverified: the database only links or trusts an email the provider verified.
+ */
+export const emailVerifiedClaim = (claim: unknown): boolean =>
+  Option.getOrElse(S.decodeUnknownOption(EmailVerifiedClaim)(claim), () => false);
+
+const EmailVerifiedClaim = S.Union([S.Boolean, BooleanFromString]);
 
 const oauthScopeByProvider = {
   google: ["openid", "email", "profile"],

@@ -46,7 +46,10 @@ begin
           'extra2', f_identifier,
           'current_user_id', app_public.current_user_id()
         ));
-    elsif v_email is not null then
+    elsif v_email is not null
+      and coalesce((f_profile ->> 'email_verified')::boolean, false) is true then
+      -- Link by email only when the provider marks the address verified; an
+      -- unverified provider address must not sign in as an existing user.
       -- See if the email is registered
       select * into v_user_email from app_public.user_emails where email = v_email and is_verified is true;
       if v_user_email is not null then
@@ -70,7 +73,13 @@ begin
 
   if v_matched_user_id is null and f_user_id is null and v_matched_authentication_id is null then
     -- Create and return a new user account
-    return app_private.register_user(f_service, f_identifier, f_profile, f_auth_details, true);
+    return app_private.register_user(
+      f_service,
+      f_identifier,
+      f_profile,
+      f_auth_details,
+      coalesce((f_profile ->> 'email_verified')::boolean, false)
+    );
   end if;
 
   if v_matched_authentication_id is null then
