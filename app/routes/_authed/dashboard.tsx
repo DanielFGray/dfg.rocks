@@ -23,6 +23,7 @@ import {
   serializeLesson,
   serializeTestimonial,
   normalizeStudents,
+  toIsoString,
 } from "../../../shared/responseMappers.js";
 import { todayRange, weekRange } from "../../../shared/dateRanges.js";
 import { toServerFunctionPayload } from "../../lib/serverFunctionPayload.js";
@@ -71,6 +72,12 @@ const getDashboardPageData = createServerFn({ method: "GET" }).handler(() =>
           courses: AdminRouteService.use((adminRouteService) =>
             adminRouteService.listCourses(session.session.id),
           ),
+          submissions: AdminRouteService.use((adminRouteService) =>
+            adminRouteService.listSubmissions(session.session.id, 5000, 0),
+          ),
+          testimonials: AdminRouteService.use((adminRouteService) =>
+            adminRouteService.listTestimonials(session.session.id),
+          ),
         });
 
         // Explicitly type the arrays to fix inference
@@ -107,6 +114,15 @@ const getDashboardPageData = createServerFn({ method: "GET" }).handler(() =>
           todayLessons: adminTodayLessons,
           weekLessons: adminWeekLessons,
           courses: [...S.decodeUnknownSync(S.Array(SharedSchemas.Course))(data.courses)],
+          unreadSubmissions: data.submissions
+            .filter((submission) => !submission.is_read)
+            .map((submission) => ({
+              ...submission,
+              created_at: toIsoString(submission.created_at),
+            })),
+          pendingTestimonials: data.testimonials
+            .filter((testimonial) => !testimonial.is_approved)
+            .map(serializeTestimonial),
         });
       }
 
@@ -257,6 +273,8 @@ function DashboardPage() {
           messages={data.messages}
           students={data.students}
           courses={data.courses}
+          unreadSubmissions={data.unreadSubmissions}
+          pendingTestimonials={data.pendingTestimonials}
         />
       ) : showParentOnboarding ? (
         <ParentOnboarding isFirstStudent={true} onSuccess={() => router.invalidate()} />
