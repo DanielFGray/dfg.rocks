@@ -1,9 +1,37 @@
 import { test, expect, loginViaUi } from "./helpers.js";
+import type { Page } from "@playwright/test";
+
+type Child = { id: string; username: string };
+
+const createChild = async (page: Page, name: string): Promise<Child> => {
+  const res = await page.request.post(new URL("/api/create-child", page.url()).toString(), {
+    data: { name },
+    headers: { "Content-Type": "application/json", "X-Requested-With": "dfg" },
+  });
+  expect(res.status()).toBe(200);
+  return res.json();
+};
+
+/**
+ * Creating a child makes it the session's active student, so a fresh login (a session with no
+ * active student) is the parent's starting point: it shows the student cards.
+ */
+const loginAsParentWithTwoChildren = async (page: Page) => {
+  await loginViaUi(page, "test_parent_parity", "testpassword123");
+  const one = await createChild(page, "Student One");
+  const two = await createChild(page, "Student Two");
+  await loginViaUi(page, "test_parent_parity", "testpassword123");
+  return { one, two };
+};
+
+/** The nav switcher is the way to change student once one is active; the cards show only with none. */
+const switchViaNav = async (page: Page, student: Child, name: string) => {
+  await page.locator('[data-testid="student-switcher"]:visible').click();
+  await page.getByTestId(`select-option-${student.id}`).click();
+  await expect(page.locator('[data-testid="student-switcher"]:visible')).toContainText(name);
+};
 
 test.describe("active-student switching parity", () => {
-  let studentOneId: string;
-  let studentTwoId: string;
-
   test.beforeEach(async ({ testing }) => {
     await testing.clear();
     // Create a parent with two students
@@ -43,38 +71,15 @@ test.describe("active-student switching parity", () => {
   });
 
   test("parent can switch between children and see correct dashboard data", async ({ page }) => {
-    // First, get the student IDs by creating them via API
-    await loginViaUi(page, "test_parent_parity", "testpassword123");
-
-    // Create student one via API
-    const createOneRes = await page.request.post(new URL("/api/create-child", page.url()).toString(), {
-      data: { name: "Student One" },
-      headers: { "Content-Type": "application/json", "X-Requested-With": "dfg" },
-    });
-    expect(createOneRes.status()).toBe(200);
-    const studentOne = await createOneRes.json();
-    studentOneId = studentOne.id;
-
-    // Create student two via API
-    const createTwoRes = await page.request.post(new URL("/api/create-child", page.url()).toString(), {
-      data: { name: "Student Two" },
-      headers: { "Content-Type": "application/json", "X-Requested-With": "dfg" },
-    });
-    expect(createTwoRes.status()).toBe(200);
-    const studentTwo = await createTwoRes.json();
-    studentTwoId = studentTwo.id;
-
-    // Reload to see the students
-    await page.goto("/dashboard");
-    await expect(page.getByTestId("dashboard")).toBeVisible();
+    const { one, two } = await loginAsParentWithTwoChildren(page);
 
     // Should show ParentDashboard initially (no active student)
     await expect(page.getByText("Your Students")).toBeVisible();
-    await expect(page.getByTestId(`student-card-${studentOneId}`)).toBeVisible();
-    await expect(page.getByTestId(`student-card-${studentTwoId}`)).toBeVisible();
+    await expect(page.getByTestId(`student-card-${one.id}`)).toBeVisible();
+    await expect(page.getByTestId(`student-card-${two.id}`)).toBeVisible();
 
     // Switch to Student One
-    await page.getByTestId(`switch-to-${studentOneId}`).click();
+    await page.getByTestId(`switch-to-${one.id}`).click();
     await expect(page.getByTestId("dashboard")).toBeVisible();
     // Dashboard should now show Student One's view
     await expect(page.getByText("Welcome back, Student")).toBeVisible();
@@ -83,151 +88,79 @@ test.describe("active-student switching parity", () => {
     await expect(page.getByText("No upcoming lessons")).toBeVisible();
 
     // Switch to Student Two
-    await page.getByTestId(`switch-to-${studentTwoId}`).click();
+    await switchViaNav(page, two, "Student Two");
     await expect(page.getByTestId("dashboard")).toBeVisible();
     await expect(page.getByText("Welcome back, Student")).toBeVisible();
     await expect(page.getByText("No upcoming lessons")).toBeVisible();
   });
 
   test("parent switching children updates courses page", async ({ page, testing }) => {
-    await loginViaUi(page, "test_parent_parity", "testpassword123");
-
-    // Create students if not already created
-    if (!studentOneId) {
-      const createOneRes = await page.request.post(new URL("/api/create-child", page.url()).toString(), {
-        data: { name: "Student One" },
-        headers: { "Content-Type": "application/json", "X-Requested-With": "dfg" },
-      });
-      expect(createOneRes.status()).toBe(200);
-      const studentOne = await createOneRes.json();
-      studentOneId = studentOne.id;
-
-      const createTwoRes = await page.request.post(new URL("/api/create-child", page.url()).toString(), {
-        data: { name: "Student Two" },
-        headers: { "Content-Type": "application/json", "X-Requested-With": "dfg" },
-      });
-      expect(createTwoRes.status()).toBe(200);
-      const studentTwo = await createTwoRes.json();
-      studentTwoId = studentTwo.id;
-    }
+    const { one, two } = await loginAsParentWithTwoChildren(page);
 
     // Seed courses for each student
     await testing.seedCourse({
       title: "Piano Basics",
       instrument: "piano",
     });
-    await testing.enroll("student_one", "Piano Basics");
+    await testing.enroll(one.username, "Piano Basics");
 
     await testing.seedCourse({
       title: "Guitar Fundamentals",
       instrument: "guitar",
     });
-    await testing.enroll("student_two", "Guitar Fundamentals");
+    await testing.enroll(two.username, "Guitar Fundamentals");
 
     // Switch to Student One
-    await page.getByTestId(`switch-to-${studentOneId}`).click();
+    await page.getByTestId(`switch-to-${one.id}`).click();
     await page.goto("/courses");
     await expect(page.getByTestId("courses")).toBeVisible();
     await expect(page.getByText("Piano Basics")).toBeVisible();
     await expect(page.getByText("Guitar Fundamentals")).not.toBeVisible();
 
     // Switch to Student Two
-    await page.getByTestId(`switch-to-${studentTwoId}`).click();
+    await switchViaNav(page, two, "Student Two");
     await page.goto("/courses");
     await expect(page.getByTestId("courses")).toBeVisible();
     await expect(page.getByText("Guitar Fundamentals")).toBeVisible();
     await expect(page.getByText("Piano Basics")).not.toBeVisible();
   });
 
-  test("parent switching children updates messages page", async ({ page, testing }) => {
-    await loginViaUi(page, "test_parent_parity", "testpassword123");
-
-    // Create students if not already created
-    if (!studentOneId) {
-      const createOneRes = await page.request.post(new URL("/api/create-child", page.url()).toString(), {
-        data: { name: "Student One" },
-        headers: { "Content-Type": "application/json", "X-Requested-With": "dfg" },
-      });
-      expect(createOneRes.status()).toBe(200);
-      const studentOne = await createOneRes.json();
-      studentOneId = studentOne.id;
-
-      const createTwoRes = await page.request.post(new URL("/api/create-child", page.url()).toString(), {
-        data: { name: "Student Two" },
-        headers: { "Content-Type": "application/json", "X-Requested-With": "dfg" },
-      });
-      expect(createTwoRes.status()).toBe(200);
-      const studentTwo = await createTwoRes.json();
-      studentTwoId = studentTwo.id;
-    }
-
-    // Login as teacher and send messages to each student
-    await testing.login({
-      username: "teacher_parity",
-      role: "teacher",
-      email: "teacher_parity@test.local",
-    });
-
-    // Note: Would need a helper to send messages to specific students
-    // For now, just verify the page loads and switches
-
-    await loginViaUi(page, "test_parent_parity", "testpassword123");
+  test("parent switching children updates messages page", async ({ page }) => {
+    const { one, two } = await loginAsParentWithTwoChildren(page);
 
     // Switch to Student One
-    await page.getByTestId(`switch-to-${studentOneId}`).click();
+    await page.getByTestId(`switch-to-${one.id}`).click();
     await page.goto("/messages");
     await expect(page.getByTestId("messages")).toBeVisible();
-    // Verify messages page loads for Student One
 
     // Switch to Student Two
-    await page.getByTestId(`switch-to-${studentTwoId}`).click();
+    await switchViaNav(page, two, "Student Two");
     await page.goto("/messages");
     await expect(page.getByTestId("messages")).toBeVisible();
-    // Verify messages page loads for Student Two
   });
 
-  test("parent switching children resets booking state", async ({ page }) => {
-    await loginViaUi(page, "test_parent_parity", "testpassword123");
-
-    // Create students if not already created
-    if (!studentOneId) {
-      const createOneRes = await page.request.post(new URL("/api/create-child", page.url()).toString(), {
-        data: { name: "Student One" },
-        headers: { "Content-Type": "application/json", "X-Requested-With": "dfg" },
-      });
-      expect(createOneRes.status()).toBe(200);
-      const studentOne = await createOneRes.json();
-      studentOneId = studentOne.id;
-
-      const createTwoRes = await page.request.post(new URL("/api/create-child", page.url()).toString(), {
-        data: { name: "Student Two" },
-        headers: { "Content-Type": "application/json", "X-Requested-With": "dfg" },
-      });
-      expect(createTwoRes.status()).toBe(200);
-      const studentTwo = await createTwoRes.json();
-      studentTwoId = studentTwo.id;
-    }
+  test("parent sees unavailable booking when Google Calendar is disconnected", async ({ page }) => {
+    const { two } = await loginAsParentWithTwoChildren(page);
 
     // Go to book-lesson page
     await page.goto("/book-lesson");
     await expect(page.getByTestId("book-lesson")).toBeVisible();
+    await expect(
+      page.getByText(
+        "Online booking is unavailable right now. Please contact your teacher to book a lesson.",
+      ),
+    ).toBeVisible();
 
-    // Select Student One in the booking student selector
-    await page.getByTestId("booking-student").click();
-    await page.getByTestId(`select-option-${studentOneId}`).click();
-
-    // Verify Student One is selected
-    await expect(page.getByTestId("booking-student")).toContainText("Student One");
-
-    // Switch to Student Two via dashboard
-    await page.goto("/dashboard");
-    await page.getByTestId(`switch-to-${studentTwoId}`).click();
+    // Switch to Student Two through the nav switcher
+    await switchViaNav(page, two, "Student Two");
 
     // Go back to book-lesson
     await page.goto("/book-lesson");
     await expect(page.getByTestId("book-lesson")).toBeVisible();
-
-    // Booking student should now be Student Two (reset to active student)
-    await expect(page.getByTestId("booking-student")).toContainText("Student Two");
+    await expect(
+      page.getByText(
+        "Online booking is unavailable right now. Please contact your teacher to book a lesson.",
+      ),
+    ).toBeVisible();
   });
 });

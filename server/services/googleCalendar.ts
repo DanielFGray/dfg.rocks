@@ -11,6 +11,7 @@ import * as HttpClient from "effect/http/HttpClient";
 import * as HttpBody from "effect/http/HttpBody";
 import { PgRootDB } from "../db.js";
 import { HttpError } from "../pgErrors.js";
+import type { AvailableSlots } from "../../shared/api/lessons.js";
 import { type TimeSlot, WorkingHours } from "../../shared/schemas.js";
 import { defaultWorkingHours } from "../../shared/workingHours.js";
 
@@ -533,18 +534,23 @@ export class GoogleCalendar extends Context.Service<GoogleCalendar>()("dfg-rocks
         days: number;
         duration: number;
       }) {
+        if (typeof (yield* getSettingEffect("gcal_refresh_token")) !== "string")
+          return { _tag: "CalendarNotConnected" } satisfies AvailableSlots;
         const workingHours = yield* readWorkingHours();
         const startDate = new Date(`${params.date}T00:00:00`);
         const endDate = new Date(startDate);
         endDate.setDate(endDate.getDate() + params.days);
         const events = yield* listEventsEffect(startDate.toISOString(), endDate.toISOString());
-        return computeAvailableSlots(
-          events,
-          params.date,
-          params.days,
-          params.duration,
-          workingHours,
-        );
+        return {
+          _tag: "Slots",
+          slots: computeAvailableSlots(
+            events,
+            params.date,
+            params.days,
+            params.duration,
+            workingHours,
+          ),
+        } satisfies AvailableSlots;
       }),
 
       getWorkingHours: readWorkingHours,

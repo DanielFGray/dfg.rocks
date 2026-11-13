@@ -15,6 +15,22 @@ const event = {
 };
 
 it.layer(PgRootDB.layer)("Google Calendar retry contracts", (test) => {
+  test.effect("reports when no Google Calendar refresh token is stored", () =>
+    Effect.gen(function* () {
+      yield* withoutRefreshToken;
+      const result = yield* GoogleCalendar.make.pipe(
+        Effect.flatMap((calendar) =>
+          calendar.getAvailableSlots({ date: "2026-07-14", days: 7, duration: 60 }),
+        ),
+        Effect.provideService(
+          HttpClient.HttpClient,
+          HttpClient.make(() => Effect.die(new Error("Google Calendar must not be called"))),
+        ),
+      );
+      expect(result).toEqual({ _tag: "CalendarNotConnected" });
+    }).pipe(Effect.scoped),
+  );
+
   test.effect("creates the caller's stable event ID", () =>
     Effect.gen(function* () {
       yield* configureCalendar;
@@ -147,6 +163,28 @@ const configureCalendar = Effect.acquireRelease(
   ({ db, keys, previous }) =>
     Effect.gen(function* () {
       yield* db.execute(db.deleteFrom("app_private.admin_settings").where("key", "in", keys));
+      if (previous.length)
+        yield* db.execute(
+          db
+            .insertInto("app_private.admin_settings")
+            .values(previous.map((row) => ({ key: row.key, value: JSON.stringify(row.value) }))),
+        );
+    }).pipe(Effect.orDie),
+);
+
+const withoutRefreshToken = Effect.acquireRelease(
+  Effect.gen(function* () {
+    const db = yield* PgRootDB;
+    const key = "gcal_refresh_token";
+    const previous = yield* db.execute(
+      db.selectFrom("app_private.admin_settings").select(["key", "value"]).where("key", "=", key),
+    );
+    yield* db.execute(db.deleteFrom("app_private.admin_settings").where("key", "=", key));
+    return { db, key, previous };
+  }),
+  ({ db, key, previous }) =>
+    Effect.gen(function* () {
+      yield* db.execute(db.deleteFrom("app_private.admin_settings").where("key", "=", key));
       if (previous.length)
         yield* db.execute(
           db

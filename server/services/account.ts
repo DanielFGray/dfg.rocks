@@ -42,6 +42,8 @@ export class Account extends Context.Service<Account>()("dfg-rocks/account", {
             db
               .selectFrom("app_public.user_emails")
               .select(["id", "email", "is_verified", "is_primary", "created_at"])
+              // RLS lets an admin read every user's emails; this list is the caller's own.
+              .where("user_id", "=", sql<string>`app_public.current_user_id()`)
               .orderBy("is_primary", "desc")
               .orderBy("created_at", "asc"),
           ),

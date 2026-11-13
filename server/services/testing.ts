@@ -156,7 +156,28 @@ export class Testing extends Context.Service<Testing>()("dfg-rocks/testing", {
         );
         const testUserIds = testUsers.map((u) => u.id);
 
-        yield* db.execute(db.deleteFrom("app_public.families").where("slug", "like", "test-%"));
+        // A test names its family freely ("parity-family"), so the slug prefix alone would leave
+        // the family behind and the next seed-family would hit the unique slug.
+        yield* db.execute(
+          db.deleteFrom("app_public.families").where((eb) =>
+            eb.or([
+              eb("slug", "like", "test-%"),
+              eb(
+                "id",
+                "in",
+                eb
+                  .selectFrom("app_public.family_memberships")
+                  .select("family_id")
+                  .where("user_id", "in", (qb) =>
+                    qb
+                      .selectFrom("app_public.users")
+                      .select("id")
+                      .where("username", "like", "test_%"),
+                  ),
+              ),
+            ]),
+          ),
+        );
 
         const testMaterialFiles = yield* db.execute(
           db

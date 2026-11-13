@@ -30,6 +30,12 @@ const AvailableSlotsQuery = S.Struct({
   duration: S.optional(S.FiniteFromString),
 });
 
+export const AvailableSlots = S.Union([
+  S.TaggedStruct("CalendarNotConnected", {}),
+  S.TaggedStruct("Slots", { slots: S.Array(TimeSlot) }),
+]);
+export type AvailableSlots = S.Schema.Type<typeof AvailableSlots>;
+
 const BookLessonPayload = S.Struct({
   scheduled_at: S.DateFromString,
   duration_minutes: S.Finite,
@@ -123,7 +129,7 @@ export const lessonsGroup = HttpApiGroup.make("lessons")
     HttpApiEndpoint.get("availableSlots", "/available-slots", {
       error: signedInErrors,
       query: AvailableSlotsQuery,
-      success: S.Array(TimeSlot),
+      success: AvailableSlots,
     }),
   )
   .add(
