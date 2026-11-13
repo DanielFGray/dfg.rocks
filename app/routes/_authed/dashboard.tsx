@@ -21,6 +21,7 @@ import { Testimonials } from "../../../server/services/testimonials.js";
 import { TestimonialReminder } from "../../../server/services/testimonialReminder.js";
 import { Sessions, resolveEffectiveStudent } from "../../../server/services/sessions.js";
 import { Lessons } from "../../../server/services/lessons.js";
+import { Practice } from "../../../server/services/practice.js";
 import * as SharedSchemas from "../../../shared/schemas.js";
 import {
   serializeMessage,
@@ -71,6 +72,10 @@ const getDashboardPageData = createServerFn({ method: "GET" }).handler(() =>
               }),
             ),
             courses: Courses.use((courseService) => courseService.listCourses()),
+            submissions: Practice.use((practiceService) => practiceService.listSubmissions(5000, 0)),
+            testimonials: Testimonials.use((testimonialService) =>
+              testimonialService.listTestimonials(),
+            ),
           });
           const adminMessages: ReturnType<typeof serializeMessage>[] =
             data.messages.map(serializeMessage);
@@ -85,6 +90,10 @@ const getDashboardPageData = createServerFn({ method: "GET" }).handler(() =>
             todayLessons: adminTodayLessons,
             weekLessons: adminWeekLessons,
             courses: [...(yield* S.decodeEffect(S.Array(SharedSchemas.Course))(data.courses))],
+            unreadSubmissions: data.submissions.filter((submission) => !submission.is_read),
+            pendingTestimonials: data.testimonials
+              .filter((testimonial) => !testimonial.is_approved)
+              .map(serializeTestimonial),
           };
         }
 
@@ -197,6 +206,8 @@ function DashboardPage() {
           messages={data.messages}
           students={data.students}
           courses={data.courses}
+          unreadSubmissions={data.unreadSubmissions}
+          pendingTestimonials={data.pendingTestimonials}
         />
       ) : showParentOnboarding ? (
         <ParentOnboarding isFirstStudent={true} onSuccess={() => router.invalidate()} />

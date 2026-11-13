@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import type { Course, Message, Lesson, User } from "../../../shared/schemas.js";
+import type { Course, Message, Lesson, Submission, Testimonial, User } from "../../../shared/schemas.js";
 import { useAuth } from "../../lib/hooks/useAuth.js";
 import { Button } from "../ui/Button.js";
 import { Card } from "../ui/Card.js";
@@ -11,12 +11,16 @@ export function AdminDashboard({
   messages,
   students,
   courses,
+  unreadSubmissions,
+  pendingTestimonials,
 }: {
   todayLessons: Lesson[];
   weekLessons: Lesson[];
   messages: Message[];
   students: User[];
   courses: Course[];
+  unreadSubmissions: Submission[];
+  pendingTestimonials: Testimonial[];
 }) {
   const { user } = useAuth();
 
@@ -58,6 +62,46 @@ export function AdminDashboard({
           })}
         </p>
       </div>
+
+      {/* ---- Needs attention: unread contact submissions, testimonials awaiting approval ---- */}
+      {unreadSubmissions.length > 0 || pendingTestimonials.length > 0 ? (
+        <section className="mb-8" data-testid="dashboard-attention">
+          <h2 className="mb-4 text-lg font-semibold">Needs Attention</h2>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {unreadSubmissions.length > 0 ? (
+              <Link to="/submissions" className="no-underline" data-testid="attention-submissions">
+                <Card>
+                  <p className="text-2xl font-bold text-accent">
+                    {String(unreadSubmissions.length)}
+                  </p>
+                  <p className="text-sm font-medium text-primary dark:text-primary-dark">
+                    Unread {unreadSubmissions.length === 1 ? "submission" : "submissions"}
+                  </p>
+                  <p className="line-clamp-1 text-sm text-muted dark:text-muted-dark">
+                    Latest: {latestBy(unreadSubmissions, (s) => s.created_at).name}
+                  </p>
+                </Card>
+              </Link>
+            ) : null}
+            {pendingTestimonials.length > 0 ? (
+              <Link to="/settings" className="no-underline" data-testid="attention-testimonials">
+                <Card>
+                  <p className="text-2xl font-bold text-accent">
+                    {String(pendingTestimonials.length)}
+                  </p>
+                  <p className="text-sm font-medium text-primary dark:text-primary-dark">
+                    {pendingTestimonials.length === 1 ? "Testimonial" : "Testimonials"} awaiting
+                    approval
+                  </p>
+                  <p className="line-clamp-1 text-sm text-muted dark:text-muted-dark">
+                    Latest: {latestBy(pendingTestimonials, (t) => t.updated_at).display_name}
+                  </p>
+                </Card>
+              </Link>
+            ) : null}
+          </div>
+        </section>
+      ) : null}
 
       {/* ---- Today's Lessons ---- */}
       <section className="mb-8">
@@ -264,4 +308,8 @@ export function AdminDashboard({
       </section>
     </>
   );
+}
+
+function latestBy<T>(items: T[], timestamp: (item: T) => Date): T {
+  return items.reduce((a, b) => (timestamp(b) > timestamp(a) ? b : a));
 }
