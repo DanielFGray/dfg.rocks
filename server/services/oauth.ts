@@ -11,7 +11,7 @@ import * as S from "effect/Schema";
 import { createRemoteJWKSet, jwtVerify } from "jose";
 import { catchPgErrors, HttpError } from "../pgErrors.js";
 import { sql } from "kysely";
-import { type UserRow } from "./users.js";
+import type { UserRow } from "./users.js";
 import { PgRootDB } from "../db.js";
 import { BooleanFromString } from "../../shared/schemas.js";
 

@@ -4,7 +4,7 @@ import { RequestDatabase } from "../requestDatabase.js";
 import { HttpError } from "../pgErrors.js";
 import { TestimonialReminder } from "./testimonialReminder.js";
 import { serializeTestimonial } from "../../shared/responseMappers.js";
-import { type Testimonial } from "../../shared/schemas.js";
+import type { Testimonial } from "../../shared/schemas.js";
 
 /** Testimonials: a user's own, the approved ones on the home page, and their approval. */
 export class Testimonials extends Context.Service<Testimonials>()("dfg-rocks/testimonials", {

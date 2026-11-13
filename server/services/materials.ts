@@ -1,5 +1,5 @@
 import { Effect, Option, Context, Layer } from "effect";
-import { type Database } from "../db.js";
+import type { Database } from "../db.js";
 import { RequestDatabase } from "../requestDatabase.js";
 import { resolveAssignedTrackIndex } from "./notationService.js";
 import { HttpError } from "../pgErrors.js";

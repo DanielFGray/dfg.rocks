@@ -1,20 +1,20 @@
-import {
-  type Adjustment as AdjustmentResponse,
-  type BillDetailResponse as BillDetailResponseType,
-  type CreditApplication as CreditApplicationResponse,
-  type Discount as DiscountResponse,
-  type Refund as RefundResponse,
-  type TaxRate as TaxRateResponse,
+import type {
+  Adjustment as AdjustmentResponse,
+  BillDetailResponse as BillDetailResponseType,
+  CreditApplication as CreditApplicationResponse,
+  Discount as DiscountResponse,
+  Refund as RefundResponse,
+  TaxRate as TaxRateResponse,
 } from "../../shared/schemas.js";
-import { type Selectable } from "kysely";
-import {
-  type AppPublicBills,
-  type AppPublicBillLineItems,
-  type AppPublicBillAdjustments,
-  type AppPublicCreditApplications,
-  type AppPublicDiscounts,
-  type AppPublicTaxRates,
-  type AppPublicRefunds,
+import type { Selectable } from "kysely";
+import type {
+  AppPublicBills,
+  AppPublicBillLineItems,
+  AppPublicBillAdjustments,
+  AppPublicCreditApplications,
+  AppPublicDiscounts,
+  AppPublicTaxRates,
+  AppPublicRefunds,
 } from "../../generated/db.js";
 
 // Wire forms of billing rows for the admin billing endpoints.
