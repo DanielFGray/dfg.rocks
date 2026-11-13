@@ -193,7 +193,8 @@ Benign warning, no functionality impact.
 
 ## Rules
 
-- Write migrations in `migrations/current/` as numbered files (`1-schemas.sql`, `2-users.sql`). Graphile Migrate writes `migrations/committed/`. Run `graphile-migrate commit` before a release that needs the change; production applies committed migrations only.
+- Write migrations in `migrations/current/` as numbered files (`1-schemas.sql`, `2-users.sql`). Each file must run more than once without error (`create or replace`, `drop ... if exists` before `create`, `if not exists`): `graphile-migrate watch` runs it again after each edit, and the commit at release runs it on a database that already has it.
+- Release: from a clean checkout on `main`, run `ops promote <branch>`. It merges the branch, commits `migrations/current/` into `migrations/committed/` (`build(db): commit migration`), signs the tree off and prints the push command. A push of `main` to `cynic` releases; the user pushes. Production applies committed migrations only, and refuses a `main` whose `migrations/current/` still holds SQL. Design: `~/build/server-ansible/docs/design/continuous-deployment.md`.
 - Write SQL keywords in lowercase (`create table`, `primary key`). Graphile placeholders such as `:DATABASE_VISITOR` stay uppercase.
 - When Effect code misbehaves, debug the Effect code.
 
