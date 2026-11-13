@@ -9,9 +9,9 @@ import * as HttpClientResponse from "effect/http/HttpClientResponse";
 import * as HttpBody from "effect/http/HttpBody";
 import * as Cookies from "effect/http/Cookies";
 import { Effect, Layer, Option, Schedule, Stream } from "effect";
-import { Logger, consoleLogFactory } from "graphile-worker";
+
 import pg from "pg";
-import generatePrepaidPeriodTask from "../../worker/tasks/lessons__generate_prepaid_period.js";
+import { runWorkerJob } from "../../worker/test/jobs.js";
 import { Storage } from "../services/storage.js";
 import { withAuthContext } from "../requestDatabase.js";
 import type { MonthlyPaymentStatus } from "../../shared/schemas.js";
@@ -928,21 +928,10 @@ describe("DFG Portal API", () => {
         billingMonth: "2026-08-01",
       });
 
-      const workerLogger = new Logger(consoleLogFactory, { label: "test" });
-      const poolClient = Object.assign(testDb, { release: () => undefined }) as any;
-      const workerHelpers = {
-        withPgClient: async (callback: (client: typeof poolClient) => Promise<unknown>) =>
-          callback(poolClient),
-        logger: workerLogger,
-      } as any;
-      yield* Effect.promise(() =>
-        Promise.resolve(
-          generatePrepaidPeriodTask(
-            { studentId: first.student_id, billingMonth: "2026-08-01" },
-            workerHelpers,
-          ),
-        ),
-      );
+      yield* runWorkerJob("lessons__generate_prepaid_period", {
+        studentId: first.student_id,
+        billingMonth: "2026-08-01",
+      });
 
       const generated = yield* Effect.tryPromise(() =>
         testDb.query(
@@ -955,14 +944,10 @@ describe("DFG Portal API", () => {
       );
       expect(generated.rows).toHaveLength(4);
 
-      yield* Effect.promise(() =>
-        Promise.resolve(
-          generatePrepaidPeriodTask(
-            { studentId: first.student_id, billingMonth: "2026-08-01" },
-            workerHelpers,
-          ),
-        ),
-      );
+      yield* runWorkerJob("lessons__generate_prepaid_period", {
+        studentId: first.student_id,
+        billingMonth: "2026-08-01",
+      });
       const generatedAgain = yield* Effect.tryPromise(() =>
         testDb.query(
           `select count(*)::integer as count

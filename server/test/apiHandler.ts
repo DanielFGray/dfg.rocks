@@ -2,11 +2,11 @@
 import { Effect, Layer, ManagedRuntime } from "effect";
 import * as HttpRouter from "effect/http/HttpRouter";
 import { applicationLayer, HttpApiLive } from "../runtime.js";
-import { BackgroundWorker } from "../services/backgroundWorker.js";
+import { Worker } from "../../worker/worker.js";
 
 // The application services with no job runner, so the API tests run no jobs.
 const testServices = applicationLayer.pipe(
-  Layer.provideMerge(Layer.succeed(BackgroundWorker, { isRunning: Effect.succeed(true) })),
+  Layer.provideMerge(Layer.succeed(Worker, { isRunning: Effect.succeed(true) })),
 );
 
 // One memo map, so the handler and the runtime share one set of services and pools.

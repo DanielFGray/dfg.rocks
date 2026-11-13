@@ -1,4 +1,4 @@
-import { Config, Context, Effect, Layer, Schema } from "effect";
+import { Context, Effect, Layer, Schema } from "effect";
 import { FileSystem } from "effect/FileSystem";
 import { Path } from "effect/Path";
 import { convert } from "html-to-text";
@@ -7,6 +7,7 @@ import mjml from "mjml";
 
 import packageJson from "../../package.json" with { type: "json" };
 import { Mailer, MailMessage } from "./mailer.js";
+import { WorkerDirectory } from "../config.js";
 
 const options = Schema.Struct({
   to: Schema.Union([Schema.NonEmptyString, Schema.NonEmptyArray(Schema.NonEmptyString)]),
@@ -92,9 +93,7 @@ export class EmailDelivery extends Context.Service<EmailDelivery>()("dfg-rocks/e
     const fs = yield* FileSystem;
     const path = yield* Path;
     const mailer = yield* Mailer;
-    const workerDirectory = yield* Config.NonEmptyString("WORKER_DIR").pipe(
-      Config.withDefault("worker"),
-    );
+    const workerDirectory = yield* WorkerDirectory;
     const templateDirectory = path.join(workerDirectory, "templates");
     return {
       send: Effect.fn("EmailDelivery.send")(function* (job: QueuedEmail) {

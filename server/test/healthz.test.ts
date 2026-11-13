@@ -11,7 +11,7 @@ import * as NodePath from "@effect/platform-node/NodePath";
 import type * as SqlClient from "effect/sql/SqlClient";
 import { ConnectionError, SqlError } from "effect/sql/SqlError";
 import { Database, PgAuthDB } from "../db.js";
-import { BackgroundWorker } from "../services/backgroundWorker.js";
+import { Worker } from "../../worker/worker.js";
 import * as HttpApi from "effect/http-api/HttpApi";
 import { healthGroup } from "../../shared/api/health.js";
 import { HealthApiGroupLive } from "../api/health.js";
@@ -31,7 +31,7 @@ function healthHandler(unsafe: (...args: never[]) => unknown, workerRunning = tr
     ),
   );
   const { handler } = HttpRouter.toWebHandler(layer, { disableLogger: true });
-  const services = Context.make(PgAuthDB, database).pipe(Context.add(BackgroundWorker, worker));
+  const services = Context.make(PgAuthDB, database).pipe(Context.add(Worker, worker));
   return (request: Request) => handler(request, services);
 }
 

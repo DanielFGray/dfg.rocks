@@ -1,6 +1,13 @@
 // @ts-check
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect, test, setSystemTime } from "bun:test";
 import pg from "pg";
+import { Effect } from "effect";
+import { WorkerJobs } from "../worker.ts";
+import { jobRun, workerTestRuntime } from "./jobs.ts";
+const runtime = workerTestRuntime();
+const users = [];
+const families = [];
+let pool;
 import { testDatabaseEnv } from "../../scripts/testDatabase.ts";
 
 const testEnv = testDatabaseEnv();
@@ -10,18 +17,20 @@ const DATABASE_URL = testEnv.DATABASE_URL;
 let client;
 
 beforeAll(async () => {
-  const pool = new pg.Pool({ connectionString: DATABASE_URL });
+  pool = new pg.Pool({ connectionString: DATABASE_URL });
   client = await pool.connect();
-  await client.query("begin");
 });
 
 afterAll(async () => {
-  try {
-    await client.query("rollback");
-  } catch {}
-  try {
-    client.release();
-  } catch {}
+  setSystemTime();
+  await runtime.dispose();
+  await q("delete from app_public.bills where payer_id = any($1::uuid[])", [users]);
+  await q("delete from app_public.tax_rates where created_by = any($1::uuid[])", [users]);
+  await q("delete from app_public.discounts where created_by = any($1::uuid[])", [users]);
+  await q("delete from app_public.families where id = any($1::uuid[])", [families]);
+  await q("delete from app_public.users where id = any($1::uuid[])", [users]);
+  client.release();
+  await pool.end();
 });
 
 async function q(sql, params) {
@@ -35,6 +44,7 @@ async function createUser(username, name) {
     [username, name, email],
   );
   const { rows } = await q("select id from app_public.users where username = $1", [username]);
+  users.push(rows[0].id);
   return rows[0].id;
 }
 
@@ -45,6 +55,7 @@ async function createFamily(slug, name, studentId) {
     [slug, name],
   );
   const familyId = rows[0].id;
+  families.push(familyId);
   const payerId = await createUser(`${slug.replaceAll("-", "_")}_parent`, `${name} Parent`);
   await q("update app_public.users set role = 'parent' where id = $1::uuid", [payerId]);
   await q(
@@ -78,11 +89,31 @@ async function createSchedule(opts) {
 }
 
 async function runBilling(billingMonth) {
-  const { rows } = await q(
-    "select app_public.issue_monthly_bills_for_month($1::date) as r",
+  const before = await countBillsForPeriod(billingMonth);
+  const completed = await q(
+    "select count(*)::int as n from app_public.monthly_billing_runs where billing_month = $1::date and status = 'completed'",
     [billingMonth],
   );
-  return rows[0].r;
+  setSystemTime(new Date(billingMonth + "T12:00:00-05:00"));
+  try {
+    await runtime.runPromise(
+      WorkerJobs.use((jobs) =>
+        Effect.promise(() => jobs.bills__issue_monthly({}, jobRun("bills__issue_monthly"))),
+      ),
+    );
+  } finally {
+    setSystemTime();
+  }
+  const after = await countBillsForPeriod(billingMonth);
+  const failed = await q(
+    "select count(*)::int as n from app_public.monthly_billing_runs where billing_month = $1::date and status = 'failed'",
+    [billingMonth],
+  );
+  return {
+    bills_created: after - before,
+    bills_skipped: completed.rows[0].n,
+    errors: failed.rows[0].n,
+  };
 }
 
 async function getStudentBill(studentId, billingMonth) {
@@ -143,8 +174,8 @@ describe("bills__issue_monthly — SQL function", () => {
     await createSchedule({ rateId: rid, dayOfWeek: 3, time: "16:00", startsOn: "2026-07-15" });
 
     const result = await runBilling("2026-07-01");
-    expect(result.bills_created).toBe(1);
     expect(result.errors).toBe(0);
+    expect(result.bills_created).toBe(1);
 
     const bill = await getStudentBill(sid, "2026-07-01");
     expect(bill).not.toBeNull();
@@ -173,8 +204,8 @@ describe("bills__issue_monthly — SQL function", () => {
     await createSchedule({ rateId: rid, dayOfWeek: 5, time: "10:00", startsOn: "2026-07-01" });
 
     const result = await runBilling("2026-07-01");
-    expect(result.bills_created).toBeGreaterThan(0);
     expect(result.errors).toBe(0);
+    expect(result.bills_created).toBeGreaterThan(0);
 
     const bill = await getStudentBill(sid, "2026-07-01");
     expect(bill).not.toBeNull();
@@ -193,6 +224,7 @@ describe("bills__issue_monthly — SQL function", () => {
   test("3. idempotency — second call creates no duplicate bills", async () => {
     const before = await countBillsForPeriod("2026-07-01");
     const result = await runBilling("2026-07-01");
+    expect(result.errors).toBe(0);
     expect(result.bills_created).toBe(0);
     expect(result.bills_skipped).toBeGreaterThan(0);
     const after = await countBillsForPeriod("2026-07-01");
@@ -212,8 +244,8 @@ describe("bills__issue_monthly — SQL function", () => {
     });
 
     const result = await runBilling("2026-07-01");
-    expect(result.bills_created).toBe(1);
     expect(result.errors).toBe(0);
+    expect(result.bills_created).toBe(1);
 
     const bill = await getStudentBill(sid, "2026-07-01");
     expect(bill).not.toBeNull();
@@ -326,7 +358,7 @@ describe("bills__issue_monthly — SQL function", () => {
     expect(bill.subtotal_cents).toBe(32000); // 4 Thursdays × $80
   });
 
-  test("9. worker target month — America/Chicago uses current month", () => {
+  test("9. worker target month — America/Chicago uses current month", async () => {
     const cases = [
       { date: "2026-08-15T12:00:00.000-05:00", expected: "2026-08-01" },
       { date: "2026-09-01T00:00:00.000-05:00", expected: "2026-09-01" },
@@ -335,16 +367,30 @@ describe("bills__issue_monthly — SQL function", () => {
       { date: "2026-07-01T01:00:00.000-05:00", expected: "2026-07-01" },
       { date: "2026-07-01T04:59:00.000-05:00", expected: "2026-07-01" },
     ];
-    for (const c of cases) {
-      const now = new Date(c.date);
-      const fmt = new Intl.DateTimeFormat("en-CA", {
-        timeZone: "America/Chicago",
-        year: "numeric",
-        month: "2-digit",
-      });
-      const [y, m] = fmt.format(now).split("-");
-      const targetMonth = `${y}-${m}-01`;
-      expect(targetMonth).toBe(c.expected);
+
+    for (const [index, c] of cases.entries()) {
+      const student = await createUser("t_tz_" + index, "Timezone Player");
+      const rate = await createRate(student, 100, 30, "online");
+      await createSchedule({ rateId: rate, dayOfWeek: 1, time: "09:00", startsOn: c.expected });
+      setSystemTime(new Date(c.date));
+      try {
+        await runtime.runPromise(
+          WorkerJobs.use((jobs) =>
+            Effect.promise(() => jobs.bills__issue_monthly({}, jobRun("bills__issue_monthly"))),
+          ),
+        );
+        const runs = await q(
+          "select count(*)::int as n from app_public.monthly_billing_runs where billing_month = $1::date",
+          [c.expected],
+        );
+        expect(runs.rows[0].n).toBeGreaterThan(0);
+        const bill = await getStudentBill(student, c.expected);
+        expect(bill).not.toBeNull();
+      } finally {
+        setSystemTime();
+        await q("delete from app_public.bills where payer_id = $1", [student]);
+        await q("delete from app_public.users where id = $1", [student]);
+      }
     }
   });
 
@@ -366,7 +412,9 @@ describe("bills__issue_monthly — SQL function", () => {
 
       // Try calling enqueue_monthly_lesson_generation as visitor — should fail
       const err2 = await authClient
-        .query("select app_public.enqueue_monthly_lesson_generation('00000000-0000-0000-0000-000000000000'::uuid, '2026-09-01'::date)")
+        .query(
+          "select app_public.enqueue_monthly_lesson_generation('00000000-0000-0000-0000-000000000000'::uuid, '2026-09-01'::date)",
+        )
         .then(() => null)
         .catch((e) => e);
       expect(err2).not.toBeNull();
@@ -396,8 +444,8 @@ describe("bills__issue_monthly — SQL function", () => {
     await createSchedule({ rateId: rid, dayOfWeek: 1, time: "15:00", startsOn: "2026-01-01" });
 
     const result = await runBilling("2026-01-01");
-    expect(result.bills_created).toBe(1);
     expect(result.errors).toBe(0);
+    expect(result.bills_created).toBe(1);
 
     const bill = await getStudentBill(sid, "2026-01-01");
     expect(bill).not.toBeNull();
@@ -439,10 +487,7 @@ describe("bills__issue_monthly — SQL function", () => {
     const sid = await createUser("t_p13", "P13");
     await createFamily("t-rate-split", "RateSplit", sid);
     const rid = await createRate(sid, 5000, 60, "online");
-    await q(
-      `delete from app_public.student_rate_history where student_rate_id = $1::uuid`,
-      [rid],
-    );
+    await q(`delete from app_public.student_rate_history where student_rate_id = $1::uuid`, [rid]);
     await q(
       `insert into app_public.student_rate_history
          (student_rate_id, student_id, rate_cents, lesson_duration_minutes, location_type, billing_model, effective_from, effective_until)
@@ -458,16 +503,13 @@ describe("bills__issue_monthly — SQL function", () => {
     });
 
     const result = await runBilling("2026-07-01");
-    expect(result.bills_created).toBeGreaterThan(0);
     expect(result.errors).toBe(0);
+    expect(result.bills_created).toBeGreaterThan(0);
 
     const bill = await getStudentBill(sid, "2026-07-01");
     expect(bill.subtotal_cents).toBe(23000); // 1 × 5000 + 3 × 6000
     const items = await getBillItems(bill.id);
     expect(items).toHaveLength(2);
-    expect(items.map((item) => item.amount_cents).sort((a, b) => a - b)).toEqual([
-      5000,
-      18000,
-    ]);
+    expect(items.map((item) => item.amount_cents).sort((a, b) => a - b)).toEqual([5000, 18000]);
   });
 });

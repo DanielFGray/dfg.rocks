@@ -33,7 +33,7 @@ import { PgAuthDB, PgRootDB } from "./db.js";
 import { ValkeyReady } from "./dependencies.js";
 import { Lessons } from "./services/lessons.js";
 import { Auth } from "./services/auth.js";
-import { BackgroundWorker } from "./services/backgroundWorker.js";
+import { Worker } from "../worker/worker.js";
 import { BillingLedger } from "./services/billingLedger.js";
 import { Files } from "./services/files.js";
 import { FamilyBilling } from "./services/familyBilling.js";
@@ -123,7 +123,7 @@ const servicesLayer = Layer.mergeAll(
 export const applicationLayer = servicesLayer;
 
 /** The services of the server process: the application services and the job runner. */
-export type AppServices = Layer.Success<typeof applicationLayer> | BackgroundWorker;
+export type AppServices = Layer.Success<typeof applicationLayer> | Worker;
 
 const GroupHandlersLive = Layer.mergeAll(
   HealthApiGroupLive,

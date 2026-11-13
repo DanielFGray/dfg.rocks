@@ -1,8 +1,9 @@
-import { Effect, Option, Context, Layer } from "effect";
+import { sql } from "kysely";
+import { Schema, Effect, Option, Context, Layer } from "effect";
 import type { ColumnType, Generated } from "kysely";
 import type { DB } from "../../generated/db.js";
 import type { PaymentGenerationStatus } from "../../shared/schemas.js";
-import { type Database } from "../db.js";
+import { PgRootDB, type Database } from "../db.js";
 import { RequestDatabase } from "../requestDatabase.js";
 import { HttpError } from "../pgErrors.js";
 
@@ -117,6 +118,176 @@ export class RecurringSchedule extends Context.Service<RecurringSchedule>()(
   "dfg-rocks/recurringSchedule",
   {
     make: Effect.succeed({
+      generatePrepaidPeriod: Effect.fn("RecurringSchedule.generatePrepaidPeriod")(function* (
+        job: typeof PrepaidPeriod.Type,
+      ) {
+        const db = yield* PgRootDB;
+        const generate = Effect.gen(function* () {
+          const payment = yield* db
+            .execute(
+              db
+                .selectFrom("app_public.monthly_payments")
+                .select(["id", "generation_status"])
+                .where("student_id", "=", job.studentId)
+                .where("billing_month", "=", job.billingMonth)
+                .forUpdate(),
+            )
+            .pipe(Effect.head, Effect.option);
+          if (Option.isSome(payment) && payment.value.generation_status === "generated") return;
+          if (Option.isSome(payment))
+            yield* db.execute(
+              db
+                .updateTable("app_public.monthly_payments")
+                .set({
+                  generation_status: "processing",
+                  generation_error: null,
+                  generated_at: null,
+                })
+                .where("id", "=", payment.value.id),
+            );
+          const schedules = yield* db.execute(
+            db
+              .selectFrom("app_public.recurring_schedules as schedule")
+              .innerJoin("app_public.student_rates as rate", "rate.id", "schedule.student_rate_id")
+              .select([
+                "schedule.id",
+                "schedule.day_of_week",
+                "schedule.local_start_time",
+                "schedule.timezone",
+                "schedule.starts_on",
+                "schedule.ends_on",
+                "rate.student_id",
+                "rate.lesson_duration_minutes",
+                "rate.location_type",
+              ])
+              .where("rate.student_id", "=", job.studentId)
+              .where("rate.billing_model", "=", "monthly_prepaid")
+              .where("schedule.active", "=", true)
+              .where(
+                "schedule.starts_on",
+                "<",
+                sql<string>`(${job.billingMonth}::date + interval '1 month')::date`,
+              )
+              .where((eb) =>
+                eb.or([
+                  eb("schedule.ends_on", "is", null),
+                  eb("schedule.ends_on", ">=", job.billingMonth),
+                ]),
+              )
+              .orderBy("schedule.id")
+              .forUpdate(["schedule", "rate"]),
+          );
+          yield* Effect.forEach(
+            schedules,
+            (schedule) =>
+              Effect.gen(function* () {
+                const dates = db
+                  .selectFrom(
+                    sql<{
+                      occurrence_date: string;
+                    }>`generate_series(greatest(${job.billingMonth}::date, ${schedule.starts_on}::date), least((${job.billingMonth}::date + interval '1 month - 1 day')::date, coalesce(${schedule.ends_on}::date, (${job.billingMonth}::date + interval '1 month - 1 day')::date)), interval '1 day')`.as(
+                      "occurrence_date",
+                    ),
+                  )
+                  .select(sql<string>`occurrence_date::date`.as("recurrence_date"))
+                  .where(
+                    sql<number>`extract(isodow from occurrence_date)::smallint`,
+                    "=",
+                    schedule.day_of_week,
+                  );
+                yield* db.execute(
+                  db
+                    .with("occurrences", () => dates)
+                    .insertInto("app_public.lessons")
+                    .columns([
+                      "student_id",
+                      "scheduled_at",
+                      "duration_minutes",
+                      "location_type",
+                      "recurring_schedule_id",
+                      "recurrence_date",
+                    ])
+                    .expression((eb) =>
+                      eb
+                        .selectFrom("occurrences as candidate")
+                        .select([
+                          eb.val(schedule.student_id).as("student_id"),
+                          sql<Date>`(candidate.recurrence_date + ${schedule.local_start_time}::time) at time zone ${schedule.timezone}`.as(
+                            "scheduled_at",
+                          ),
+                          eb.val(schedule.lesson_duration_minutes).as("duration_minutes"),
+                          eb.val(schedule.location_type).as("location_type"),
+                          eb.val(schedule.id).as("recurring_schedule_id"),
+                          "candidate.recurrence_date",
+                        ])
+                        .where(({ not, exists, selectFrom }) =>
+                          not(
+                            exists(
+                              selectFrom("app_public.lessons as existing")
+                                .select("existing.id")
+                                .where("existing.status", "=", "scheduled")
+                                .where(
+                                  "existing.scheduled_at",
+                                  "<",
+                                  sql<Date>`((candidate.recurrence_date + ${schedule.local_start_time}::time) at time zone ${schedule.timezone}) + (${schedule.lesson_duration_minutes} * interval '1 minute')`,
+                                )
+                                .where(
+                                  sql<Date>`existing.scheduled_at + (existing.duration_minutes * interval '1 minute')`,
+                                  ">",
+                                  sql<Date>`(candidate.recurrence_date + ${schedule.local_start_time}::time) at time zone ${schedule.timezone}`,
+                                )
+                                .where((eb) =>
+                                  eb.not(
+                                    eb.and([
+                                      eb("existing.recurring_schedule_id", "=", schedule.id),
+                                      eb(
+                                        "existing.recurrence_date",
+                                        "=",
+                                        eb.ref("candidate.recurrence_date"),
+                                      ),
+                                    ]),
+                                  ),
+                                ),
+                            ),
+                          ),
+                        ),
+                    )
+                    .onConflict((oc) =>
+                      oc.columns(["recurring_schedule_id", "recurrence_date"]).doNothing(),
+                    ),
+                );
+              }),
+            { discard: true },
+          );
+          if (Option.isSome(payment))
+            yield* db.execute(
+              db
+                .updateTable("app_public.monthly_payments")
+                .set({
+                  generation_status: "generated",
+                  generation_error: null,
+                  generated_at: sql`now()`,
+                })
+                .where("id", "=", payment.value.id),
+            );
+        });
+        yield* db.withTransaction(generate).pipe(
+          Effect.tapError((error) =>
+            db.execute(
+              db
+                .updateTable("app_public.monthly_payments")
+                .set({
+                  generation_status: "failed",
+                  generation_error: sql`left(${String(error)}, 4000)`,
+                  generated_at: null,
+                })
+                .where("student_id", "=", job.studentId)
+                .where("billing_month", "=", job.billingMonth),
+            ),
+          ),
+        );
+      }),
+
       listSchedules: Effect.fn("listRecurringSchedulesForStudent")(function* (studentId: string) {
         return yield* RequestDatabase.use((baseDb) => {
           const db = baseDb as unknown as Database<RecurringDB>;
@@ -441,3 +612,8 @@ function monthlyPrepaidStudents(db: Database<RecurringDB>, billingMonth: string)
     .where("rs.starts_on", "<=", lastDay)
     .where((eb) => eb.or([eb("rs.ends_on", "is", null), eb("rs.ends_on", ">=", billingMonth)]));
 }
+
+export const PrepaidPeriod = Schema.Struct({
+  studentId: Schema.NonEmptyString,
+  billingMonth: Schema.NonEmptyString,
+});

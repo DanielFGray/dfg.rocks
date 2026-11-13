@@ -3,7 +3,7 @@ import { ConfigProvider, Effect, Layer } from "effect";
 import * as FetchHttpClient from "effect/http/FetchHttpClient";
 import { NodeServices } from "@effect/platform-node";
 import { PgRootDB } from "../db.js";
-import { BackgroundWorker } from "../services/backgroundWorker.js";
+import { Worker } from "../../worker/worker.js";
 import { GoogleCalendar } from "../services/googleCalendar.js";
 
 it.effect("fails the layer when the worker runner cannot start", () =>
@@ -17,7 +17,7 @@ it.effect("fails the layer when the worker runner cannot start", () =>
         ),
       ),
     );
-    const worker = BackgroundWorker.layer.pipe(
+    const worker = Worker.layer.pipe(
       Layer.provideMerge(rootDatabase),
       Layer.provide(NodeServices.layer),
       Layer.provide(FetchHttpClient.layer),

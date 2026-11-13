@@ -49,6 +49,17 @@ const GcalEventSchema = S.Struct({
   status: S.optional(S.String),
 });
 
+const GcalChangeSchema = S.Struct({
+  id: S.String,
+  status: S.optional(S.String),
+  start: S.optional(GcalEventTimeSchema),
+});
+const GcalChangesSchema = S.Struct({
+  items: S.optional(S.Array(GcalChangeSchema)),
+  nextSyncToken: S.optional(S.String),
+  nextPageToken: S.optional(S.String),
+});
+
 const GcalEventListSchema = S.Struct({
   items: S.optional(S.Array(GcalEventSchema)),
   nextPageToken: S.optional(S.String),
@@ -572,7 +583,7 @@ export class GoogleCalendar extends Context.Service<GoogleCalendar>()("dfg-rocks
                   }),
               ),
             );
-            const decoded = yield* S.decodeUnknownEffect(GcalEventListSchema)(json).pipe(
+            const decoded = yield* S.decodeUnknownEffect(GcalChangesSchema)(json).pipe(
               Effect.catchTags({
                 SchemaError: () =>
                   new HttpError({
@@ -624,7 +635,7 @@ export class GoogleCalendar extends Context.Service<GoogleCalendar>()("dfg-rocks
                 }),
             ),
           );
-          const decoded = yield* S.decodeUnknownEffect(GcalEventListSchema)(json).pipe(
+          const decoded = yield* S.decodeUnknownEffect(GcalChangesSchema)(json).pipe(
             Effect.catchTags({
               SchemaError: () =>
                 new HttpError({

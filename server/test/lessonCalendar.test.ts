@@ -6,9 +6,10 @@ import { withAuthContext } from "../requestDatabase.js";
 import { GoogleCalendar } from "../services/googleCalendar.js";
 import { LessonPolicy } from "../services/lessonPolicy.js";
 import { Lessons } from "../services/lessons.js";
-import { CalendarSync } from "../../worker/calendar/calendarSync.js";
-import { WorkerTasks } from "../../worker/workerTasks.js";
-import { EmailDelivery } from "../../worker/email/emailDelivery.js";
+import { CalendarSync, CalendarSyncJob } from "../../worker/calendar/calendarSync.js";
+import { taskIn } from "../../worker/worker.js";
+import { jobRun, JobTestError } from "../../worker/test/jobs.js";
+
 import { HttpError } from "../pgErrors.js";
 import * as HttpClient from "effect/http/HttpClient";
 
@@ -275,12 +276,11 @@ it.layer(services)("lesson calendar queue", (test) => {
         isConnected: () => Effect.succeed(true),
         updateEvent: () => Effect.fail(error),
       };
-      expect(
-        yield* runCalendarJob({ lessonId: fixture.lesson.id, gcalEventId: null }).pipe(
-          Effect.provideService(GoogleCalendar, calendar),
-          Effect.flip,
-        ),
-      ).toEqual(error);
+      const failure = yield* runCalendarJob({
+        lessonId: fixture.lesson.id,
+        gcalEventId: null,
+      }).pipe(Effect.provideService(GoogleCalendar, calendar), Effect.flip);
+      expect(failure.cause).toEqual(error);
     }).pipe(Effect.scoped),
   );
 
@@ -306,7 +306,9 @@ it.layer(services)("lesson calendar queue", (test) => {
     runCalendarJob({ lessonId: "not-a-uuid", gcalEventId: null }).pipe(
       Effect.provideService(GoogleCalendar, forbiddenGoogle),
       Effect.flip,
-      Effect.tap((error) => Effect.sync(() => expect(error._tag).toBe("SchemaError"))),
+      Effect.tap((error) =>
+        Effect.sync(() => expect(error.cause).toMatchObject({ _tag: "SchemaError" })),
+      ),
     ),
   );
 });
@@ -446,11 +448,15 @@ const makeFixture = Effect.gen(function* () {
 
 /** Invokes the registered job with the calendar dependency supplied by each scenario. */
 const runCalendarJob = (input: unknown) =>
-  WorkerTasks.use((tasks) => tasks.lessons__sync_calendar_event(input)).pipe(
-    Effect.provide(
-      WorkerTasks.layerNoDeps.pipe(
-        Layer.provide(CalendarSync.layerNoDeps),
-        Layer.provide(Layer.succeed(EmailDelivery, { send: () => Effect.void })),
-      ),
-    ),
-  );
+  Effect.gen(function* () {
+    const calendar = yield* CalendarSync;
+    const context = yield* Effect.context();
+    yield* Effect.tryPromise({
+      try: () =>
+        taskIn(context)(CalendarSyncJob, calendar.sync)(
+          input,
+          jobRun("lessons__sync_calendar_event"),
+        ),
+      catch: (cause) => new JobTestError({ cause }),
+    });
+  }).pipe(Effect.provide(CalendarSync.layerNoDeps));

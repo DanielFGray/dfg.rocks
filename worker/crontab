@@ -1,2 +1,5 @@
 # Run the testimonial reminder sweep once per hour.
 0 * * * * testimonials__reminder_sweep ?jobKey=testimonials__reminder_sweep
+
+# Bill the current America/Chicago month once per day.
+0 0 * * * bills__issue_monthly ?jobKey=bills__issue_monthly

@@ -3,7 +3,7 @@ import { Config, Effect } from "effect";
 import { HealthUnavailableError } from "../../shared/api/health.js";
 import { Contract } from "../../shared/httpApi.js";
 import { PgAuthDB } from "../db.js";
-import { BackgroundWorker } from "../services/backgroundWorker.js";
+import { Worker } from "../../worker/worker.js";
 
 // How long the database check may take before the platform sees the app as down.
 const DATABASE_CHECK_TIMEOUT = "2 seconds";
@@ -21,7 +21,7 @@ export const HealthApiGroupLive = HttpApiBuilder.group(Contract, "health", (hand
             Effect.logError("Health check: database unreachable", cause).pipe(Effect.as(true)),
           ),
         );
-        const worker = yield* BackgroundWorker;
+        const worker = yield* Worker;
         const workerRunning = yield* worker.isRunning;
         const failed = [
           ...(databaseDown ? ["database"] : []),

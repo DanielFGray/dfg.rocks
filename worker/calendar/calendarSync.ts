@@ -1,4 +1,5 @@
-import { Context, Effect, Layer, Option, Schema } from "effect";
+import { sql } from "kysely";
+import { Clock, Context, Effect, Layer, Option, Schema } from "effect";
 import { PgRootDB } from "../../server/db.js";
 import { GoogleCalendar } from "../../server/services/googleCalendar.js";
 
@@ -13,6 +14,57 @@ export class CalendarSync extends Context.Service<CalendarSync>()("dfg-rocks/cal
     const calendar = yield* GoogleCalendar;
     const db = yield* PgRootDB;
     return {
+      poll: Effect.fn("CalendarSync.poll")(function* () {
+        const poll = Effect.gen(function* () {
+          if (!(yield* calendar.isConnected())) return;
+          const changes = yield* calendar.incrementalSync();
+          yield* Effect.forEach(
+            changes.events,
+            (event) =>
+              Effect.gen(function* () {
+                if (event.status === "cancelled") {
+                  yield* db.execute(
+                    db
+                      .updateTable("app_public.lessons")
+                      .set({
+                        status: "cancelled",
+                        cancelled_at: sql`now()`,
+                        cancellation_reason: "Cancelled from Google Calendar",
+                      })
+                      .where("gcal_event_id", "=", event.id)
+                      .where("status", "=", "scheduled"),
+                  );
+                } else if (event.start?.dateTime) {
+                  yield* db.execute(
+                    db
+                      .updateTable("app_public.lessons")
+                      .set({ scheduled_at: new Date(event.start.dateTime) })
+                      .where("gcal_event_id", "=", event.id),
+                  );
+                }
+              }),
+            { discard: true },
+          );
+        });
+        // One transaction stores Google's next sync token with the lesson updates, so a
+        // failed update leaves the old token and the next poll fetches the same changes.
+        // This one-attempt job queues its own successor whatever the poll's outcome; no
+        // other process restarts polling.
+        yield* db
+          .withTransaction(poll)
+          .pipe(
+            Effect.catchCause((cause) => Effect.logError("Google Calendar poll failed", cause)),
+          );
+        const runAt = new Date((yield* Clock.currentTimeMillis) + 3 * 60_000);
+        yield* db.execute(
+          db.selectNoFrom(
+            sql<string>`(graphile_worker.add_job('gcal__sync', '{}'::json, run_at := ${runAt}, queue_name := 'gcal', max_attempts := 1, job_key := 'gcal__sync', job_key_mode := 'replace')).id`.as(
+              "job_id",
+            ),
+          ),
+        );
+      }),
+
       sync: Effect.fn("CalendarSync.sync")(function* (job: typeof CalendarSyncJob.Type) {
         if (!(yield* calendar.isConnected())) {
           yield* Effect.logInfo("Calendar sync skipped: Google Calendar is not connected", {

@@ -1,5 +1,3 @@
-import { WorkerTasks } from "../workerTasks.js";
-import { CalendarSync } from "../calendar/calendarSync.js";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { describe, expect, it } from "@effect/vitest";
 import { vi } from "vitest";
@@ -139,25 +137,6 @@ describe("queued email delivery", () => {
       const [mail] = yield* mailCapture.sent;
       expect(mail?.html).toContain("&lt;script&gt;");
       expect(mail?.html).not.toContain("<script>x");
-    }),
-  );
-
-  it.live("rejects a payload that does not match its template before delivery", () =>
-    Effect.gen(function* () {
-      const mailCapture = yield* MailCapture.make;
-      const delivery = yield* EmailDelivery.make.pipe(
-        Effect.provideService(Mailer, { send: mailCapture.record }),
-        Effect.provide(NodeServices.layer),
-      );
-      const jobs = yield* WorkerTasks.make.pipe(
-        Effect.provideService(EmailDelivery, delivery),
-        Effect.provideService(CalendarSync, { sync: () => Effect.void }),
-      );
-      const error = yield* jobs
-        .send_email({ ...contact, variables: { name: "Visitor" } })
-        .pipe(Effect.flip);
-      expect(error._tag).toBe("SchemaError");
-      expect(yield* mailCapture.sent).toHaveLength(0);
     }),
   );
 });

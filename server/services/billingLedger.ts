@@ -1,6 +1,6 @@
-import { Effect, Option, Context, Layer } from "effect";
+import { Clock, Effect, Option, Context, Layer, Schema } from "effect";
 import { sql } from "kysely";
-import { type Database } from "../db.js";
+import { PgRootDB, type Database } from "../db.js";
 import { RequestDatabase } from "../requestDatabase.js";
 import { catchPgErrors, HttpError } from "../pgErrors.js";
 import { allocatePayment } from "./billingCalculation.js";
@@ -153,6 +153,32 @@ export class BillingLedger extends Context.Service<BillingLedger>()("dfg-rocks/b
   make: Effect.gen(function* () {
     yield* Effect.void;
     return {
+      /**
+       * Runs daily for the current America/Chicago month. The database function skips a month
+       * that it already billed, so each daily run is safe.
+       */
+      issueMonthly: Effect.fn("BillingLedger.issueMonthly")(function* () {
+        const db = yield* PgRootDB;
+        const now = new Date(yield* Clock.currentTimeMillis);
+        const parts = new Intl.DateTimeFormat("en-CA", {
+          timeZone: "America/Chicago",
+          year: "numeric",
+          month: "2-digit",
+        }).formatToParts(now);
+        const month = parts.find((part) => part.type === "month")?.value;
+        const year = parts.find((part) => part.type === "year")?.value;
+        const rows = yield* db.execute(
+          db.selectNoFrom(
+            sql`app_public.issue_monthly_bills_for_month(${year + "-" + month + "-01"}::date)`.as(
+              "result",
+            ),
+          ),
+        );
+        const result = yield* Schema.decodeUnknownEffect(MonthlyBillingResult)(rows[0]?.result);
+        yield* Effect.logInfo("Monthly billing completed", result);
+        if (result.errors > 0) yield* Effect.logWarning("Monthly billing reported errors", result);
+        return result;
+      }),
       createBill: Effect.fn("createBill")(function* (input: CreateBillInput) {
         const subtotalCents = input.lineItems.reduce((sum, li) => sum + li.amountCents, 0);
         const discountCents = input.discountCents ?? 0;
@@ -1762,3 +1788,9 @@ const billBalanceColumns = [
     "payments",
   ),
 ];
+
+const MonthlyBillingResult = Schema.Struct({
+  bills_created: Schema.Finite,
+  bills_skipped: Schema.Finite,
+  errors: Schema.Finite,
+});

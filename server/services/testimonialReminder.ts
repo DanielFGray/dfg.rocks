@@ -1,6 +1,6 @@
 import { sql } from "kysely";
-import { Effect, Option, Context, Layer } from "effect";
-import { PgRootDB } from "../db.js";
+import { Config, Effect, Option, Context, Layer } from "effect";
+import { addJob, PgRootDB } from "../db.js";
 
 const DEFAULT_INTERVAL_DAYS = 30;
 
@@ -146,6 +146,63 @@ export class TestimonialReminder extends Context.Service<TestimonialReminder>()(
       });
 
       return {
+        sweep: Effect.fn("TestimonialReminder.sweep")(function* () {
+          const days = yield* getIntervalDays();
+          const rootUrl = yield* Config.NonEmptyString("VITE_ROOT_URL");
+          const users = yield* rootDb.execute(
+            rootDb
+              .selectFrom("app_private.user_secrets as secrets")
+              .innerJoin("app_public.users as user", "user.id", "secrets.user_id")
+              .leftJoin("app_public.testimonials as testimonial", "testimonial.user_id", "user.id")
+              .leftJoinLateral(
+                (eb) =>
+                  eb
+                    .selectFrom("app_public.user_emails")
+                    .select("email")
+                    .whereRef("user_id", "=", "user.id")
+                    .where("is_primary", "=", true)
+                    .limit(1)
+                    .as("address"),
+                (join) => join.onTrue(),
+              )
+              .select(["user.id", "user.name", "user.username", "address.email"])
+              .where("user.role", "in", ["student", "parent"])
+              .where("testimonial.id", "is", null)
+              .where("secrets.testimonial_next_prompt_at", "<=", sql<Date>`now()`),
+          );
+          yield* Effect.forEach(
+            users,
+            (user) =>
+              Effect.gen(function* () {
+                if (!user.email)
+                  return yield* Effect.logError("Skipping testimonial reminder: no primary email", {
+                    userId: user.id,
+                  });
+                yield* addJob(rootDb, "send_email", {
+                  options: {
+                    to: user.email,
+                    subject: "How would you recommend DFG Music Lessons?",
+                  },
+                  template: "testimonial_reminder.mjml",
+                  variables: {
+                    displayName: user.name || user.username,
+                    testimonialLink: rootUrl + "/dashboard",
+                  },
+                });
+                yield* rootDb.execute(
+                  rootDb
+                    .updateTable("app_private.user_secrets")
+                    .set({
+                      testimonial_prompt_enabled: true,
+                      testimonial_last_emailed_at: sql`now()`,
+                      testimonial_next_prompt_at: sql`now() + make_interval(days => ${days})`,
+                    })
+                    .where("user_id", "=", user.id),
+                );
+              }),
+            { discard: true },
+          );
+        }),
         getIntervalDays,
         setIntervalDays,
         getPromptEnabled,

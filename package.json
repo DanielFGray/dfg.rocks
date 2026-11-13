@@ -23,7 +23,7 @@
     "lint": "ast-grep scan server worker shared app/lib --globs 'server/**' --globs 'worker/**' --globs 'shared/**' --globs 'app/lib/*.server.ts' --globs 'app/lib/serverEffect.ts' && ast-grep test && oxlint .",
     "test": "run-s typecheck lint test:unit test:worker test:bun test:e2e",
     "test:unit": "vitest run",
-    "test:worker": "bun test worker/test/bills.test.js worker/test/contracts.test.js",
+    "test:worker": "bun test worker/test",
     "test:bun": "bun test server/test/s3Objects.bun.test.ts",
     "test:e2e": "playwright test",
     "e2e:server": "bun scripts/e2eServer.ts",
