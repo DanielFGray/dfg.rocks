@@ -160,7 +160,63 @@ describe("access policy for signed-in accounts", () => {
     );
     expect(unsafe.rows.map((r) => r.fn)).toEqual([]);
   });
+
+  // A SECURITY DEFINER function runs past RLS, so the visitor may execute only the ones listed
+  // here, each meant to be called by a signed-in account. Default privileges grant EXECUTE on every
+  // new app_public function, and again whenever a migration re-creates one: a new function fails
+  // this test until it is either listed or revoked from the visitor.
+  it("the visitor executes only the SECURITY DEFINER functions meant for it", async () => {
+    const executable = await owner(
+      `select p.oid::regprocedure::text as fn
+         from pg_proc p
+         join pg_namespace n on n.oid = p.pronamespace
+        where p.prosecdef
+          and n.nspname in ('app_public', 'app_hidden', 'app_private')
+          and has_function_privilege($1, p.oid, 'execute')
+        order by 1`,
+      [requiredEnv("DATABASE_VISITOR")],
+    );
+    expect(executable.rows.map((r) => r.fn)).toEqual([
+      "app_public.accept_invitation_to_family(uuid,text)",
+      "app_public.can_book_for_family_student(uuid)",
+      "app_public.change_password(text,text)",
+      "app_public.confirm_account_deletion(text)",
+      "app_public.create_child(uuid,text)",
+      "app_public.create_family(citext,text)",
+      "app_public.create_single_booking_obligation(uuid)",
+      "app_public.current_effective_user_id()",
+      "app_public.current_user_family_member_ids()",
+      "app_public.current_user_id()",
+      "app_public.current_user_invited_family_ids()",
+      "app_public.current_user_member_family_ids()",
+      "app_public.current_user_role()",
+      "app_public.current_user_visible_payer_ids()",
+      "app_public.delete_family(uuid)",
+      "app_public.enqueue_prepaid_lesson_generation(uuid)",
+      "app_public.family_for_invitation(uuid,text)",
+      "app_public.forgot_password(citext)",
+      "app_public.invite_to_family(uuid,citext,citext,text)",
+      "app_public.is_acting_for_family_student(uuid)",
+      "app_public.logout()",
+      "app_public.make_email_primary(uuid)",
+      "app_public.next_bill_number()",
+      "app_public.next_payment_number()",
+      "app_public.remove_from_family(uuid,uuid)",
+      "app_public.request_account_deletion()",
+      "app_public.resend_email_verification_code(uuid)",
+      "app_public.settle_single_booking_cancellation(uuid,integer)",
+      "app_public.tg__graphql_subscription()",
+      "app_public.tg_user_emails__forbid_if_verified()",
+      "app_public.tg_user_emails__prevent_delete_last_email()",
+      "app_public.tg_user_emails__verify_account_on_verified()",
+      "app_public.transfer_family_billing_contact(uuid,uuid)",
+      "app_public.transfer_family_ownership(uuid,uuid)",
+      "app_public.users_has_password(app_public.users)",
+      "app_public.verify_email(uuid,text)",
+    ]);
+  });
 });
+
 async function createUser(username: string, role: string): Promise<string> {
   const r = await owner(
     `select id from app_private.really_create_user($1::citext, $1, null, true, $2::citext, $3)`,
