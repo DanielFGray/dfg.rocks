@@ -143,8 +143,24 @@ describe("access policy for signed-in accounts", () => {
       ),
     ).rejects.toMatchObject({ code: "DNIED" });
   });
-});
 
+  // The visitor holds TEMP, and Postgres searches pg_temp first for tables unless
+  // search_path names it last, so a temporary table could shadow one a
+  // SECURITY DEFINER body names.
+  it("every SECURITY DEFINER function ends its search_path with pg_temp", async () => {
+    const unsafe = await owner(
+      `select p.oid::regprocedure::text as fn
+         from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+        where p.prosecdef
+          and n.nspname in ('app_public', 'app_hidden', 'app_private')
+          and not exists (
+            select 1 from unnest(coalesce(p.proconfig, '{}')) setting
+             where setting ~ '^search_path=.*pg_temp$'
+          )`,
+    );
+    expect(unsafe.rows.map((r) => r.fn)).toEqual([]);
+  });
+});
 async function createUser(username: string, role: string): Promise<string> {
   const r = await owner(
     `select id from app_private.really_create_user($1::citext, $1, null, true, $2::citext, $3)`,
