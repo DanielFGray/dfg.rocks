@@ -8,12 +8,13 @@ export const Route = createFileRoute("/forgot-password")({
   head: () => ({ meta: [{ title: "Forgot Password | DFG Portal" }] }),
   validateSearch: (search: Record<string, unknown>) => ({
     ...(search.sent === "true" ? { sent: true as const } : {}),
+    ...(typeof search.error === "string" ? { error: search.error } : {}),
   }),
   component: ForgotPasswordPage,
 });
 
 function ForgotPasswordPage() {
-  const { sent } = Route.useSearch();
+  const { sent, error } = Route.useSearch();
   const [email, setEmail] = useState("");
 
   if (sent) {
@@ -54,6 +55,15 @@ function ForgotPasswordPage() {
           </p>
         </div>
         <form method="post" action={forgotPassword.url} className="flex flex-col gap-5">
+          {error ? (
+            <div
+              data-testid="forgot-error"
+              role="alert"
+              className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-600 dark:text-red-400"
+            >
+              {error}
+            </div>
+          ) : null}
           <Input
             id="forgot-email"
             name="email"

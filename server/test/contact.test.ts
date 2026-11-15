@@ -121,7 +121,7 @@ describe("contact form", () => {
         const inProcess = yield* InProcessApi;
         // A documentation address: ip-api.com has no location for it, so the lookup answers
         // "unknown" whether or not the network is up, and the visitor is accepted.
-        const api = yield* inProcess.clientFor(
+        const { api } = yield* inProcess.clientFor(
           new Request("http://dfg.test/", { headers: { "x-real-ip": "192.0.2.10" } }),
         );
         yield* api.public.contact({ payload: submission(email) });

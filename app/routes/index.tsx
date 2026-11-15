@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Effect, Schema as S } from "effect";
+import { Schema as S } from "effect";
 import { createFileRoute, Link, redirect } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import {
@@ -18,11 +18,10 @@ import { Select } from "../components/ui/Select.js";
 import { Textarea } from "../components/ui/Textarea.js";
 
 import { createServerFn } from "@tanstack/react-start";
-import { getRequest } from "@tanstack/react-start/server";
 import { runServerEffect } from "../lib/serverEffect.js";
 import { getErrorMessage } from "../lib/errors.js";
 import { Testimonials } from "../../server/services/testimonials.js";
-import { InProcessApi } from "../../server/inProcessApi.js";
+import { callApi } from "../lib/inProcessCall.js";
 import { ContactPayload } from "../../shared/api/public.js";
 
 const [logoBefore, logoAfter] = site.logo.split(site.logoDot);
@@ -43,13 +42,7 @@ export const submitContact = createServerFn({ method: "POST" })
     return S.decodeUnknownSync(ContactPayload)(obj);
   })
   .handler(async ({ data }) => {
-    const request = getRequest();
-    await runServerEffect(
-      Effect.gen(function* () {
-        const api = yield* InProcessApi.use((inProcess) => inProcess.clientFor(request));
-        yield* api.public.contact({ payload: data });
-      }),
-    ).catch((error) => {
+    await callApi((api) => api.public.contact({ payload: data })).catch((error) => {
       throw new Error(getErrorMessage(error, "Failed to send message"));
     });
     throw redirect({ to: "/", search: { sent: true as const } });

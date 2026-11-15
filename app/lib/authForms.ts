@@ -1,18 +1,15 @@
 import { createServerFn } from "@tanstack/react-start";
 import { redirect } from "@tanstack/react-router";
-import { setCookie } from "@tanstack/react-start/server";
-import { Effect, Schema as S } from "effect";
-import { runServerEffect } from "./serverEffect.js";
-import { Auth } from "../../server/services/auth.js";
-import { Families } from "../../server/services/families.js";
-import { Users } from "../../server/services/users.js";
+import { Schema as S } from "effect";
+import { getErrorMessage } from "./errors.js";
+import { callApi } from "./inProcessCall.js";
 import { normalizeLoginRedirect } from "./loginRedirect.js";
 
-const SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 30;
-
-function messageFromError(error: unknown, fallback: string): string {
-  return error instanceof Error && error.message ? error.message : fallback;
-}
+/*
+ * The forms on the auth pages post here before hydration. Each handler calls its API endpoint
+ * in process (callApi), so the endpoint's rate limit runs and the endpoint sets the session
+ * cookie. A refusal returns to the form's page with the endpoint's message.
+ */
 
 function formDataToObject(formData: FormData): Record<string, unknown> {
   const obj: Record<string, unknown> = {};
@@ -38,37 +35,15 @@ export const loginWithPassword = createServerFn({ method: "POST" })
     return validateFormData(PasswordLoginSchema, data);
   })
   .handler(async ({ data }) => {
-    const result = await runServerEffect(
-      Effect.gen(function* () {
-        const login = yield* Auth.use((authService) =>
-          authService.login({ id: data.id, password: data.password }),
-        );
-        yield* Users.use((userService) => userService.primaryEmailForUser(login.user.user_id));
-        return {
-          token: login.token,
-          expiresAt: login.expiresAt,
-          redirectTo: normalizeLoginRedirect(data.redirect) ?? "/dashboard",
-        };
-      }),
+    await callApi((api) =>
+      api.auth.login({ payload: { id: data.id, password: data.password } }),
     ).catch((error) => {
-      const message = messageFromError(error, "Login failed");
       throw redirect({
         to: "/login",
-        search: {
-          ...(data.redirect ? { redirect: data.redirect } : {}),
-          error: message,
-        },
+        search: { redirect: data.redirect, error: getErrorMessage(error, "Login failed") },
       });
     });
-    setCookie("session", result.token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      maxAge: SESSION_TTL_MS / 1000,
-      path: "/",
-      expires: result.expiresAt,
-    });
-    throw redirect({ to: result.redirectTo });
+    throw redirect({ to: normalizeLoginRedirect(data.redirect) ?? "/dashboard" });
   });
 
 const MagicLinkSchema = S.Struct({
@@ -82,14 +57,21 @@ export const requestMagicLink = createServerFn({ method: "POST" })
     return validateFormData(MagicLinkSchema, data);
   })
   .handler(async ({ data }) => {
-    await runServerEffect(Auth.use((authService) => authService.generateMagicLink(data.email)));
+    await callApi((api) => api.auth.magicLink({ payload: { email: data.email } })).catch(
+      (error) => {
+        throw redirect({
+          to: "/login",
+          search: {
+            redirect: data.redirect,
+            login_method: "magic",
+            error: getErrorMessage(error, "Could not send the link"),
+          },
+        });
+      },
+    );
     throw redirect({
       to: "/login",
-      search: {
-        magic_sent: true as const,
-        redirect: data.redirect,
-        login_method: "magic",
-      },
+      search: { magic_sent: true as const, redirect: data.redirect, login_method: "magic" },
     });
   });
 
@@ -103,8 +85,13 @@ export const forgotPassword = createServerFn({ method: "POST" })
     return validateFormData(ForgotPasswordSchema, data);
   })
   .handler(async ({ data }) => {
-    await runServerEffect(
-      Auth.use((authService) => authService.forgotPassword({ email: data.email })),
+    await callApi((api) => api.auth.forgotPassword({ payload: { email: data.email } })).catch(
+      (error) => {
+        throw redirect({
+          to: "/forgot-password",
+          search: { error: getErrorMessage(error, "Could not send the reset link") },
+        });
+      },
     );
     throw redirect({ to: "/forgot-password", search: { sent: true as const } });
   });
@@ -120,29 +107,13 @@ export const resetPassword = createServerFn({ method: "POST" })
     return validateFormData(ResetPasswordSchema, data);
   })
   .handler(async ({ data }) => {
-    const result = await runServerEffect(
-      Auth.use((authService) =>
-        authService.resetPassword({
-          token: data.token,
-          password: data.password,
-        }),
-      ),
+    await callApi((api) =>
+      api.auth.resetPassword({ payload: { token: data.token, password: data.password } }),
     ).catch((error) => {
       throw redirect({
         to: "/reset-password",
-        search: {
-          token: data.token,
-          error: messageFromError(error, "Password reset failed"),
-        },
+        search: { token: data.token, error: getErrorMessage(error, "Password reset failed") },
       });
-    });
-    setCookie("session", result.token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      maxAge: SESSION_TTL_MS / 1000,
-      path: "/",
-      expires: result.expiresAt,
     });
     throw redirect({ to: "/dashboard" });
   });
@@ -162,34 +133,26 @@ export const acceptInvitation = createServerFn({ method: "POST" })
     return validateFormData(AcceptInviteSchema, data);
   })
   .handler(async ({ data }) => {
-    const session = await runServerEffect(
-      Families.use((familyService) =>
-        familyService.acceptInvitation({
-          invitationId: data.id,
+    await callApi((api) =>
+      api.public.acceptInvitation({
+        params: { id: data.id },
+        payload: {
           code: data.code,
           username: data.username,
           password: data.password,
           name: data.name,
           email: data.email,
-        }),
-      ),
-    ).catch((err) => {
+        },
+      }),
+    ).catch((error) => {
       throw redirect({
         to: "/accept-invite",
         search: {
           id: data.id,
           code: data.code,
-          error: messageFromError(err, "Could not accept invitation"),
+          error: getErrorMessage(error, "Could not accept invitation"),
         },
       });
-    });
-    setCookie("session", session.token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      maxAge: SESSION_TTL_MS / 1000,
-      path: "/",
-      expires: session.expiresAt,
     });
     throw redirect({ to: "/dashboard" });
   });

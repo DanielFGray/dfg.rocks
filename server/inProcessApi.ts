@@ -1,4 +1,5 @@
-import { Context, Effect, Layer, Option } from "effect";
+import { Context, Effect, Layer, Option, Ref } from "effect";
+import * as Cookies from "effect/http/Cookies";
 import * as HttpClient from "effect/http/HttpClient";
 import * as HttpClientRequest from "effect/http/HttpClientRequest";
 import * as HttpRouter from "effect/http/HttpRouter";
@@ -23,17 +24,41 @@ export class InProcessApi extends Context.Service<InProcessApi>()("dfg-rocks/inP
     const http = loopbackClient(handler);
     return {
       handler,
-      /** The typed API client for one request that TanStack Start is serving. */
-      clientFor: (incoming: Request) =>
-        HttpApiClient.make(Contract, {
+      /**
+       * The typed API client for one request that TanStack Start is serving. `setCookieHeaders`
+       * gives the cookies the API's responses set (the session, after a login), for the server
+       * function to pass on in its own response.
+       */
+      clientFor: Effect.fn("InProcessApi.clientFor")(function* (incoming: Request) {
+        const responseCookies = yield* Ref.make(Cookies.empty);
+        const api = yield* HttpApiClient.make(Contract, {
           baseUrl: InProcessOrigin,
-          transformClient: HttpClient.mapRequest(forwardedHeaders(incoming.headers)),
-        }).pipe(Effect.provideService(HttpClient.HttpClient, http)),
+          transformClient: (client) =>
+            client.pipe(
+              HttpClient.mapRequest(forwardedHeaders(incoming.headers)),
+              HttpClient.transformResponse(
+                Effect.tap((response) =>
+                  Ref.update(
+                    responseCookies,
+                    Cookies.setAllCookie(Object.values(response.cookies.cookies)),
+                  ),
+                ),
+              ),
+            ),
+        }).pipe(Effect.provideService(HttpClient.HttpClient, http));
+        return {
+          api,
+          setCookieHeaders: Ref.get(responseCookies).pipe(Effect.map(Cookies.toSetCookieHeaders)),
+        };
+      }),
     };
   }),
 }) {
   static readonly layer = Layer.effect(this, this.make);
 }
+
+/** The typed API client that `InProcessApi.clientFor` gives. */
+export type InProcessClient = HttpApiClient.ForApi<typeof Contract>;
 
 /**
  * Copies onto an in-process request what the API reads from the visitor's own request: the
