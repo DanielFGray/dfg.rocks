@@ -34,10 +34,10 @@ import { ValkeyReady } from "./dependencies.js";
 import { Lessons } from "./services/lessons.js";
 import { Auth } from "./services/auth.js";
 import { Worker } from "../worker/worker.js";
+import type { InProcessApi } from "./inProcessApi.js";
 import { BillingLedger } from "./services/billingLedger.js";
 import { Files } from "./services/files.js";
 import { FamilyBilling } from "./services/familyBilling.js";
-import { Geolocation } from "./services/geolocation.js";
 import { GoogleCalendar } from "./services/googleCalendar.js";
 import { LessonPolicy } from "./services/lessonPolicy.js";
 import { Contact } from "./services/contact.js";
@@ -103,7 +103,6 @@ const servicesLayer = Layer.mergeAll(
   BillingLedger.layer,
   rateLimitLayer,
   Files.layer,
-  Geolocation.layer,
   Contact.layer,
   OAuth.layer,
   Testimonials.layer,
@@ -122,8 +121,11 @@ const servicesLayer = Layer.mergeAll(
 /** The services every request and server function uses, without the job runner. */
 export const applicationLayer = servicesLayer;
 
-/** The services of the server process: the application services and the job runner. */
-export type AppServices = Layer.Success<typeof applicationLayer> | Worker;
+/** The services the API handler runs on: the application services and the job runner. */
+export type ApplicationServices = Layer.Success<typeof applicationLayer> | Worker;
+
+/** The services of the server process: those of the API handler, and the API in this process. */
+export type AppServices = ApplicationServices | InProcessApi;
 
 const GroupHandlersLive = Layer.mergeAll(
   HealthApiGroupLive,

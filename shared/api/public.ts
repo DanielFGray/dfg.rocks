@@ -16,12 +16,13 @@ import {
 } from "../httpApiErrors.js";
 import { params } from "./fields.js";
 
-const ContactPayload = S.Struct({
-  name: S.String,
-  email: S.String,
+/** The contact form. `website` is a field people never see; a bot that fills it is refused. */
+export const ContactPayload = S.Struct({
+  name: S.String.pipe(S.check(S.isNonEmpty())),
+  email: S.String.pipe(S.check(S.isNonEmpty())),
   phone: S.optional(S.String),
-  instrument: S.String,
-  format: S.String,
+  instrument: S.String.pipe(S.check(S.isNonEmpty())),
+  format: S.String.pipe(S.check(S.isNonEmpty())),
   message: S.optional(S.String),
   website: S.optional(S.String),
 });

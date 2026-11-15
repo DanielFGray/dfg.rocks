@@ -85,12 +85,17 @@ export class RateLimit extends Context.Service<RateLimit>()("dfg-rocks/rateLimit
 export const checkRateLimit = (rule: RateLimitRule, headers: Record<string, string | undefined>) =>
   RateLimit.use((rateLimit) => rateLimit.check(rule, headers));
 
-// The ingress proxy (Traefik) discards any client-sent X-Real-Ip and sets it from the connection.
-// Every other client-IP header passes through it unchanged, so a client could forge it.
+/**
+ * The header that holds the client address. The ingress proxy (Traefik) discards any client-sent
+ * X-Real-Ip and sets it from the connection. Every other client-IP header passes through it
+ * unchanged, so a client could forge it.
+ */
+export const clientAddressHeader = "x-real-ip";
+
 export function clientIdentifierFromHeaders(
   headers: Record<string, string | undefined>,
 ): string | undefined {
-  const candidate = headers["x-real-ip"]?.trim();
+  const candidate = headers[clientAddressHeader]?.trim();
   return candidate && net.isIP(candidate) ? candidate : undefined;
 }
 

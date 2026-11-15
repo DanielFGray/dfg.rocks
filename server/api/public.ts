@@ -1,6 +1,6 @@
 import * as HttpApiBuilder from "effect/http-api/HttpApiBuilder";
 import * as HttpServerResponse from "effect/http/HttpServerResponse";
-import { Config, Effect } from "effect";
+import { Config, Effect, Option } from "effect";
 import { Contract } from "../../shared/httpApi.js";
 import { adaptHttpApiErrors } from "../httpApiErrors.js";
 import { HttpError } from "../pgErrors.js";
@@ -14,7 +14,6 @@ import {
   getOAuthRedirectCookieName,
   getOAuthRedirectTarget,
 } from "../services/oauth.js";
-import { Geolocation } from "../services/geolocation.js";
 import { Families } from "../services/families.js";
 import { Account } from "../services/account.js";
 import { Contact } from "../services/contact.js";
@@ -56,35 +55,13 @@ export const PublicApiGroupLive = HttpApiBuilder.group(Contract, "public", (hand
     .handle(
       "contact",
       Effect.fnUntraced(function* ({ request, payload }) {
-        if (payload.website) {
-          return yield* new HttpError({ status: 400, message: "Invalid submission" });
-        }
         yield* checkRateLimit("contact", request.headers);
-        const ip = clientIdentifierFromHeaders(request.headers);
-        if (ip) {
-          const loc = yield* Geolocation.use((geolocationService) =>
-            geolocationService.lookupIp(ip),
-          );
-          const isTexas = loc?.country === "US" && loc?.region === "TX";
-
-          if (!isTexas) {
-            return yield* new HttpError({
-              status: 403,
-              message:
-                "Sorry, I only accept lesson inquiries from the Houston / Galveston area in Texas. If you're outside Texas, I hope you find a great teacher near you!",
-            });
-          }
-          yield* Contact.use((contactService) =>
-            contactService.submitContact(payload, {
-              ip,
-              country: loc?.country ?? "",
-              region: loc?.region ?? "",
-              city: loc?.city ?? "",
-            }),
-          );
-        } else {
-          yield* Contact.use((contactService) => contactService.submitContact(payload));
-        }
+        yield* Contact.use((contactService) =>
+          contactService.submitContact(
+            payload,
+            Option.fromNullishOr(clientIdentifierFromHeaders(request.headers)),
+          ),
+        );
         return { success: true as const };
       }, adaptPublicHttpApiErrors),
     )

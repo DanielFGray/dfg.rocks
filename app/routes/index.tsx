@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Schema as S } from "effect";
+import { Effect, Schema as S } from "effect";
 import { createFileRoute, Link, redirect } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import {
@@ -18,9 +18,12 @@ import { Select } from "../components/ui/Select.js";
 import { Textarea } from "../components/ui/Textarea.js";
 
 import { createServerFn } from "@tanstack/react-start";
+import { getRequest } from "@tanstack/react-start/server";
 import { runServerEffect } from "../lib/serverEffect.js";
+import { getErrorMessage } from "../lib/errors.js";
 import { Testimonials } from "../../server/services/testimonials.js";
-import { Contact } from "../../server/services/contact.js";
+import { InProcessApi } from "../../server/inProcessApi.js";
+import { ContactPayload } from "../../shared/api/public.js";
 
 const [logoBefore, logoAfter] = site.logo.split(site.logoDot);
 
@@ -28,16 +31,8 @@ export const getHomePageData = createServerFn({ method: "GET" }).handler(() =>
   runServerEffect(Testimonials.use((testimonialService) => testimonialService.homePageData())),
 );
 
-const ContactFormSchema = S.Struct({
-  name: S.String.pipe(S.check(S.isNonEmpty())),
-  email: S.String.pipe(S.check(S.isNonEmpty())),
-  phone: S.optional(S.String),
-  instrument: S.String.pipe(S.check(S.isNonEmpty())),
-  format: S.String.pipe(S.check(S.isNonEmpty())),
-  message: S.optional(S.String),
-  website: S.optional(S.String),
-});
-
+// The form posts here so it works before the page hydrates. The submission goes through
+// /api/contact in this process, which holds the honeypot, rate limit and location checks.
 export const submitContact = createServerFn({ method: "POST" })
   .validator((data) => {
     if (!(data instanceof FormData)) throw new Error("FormData expected");
@@ -45,22 +40,18 @@ export const submitContact = createServerFn({ method: "POST" })
     for (const [key, value] of data.entries()) {
       obj[key] = value;
     }
-    return S.decodeUnknownSync(ContactFormSchema)(obj);
+    return S.decodeUnknownSync(ContactPayload)(obj);
   })
   .handler(async ({ data }) => {
-    if (data.website) throw new Error("Invalid submission");
+    const request = getRequest();
     await runServerEffect(
-      Contact.use((contactService) =>
-        contactService.submitContact({
-          name: data.name,
-          email: data.email,
-          phone: data.phone,
-          instrument: data.instrument,
-          format: data.format,
-          message: data.message,
-        }),
-      ),
-    );
+      Effect.gen(function* () {
+        const api = yield* InProcessApi.use((inProcess) => inProcess.clientFor(request));
+        yield* api.public.contact({ payload: data });
+      }),
+    ).catch((error) => {
+      throw new Error(getErrorMessage(error, "Failed to send message"));
+    });
     throw redirect({ to: "/", search: { sent: true as const } });
   });
 
