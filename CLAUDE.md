@@ -55,6 +55,8 @@ server/main.ts (production) / server/dev.ts (development)
 
 The shell passes the application's services in TanStack Start's request context, and server functions run on them through `runServerEffect` (`app/lib/serverEffect.ts`). Production loads the application from the bundle. Development loads it through Vite's SSR runner and builds it again after an edit. After an edit to `server/dev.ts` or `server/shell/`, restart the dev process with Ctrl-C.
 
+A server function that stands in for an API endpoint (a form that posts before hydration) calls the API through `InProcessApi.clientFor(getRequest())` (`server/inProcessApi.ts`), so the endpoint's rate limits and checks run. Design: ~/build/effect-web-template/docs/design/in-process-callers.md.
+
 ### Client: Typed Fetch API
 
 All API access goes through `app/lib/api.ts`:
