@@ -24,7 +24,7 @@ const UpdateDiscountPayload = S.Struct({
   effective_from: S.optional(S.String),
   effective_until: S.optional(S.String),
   is_active: S.optional(S.Boolean),
-});
+}).pipe(S.check(S.isMinProperties(1)));
 
 const CreateTaxRatePayload = S.Struct({
   label: S.String,

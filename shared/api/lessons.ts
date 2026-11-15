@@ -54,7 +54,7 @@ const UpdateLessonPayload = S.Struct({
   scheduled_at: S.optional(S.DateFromString),
   duration_minutes: S.optional(S.Finite),
   location_type: S.optional(LocationType),
-});
+}).pipe(S.check(S.isMinProperties(1)));
 
 const AdminLessonsQuery = S.Struct({
   limit: S.optional(S.FiniteFromString),

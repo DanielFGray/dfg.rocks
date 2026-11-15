@@ -2,10 +2,10 @@
  * Centralized PostgreSQL custom error code handling.
  *
  * Maps custom errcodes raised by SECURITY DEFINER functions to
- * typed HTTP errors. Unknown SQL errors are rethrown as-is.
+ * typed HTTP errors. Other SQL errors pass through unchanged.
  */
 import { SqlError } from "effect/sql/SqlError";
-import { Effect } from "effect";
+import { Effect, Option, Record } from "effect";
 import * as Schema from "effect/Schema";
 
 export class HttpError extends Schema.TaggedError<HttpError, { readonly brand: unique symbol }>()(
@@ -37,55 +37,38 @@ const pg_errcodes: Record<string, (msg: string) => HttpError> = {
   EMTKN: (msg) =>
     new HttpError({ status: 409, message: msg || "An account already uses this email address" }),
   /** Unique violation (duplicate username, email, etc.) */
-  23505: (msg) =>
-    new HttpError({ status: 409, message: msg || "A record with this value already exists" }),
+  23505: () => new HttpError({ status: 409, message: "A record with this value already exists" }),
+  /**
+   * Foreign key violation: the request is well formed but names a row that does not exist (or no
+   * longer exists) now.
+   */
+  23503: () => new HttpError({ status: 409, message: "This change conflicts with related data" }),
 };
 
-function unwrapSqlError(err: unknown): unknown {
-  return err instanceof SqlError && err.cause !== undefined ? err.cause : err;
-}
+/**
+ * What Postgres reports about a statement it refused. A `SqlError` holds it two levels down: its
+ * `reason` (UnknownError, ConstraintError, ...) keeps the driver's error as `cause`.
+ */
+const PostgresReport = Schema.Struct({ code: Schema.String, message: Schema.String });
 
-export function pgErrorToHttpError(err: unknown): HttpError | null {
-  const unwrapped = unwrapSqlError(err);
+/**
+ * The HttpError that a refused query's errcode stands for, if any. A custom code passes the
+ * SQL's own message on, which was written for users; a standard code gets fixed text, because
+ * Postgres's message can name tables, columns and values. API handlers get it through
+ * adaptHttpApiErrors.
+ */
+export const pgRefusal = (error: SqlError): Option.Option<HttpError> =>
+  Option.flatMap(Schema.decodeUnknownOption(PostgresReport)(error.reason.cause), (report) =>
+    Option.map(Record.get(pg_errcodes, report.code), (answer) => answer(report.message)),
+  );
 
-  if (unwrapped instanceof HttpError) {
-    return unwrapped;
-  }
-
-  if (typeof unwrapped === "object" && unwrapped !== null) {
-    const cause = unwrapped as {
-      code?: unknown;
-      message?: unknown;
-    };
-    if (typeof cause.code !== "string") {
-      return null;
-    }
-
-    const factory = pg_errcodes[cause.code];
-    if (factory) {
-      return factory(typeof cause.message === "string" ? cause.message : "");
-    }
-  }
-
-  return null;
-}
-
+/** `pgRefusal` over an effect's failures, for a caller that is not an API handler. */
 export function catchPgErrors<A, E, R>(
   self: Effect.Effect<A, E, R>,
 ): Effect.Effect<A, E | HttpError, R> {
   return self.pipe(
-    Effect.mapError((error): E | HttpError => {
-      if (error instanceof HttpError) {
-        return error;
-      }
-      return pgErrorToHttpError(error) ?? error;
-    }),
+    Effect.mapError((error): E | HttpError =>
+      error instanceof SqlError ? Option.getOrElse(pgRefusal(error), () => error) : error,
+    ),
   );
-}
-/**
- * Map a PostgreSQL DatabaseError to an HttpError if the errcode is known,
- * otherwise rethrow the original error.
- */
-export function mapPgError(err: unknown): never {
-  throw pgErrorToHttpError(err) ?? unwrapSqlError(err);
 }

@@ -23,7 +23,7 @@ const UpdateCoursePayload = S.Struct({
   title: S.optional(S.String),
   description: S.optional(S.String),
   instrument: S.optional(S.String),
-});
+}).pipe(S.check(S.isMinProperties(1)));
 
 const CreateModulePayload = S.Struct({
   title: S.String,
@@ -34,7 +34,7 @@ const UpdateModulePayload = S.Struct({
   title: S.optional(S.String),
   content: S.optional(S.NullOr(RichTextDocument)),
   sort_order: S.optional(S.Finite),
-});
+}).pipe(S.check(S.isMinProperties(1)));
 
 const EnrollStudentPayload = S.Struct({
   course_id: S.String,

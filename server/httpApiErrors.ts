@@ -15,7 +15,9 @@ import {
   TooManyRequestsError,
   UnauthorizedError,
 } from "../shared/httpApiErrors.js";
-import { HttpError } from "./pgErrors.js";
+import * as Option from "effect/Option";
+import { SqlError } from "effect/sql/SqlError";
+import { HttpError, pgRefusal } from "./pgErrors.js";
 
 const internalServerError = () => new InternalServerError({ error: "Internal Server Error" });
 
@@ -153,17 +155,16 @@ export function adaptHttpApiErrors<A, E, R, const Allowed extends AllowedHttpApi
 
     const failure = Cause.findError(cause);
     if (Result.isSuccess(failure)) {
-      if (
-        isHttpApiError(failure.success) &&
-        isAllowedStatus(allowedStatuses, httpApiErrorStatus(failure.success))
-      ) {
-        return Effect.fail(failure.success as HttpApiErrorForStatus<AllowedStatus<Allowed>>);
+      // A query the database refused with a known errcode is answered as that errcode says.
+      const error =
+        failure.success instanceof SqlError
+          ? Option.getOrElse(pgRefusal(failure.success), () => failure.success)
+          : failure.success;
+      if (isHttpApiError(error) && isAllowedStatus(allowedStatuses, httpApiErrorStatus(error))) {
+        return Effect.fail(error as HttpApiErrorForStatus<AllowedStatus<Allowed>>);
       }
-      if (
-        failure.success instanceof HttpError &&
-        isAllowedStatus(allowedStatuses, failure.success.status)
-      ) {
-        const apiError = httpErrorToHttpApiError(failure.success);
+      if (error instanceof HttpError && isAllowedStatus(allowedStatuses, error.status)) {
+        const apiError = httpErrorToHttpApiError(error);
         if (apiError !== undefined) {
           return Effect.fail(apiError as HttpApiErrorForStatus<AllowedStatus<Allowed>>);
         }

@@ -1485,4 +1485,30 @@ describe("DFG Portal API", () => {
       }),
     60_000,
   );
+
+  // An admin's bad request is a 4xx, never a database error answered as 500: an update that names
+  // no field is a 400 before any SQL runs, an id that matches no row is a 404, and a row that refers
+  // to a missing one is a 409 (a foreign-key violation).
+  it.effect("admin writes answer 4xx for no fields and unknown ids", () =>
+    Effect.gen(function* () {
+      const id = "00000000-0000-0000-0000-000000000000";
+      const cases = [
+        ["PATCH", `/api/admin/courses/${id}`, {}, 400],
+        ["PATCH", `/api/admin/modules/${id}`, {}, 400],
+        ["PATCH", `/api/admin/billing/discounts/${id}`, {}, 400],
+        ["PATCH", `/api/admin/lessons/${id}`, {}, 400],
+        ["PATCH", `/api/admin/courses/${id}`, { title: "Renamed" }, 404],
+        ["PATCH", `/api/admin/modules/${id}`, { title: "Renamed" }, 404],
+        ["PATCH", `/api/admin/lessons/${id}`, { duration_minutes: 30 }, 404],
+        ["DELETE", `/api/admin/lessons/${id}`, undefined, 404],
+        ["POST", `/api/admin/lessons/${id}/notes`, { notes: "Scales" }, 409],
+      ] as const;
+      const statuses = yield* Effect.forEach(cases, ([method, path, body]) =>
+        reqEffect(method, path, { cookie: adminCookie, body }).pipe(
+          Effect.map((res) => [method, path, res.status]),
+        ),
+      );
+      expect(statuses).toEqual(cases.map(([method, path, , status]) => [method, path, status]));
+    }),
+  );
 });
