@@ -2,6 +2,7 @@ import { Effect } from "effect";
 import { withAuthContext } from "../../../server/requestDatabase.js";
 import { useState } from "react";
 import { createFileRoute, useRouter } from "@tanstack/react-router";
+import { requireAdmin } from "../../lib/adminRoute.js";
 import { useMutation } from "@tanstack/react-query";
 import { createServerFn } from "@tanstack/react-start";
 import { getCookie } from "@tanstack/react-start/server";
@@ -34,6 +35,7 @@ const getSubmissionsPageData = createServerFn({ method: "GET" }).handler(() =>
 );
 
 export const Route = createFileRoute("/_authed/submissions")({
+  beforeLoad: requireAdmin,
   head: () => ({
     meta: [{ title: "Submissions | DFG Portal" }],
   }),

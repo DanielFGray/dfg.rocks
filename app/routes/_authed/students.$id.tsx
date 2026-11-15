@@ -3,6 +3,7 @@ import { withAuthContext } from "../../../server/requestDatabase.js";
 import * as S from "effect/Schema";
 import { useState } from "react";
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
+import { requireAdmin } from "../../lib/adminRoute.js";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { createServerFn } from "@tanstack/react-start";
 import { getCookie } from "@tanstack/react-start/server";
@@ -64,6 +65,7 @@ const getStudentDetailPageData = createServerFn({ method: "GET" })
   );
 
 export const Route = createFileRoute("/_authed/students/$id")({
+  beforeLoad: requireAdmin,
   head: () => ({ meta: [{ title: "Student Detail | DFG Portal" }] }),
   loader: ({ params }) => getStudentDetailPageData({ data: { studentId: params.id } }),
   component: StudentDetailPage,
