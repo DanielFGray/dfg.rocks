@@ -1,3 +1,10 @@
+--! Previous: sha1:fdf313e8b6092c712606d1606fd99fad999dceec
+--! Hash: sha1:58517ccd33b9e1ce1c75777794050dec6baebced
+
+--! split: 1-current.sql
+-- Enter migration here
+
+--! split: 2-billing-helper-execute.sql
 /*
  * Internal billing helpers are not callable by the visitor. They are SECURITY DEFINER, so a
  * visitor who calls one reads billing data past RLS: a payer's discount and tax rate, which
