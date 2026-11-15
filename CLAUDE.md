@@ -196,7 +196,12 @@ Benign warning, no functionality impact.
 ## Rules
 
 - Write migrations in `migrations/current/` as numbered files (`1-schemas.sql`, `2-users.sql`). Each file must run more than once without error (`create or replace`, `drop ... if exists` before `create`, `if not exists`): `graphile-migrate watch` runs it again after each edit, and the commit at release runs it on a database that already has it.
-- Release: from a clean checkout on `main`, run `ops promote <branch>`. It merges the branch, commits `migrations/current/` into `migrations/committed/` (`build(db): commit migration`), signs the tree off and prints the push command. A push of `main` to `cynic` releases; the user pushes. Production applies committed migrations only, and refuses a `main` whose `migrations/current/` still holds SQL. Design: `~/build/server-ansible/docs/design/continuous-deployment.md`.
+- Release in two steps. Push only when the user asks.
+  1. Stage: merge the branch into `develop`, then push `develop` to `origin` and `cynic`. The pre-push hook signs off the tree, and the push to `cynic` deploys the tailnet-only staged copy, whose databases start as copies of production. `ops dash` shows whether it is healthy. Check the change there. The staged copy runs `bun run migrate`, which applies committed migrations only, so it does not have the SQL in `migrations/current/`. Check a schema change on the dev database.
+  2. Release: from a clean checkout on `main`, run `ops promote`. It merges `develop`, commits `migrations/current/` into `migrations/committed/` (`build(db): commit migration`) when it holds SQL, signs the tree off and prints the push command. A push of `main` to `cynic` releases. Production applies committed migrations only, and refuses a `main` whose `migrations/current/` still holds SQL.
+  3. When the promote committed a migration, fast-forward `develop` to `main` (`git merge --ff-only main` on `develop`). `ops promote` does not move `develop`, which otherwise keeps the committed SQL in `migrations/current/`.
+
+  A branch that reaches `main` without passing through `develop` leaves `develop` behind. Design: `~/build/server-ansible/docs/design/continuous-deployment.md`.
 - Write SQL keywords in lowercase (`create table`, `primary key`). Graphile placeholders such as `:DATABASE_VISITOR` stay uppercase.
 - When Effect code misbehaves, debug the Effect code.
 
