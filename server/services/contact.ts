@@ -20,7 +20,9 @@ export class Contact extends Context.Service<Contact>()("dfg-rocks/contact", {
         values: typeof ContactPayload.Type,
         ip: Option.Option<string>,
       ) {
+        // A refusal saves no row, so the log is the only record of what the checks block.
         if (values.website) {
+          yield* Effect.logInfo("Contact refused: honeypot filled", { ip: Option.getOrNull(ip) });
           return yield* new HttpError({ status: 400, message: "Invalid submission" });
         }
         const location = yield* Option.match(ip, {
@@ -28,6 +30,10 @@ export class Contact extends Context.Service<Contact>()("dfg-rocks/contact", {
           onSome: geolocation.lookupIp,
         });
         if (Option.exists(location, (found) => found.country !== "US" || found.region !== "TX")) {
+          yield* Effect.logInfo("Contact refused: outside Texas", {
+            ip: Option.getOrNull(ip),
+            location: Option.getOrNull(location),
+          });
           return yield* new HttpError({
             status: 403,
             message:
