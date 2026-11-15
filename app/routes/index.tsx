@@ -42,10 +42,15 @@ export const submitContact = createServerFn({ method: "POST" })
     return S.decodeUnknownSync(ContactPayload)(obj);
   })
   .handler(async ({ data }) => {
+    // Both outcomes return to the form, so a post before hydration shows the result where it was sent.
     await callApi((api) => api.public.contact({ payload: data })).catch((error) => {
-      throw new Error(getErrorMessage(error, "Failed to send message"));
+      throw redirect({
+        to: "/",
+        hash: "contact",
+        search: { error: getErrorMessage(error, "Failed to send message") },
+      });
     });
-    throw redirect({ to: "/", search: { sent: true as const } });
+    throw redirect({ to: "/", hash: "contact", search: { sent: true as const } });
   });
 
 export const Route = createFileRoute("/")({
@@ -92,6 +97,7 @@ export const Route = createFileRoute("/")({
   loader: () => getHomePageData(),
   validateSearch: (search: Record<string, unknown>) => ({
     ...(search.sent === "true" ? { sent: true as const } : {}),
+    ...(typeof search.error === "string" ? { error: search.error } : {}),
   }),
   component: HomePage,
 });
@@ -316,7 +322,7 @@ function TestimonialSection() {
 }
 
 function ContactSection() {
-  const { sent } = Route.useSearch();
+  const { sent, error: refusal } = Route.useSearch();
   const contactFn = useServerFn(submitContact);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -326,6 +332,7 @@ function ContactSection() {
   const [message, setMessage] = useState("");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const shownError = pending ? null : (error ?? refusal ?? null);
 
   if (sent) {
     return (
@@ -430,10 +437,13 @@ function ContactSection() {
             setPending(true);
             setError(null);
             const formData = new FormData(event.currentTarget);
-            contactFn({ data: formData }).catch((err) => {
-              setError(err instanceof Error ? err.message : "Failed to send message");
-              setPending(false);
-            });
+            // A refusal comes back as a redirect to this page with `error` in the search, so the
+            // call resolves; only a failed request rejects.
+            contactFn({ data: formData })
+              .catch((err) => {
+                setError(err instanceof Error ? err.message : "Failed to send message");
+              })
+              .finally(() => setPending(false));
           }}
           className="mb-10"
           data-testid="contact-form"
@@ -510,9 +520,12 @@ function ContactSection() {
               autoComplete="off"
             />
 
-            {error ? (
-              <div className="rounded-lg border border-red-500/30 bg-red-500/5 px-4 py-3 text-sm text-red-600 dark:text-red-400">
-                {error}
+            {shownError ? (
+              <div
+                data-testid="contact-error"
+                role="alert"
+                className="rounded-lg border border-red-500/30 bg-red-500/5 px-4 py-3 text-sm text-red-600 dark:text-red-400">
+                {shownError}
               </div>
             ) : null}
 
