@@ -96,7 +96,7 @@
   "fromEmail": "noreply@dfg.rocks",
   "legalText": "",
   "patchedDependencies": {
-    "@coderline/alphatab@1.9.0-alpha.1785": "patches/@coderline%2Falphatab@1.9.0-alpha.1785.patch"
+    "@coderline/alphatab@1.9.0": "patches/@coderline%2Falphatab@1.9.0.patch"
   },
   "projectName": "DFG Music Lessons",
   "templateCopies": [
