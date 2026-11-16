@@ -1,0 +1,78 @@
+diff --git a/dist/alphaTab.core.mjs b/dist/alphaTab.core.mjs
+index c02bd31c8de1f087c8f0071c57e21b661e3a05ae..e38776edfef4c1300857f961bd9a2aac65a52733 100644
+--- a/dist/alphaTab.core.mjs
++++ b/dist/alphaTab.core.mjs
+@@ -33106,9 +33106,9 @@ class HtmlElementContainer {
+ 	_attachMouseListeners() {
+ 		if (this._mouseListenersAttached) return;
+ 		this._mouseListenersAttached = true;
+-		this.element.addEventListener("mousedown", this._onElementMouseDown, true);
+-		this.element.addEventListener("mousemove", this._onElementMouseMove, true);
+-		this.element.addEventListener("mouseup", this._onElementMouseUp, true);
++		this.element.addEventListener("pointerdown", this._onElementMouseDown, true);
++		this.element.addEventListener("pointermove", this._onElementMouseMove, true);
++		this.element.addEventListener("pointerup", this._onElementMouseUp, true);
+ 	}
+ 	_onElementMouseDown = (e) => {
+ 		if (e.button === 0) this._beginPress();
+@@ -33138,15 +33138,17 @@ class HtmlElementContainer {
+ 		if (this._pressDocument) return;
+ 		const doc = this.element.ownerDocument;
+ 		this._pressDocument = doc;
+-		doc.addEventListener("mousemove", this._onPressMouseMove, true);
+-		doc.addEventListener("mouseup", this._onPressMouseUp, true);
++		doc.addEventListener("pointermove", this._onPressMouseMove, true);
++		doc.addEventListener("pointerup", this._onPressMouseUp, true);
++		doc.addEventListener("pointercancel", this._onPressMouseUp, true);
+ 	}
+ 	_endPress() {
+ 		const doc = this._pressDocument;
+ 		if (!doc) return;
+ 		this._pressDocument = null;
+-		doc.removeEventListener("mousemove", this._onPressMouseMove, true);
+-		doc.removeEventListener("mouseup", this._onPressMouseUp, true);
++		doc.removeEventListener("pointermove", this._onPressMouseMove, true);
++		doc.removeEventListener("pointerup", this._onPressMouseUp, true);
++		doc.removeEventListener("pointercancel", this._onPressMouseUp, true);
+ 	}
+ 	stopAnimation() {
+ 		this.element.style.transition = "none";
+diff --git a/dist/alphaTab.js b/dist/alphaTab.js
+index 0934d6f5c1dc89ed4468663ead397ddfb09a6ed0..c0076ddd10690de4e95ec9283692aa06b93b84e9 100644
+--- a/dist/alphaTab.js
++++ b/dist/alphaTab.js
+@@ -33105,9 +33105,9 @@
+ 		_attachMouseListeners() {
+ 			if (this._mouseListenersAttached) return;
+ 			this._mouseListenersAttached = true;
+-			this.element.addEventListener("mousedown", this._onElementMouseDown, true);
+-			this.element.addEventListener("mousemove", this._onElementMouseMove, true);
+-			this.element.addEventListener("mouseup", this._onElementMouseUp, true);
++			this.element.addEventListener("pointerdown", this._onElementMouseDown, true);
++			this.element.addEventListener("pointermove", this._onElementMouseMove, true);
++			this.element.addEventListener("pointerup", this._onElementMouseUp, true);
+ 		}
+ 		_onElementMouseDown = (e) => {
+ 			if (e.button === 0) this._beginPress();
+@@ -33137,15 +33137,17 @@
+ 			if (this._pressDocument) return;
+ 			const doc = this.element.ownerDocument;
+ 			this._pressDocument = doc;
+-			doc.addEventListener("mousemove", this._onPressMouseMove, true);
+-			doc.addEventListener("mouseup", this._onPressMouseUp, true);
++			doc.addEventListener("pointermove", this._onPressMouseMove, true);
++			doc.addEventListener("pointerup", this._onPressMouseUp, true);
++			doc.addEventListener("pointercancel", this._onPressMouseUp, true);
+ 		}
+ 		_endPress() {
+ 			const doc = this._pressDocument;
+ 			if (!doc) return;
+ 			this._pressDocument = null;
+-			doc.removeEventListener("mousemove", this._onPressMouseMove, true);
+-			doc.removeEventListener("mouseup", this._onPressMouseUp, true);
++			doc.removeEventListener("pointermove", this._onPressMouseMove, true);
++			doc.removeEventListener("pointerup", this._onPressMouseUp, true);
++			doc.removeEventListener("pointercancel", this._onPressMouseUp, true);
+ 		}
+ 		stopAnimation() {
+ 			this.element.style.transition = "none";
