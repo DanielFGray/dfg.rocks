@@ -226,7 +226,7 @@ test.describe("assignments management", () => {
       .click();
     await expect(page.getByTestId("assignment-detail")).toBeVisible();
     await expect(page.getByText("student-review.musicxml · Bass")).toBeVisible();
-    await expect(page.getByLabel("Track:")).toHaveValue("1", { timeout: 15_000 });
+    await expect(page.getByRole("combobox", { name: "Track" })).toHaveValue("1", { timeout: 15_000 });
 
     await expect(page.getByText("No self-reviews yet.")).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Save Review" })).toHaveCount(0);

@@ -38,6 +38,6 @@ google-auth-*
 .idea/
 .claude/
 
-# Copied from @coderline/alphatab by its Vite plugin
+# Copied from @coderline/alphatab by the gigbag.js Vite plugin (alphaTabAssets)
 public/font/
 public/soundfont/

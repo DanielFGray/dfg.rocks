@@ -32,7 +32,8 @@
     "prepare": "effect-tsgo patch --typescript && (git rev-parse --git-dir >/dev/null 2>&1 || exit 0; lefthook install --reset-hooks-path)"
   },
   "dependencies": {
-    "@coderline/alphatab": "^1.9.0",
+    "@coderline/alphatab": "1.9.0",
+    "gigbag.js": "github:DanielFGray/alphatab-kit#v0.4.1",
     "@effect/platform-bun": "4.1.4",
     "@effect/platform-node": "4.1.4",
     "@effect/sql-pg": "4.1.4",
@@ -70,7 +71,6 @@
     "vitest": "^5.1.0"
   },
   "devDependencies": {
-    "@coderline/alphatab-vite": "1.9.0",
     "@effect/language-service": "^0.87.5",
     "@effect/tsgo": "0.69.0",
     "@effect/vitest": "4.1.4",
