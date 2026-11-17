@@ -12,7 +12,9 @@ export function ProgressBar({ currentTimeMs, endTimeMs, isLoading, onSeek }: Pro
 
   return (
     <div className="flex min-w-0 flex-1 items-center gap-2">
-      <div className="min-w-[72px] shrink-0 font-mono text-[11px] text-muted md:min-w-[86px] md:text-xs dark:text-muted-dark">
+      <div
+        data-testid="alphatab-time"
+        className="min-w-[72px] shrink-0 font-mono text-[11px] text-muted md:min-w-[86px] md:text-xs dark:text-muted-dark">
         {formatTime(currentTimeMs / 1000)} / {formatTime(endTimeMs / 1000)}
       </div>
 

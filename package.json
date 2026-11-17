@@ -70,6 +70,7 @@
     "vitest": "^5.1.0"
   },
   "devDependencies": {
+    "@coderline/alphatab-vite": "1.9.0",
     "@effect/language-service": "^0.87.5",
     "@effect/tsgo": "0.69.0",
     "@effect/vitest": "4.1.4",
