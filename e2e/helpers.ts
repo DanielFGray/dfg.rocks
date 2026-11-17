@@ -108,6 +108,11 @@ export const test = base.extend<{ testing: TestingApi; browserErrorGuard: void }
           (type === "warning" && regressionWarningPatterns.some((pattern) => pattern.test(text)))
         ) {
           const { url, lineNumber, columnNumber } = message.location();
+          // Chromium's built-in PDF viewer, which runs in the PDF preview iframe
+          // (MaterialPreview), intermittently fails to load
+          // chrome://resources/css/text_defaults_md.css. These URLs belong to
+          // Chromium's own pages; no app or test code can cause or fix them.
+          if (url.startsWith("chrome://") || url.startsWith("chrome-extension://")) return;
           const source = url ? ` (${url}:${lineNumber}:${columnNumber})` : "";
           browserErrors.push(`console.${type}: ${text}${source}`);
         }
