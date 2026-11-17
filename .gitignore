@@ -37,3 +37,7 @@ google-auth-*
 # jetbrains setting folder
 .idea/
 .claude/
+
+# Copied from @coderline/alphatab by its Vite plugin
+public/font/
+public/soundfont/

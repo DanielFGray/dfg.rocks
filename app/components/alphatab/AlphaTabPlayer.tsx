@@ -724,7 +724,6 @@ export function AlphaTabPlayer({
         file: src,
         engine: "svg",
         logLevel: 1,
-        scriptFile: `${assetBase}alphatab/alphaTab.mjs`,
         fontDirectory: `${assetBase}font/`,
       },
       display: {

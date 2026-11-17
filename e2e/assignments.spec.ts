@@ -154,6 +154,38 @@ test.describe("assignments management", () => {
     });
   });
 
+  // Regression: the production bundle once inlined alphaTab's audio worklet as a data: URL,
+  // which cannot import alphaTab's core, so Play made no sound and the clock never moved.
+  test("student plays an assigned score", async ({ page, testing }) => {
+    await testing.login();
+    await testing.login({
+      username: "test_assignment_student_playback",
+      role: "student",
+      name: "Playback Student",
+    });
+    await testing.seedMaterial({
+      title: "Test: Playback Material",
+      original_filename: "playback.musicxml",
+      mime_type: "application/octet-stream",
+      source_file_path: notationFixturePath,
+      is_global: false,
+    });
+    await testing.assignMaterial("test_assignment_student_playback", "Test: Playback Material", 1);
+
+    await loginViaUi(page, "test_assignment_student_playback", "testpassword123");
+    await page.getByTestId("nav-assignments").click();
+    await page
+      .getByTestId("assignment-open-link")
+      .filter({ hasText: "Test: Playback Material" })
+      .click();
+
+    // The end time appears once the score is loaded and its MIDI generated.
+    const time = page.getByTestId("alphatab-time");
+    await expect(time).not.toHaveText(/ \/ 0:00$/, { timeout: 15_000 });
+    await page.getByRole("button", { name: "Play" }).click();
+    await expect(time).not.toHaveText(/^0:00 /, { timeout: 10_000 });
+  });
+
   test("student uses self-reviews instead of manual practice buttons", async ({
     page,
     testing,
