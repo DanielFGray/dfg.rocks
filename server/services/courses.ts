@@ -98,6 +98,18 @@ export class Courses extends Context.Service<Courses>()("dfg-rocks/courses", {
 
       return { ...course, modules: modulesWithMaterials };
     }),
+    /**
+     * Whether the course exists, whatever the caller may read. A caller asks after a course it cannot
+     * read, to tell a locked course from a missing one. Runs in the caller's visitor transaction.
+     */
+    courseExists: Effect.fn("courseExists")(function* (courseId: string) {
+      const db = yield* RequestDatabase;
+      const rows = yield* db.execute(
+        db.selectNoFrom(sql<boolean>`app_public.course_exists(${courseId}::uuid)`.as("exists")),
+      );
+      return rows[0]?.exists === true;
+    }),
+
     listCourses: Effect.fn("listCourses")(function* () {
       const db = yield* RequestDatabase;
       return yield* db.execute(

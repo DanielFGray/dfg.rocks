@@ -17,6 +17,15 @@ export const SubscriptionsApiGroupLive = HttpApiBuilder.group(
   (handlers) =>
     handlers
       .handle(
+        "mySubscription",
+        Effect.fnUntraced(function* () {
+          const auth = yield* CurrentSession;
+          return yield* Stripe.use((stripe) =>
+            stripe.billingStatus(auth.user.id).pipe(withAuthContext(auth.session.id)),
+          );
+        }, adaptSubscriptionErrors),
+      )
+      .handle(
         "startCheckout",
         Effect.fnUntraced(function* ({ request, payload }) {
           yield* checkRateLimit("checkout", request.headers);

@@ -20,6 +20,7 @@ import { Contact } from "../services/contact.js";
 import { OAuth } from "../services/oauth.js";
 import { checkRateLimit, clientIdentifierFromHeaders } from "../rateLimit.js";
 import { Users } from "../services/users.js";
+import { Stripe } from "../services/stripe.js";
 import { StripeWebhook } from "../services/stripeWebhook.js";
 import { setSessionCookie } from "./raw.js";
 
@@ -53,6 +54,14 @@ const fetchGoogleUserInfo = Effect.fnUntraced(function* (accessToken: string) {
 
 export const PublicApiGroupLive = HttpApiBuilder.group(Contract, "public", (handlers) =>
   handlers
+    .handle(
+      "subscriptionPlans",
+      Effect.fnUntraced(function* () {
+        const plans = yield* Stripe.use((stripe) => stripe.planPrices());
+        return { plans };
+      }, adaptPublicHttpApiErrors),
+    )
+
     .handle(
       "contact",
       Effect.fnUntraced(function* ({ request, payload }) {

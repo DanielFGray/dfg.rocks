@@ -1,8 +1,8 @@
-import { Effect } from "effect";
+import { Effect, Option } from "effect";
 import { withAuthContext } from "../../../server/requestDatabase.js";
 import * as S from "effect/Schema";
 import { useState } from "react";
-import { createFileRoute, Link, useNavigate, useRouter } from "@tanstack/react-router";
+import { createFileRoute, Link, notFound, useNavigate, useRouter } from "@tanstack/react-router";
 import { useMutation } from "@tanstack/react-query";
 import { createServerFn } from "@tanstack/react-start";
 import { getCookie } from "@tanstack/react-start/server";
@@ -21,17 +21,26 @@ import { Modal } from "../../components/ui/Modal.js";
 import { ConfirmDialog } from "../../components/ui/ConfirmDialog.js";
 import { EmptyState } from "../../components/ui/EmptyState.js";
 import { Input } from "../../components/ui/Input.js";
+import { Main } from "../../components/ui/Container.js";
+import { SubscribeCallout } from "../../components/subscriptions/SubscribeCallout.js";
 import { runServerEffect } from "../../lib/serverEffect.js";
 import { normalizeStudents, serializeCourseDetail } from "../../../shared/responseMappers.js";
 import { Sessions } from "../../../server/services/sessions.js";
 import { Courses } from "../../../server/services/courses.js";
 import { People } from "../../../server/services/people.js";
 
-type CourseDetailPageData = {
+type CourseDetailLoaded = {
+  kind: "loaded";
   course: CourseDetail & { modules: readonly ModuleWithMaterials[] };
   enrolledStudents: readonly User[];
   allStudents: readonly User[];
 };
+
+// A course the reader may not read is hidden by row security, so it is `locked` when it exists and
+// `missing` when it does not. A missing course leads the route to its not-found page.
+type CourseDetailPageData = CourseDetailLoaded | { kind: "locked" } | { kind: "missing" };
+
+const CourseId = S.String.pipe(S.check(S.isUUID()));
 
 const getCourseDetailData = createServerFn({ method: "GET" })
   .validator(S.toStandardSchemaV1(S.Struct({ courseId: S.String })))
@@ -41,30 +50,57 @@ const getCourseDetailData = createServerFn({ method: "GET" })
         const session = yield* Sessions.use((sessions) =>
           sessions.requireSession(getCookie("session")),
         );
-        return yield* Effect.gen(function* () {
-          const course = yield* Courses.use((courseService) =>
-            courseService.courseById(data.courseId),
-          );
-
-          if (session.user.role !== "admin") {
-            return {
-              course: serializeCourseDetail(course),
-              enrolledStudents: [],
-              allStudents: [],
-            } satisfies CourseDetailPageData;
-          }
-
-          const [enrolledStudents, allStudents] = yield* Effect.all([
-            Courses.use((courseService) => courseService.listCourseStudents(data.courseId)),
-            People.use((people) => people.listPeople("student")),
-          ]);
-
-          return {
-            course: serializeCourseDetail(course),
-            enrolledStudents: normalizeStudents(enrolledStudents),
-            allStudents: normalizeStudents(allStudents),
-          } satisfies CourseDetailPageData;
-        }).pipe(withAuthContext(session.session.id));
+        // A course id that is not a uuid names no course, so it is missing without a query.
+        return yield* Option.match(S.decodeOption(CourseId)(data.courseId), {
+          onNone: () => Effect.succeed({ kind: "missing" } satisfies CourseDetailPageData),
+          onSome: (courseId) =>
+            Effect.gen(function* () {
+              const course = yield* Courses.use((courseService) =>
+                courseService.courseById(courseId),
+              ).pipe(
+                Effect.asSome,
+                Effect.catchIf(
+                  (error) => error._tag === "HttpError" && error.status === 404,
+                  () => Effect.succeedNone,
+                ),
+              );
+              return yield* Option.match(course, {
+                onNone: () =>
+                  Effect.gen(function* () {
+                    // Admins read every course, so only a reader who is not an admin can be locked out.
+                    const exists = yield* Courses.use((courseService) =>
+                      courseService.courseExists(courseId),
+                    );
+                    return (
+                      exists && session.user.role !== "admin"
+                        ? { kind: "locked" }
+                        : { kind: "missing" }
+                    ) satisfies CourseDetailPageData;
+                  }),
+                onSome: (loadedCourse) =>
+                  Effect.gen(function* () {
+                    if (session.user.role !== "admin") {
+                      return {
+                        kind: "loaded",
+                        course: serializeCourseDetail(loadedCourse),
+                        enrolledStudents: [],
+                        allStudents: [],
+                      } satisfies CourseDetailPageData;
+                    }
+                    const [enrolledStudents, allStudents] = yield* Effect.all([
+                      Courses.use((courseService) => courseService.listCourseStudents(courseId)),
+                      People.use((people) => people.listPeople("student")),
+                    ]);
+                    return {
+                      kind: "loaded",
+                      course: serializeCourseDetail(loadedCourse),
+                      enrolledStudents: normalizeStudents(enrolledStudents),
+                      allStudents: normalizeStudents(allStudents),
+                    } satisfies CourseDetailPageData;
+                  }),
+              });
+            }).pipe(withAuthContext(session.session.id)),
+        });
       }),
     ),
   );
@@ -75,17 +111,43 @@ const getCourseDetailData = createServerFn({ method: "GET" })
 
 export const Route = createFileRoute("/_authed/courses/$id")({
   head: () => ({ meta: [{ title: "Course Detail | DFG Portal" }] }),
-  loader: ({ params }) => getCourseDetailData({ data: { courseId: params.id } }),
+  loader: async ({ params }) => {
+    const data = await getCourseDetailData({ data: { courseId: params.id } });
+    if (data.kind === "missing") throw notFound();
+    return data;
+  },
   component: CourseDetailPage,
   pendingComponent: () => <div>Loading...</div>,
 });
 
 function CourseDetailPage() {
+  const data = Route.useLoaderData();
+  if (data.kind === "locked") {
+    return (
+      <Main data-testid="course-locked">
+        <h1 className="mb-8 text-3xl font-bold tracking-tight">Course</h1>
+        <SubscribeCallout message="This course is part of a subscription." />
+      </Main>
+    );
+  }
+  return (
+    <CourseDetailView
+      course={data.course}
+      enrolledStudents={data.enrolledStudents}
+      allStudents={data.allStudents}
+    />
+  );
+}
+
+function CourseDetailView({
+  course,
+  enrolledStudents,
+  allStudents,
+}: Omit<CourseDetailLoaded, "kind">) {
   const { id } = Route.useParams();
   const navigate = useNavigate();
   const router = useRouter();
   const { isAdmin } = useAuth();
-  const { course, enrolledStudents, allStudents } = Route.useLoaderData();
 
   const enrolledIds = new Set((enrolledStudents ?? []).map((s: User) => s.id));
   const availableStudents = (allStudents ?? []).filter((s: User) => !enrolledIds.has(s.id));

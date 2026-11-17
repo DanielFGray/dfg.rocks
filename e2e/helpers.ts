@@ -44,6 +44,13 @@ type TestingApi = {
     is_owner?: boolean;
     is_billing_contact?: boolean;
   }): Promise<void>;
+  seedSubscription(data: {
+    username: string;
+    plan: "monthly" | "annual";
+    status?: string;
+    periodEndInDays?: number;
+    cancelAtPeriodEnd?: boolean;
+  }): Promise<void>;
   seedInvitation(data: {
     email: string;
     family_slug?: string;
@@ -96,9 +103,15 @@ const regressionWarningPatterns = [
   /do not provide a visible label/i,
 ];
 
-export const test = base.extend<{ testing: TestingApi; browserErrorGuard: void }>({
+export const test = base.extend<{
+  testing: TestingApi;
+  browserErrorGuard: void;
+  /** A test that visits a page which answers 404 on purpose, such as a missing course. */
+  expectMissingPages: boolean;
+}>({
+  expectMissingPages: [false, { option: true }],
   browserErrorGuard: [
-    async ({ page }, use) => {
+    async ({ page, expectMissingPages }, use) => {
       const browserErrors: string[] = [];
       const handleConsole = (message: ConsoleMessage) => {
         const type = message.type();
@@ -113,6 +126,10 @@ export const test = base.extend<{ testing: TestingApi; browserErrorGuard: void }
           // chrome://resources/css/text_defaults_md.css. These URLs belong to
           // Chromium's own pages; no app or test code can cause or fix them.
           if (url.startsWith("chrome://") || url.startsWith("chrome-extension://")) return;
+          // A page that answers 404 for a missing record is logged by the browser at the page's own
+          // URL. Only a test that asks for a missing page may see that one; a missing script or image
+          // still fails.
+          if (expectMissingPages && text.includes("status of 404") && url === page.url()) return;
           const source = url ? ` (${url}:${lineNumber}:${columnNumber})` : "";
           browserErrors.push(`console.${type}: ${text}${source}`);
         }
@@ -208,6 +225,16 @@ export const test = base.extend<{ testing: TestingApi; browserErrorGuard: void }
 
       async seedFamily(data = {}) {
         await get("seed-family", data);
+      },
+
+      async seedSubscription(data) {
+        await get("seed-subscription", {
+          username: data.username,
+          plan: data.plan,
+          status: data.status,
+          period_end_days: data.periodEndInDays?.toString(),
+          cancel_at_period_end: data.cancelAtPeriodEnd?.toString(),
+        });
       },
 
       async seedFamilyMembership(data) {

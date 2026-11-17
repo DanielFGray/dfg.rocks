@@ -1,13 +1,16 @@
 import crypto from "crypto";
 import fs from "fs/promises";
-import { Effect, Option, Context, Layer } from "effect";
+import { Clock, Config, Effect, Option, Context, Layer } from "effect";
 import { sql } from "kysely";
 import type { LessonStatus, LocationType } from "../../shared/schemas.js";
+import type { SubscriptionPlan } from "../../shared/api/subscriptions.js";
 import { HttpError } from "../pgErrors.js";
 import { extractNotationTracksFromBytes, resolveAssignedTrackIndex } from "./notationService.js";
 import { Sessions } from "./sessions.js";
 import { Storage } from "./storage.js";
 import { PgRootDB } from "../db.js";
+import { priceVariable } from "./stripe.js";
+import { notConfigured } from "./stripeErrors.js";
 
 export class Testing extends Context.Service<Testing>()("dfg-rocks/testing", {
   make: Effect.gen(function* () {
@@ -396,6 +399,32 @@ export class Testing extends Context.Service<Testing>()("dfg-rocks/testing", {
         }
 
         return family.id;
+      }),
+
+      seedSubscription: Effect.fnUntraced(function* (values: {
+        username: string;
+        plan: SubscriptionPlan;
+        status: string;
+        periodEndInDays: number;
+        cancelAtPeriodEnd: boolean;
+      }) {
+        const user = yield* queries.userIdByUsername(values.username).pipe(Effect.head);
+        const priceId = yield* Config.NonEmptyString(priceVariable[values.plan]).pipe(
+          Effect.mapError(notConfigured),
+        );
+        const now = yield* Clock.currentTimeMillis;
+        yield* db.execute(
+          db.insertInto("app_public.subscriptions").values({
+            payer_id: user.id,
+            stripe_customer_id: `cus_e2e_${user.id}`,
+            stripe_subscription_id: `sub_${crypto.randomUUID()}`,
+            status: values.status,
+            price_id: priceId,
+            current_period_end: new Date(now + values.periodEndInDays * 24 * 60 * 60 * 1000),
+            cancel_at_period_end: values.cancelAtPeriodEnd,
+            stripe_event_created: new Date(now),
+          }),
+        );
       }),
 
       seedFamilyMembership: Effect.fnUntraced(function* (values: {

@@ -11,6 +11,7 @@ import type { Course } from "../../../shared/schemas.js";
 import { Button } from "../../components/ui/Button.js";
 import { Card } from "../../components/ui/Card.js";
 import { EmptyState } from "../../components/ui/EmptyState.js";
+import { SubscribeCallout } from "../../components/subscriptions/SubscribeCallout.js";
 import { ConfirmDialog } from "../../components/ui/ConfirmDialog.js";
 import { CourseFormModal } from "../../components/CourseFormModal.js";
 import { Main } from "../../components/ui/Container.js";
@@ -161,7 +162,7 @@ export function StudentCourses({ courses }: { courses: readonly Course[] }) {
       </div>
 
       {courses.length === 0 ? (
-        <EmptyState message="You're not enrolled in any courses yet." />
+        <SubscribeCallout message="You're not enrolled in any courses yet." />
       ) : (
         <div className="flex flex-col gap-2">
           {courses.map((c) => (

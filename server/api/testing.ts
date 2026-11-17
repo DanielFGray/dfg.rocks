@@ -88,6 +88,14 @@ const TestingSeedFamilyMembershipQuery = S.Struct({
   is_billing_contact: S.optional(BooleanFromString),
 });
 
+const TestingSeedSubscriptionQuery = S.Struct({
+  username: S.String,
+  plan: S.Literals(["monthly", "annual"]),
+  status: S.optional(S.String),
+  period_end_days: S.optional(S.FiniteFromString),
+  cancel_at_period_end: S.optional(BooleanFromString),
+});
+
 const TestingSeedInvitationQuery = S.Struct({
   email: S.String,
   family_slug: S.optional(S.String),
@@ -162,6 +170,12 @@ export const testingGroup = HttpApiGroup.make("testing")
     HttpApiEndpoint.get("seedFamilyMembership", "/testing/seed-family-membership", {
       error: testingErrors,
       query: TestingSeedFamilyMembershipQuery,
+    }),
+  )
+  .add(
+    HttpApiEndpoint.get("seedSubscription", "/testing/seed-subscription", {
+      error: testingErrors,
+      query: TestingSeedSubscriptionQuery,
     }),
   )
   .add(
@@ -287,6 +301,21 @@ export const TestingApiGroupLive = HttpApiBuilder.group(testingApi, "testing", (
             slug: query.slug,
             name: query.name,
             ownerUsername: query.owner_username,
+          }),
+        );
+        return HttpServerResponse.jsonUnsafe({ success: true });
+      }, adaptTestingHandler),
+    )
+    .handle(
+      "seedSubscription",
+      Effect.fnUntraced(function* ({ query }) {
+        yield* Testing.use((testingService) =>
+          testingService.seedSubscription({
+            username: query.username,
+            plan: query.plan,
+            status: query.status ?? "active",
+            periodEndInDays: query.period_end_days ?? 30,
+            cancelAtPeriodEnd: query.cancel_at_period_end ?? false,
           }),
         );
         return HttpServerResponse.jsonUnsafe({ success: true });

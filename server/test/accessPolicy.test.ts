@@ -230,7 +230,9 @@ describe("access policy for signed-in accounts", () => {
       "app_public.can_book_for_family_student(uuid)",
       "app_public.can_read_course(uuid,uuid)",
       "app_public.change_password(text,text)",
+      "app_public.checkout_eligibility()",
       "app_public.confirm_account_deletion(text)",
+      "app_public.course_exists(uuid)",
       "app_public.create_child(uuid,text)",
       "app_public.create_family(citext,text)",
       "app_public.create_single_booking_obligation(uuid)",
@@ -240,10 +242,10 @@ describe("access policy for signed-in accounts", () => {
       "app_public.current_user_invited_family_ids()",
       "app_public.current_user_member_family_ids()",
       "app_public.current_user_role()",
-      "app_public.current_user_visible_payer_ids()",
       "app_public.delete_family(uuid)",
       "app_public.enqueue_prepaid_lesson_generation(uuid)",
       "app_public.family_for_invitation(uuid,text)",
+      "app_public.family_payers(uuid)",
       "app_public.forgot_password(citext)",
       "app_public.invite_to_family(uuid,citext,citext,text)",
       "app_public.is_acting_for_family_student(uuid)",
@@ -251,6 +253,7 @@ describe("access policy for signed-in accounts", () => {
       "app_public.make_email_primary(uuid)",
       "app_public.next_bill_number()",
       "app_public.next_payment_number()",
+      "app_public.payer_relation()",
       "app_public.remove_from_family(uuid,uuid)",
       "app_public.request_account_deletion()",
       "app_public.resend_email_verification_code(uuid)",
@@ -532,6 +535,94 @@ describe("access policy for signed-in accounts", () => {
         periodEndInDays,
       });
     }
+  });
+
+  // Who may see a subscription row, and who pays for a reader: the reader, and the billing contact of
+  // each family the reader belongs to. A parent in two families is covered by both contacts.
+  describe("subscription visibility", () => {
+    const v: Record<
+      "contactA" | "contactB" | "nonBillingParent" | "twoFamilyParent" | "unrelated",
+      string
+    > = {
+      contactA: "",
+      contactB: "",
+      nonBillingParent: "",
+      twoFamilyParent: "",
+      unrelated: "",
+    };
+    const sessionOfV = new Map<string, string>();
+
+    beforeAll(async () => {
+      v.contactA = await createUser("acc_sub_contact_a", "parent");
+      v.contactB = await createUser("acc_sub_contact_b", "parent");
+      v.nonBillingParent = await createUser("acc_sub_parent", "parent");
+      v.twoFamilyParent = await createUser("acc_sub_two", "parent");
+      v.unrelated = await createUser("acc_sub_unrelated", "student");
+
+      const familyA = await owner(
+        `insert into app_public.families (slug, name) values ('acc-sub-a', 'Sub A') returning id`,
+      );
+      const familyB = await owner(
+        `insert into app_public.families (slug, name) values ('acc-sub-b', 'Sub B') returning id`,
+      );
+      await owner(
+        `insert into app_public.family_memberships (family_id, user_id, is_owner, is_billing_contact)
+         values ($1, $2, true, true), ($1, $3, false, false), ($1, $4, false, false)`,
+        [familyA.rows[0].id, v.contactA, v.nonBillingParent, v.twoFamilyParent],
+      );
+      await owner(
+        `insert into app_public.family_memberships (family_id, user_id, is_owner, is_billing_contact)
+         values ($1, $2, true, true), ($1, $3, false, false)`,
+        [familyB.rows[0].id, v.contactB, v.twoFamilyParent],
+      );
+      await insertSubscription(owner, { payerId: v.contactA, customerId: "cus_sub_a" });
+      await insertSubscription(owner, { payerId: v.contactB, customerId: "cus_sub_b" });
+
+      for (const userId of Object.values(v)) {
+        const r = await owner(
+          `insert into app_private.sessions (user_id) values ($1) returning id`,
+          [userId],
+        );
+        sessionOfV.set(userId, r.rows[0].id);
+      }
+    }, 120_000);
+
+    /** The payer ids of the subscription rows the reader can see. */
+    const visiblePayers = (reader: keyof typeof v) =>
+      asVisitor(sessionOfV.get(v[reader]) ?? "", async (c) => {
+        const r = await c.query(`select payer_id from app_public.subscriptions order by payer_id`);
+        return r.rows.map((row) => row.payer_id as string).sort();
+      });
+
+    it("a parent who is not the billing contact sees the family's contact row, and no other", async () => {
+      expect(await visiblePayers("nonBillingParent")).toEqual([v.contactA]);
+    });
+
+    it("a parent in two families sees the row of each family's billing contact", async () => {
+      expect(await visiblePayers("twoFamilyParent")).toEqual([v.contactA, v.contactB].sort());
+    });
+
+    it("a reader outside both families sees no subscription row", async () => {
+      expect(await visiblePayers("unrelated")).toEqual([]);
+    });
+
+    it("a family member who is covered sees their family's subscription as covering them", async () => {
+      const eligibility = await asVisitor(sessionOfV.get(v.nonBillingParent) ?? "", async (c) => {
+        const r = await c.query(`select app_public.checkout_eligibility() as ok`);
+        return r.rows[0].ok as string;
+      });
+      expect(eligibility).toBe("covered");
+    });
+
+    it("family_payers names nothing about a reader the caller may not see", async () => {
+      const payers = await asVisitor(sessionOfV.get(v.unrelated) ?? "", async (c) => {
+        const r = await c.query(`select app_public.family_payers($1::uuid) as payer`, [
+          v.nonBillingParent,
+        ]);
+        return r.rows;
+      });
+      expect(payers).toEqual([]);
+    });
   });
 });
 

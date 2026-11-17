@@ -95,6 +95,16 @@ const rateLimitLayer = Layer.unwrap(
   ),
 );
 
+// E2E runs (NODE_ENV=test) answer Stripe's HTTP calls from a fake, so the test server never sends a
+// request to Stripe. The fake module loads only then, as the testing routes do.
+const stripeLayer = Layer.unwrap(
+  Effect.gen(function* () {
+    if ((yield* Config.String("NODE_ENV")) !== "test") return Stripe.layer;
+    const { stripeFakeHttp } = yield* Effect.promise(() => import("./services/stripeFake.js"));
+    return Stripe.layerWithHttp(stripeFakeHttp);
+  }),
+);
+
 const servicesLayer = Layer.mergeAll(
   Realtime.layer,
   GoogleCalendar.layer,
@@ -104,7 +114,7 @@ const servicesLayer = Layer.mergeAll(
   LessonPolicy.layer,
   Auth.layer,
   FamilyBilling.layer,
-  Stripe.layer,
+  stripeLayer,
   StripeWebhook.layer,
   Pdf.layer,
   BillingLedger.layer,
