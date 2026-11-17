@@ -16,14 +16,7 @@ export class Courses extends Context.Service<Courses>()("dfg-rocks/courses", {
         .selectFrom("app_public.courses")
         .select(["id", "title", "description", "instrument"]);
       if (studentId) {
-        q = q.where((eb) =>
-          eb("id", "in", (sq) =>
-            sq
-              .selectFrom("app_public.enrollments")
-              .select("course_id")
-              .where("student_id", "=", studentId),
-          ),
-        );
+        q = q.where(sql<boolean>`app_public.can_read_course(id, ${studentId}::uuid)`);
       }
       return yield* db.execute(q);
     }),

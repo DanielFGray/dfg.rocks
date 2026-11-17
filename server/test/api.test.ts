@@ -509,6 +509,131 @@ describe("DFG Portal API", () => {
   );
 
   it.effect(
+    "materials: download of a material the reader cannot read answers 404",
+    Effect.fnUntraced(function* () {
+      const formData = new FormData();
+      formData.append(
+        "file",
+        new File([Buffer.from(`%PDF-1.4\n% unreadable ${Date.now()}\n`)], "unreadable.pdf", {
+          type: "application/pdf",
+        }),
+      );
+      formData.append("title", "Unreadable Material");
+      formData.append("is_global", "false");
+      const upload = yield* reqEffect("POST", "/api/admin/materials/upload", {
+        body: formData,
+        cookie: adminCookie,
+      });
+      expect(upload.status).toBe(200);
+      const material = yield* resJson(upload);
+
+      const download = yield* reqEffect("GET", `/api/materials/${(material as any).id}/download`, {
+        cookie: studentCookie,
+      });
+      expect(download.status).toBe(404);
+      expect(yield* resJson(download)).toEqual({ error: "Material not found" });
+
+      // The admin gets the same material, so the 404 above comes from the reader's access rule
+      // and not from a material that does not exist.
+      const adminDownload = yield* reqEffect(
+        "GET",
+        `/api/materials/${(material as any).id}/download`,
+        { cookie: adminCookie },
+      );
+      expect(adminDownload.status).toBe(200);
+    }),
+  );
+
+  it.effect(
+    "courses: a parent acting as a child sees a course that the family's subscription or the child's schedule opens",
+    Effect.fnUntraced(function* () {
+      const createUser = (username: string, role: string) =>
+        Effect.tryPromise(async () => {
+          const r = await testDb.query(
+            `select id from app_private.really_create_user($1::citext, $2, null, true, $3::citext, $4)`,
+            [username, username, `${username}@test.com`, `${username}123`],
+          );
+          await testDb.query(`update app_public.users set role = $1 where id = $2`, [
+            role,
+            r.rows[0].id,
+          ]);
+          return r.rows[0].id as string;
+        });
+      // Each family has one parent (billing contact) and one child with no enrollment, so the
+      // course can open for them only through the subscription or the schedule.
+      const makeFamily = (slug: string, parentId: string, childId: string) =>
+        Effect.tryPromise(async () => {
+          const f = await testDb.query(
+            `insert into app_public.families (slug, name) values ($1::citext, $1) returning id`,
+            [slug],
+          );
+          await testDb.query(
+            `insert into app_public.family_memberships (family_id, user_id, is_owner, is_billing_contact)
+             values ($1, $2, true, true), ($1, $3, false, false)`,
+            [f.rows[0].id, parentId, childId],
+          );
+        });
+
+      const subParent = yield* createUser("subparent", "parent");
+      const subChild = yield* createUser("subchild", "student");
+      yield* makeFamily("sub-family", subParent, subChild);
+      yield* Effect.tryPromise(() =>
+        testDb.query(
+          `insert into app_public.subscriptions
+             (payer_id, stripe_customer_id, stripe_subscription_id, status, price_id, current_period_end)
+           values ($1, 'cus_sub', 'sub_sub', 'active', 'price_test', now() + interval '30 days')`,
+          [subParent],
+        ),
+      );
+
+      const schedParent = yield* createUser("schedparent", "parent");
+      const schedChild = yield* createUser("schedchild", "student");
+      yield* makeFamily("sched-family", schedParent, schedChild);
+      yield* Effect.tryPromise(() =>
+        testDb.query(
+          `with rate as (
+             insert into app_public.student_rates (student_id, rate_cents, lesson_duration_minutes, location_type)
+             values ($1, 4000, 30, 'online') returning id
+           )
+           insert into app_public.recurring_schedules
+             (student_rate_id, day_of_week, local_start_time, starts_on, active)
+           select id, 2, '16:00', (now() at time zone 'America/Chicago')::date - 30, true from rate`,
+          [schedChild],
+        ),
+      );
+
+      const courseResult = yield* Effect.tryPromise(() =>
+        testDb.query(
+          `insert into app_public.courses (title) values ('Subscription Course') returning id`,
+        ),
+      );
+      const newCourseId = courseResult.rows[0].id as string;
+
+      const coursesFor = (parent: string, child: string) =>
+        Effect.gen(function* () {
+          const login = yield* reqEffect("POST", "/api/login", {
+            body: { id: parent, password: `${parent}123` },
+          });
+          expect(login.status).toBe(200);
+          const cookie = getCookie(login)!;
+          const sw = yield* reqEffect("POST", "/api/switch-active-student", {
+            body: { student_id: child },
+            cookie,
+          });
+          expect(sw.status).toBe(200);
+          const res = yield* reqEffect("GET", "/api/courses", { cookie });
+          expect(res.status).toBe(200);
+          return (yield* resJson(res)) as Array<{ id: string }>;
+        });
+
+      expect((yield* coursesFor("subparent", subChild)).map((c) => c.id)).toContain(newCourseId);
+      expect((yield* coursesFor("schedparent", schedChild)).map((c) => c.id)).toContain(
+        newCourseId,
+      );
+    }),
+  );
+
+  it.effect(
     "messages: student can send a message to staff",
     Effect.fnUntraced(function* () {
       const create = yield* reqEffect("POST", "/api/messages", {

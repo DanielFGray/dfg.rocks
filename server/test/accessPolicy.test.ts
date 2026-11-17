@@ -24,6 +24,10 @@ const sessions: Record<"stranger" | "parent" | "kid", string> = {
 };
 let familyId: string;
 
+const sessionOf = new Map<string, string>();
+const FULL = { course: true, module: true, moduleMaterial: true, material: true };
+const NONE = { course: false, module: false, moduleMaterial: false, material: false };
+
 describe("access policy for signed-in accounts", () => {
   beforeAll(async () => {
     ownerPool = new pg.Pool({ connectionString: forceIpv4(requiredEnv("DATABASE_URL")) });
@@ -45,10 +49,9 @@ describe("access policy for signed-in accounts", () => {
     );
 
     for (const name of ["stranger", "parent", "kid"] as const) {
-      const r = await owner(
-        `insert into app_private.sessions (user_id) values ($1) returning id`,
-        [ids[name]],
-      );
+      const r = await owner(`insert into app_private.sessions (user_id) values ($1) returning id`, [
+        ids[name],
+      ]);
       sessions[name] = r.rows[0].id;
     }
   }, 120_000);
@@ -179,6 +182,7 @@ describe("access policy for signed-in accounts", () => {
     expect(executable.rows.map((r) => r.fn)).toEqual([
       "app_public.accept_invitation_to_family(uuid,text)",
       "app_public.can_book_for_family_student(uuid)",
+      "app_public.can_read_course(uuid,uuid)",
       "app_public.change_password(text,text)",
       "app_public.confirm_account_deletion(text)",
       "app_public.create_child(uuid,text)",
@@ -214,6 +218,283 @@ describe("access policy for signed-in accounts", () => {
       "app_public.users_has_password(app_public.users)",
       "app_public.verify_email(uuid,text)",
     ]);
+  });
+
+  // Each reader below has exactly one way in (or none), so a passing case proves that route.
+  // The course-content material is not global and no student_materials row names it, so no
+  // other policy branch can admit it.
+  describe("course access", () => {
+    const today = `(now() at time zone 'America/Chicago')::date`;
+    let courseId: string;
+    let moduleId: string;
+    let materialId: string;
+    const reader: Record<string, string> = {};
+
+    beforeAll(async () => {
+      const course = await owner(
+        `insert into app_public.courses (title) values ('Access Course') returning id`,
+      );
+      courseId = course.rows[0].id;
+      const module = await owner(
+        `insert into app_public.modules (course_id, title) values ($1, 'Access Module') returning id`,
+        [courseId],
+      );
+      moduleId = module.rows[0].id;
+      const material = await owner(
+        `insert into app_public.materials (title, original_filename, storage_key)
+         values ('Access Sheet', 'sheet.pdf', 'acc/sheet.pdf') returning id`,
+      );
+      materialId = material.rows[0].id;
+      await owner(
+        `insert into app_public.module_materials (module_id, material_id) values ($1, $2)`,
+        [moduleId, materialId],
+      );
+
+      // The existing kid is enrolled, so the kid and the parent reach the course through
+      // enrollment.
+      await owner(`insert into app_public.enrollments (student_id, course_id) values ($1, $2)`, [
+        ids.kid,
+        courseId,
+      ]);
+      reader.kid = ids.kid;
+      reader.parent = ids.parent;
+      reader.stranger = ids.stranger;
+
+      reader.scheduled = await createUser("acc_scheduled", "student");
+      await weeklySchedule(reader.scheduled, `${today} - 30`, null, true);
+
+      reader.endedYesterday = await createUser("acc_ended", "student");
+      await weeklySchedule(reader.endedYesterday, `${today} - 60`, `${today} - 1`, true);
+
+      reader.inactive = await createUser("acc_inactive", "student");
+      await weeklySchedule(reader.inactive, `${today} - 30`, null, false);
+
+      reader.selfPastDue = await createUser("acc_selfpay", "student");
+      await subscription(
+        reader.selfPastDue,
+        reader.selfPastDue,
+        "past_due",
+        "now() + interval '5 days'",
+      );
+
+      reader.canceled = await createUser("acc_canceled", "student");
+      await subscription(reader.canceled, reader.canceled, "canceled", "now() + interval '5 days'");
+
+      reader.periodEnded = await createUser("acc_expired", "student");
+      await subscription(
+        reader.periodEnded,
+        reader.periodEnded,
+        "active",
+        "now() - interval '1 day'",
+      );
+
+      const billingParent = await createUser("acc_billing", "parent");
+      const billingKid = await createUser("acc_billing_kid", "student");
+      const billingFamily = await owner(
+        `insert into app_public.families (slug, name) values ('acc-billing-family', 'Billing Family') returning id`,
+      );
+      await owner(
+        `insert into app_public.family_memberships (family_id, user_id, is_owner, is_billing_contact)
+         values ($1, $2, true, true), ($1, $3, false, false)`,
+        [billingFamily.rows[0].id, billingParent, billingKid],
+      );
+      await subscription(billingParent, billingParent, "active", "now() + interval '30 days'");
+      reader.familySubscriber = billingKid;
+      reader.familyBillingParent = billingParent;
+
+      // Two families, each a parent, a learner and a sibling. The first learner is enrolled; the
+      // second has a weekly schedule. The siblings hold nothing, so only the parent-learner route
+      // could reach the course for them.
+      const family = async (slug: string) => {
+        const parent = await createUser(`${slug}_parent`, "parent");
+        const learner = await createUser(`${slug}_learner`, "student");
+        const sibling = await createUser(`${slug}_sibling`, "student");
+        const f = await owner(
+          `insert into app_public.families (slug, name) values ($1::citext, $2) returning id`,
+          [slug, slug],
+        );
+        await owner(
+          `insert into app_public.family_memberships (family_id, user_id, is_owner, is_billing_contact)
+           values ($1, $2, true, true), ($1, $3, false, false), ($1, $4, false, false)`,
+          [f.rows[0].id, parent, learner, sibling],
+        );
+        return { parent, learner, sibling };
+      };
+      const enrolledFamily = await family("acc_enrolled_fam");
+      await owner(`insert into app_public.enrollments (student_id, course_id) values ($1, $2)`, [
+        enrolledFamily.learner,
+        courseId,
+      ]);
+      reader.parentOfEnrolled = enrolledFamily.parent;
+      reader.enrolledLearner = enrolledFamily.learner;
+      reader.siblingOfEnrolled = enrolledFamily.sibling;
+
+      const scheduledFamily = await family("acc_scheduled_fam");
+      await weeklySchedule(scheduledFamily.learner, `${today} - 30`, null, true);
+      reader.parentOfScheduled = scheduledFamily.parent;
+      reader.scheduledLearner = scheduledFamily.learner;
+      reader.siblingOfScheduled = scheduledFamily.sibling;
+
+      reader.admin = ids.admin;
+
+      for (const userId of Object.values(reader)) {
+        const r = await owner(
+          `insert into app_private.sessions (user_id) values ($1) returning id`,
+          [userId],
+        );
+        sessionOf.set(userId, r.rows[0].id);
+      }
+    }, 120_000);
+
+    it("an enrolled student and a parent of an enrolled student reach the course", async () => {
+      expect(await reachOf(reader.kid)).toEqual(FULL);
+      expect(await reachOf(reader.parent)).toEqual(FULL);
+    });
+
+    it("a student with an active weekly schedule reaches the course without enrollment", async () => {
+      expect(await reachOf(reader.scheduled)).toEqual(FULL);
+    });
+
+    it("a student whose family billing contact has a live subscription reaches the course", async () => {
+      expect(await reachOf(reader.familySubscriber)).toEqual(FULL);
+      expect(await reachOf(reader.familyBillingParent)).toEqual(FULL);
+    });
+
+    it("a self-paying student with a past_due subscription keeps access", async () => {
+      expect(await reachOf(reader.selfPastDue)).toEqual(FULL);
+    });
+
+    it("a stranger reaches no course content", async () => {
+      expect(await reachOf(reader.stranger)).toEqual(NONE);
+    });
+
+    it("a canceled subscription or one whose period has passed grants nothing", async () => {
+      expect(await reachOf(reader.canceled)).toEqual(NONE);
+      expect(await reachOf(reader.periodEnded)).toEqual(NONE);
+    });
+
+    it("a weekly schedule that ended yesterday or is inactive grants nothing", async () => {
+      expect(await reachOf(reader.endedYesterday)).toEqual(NONE);
+      expect(await reachOf(reader.inactive)).toEqual(NONE);
+    });
+
+    it("a reader's access is reported only to staff and to members of the reader's family", async () => {
+      const probe = (sessionId: string, readerId: string) =>
+        asVisitor(sessionId, async (c) => {
+          const r = await c.query<{ ok: boolean }>(
+            `select app_public.can_read_course($1, $2) as ok`,
+            [courseId, readerId],
+          );
+          return r.rows[0].ok;
+        });
+      // The kid is enrolled, so only the access check decides what each caller learns.
+      expect(await probe(sessions.parent, ids.kid)).toBe(true);
+      expect(await probe(sessions.stranger, ids.kid)).toBe(false);
+      expect(await probe(sessions.stranger, reader.scheduled)).toBe(false);
+      expect(await probe(sessions.kid, reader.kid)).toBe(true);
+      expect(await probe(sessions.stranger, reader.stranger)).toBe(false);
+    });
+
+    it("a sibling of an enrolled learner reaches nothing; the parent and the learner reach the course", async () => {
+      expect(await reachOf(reader.siblingOfEnrolled)).toEqual(NONE);
+      expect(await reachOf(reader.parentOfEnrolled)).toEqual(FULL);
+      expect(await reachOf(reader.enrolledLearner)).toEqual(FULL);
+    });
+
+    it("a sibling of a scheduled learner reaches nothing; the parent and the learner reach the course", async () => {
+      expect(await reachOf(reader.siblingOfScheduled)).toEqual(NONE);
+      expect(await reachOf(reader.parentOfScheduled)).toEqual(FULL);
+      expect(await reachOf(reader.scheduledLearner)).toEqual(FULL);
+    });
+
+    it("a staff caller gets each reader's real answer", async () => {
+      const probe = (readerId: string) =>
+        asVisitor(sessionOf.get(reader.admin)!, async (c) => {
+          const r = await c.query<{ ok: boolean }>(
+            `select app_public.can_read_course($1, $2) as ok`,
+            [courseId, readerId],
+          );
+          return r.rows[0].ok;
+        });
+      expect(await probe(reader.enrolledLearner)).toBe(true);
+      expect(await probe(reader.scheduledLearner)).toBe(true);
+      expect(await probe(reader.siblingOfEnrolled)).toBe(false);
+      expect(await probe(reader.siblingOfScheduled)).toBe(false);
+    });
+
+    it("a schedule in a time zone PostgreSQL does not know is refused on insert and on update", async () => {
+      const student = await createUser("acc_badtz", "student");
+      const rate = await owner(
+        `insert into app_public.student_rates (student_id, rate_cents, lesson_duration_minutes, location_type)
+         values ($1, 4000, 30, 'online') returning id`,
+        [student],
+      );
+      await expect(
+        owner(
+          `insert into app_public.recurring_schedules
+             (student_rate_id, day_of_week, local_start_time, timezone, starts_on)
+           values ($1, 2, '16:00', 'Mars/Olympus', ${today} - 30)`,
+          [rate.rows[0].id],
+        ),
+      ).rejects.toMatchObject({ code: "DNIED", message: expect.stringContaining("Mars/Olympus") });
+
+      await expect(
+        owner(
+          `update app_public.recurring_schedules set timezone = 'Mars/Olympus'
+           where student_rate_id in (select id from app_public.student_rates where student_id = $1)`,
+          [reader.scheduled],
+        ),
+      ).rejects.toMatchObject({ code: "DNIED" });
+    });
+
+    async function reachOf(userId: string) {
+      return asVisitor(sessionOf.get(userId)!, async (c) => {
+        const count = async (text: string, params: unknown[]) =>
+          (await c.query(text, params)).rowCount === 1;
+        return {
+          course: await count(`select id from app_public.courses where id = $1`, [courseId]),
+          module: await count(`select id from app_public.modules where id = $1`, [moduleId]),
+          moduleMaterial: await count(
+            `select material_id from app_public.module_materials where module_id = $1 and material_id = $2`,
+            [moduleId, materialId],
+          ),
+          material: await count(`select id from app_public.materials where id = $1`, [materialId]),
+        };
+      });
+    }
+
+    async function weeklySchedule(
+      studentId: string,
+      startsOn: string,
+      endsOn: string | null,
+      active: boolean,
+    ) {
+      const rate = await owner(
+        `insert into app_public.student_rates (student_id, rate_cents, lesson_duration_minutes, location_type)
+         values ($1, 4000, 30, 'online') returning id`,
+        [studentId],
+      );
+      await owner(
+        `insert into app_public.recurring_schedules
+           (student_rate_id, day_of_week, local_start_time, starts_on, ends_on, active)
+         values ($1, 2, '16:00', ${startsOn}, ${endsOn ?? "null"}, $2)`,
+        [rate.rows[0].id, active],
+      );
+    }
+
+    async function subscription(
+      studentId: string,
+      payerId: string,
+      status: string,
+      periodEnd: string,
+    ) {
+      await owner(
+        `insert into app_public.subscriptions
+           (payer_id, stripe_customer_id, stripe_subscription_id, status, price_id, current_period_end)
+         values ($1, $2, $3, $4, 'price_test', ${periodEnd})`,
+        [payerId, `cus_${studentId}`, `sub_${studentId}_${status}`, status],
+      );
+    }
   });
 });
 

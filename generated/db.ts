@@ -813,6 +813,19 @@ export interface AppPublicStudentRates {
   updated_at: Generated<Timestamp>;
 }
 
+export interface AppPublicSubscriptions {
+  cancel_at_period_end: Generated<boolean>;
+  created_at: Generated<Timestamp>;
+  current_period_end: Timestamp;
+  id: Generated<string>;
+  payer_id: string;
+  price_id: string;
+  status: string;
+  stripe_customer_id: string;
+  stripe_subscription_id: string;
+  updated_at: Generated<Timestamp>;
+}
+
 export interface AppPublicTaxExemptions {
   created_at: Generated<Timestamp>;
   created_by: string;
@@ -1034,6 +1047,7 @@ export interface DB {
   "app_public.student_payers": AppPublicStudentPayers;
   "app_public.student_rate_history": AppPublicStudentRateHistory;
   "app_public.student_rates": AppPublicStudentRates;
+  "app_public.subscriptions": AppPublicSubscriptions;
   "app_public.tax_exemptions": AppPublicTaxExemptions;
   "app_public.tax_rates": AppPublicTaxRates;
   "app_public.testimonials": AppPublicTestimonials;

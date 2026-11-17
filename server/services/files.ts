@@ -210,7 +210,9 @@ export class Files extends Context.Service<Files>()("dfg-rocks/files", {
         );
       }),
 
-      download: Effect.fnUntraced(function* (materialId: string, userId: string) {
+      // RLS on app_public.materials is the access check: a material the reader cannot read
+      // is absent from this query and answers 404, the same as a material that does not exist.
+      download: Effect.fnUntraced(function* (materialId: string) {
         const material = yield* RequestDatabase.use((db) =>
           db
             .execute(
@@ -223,8 +225,6 @@ export class Files extends Context.Service<Files>()("dfg-rocks/files", {
                   "storage_backend",
                   "storage_key",
                   "mime_type",
-                  "is_global",
-                  "uploaded_by",
                 ])
                 .where("id", "=", materialId),
             )
@@ -236,50 +236,6 @@ export class Files extends Context.Service<Files>()("dfg-rocks/files", {
               }),
             ),
         );
-        const user = yield* RequestDatabase.use((db) =>
-          db
-            .execute(
-              db.selectFrom("app_public.users").select(["id", "role"]).where("id", "=", userId),
-            )
-            .pipe(
-              Effect.head,
-              Effect.catchTags({
-                NoSuchElementError: () => new HttpError({ status: 404, message: "User not found" }),
-              }),
-            ),
-        );
-        if (user.role !== "admin") {
-          let hasAccess = material.is_global;
-          if (!hasAccess) {
-            const assignedRows = yield* RequestDatabase.use((db) =>
-              db.execute(
-                db
-                  .selectFrom("app_public.student_materials")
-                  .select(["material_id"])
-                  .where("student_id", "=", userId)
-                  .where("material_id", "=", materialId),
-              ),
-            );
-            if (assignedRows[0]) hasAccess = true;
-          }
-          if (!hasAccess) {
-            const enrolledRows = yield* RequestDatabase.use((db) =>
-              db.execute(
-                db
-                  .selectFrom("app_public.module_materials as mm")
-                  .innerJoin("app_public.modules as mod", "mod.id", "mm.module_id")
-                  .innerJoin("app_public.enrollments as e", "e.course_id", "mod.course_id")
-                  .where("mm.material_id", "=", materialId)
-                  .where("e.student_id", "=", userId)
-                  .select(["mm.material_id"]),
-              ),
-            );
-            if (enrolledRows[0]) hasAccess = true;
-          }
-          if (!hasAccess) {
-            return yield* new HttpError({ status: 403, message: "Access denied" });
-          }
-        }
         const location = toStorageLocation(material);
         const exists = yield* storage.exists(location);
         if (!exists) {
