@@ -1,5 +1,6 @@
 import { it, expect, describe, beforeAll, afterAll } from "vitest";
 import pg from "pg";
+import { insertSubscription } from "./subscriptionRow.js";
 
 /**
  * What a signed-in account can reach through the visitor role. Anyone can get
@@ -316,23 +317,13 @@ describe("access policy for signed-in accounts", () => {
       await weeklySchedule(reader.inactive, `${today} - 30`, null, false);
 
       reader.selfPastDue = await createUser("acc_selfpay", "student");
-      await subscription(
-        reader.selfPastDue,
-        reader.selfPastDue,
-        "past_due",
-        "now() + interval '5 days'",
-      );
+      await subscription(reader.selfPastDue, reader.selfPastDue, "past_due", 5);
 
       reader.canceled = await createUser("acc_canceled", "student");
-      await subscription(reader.canceled, reader.canceled, "canceled", "now() + interval '5 days'");
+      await subscription(reader.canceled, reader.canceled, "canceled", 5);
 
       reader.periodEnded = await createUser("acc_expired", "student");
-      await subscription(
-        reader.periodEnded,
-        reader.periodEnded,
-        "active",
-        "now() - interval '1 day'",
-      );
+      await subscription(reader.periodEnded, reader.periodEnded, "active", -1);
 
       const billingParent = await createUser("acc_billing", "parent");
       const billingKid = await createUser("acc_billing_kid", "student");
@@ -344,7 +335,7 @@ describe("access policy for signed-in accounts", () => {
          values ($1, $2, true, true), ($1, $3, false, false)`,
         [billingFamily.rows[0].id, billingParent, billingKid],
       );
-      await subscription(billingParent, billingParent, "active", "now() + interval '30 days'");
+      await subscription(billingParent, billingParent, "active", 30);
       reader.familySubscriber = billingKid;
       reader.familyBillingParent = billingParent;
 
@@ -532,14 +523,14 @@ describe("access policy for signed-in accounts", () => {
       studentId: string,
       payerId: string,
       status: string,
-      periodEnd: string,
+      periodEndInDays: number,
     ) {
-      await owner(
-        `insert into app_public.subscriptions
-           (payer_id, stripe_customer_id, stripe_subscription_id, status, price_id, current_period_end)
-         values ($1, $2, $3, $4, 'price_test', ${periodEnd})`,
-        [payerId, `cus_${studentId}`, `sub_${studentId}_${status}`, status],
-      );
+      await insertSubscription(owner, {
+        payerId,
+        customerId: `cus_${studentId}`,
+        status,
+        periodEndInDays,
+      });
     }
   });
 });

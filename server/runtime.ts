@@ -28,6 +28,7 @@ import { PaymentsAdminApiGroupLive } from "./api/payments.js";
 import { CreditsAdminApiGroupLive } from "./api/credits.js";
 import { BillingRatesAdminApiGroupLive } from "./api/billingRates.js";
 import { FamilyBillingApiGroupLive } from "./api/familyBilling.js";
+import { SubscriptionsApiGroupLive } from "./api/subscriptions.js";
 import { HealthApiGroupLive } from "./api/health.js";
 import { PublicApiGroupLive } from "./api/public.js";
 import { PgAuthDB, PgRootDB } from "./db.js";
@@ -39,6 +40,7 @@ import type { InProcessApi } from "./inProcessApi.js";
 import { BillingLedger } from "./services/billingLedger.js";
 import { Files } from "./services/files.js";
 import { FamilyBilling } from "./services/familyBilling.js";
+import { Stripe } from "./services/stripe.js";
 import { GoogleCalendar } from "./services/googleCalendar.js";
 import { LessonPolicy } from "./services/lessonPolicy.js";
 import { Contact } from "./services/contact.js";
@@ -101,6 +103,7 @@ const servicesLayer = Layer.mergeAll(
   LessonPolicy.layer,
   Auth.layer,
   FamilyBilling.layer,
+  Stripe.layer,
   Pdf.layer,
   BillingLedger.layer,
   rateLimitLayer,
@@ -161,6 +164,7 @@ const GroupHandlersLive = Layer.mergeAll(
   CreditsAdminApiGroupLive,
   BillingRatesAdminApiGroupLive,
   FamilyBillingApiGroupLive,
+  SubscriptionsApiGroupLive,
 );
 
 const ApiLive = HttpApiBuilder.layer(Contract).pipe(

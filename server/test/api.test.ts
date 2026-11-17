@@ -1,4 +1,5 @@
 import { runPlatform, testClient } from "./framework.js";
+import { insertSubscription } from "./subscriptionRow.js";
 import { it, expect, describe, beforeAll, afterAll, vi } from "@effect/vitest";
 import * as FileSystem from "effect/FileSystem";
 import * as NodeFileSystem from "@effect/platform-node/NodeFileSystem";
@@ -578,12 +579,10 @@ describe("DFG Portal API", () => {
       const subChild = yield* createUser("subchild", "student");
       yield* makeFamily("sub-family", subParent, subChild);
       yield* Effect.tryPromise(() =>
-        testDb.query(
-          `insert into app_public.subscriptions
-             (payer_id, stripe_customer_id, stripe_subscription_id, status, price_id, current_period_end)
-           values ($1, 'cus_sub', 'sub_sub', 'active', 'price_test', now() + interval '30 days')`,
-          [subParent],
-        ),
+        insertSubscription((text, params) => testDb.query(text, params), {
+          payerId: subParent,
+          customerId: "cus_sub",
+        }),
       );
 
       const schedParent = yield* createUser("schedparent", "parent");

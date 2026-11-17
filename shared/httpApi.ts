@@ -21,6 +21,7 @@ import { paymentsAdminGroup } from "./api/payments.js";
 import { creditsAdminGroup } from "./api/credits.js";
 import { billingRatesAdminGroup } from "./api/billingRates.js";
 import { familyBillingGroup } from "./api/familyBilling.js";
+import { subscriptionsGroup } from "./api/subscriptions.js";
 
 /** Every endpoint the server serves, except the testing routes. The browser client uses it too. */
 export const Contract = HttpApi.make("dfg")
@@ -53,4 +54,5 @@ export const Contract = HttpApi.make("dfg")
   .add(paymentsAdminGroup)
   .add(creditsAdminGroup)
   .add(billingRatesAdminGroup)
-  .add(familyBillingGroup);
+  .add(familyBillingGroup)
+  .add(subscriptionsGroup);
