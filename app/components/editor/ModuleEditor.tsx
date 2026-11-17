@@ -3,7 +3,6 @@ import * as Result from "effect/Result";
 import * as S from "effect/Schema";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
-import Link from "@tiptap/extension-link";
 import { MaterialEmbedNode } from "./MaterialEmbedNode.js";
 import { MaterialsContext } from "./MaterialsContext.js";
 import { EditorToolbar } from "./EditorToolbar.js";
@@ -35,7 +34,7 @@ export function ModuleEditor({
   const materialMap = new Map(knownMaterials.map((m) => [m.id, m]));
 
   const editor = useEditor({
-    extensions: [StarterKit, Link.configure({ openOnClick: false }), MaterialEmbedNode],
+    extensions: [StarterKit.configure({ link: { openOnClick: false } }), MaterialEmbedNode],
     content: content ?? undefined,
     onUpdate: ({ editor }) => {
       onChange(decodeDocument(editor.getJSON()));
