@@ -1133,6 +1133,55 @@ describe("DFG Portal API", () => {
   );
 
   it.effect(
+    "a removal that leaves a student without a parent billing contact answers 409 with the SQL message",
+    Effect.fnUntraced(function* () {
+      const makeUser = (username: string, role: string) =>
+        Effect.tryPromise(async () => {
+          const result = await testDb.query(
+            `select * from app_private.really_create_user($1::citext, $2, null, true, $3::citext, $4)`,
+            [username, username, `${username}@test.com`, `${username}123`],
+          );
+          await testDb.query(`update app_public.users set role = $1 where id = $2`, [
+            role,
+            result.rows[0].id,
+          ]);
+          return result.rows[0].id as string;
+        });
+      const ownerId = yield* makeUser("bc_api_owner", "admin");
+      const guardianId = yield* makeUser("bc_api_parent", "parent");
+      const kidId = yield* makeUser("bc_api_kid", "student");
+
+      const familyId = yield* Effect.tryPromise(async () => {
+        const family = await testDb.query(
+          `insert into app_public.families (slug, name) values ('bc-api-family', 'Billing API Family') returning id`,
+        );
+        await testDb.query(
+          `insert into app_public.family_memberships (family_id, user_id, is_owner, is_billing_contact)
+           values ($1, $2, true, false), ($1, $3, false, true), ($1, $4, false, false)`,
+          [family.rows[0].id, ownerId, guardianId, kidId],
+        );
+        return family.rows[0].id as string;
+      });
+      expect(familyId).toBeTruthy();
+
+      const login = yield* reqEffect("POST", "/api/login", {
+        body: { id: "bc_api_owner", password: "bc_api_owner123" },
+      });
+      expect(login.status).toBe(200);
+      const cookie = getCookie(login)!;
+
+      const remove = yield* reqEffect("POST", "/api/family/remove-member", {
+        body: { user_id: guardianId },
+        cookie,
+      });
+      expect(remove.status).toBe(409);
+      expect(yield* resJson(remove)).toEqual({
+        error: "A family needs a parent as its billing contact before it can have students",
+      });
+    }),
+  );
+
+  it.effect(
     "effective-student: parent acts as selected child for writes and reads",
     Effect.fnUntraced(function* () {
       const parentResult = yield* Effect.tryPromise(() =>
@@ -1179,7 +1228,7 @@ describe("DFG Portal API", () => {
 
       yield* Effect.tryPromise(() =>
         testDb.query(
-          `insert into app_public.family_memberships (family_id, user_id, is_owner) values ($1, $2, true), ($1, $3, false)`,
+          `insert into app_public.family_memberships (family_id, user_id, is_owner, is_billing_contact) values ($1, $2, true, true), ($1, $3, false, false)`,
           [familyId, parentId, childId],
         ),
       );

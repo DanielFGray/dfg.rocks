@@ -456,7 +456,7 @@ export class Testing extends Context.Service<Testing>()("dfg-rocks/testing", {
             family_id: familyId,
             user_id: admin.id,
             is_owner: true,
-            is_billing_contact: true,
+            is_billing_contact: false,
           });
         }
 
