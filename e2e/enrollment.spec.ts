@@ -36,9 +36,9 @@ test.describe("enrollment management", () => {
     });
 
     await loginViaUi(page, "test_admin", "testpassword123");
-    await page.getByTestId("nav-students").click();
+    await page.getByTestId("nav-people").click();
     await page.getByText("Enroll Target").first().click();
-    await expect(page.getByTestId("student-detail")).toBeVisible();
+    await expect(page.getByTestId("person-detail")).toBeVisible();
 
     // Should see empty enrolled courses
     await expect(page.getByText("Not enrolled in any courses")).toBeVisible();

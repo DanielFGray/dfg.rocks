@@ -25,7 +25,7 @@ import { runServerEffect } from "../../lib/serverEffect.js";
 import { normalizeStudents, serializeCourseDetail } from "../../../shared/responseMappers.js";
 import { Sessions } from "../../../server/services/sessions.js";
 import { Courses } from "../../../server/services/courses.js";
-import { Students } from "../../../server/services/students.js";
+import { People } from "../../../server/services/people.js";
 
 type CourseDetailPageData = {
   course: CourseDetail & { modules: readonly ModuleWithMaterials[] };
@@ -56,7 +56,7 @@ const getCourseDetailData = createServerFn({ method: "GET" })
 
           const [enrolledStudents, allStudents] = yield* Effect.all([
             Courses.use((courseService) => courseService.listCourseStudents(data.courseId)),
-            Students.use((studentService) => studentService.listStudents()),
+            People.use((people) => people.listPeople("student")),
           ]);
 
           return {

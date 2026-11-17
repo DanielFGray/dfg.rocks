@@ -9,7 +9,7 @@ import type {
   LessonNote,
   Material,
   Message,
-  StudentDetail,
+  PersonDetail,
   Testimonial,
   User,
   UserEmail,
@@ -105,8 +105,21 @@ export function serializeCourseDetail(course: unknown): CourseDetail {
   return S.decodeUnknownSync(Schemas.CourseDetail)(course);
 }
 
-export function serializeStudentDetail(student: unknown): StudentDetail {
-  return S.decodeUnknownSync(Schemas.StudentDetail)(student);
+/**
+ * A person page, from the account with its learner lists, families and lessons. Families are
+ * decoded here; lessons go through serializeLesson, which decodes raw rows.
+ */
+export function serializePersonDetail(
+  person: Omit<PersonDetail, "families" | "lessons"> & {
+    families: readonly unknown[];
+    lessons: readonly Parameters<typeof serializeLesson>[0][];
+  },
+): PersonDetail {
+  return {
+    ...person,
+    families: person.families.map((family) => S.decodeUnknownSync(Schemas.PersonFamily)(family)),
+    lessons: person.lessons.map(serializeLesson),
+  };
 }
 
 export function serializeFamily(family: {

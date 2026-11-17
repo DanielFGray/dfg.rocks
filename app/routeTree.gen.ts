@@ -37,8 +37,8 @@ import { Route as AuthedBillingMonthlyRouteImport } from './routes/_authed/billi
 import { Route as AuthedCoursesIndexRouteImport } from './routes/_authed/courses.index'
 import { Route as AuthedCoursesIdRouteImport } from './routes/_authed/courses.$id'
 import { Route as AuthedFamilyBillingRouteImport } from './routes/_authed/family/billing'
-import { Route as AuthedStudentsIndexRouteImport } from './routes/_authed/students.index'
-import { Route as AuthedStudentsIdRouteImport } from './routes/_authed/students.$id'
+import { Route as AuthedPeopleIndexRouteImport } from './routes/_authed/people.index'
+import { Route as AuthedPeopleIdRouteImport } from './routes/_authed/people.$id'
 import { Route as AuthedBillingBillsBillIdRouteImport } from './routes/_authed/billing.bills.$billId'
 import { Route as AuthedBillingPayersPayerIdRouteImport } from './routes/_authed/billing.payers.$payerId'
 import { Route as AuthedFamilyBillingIndexRouteImport } from './routes/_authed/family/billing.index'
@@ -187,14 +187,14 @@ const AuthedFamilyBillingRoute = AuthedFamilyBillingRouteImport.update({
   path: '/billing',
   getParentRoute: () => AuthedFamilyRoute,
 } as any)
-const AuthedStudentsIndexRoute = AuthedStudentsIndexRouteImport.update({
-  id: '/students/',
-  path: '/students/',
+const AuthedPeopleIndexRoute = AuthedPeopleIndexRouteImport.update({
+  id: '/people/',
+  path: '/people/',
   getParentRoute: () => AuthedRoute,
 } as any)
-const AuthedStudentsIdRoute = AuthedStudentsIdRouteImport.update({
-  id: '/students/$id',
-  path: '/students/$id',
+const AuthedPeopleIdRoute = AuthedPeopleIdRouteImport.update({
+  id: '/people/$id',
+  path: '/people/$id',
   getParentRoute: () => AuthedRoute,
 } as any)
 const AuthedBillingBillsBillIdRoute =
@@ -265,11 +265,11 @@ export interface FileRoutesByFullPath {
   '/billing/monthly': typeof AuthedBillingMonthlyRoute
   '/courses/$id': typeof AuthedCoursesIdRoute
   '/family/billing': typeof AuthedFamilyBillingRouteWithChildren
-  '/students/$id': typeof AuthedStudentsIdRoute
+  '/people/$id': typeof AuthedPeopleIdRoute
   '/assignments/': typeof AuthedAssignmentsIndexRoute
   '/billing/': typeof AuthedBillingIndexRoute
   '/courses/': typeof AuthedCoursesIndexRoute
-  '/students/': typeof AuthedStudentsIndexRoute
+  '/people/': typeof AuthedPeopleIndexRoute
   '/billing/bills/$billId': typeof AuthedBillingBillsBillIdRoute
   '/billing/payers/$payerId': typeof AuthedBillingPayersPayerIdRoute
   '/family/billing/bills': typeof AuthedFamilyBillingBillsRouteWithChildren
@@ -300,11 +300,11 @@ export interface FileRoutesByTo {
   '/assignments/$materialId': typeof AuthedAssignmentsMaterialIdRoute
   '/billing/monthly': typeof AuthedBillingMonthlyRoute
   '/courses/$id': typeof AuthedCoursesIdRoute
-  '/students/$id': typeof AuthedStudentsIdRoute
+  '/people/$id': typeof AuthedPeopleIdRoute
   '/assignments': typeof AuthedAssignmentsIndexRoute
   '/billing': typeof AuthedBillingIndexRoute
   '/courses': typeof AuthedCoursesIndexRoute
-  '/students': typeof AuthedStudentsIndexRoute
+  '/people': typeof AuthedPeopleIndexRoute
   '/billing/bills/$billId': typeof AuthedBillingBillsBillIdRoute
   '/billing/payers/$payerId': typeof AuthedBillingPayersPayerIdRoute
   '/family/billing/bills': typeof AuthedFamilyBillingBillsRouteWithChildren
@@ -340,11 +340,11 @@ export interface FileRoutesById {
   '/_authed/billing/monthly': typeof AuthedBillingMonthlyRoute
   '/_authed/courses/$id': typeof AuthedCoursesIdRoute
   '/_authed/family/billing': typeof AuthedFamilyBillingRouteWithChildren
-  '/_authed/students/$id': typeof AuthedStudentsIdRoute
+  '/_authed/people/$id': typeof AuthedPeopleIdRoute
   '/_authed/assignments/': typeof AuthedAssignmentsIndexRoute
   '/_authed/billing/': typeof AuthedBillingIndexRoute
   '/_authed/courses/': typeof AuthedCoursesIndexRoute
-  '/_authed/students/': typeof AuthedStudentsIndexRoute
+  '/_authed/people/': typeof AuthedPeopleIndexRoute
   '/_authed/billing/bills/$billId': typeof AuthedBillingBillsBillIdRoute
   '/_authed/billing/payers/$payerId': typeof AuthedBillingPayersPayerIdRoute
   '/_authed/family/billing/bills': typeof AuthedFamilyBillingBillsRouteWithChildren
@@ -380,11 +380,11 @@ export interface FileRouteTypes {
     | '/billing/monthly'
     | '/courses/$id'
     | '/family/billing'
-    | '/students/$id'
+    | '/people/$id'
     | '/assignments/'
     | '/billing/'
     | '/courses/'
-    | '/students/'
+    | '/people/'
     | '/billing/bills/$billId'
     | '/billing/payers/$payerId'
     | '/family/billing/bills'
@@ -415,11 +415,11 @@ export interface FileRouteTypes {
     | '/assignments/$materialId'
     | '/billing/monthly'
     | '/courses/$id'
-    | '/students/$id'
+    | '/people/$id'
     | '/assignments'
     | '/billing'
     | '/courses'
-    | '/students'
+    | '/people'
     | '/billing/bills/$billId'
     | '/billing/payers/$payerId'
     | '/family/billing/bills'
@@ -454,11 +454,11 @@ export interface FileRouteTypes {
     | '/_authed/billing/monthly'
     | '/_authed/courses/$id'
     | '/_authed/family/billing'
-    | '/_authed/students/$id'
+    | '/_authed/people/$id'
     | '/_authed/assignments/'
     | '/_authed/billing/'
     | '/_authed/courses/'
-    | '/_authed/students/'
+    | '/_authed/people/'
     | '/_authed/billing/bills/$billId'
     | '/_authed/billing/payers/$payerId'
     | '/_authed/family/billing/bills'
@@ -678,18 +678,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedFamilyBillingRouteImport
       parentRoute: typeof AuthedFamilyRoute
     }
-    '/_authed/students/': {
-      id: '/_authed/students/'
-      path: '/students'
-      fullPath: '/students/'
-      preLoaderRoute: typeof AuthedStudentsIndexRouteImport
+    '/_authed/people/': {
+      id: '/_authed/people/'
+      path: '/people'
+      fullPath: '/people/'
+      preLoaderRoute: typeof AuthedPeopleIndexRouteImport
       parentRoute: typeof AuthedRoute
     }
-    '/_authed/students/$id': {
-      id: '/_authed/students/$id'
-      path: '/students/$id'
-      fullPath: '/students/$id'
-      preLoaderRoute: typeof AuthedStudentsIdRouteImport
+    '/_authed/people/$id': {
+      id: '/_authed/people/$id'
+      path: '/people/$id'
+      fullPath: '/people/$id'
+      preLoaderRoute: typeof AuthedPeopleIdRouteImport
       parentRoute: typeof AuthedRoute
     }
     '/_authed/billing/bills/$billId': {
@@ -831,9 +831,9 @@ interface AuthedRouteChildren {
   AuthedSettingsRoute: typeof AuthedSettingsRoute
   AuthedSubmissionsRoute: typeof AuthedSubmissionsRoute
   AuthedCoursesIdRoute: typeof AuthedCoursesIdRoute
-  AuthedStudentsIdRoute: typeof AuthedStudentsIdRoute
+  AuthedPeopleIdRoute: typeof AuthedPeopleIdRoute
   AuthedCoursesIndexRoute: typeof AuthedCoursesIndexRoute
-  AuthedStudentsIndexRoute: typeof AuthedStudentsIndexRoute
+  AuthedPeopleIndexRoute: typeof AuthedPeopleIndexRoute
   AuthedCoursesCourseIdModulesModuleIdEditRoute: typeof AuthedCoursesCourseIdModulesModuleIdEditRoute
 }
 
@@ -851,9 +851,9 @@ const AuthedRouteChildren: AuthedRouteChildren = {
   AuthedSettingsRoute: AuthedSettingsRoute,
   AuthedSubmissionsRoute: AuthedSubmissionsRoute,
   AuthedCoursesIdRoute: AuthedCoursesIdRoute,
-  AuthedStudentsIdRoute: AuthedStudentsIdRoute,
+  AuthedPeopleIdRoute: AuthedPeopleIdRoute,
   AuthedCoursesIndexRoute: AuthedCoursesIndexRoute,
-  AuthedStudentsIndexRoute: AuthedStudentsIndexRoute,
+  AuthedPeopleIndexRoute: AuthedPeopleIndexRoute,
   AuthedCoursesCourseIdModulesModuleIdEditRoute:
     AuthedCoursesCourseIdModulesModuleIdEditRoute,
 }

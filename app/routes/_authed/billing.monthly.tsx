@@ -90,7 +90,7 @@ function MonthlyPaymentsPage() {
                   >
                     <td className="px-4 py-3">
                       <Link
-                        to="/students/$id"
+                        to="/people/$id"
                         params={{ id: row.student_id }}
                         className="font-medium text-accent hover:underline"
                       >

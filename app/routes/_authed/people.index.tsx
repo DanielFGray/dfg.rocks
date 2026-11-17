@@ -2,7 +2,8 @@ import { useState, useMemo } from "react";
 import { Effect, Schema as S } from "effect";
 import { withAuthContext } from "../../../server/requestDatabase.js";
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
-import { requireAdmin } from "../../lib/adminRoute.js";
+import { requireStaff } from "../../lib/adminRoute.js";
+import { useAuth } from "../../lib/hooks/useAuth.js";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { createServerFn } from "@tanstack/react-start";
 import { getCookie } from "@tanstack/react-start/server";
@@ -11,11 +12,11 @@ import { api } from "../../lib/api.js";
 import { requiredValidator, emailValidator } from "../../lib/validators.js";
 import { fieldError } from "../../lib/form.js";
 import { runServerEffect } from "../../lib/serverEffect.js";
-import { Students } from "../../../server/services/students.js";
+import { People } from "../../../server/services/people.js";
 import { Families } from "../../../server/services/families.js";
-import { normalizeStudents, serializeFamily } from "../../../shared/responseMappers.js";
+import { serializeFamily } from "../../../shared/responseMappers.js";
 import { Sessions } from "../../../server/services/sessions.js";
-import { FamilyInviteRole, type Family } from "../../../shared/schemas.js";
+import { FamilyInviteRole, type Family, type PersonSummary } from "../../../shared/schemas.js";
 import { Button } from "../../components/ui/Button.js";
 import { Card } from "../../components/ui/Card.js";
 import { Input } from "../../components/ui/Input.js";
@@ -26,25 +27,25 @@ import { SearchField } from "../../components/ui/SearchField.js";
 import { QrInviteModal } from "../../components/students/QrInviteModal.js";
 import { CreateFamilyModal } from "../../components/students/CreateFamilyModal.js";
 
-type StudentsPageData = {
-  students: ReturnType<typeof normalizeStudents>;
+type PeoplePageData = {
+  people: readonly PersonSummary[];
   families: Family[];
 };
 
-const getStudentsPageData = createServerFn({ method: "GET" }).handler(() =>
+const getPeoplePageData = createServerFn({ method: "GET" }).handler(() =>
   runServerEffect(
     Effect.gen(function* () {
       const session = yield* Sessions.use((sessions) =>
-        sessions.requireAdminSession(getCookie("session")),
+        sessions.requireStaffSession(getCookie("session")),
       );
-      const [students, families] = yield* Effect.all([
-        Students.use((studentService) => studentService.listStudents()),
+      const [people, families] = yield* Effect.all([
+        People.use((people) => people.listPeople()),
         Families.use((familyService) => familyService.listFamilies()),
       ]).pipe(withAuthContext(session.session.id));
       return {
-        students: normalizeStudents(students),
+        people,
         families: families.map(serializeFamily),
-      } satisfies StudentsPageData;
+      } satisfies PeoplePageData;
     }),
   ),
 );
@@ -53,34 +54,45 @@ const getStudentsPageData = createServerFn({ method: "GET" }).handler(() =>
  * Route
  * --------------------------------------------------------------------------- */
 
-export const Route = createFileRoute("/_authed/students/")({
-  beforeLoad: requireAdmin,
-  head: () => ({ meta: [{ title: "Students | DFG Portal" }] }),
-  loader: () => getStudentsPageData(),
-  component: StudentsPage,
+export const Route = createFileRoute("/_authed/people/")({
+  beforeLoad: requireStaff,
+  head: () => ({ meta: [{ title: "People | DFG Portal" }] }),
+  loader: () => getPeoplePageData(),
+  component: PeoplePage,
   pendingComponent: () => <div>Loading...</div>,
 });
 
-function StudentsPage() {
+const ROLE_FILTER_OPTIONS = [
+  { value: "all", label: "All roles" },
+  { value: "student", label: "Students" },
+  { value: "parent", label: "Parents" },
+  { value: "teacher", label: "Teachers" },
+  { value: "admin", label: "Admins" },
+];
+
+function PeoplePage() {
   const queryClient = useQueryClient();
   const router = useRouter();
-  const { students, families } = Route.useLoaderData();
+  const { people, families } = Route.useLoaderData();
+  const { isAdmin } = useAuth();
 
   const [formOpen, setFormOpen] = useState(false);
   const [qrOpen, setQrOpen] = useState(false);
   const [createFamilyOpen, setCreateFamilyOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [roleFilter, setRoleFilter] = useState("all");
 
-  const filteredStudents = useMemo(
+  const filteredPeople = useMemo(
     () =>
-      students.filter(
-        (s) =>
-          !searchQuery ||
-          s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          s.username.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          s.email.toLowerCase().includes(searchQuery.toLowerCase()),
+      people.filter(
+        (p) =>
+          (roleFilter === "all" || p.role === roleFilter) &&
+          (!searchQuery ||
+            (p.name ?? "").toLowerCase().includes(searchQuery.toLowerCase()) ||
+            p.username.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            (p.email ?? "").toLowerCase().includes(searchQuery.toLowerCase())),
       ),
-    [students, searchQuery],
+    [people, searchQuery, roleFilter],
   );
 
   const inviteMutation = useMutation({
@@ -100,7 +112,7 @@ function StudentsPage() {
         }),
       ),
     onSettled: () => {
-      void queryClient.invalidateQueries({ queryKey: ["admin", "students"] });
+      void queryClient.invalidateQueries({ queryKey: ["admin", "people"] });
       void queryClient.invalidateQueries({ queryKey: ["admin", "families"] });
       void router.invalidate();
     },
@@ -143,63 +155,86 @@ function StudentsPage() {
   });
 
   return (
-    <main data-testid="students" className="mx-auto max-w-[1100px] px-5 pt-20 pb-16 md:px-8">
+    <main data-testid="people" className="mx-auto max-w-[1100px] px-5 pt-20 pb-16 md:px-8">
       <div className="mb-8 flex items-center justify-between">
-        <h1 className="text-3xl font-bold tracking-tight">Students</h1>
-        <div className="flex gap-3">
-          <Button
-            variant="ghost"
-            onClick={() => setCreateFamilyOpen(true)}
-            data-testid="create-family-btn"
-          >
-            Create Family
-          </Button>
-          <Button variant="ghost" onClick={() => setQrOpen(true)} data-testid="add-via-qr">
-            Add via QR
-          </Button>
-          <Button onClick={openForm} data-testid="invite-student">
-            Invite Student
-          </Button>
+        <h1 className="text-3xl font-bold tracking-tight">People</h1>
+        {isAdmin ? (
+          <div className="flex gap-3">
+            <Button
+              variant="ghost"
+              onClick={() => setCreateFamilyOpen(true)}
+              data-testid="create-family-btn"
+            >
+              Create Family
+            </Button>
+            <Button variant="ghost" onClick={() => setQrOpen(true)} data-testid="add-via-qr">
+              Add via QR
+            </Button>
+            <Button onClick={openForm} data-testid="invite-student">
+              Invite Student
+            </Button>
+          </div>
+        ) : null}
+      </div>
+
+      <div className="mb-6 flex flex-col gap-3 md:flex-row">
+        <div className="flex-1">
+          <SearchField
+            value={searchQuery}
+            onChange={setSearchQuery}
+            placeholder="Search by name, username, or email..."
+            data-testid="people-search"
+          />
+        </div>
+        <div className="md:w-48">
+          <Select
+            id="people-role-filter"
+            name="role"
+            label="Role"
+            value={roleFilter}
+            onChange={setRoleFilter}
+            options={ROLE_FILTER_OPTIONS}
+          />
         </div>
       </div>
 
-      <div className="mb-6">
-        <SearchField
-          value={searchQuery}
-          onChange={setSearchQuery}
-          placeholder="Search by name, username, or email..."
-          data-testid="students-search"
-        />
-      </div>
-
-      {filteredStudents.length === 0 ? (
+      {filteredPeople.length === 0 ? (
         <EmptyState
-          message={searchQuery ? "No students match your search." : "No students yet."}
-          action={searchQuery ? undefined : { label: "Invite Student", onClick: openForm }}
+          message={
+            searchQuery || roleFilter !== "all" ? "No people match your search." : "No people yet."
+          }
+          action={
+            searchQuery || roleFilter !== "all" || !isAdmin
+              ? undefined
+              : { label: "Invite Student", onClick: openForm }
+          }
         />
       ) : (
         <div className="flex flex-col gap-3">
-          {filteredStudents.map((s) => (
-            <Card key={s.id}>
+          {filteredPeople.map((p) => (
+            <Card key={p.id}>
               <div className="flex items-center justify-between">
                 <div>
                   <Link
-                    to="/students/$id"
-                    params={{ id: s.id }}
+                    to="/people/$id"
+                    params={{ id: p.id }}
                     className="font-semibold text-primary no-underline transition-colors hover:text-accent dark:text-primary-dark"
                   >
-                    {s.name}
+                    {p.name ?? p.username}
                   </Link>
                   <span className="ml-3 text-sm text-muted dark:text-muted-dark">
-                    @{s.username}
+                    @{p.username}
                   </span>
                   <span className="ml-3 text-sm text-muted/60 dark:text-muted-dark/60">
-                    {s.email}
+                    {p.email}
+                  </span>
+                  <span className="ml-3 text-xs tracking-wide text-muted uppercase dark:text-muted-dark">
+                    {p.role}
                   </span>
                 </div>
                 <Link
-                  to="/students/$id"
-                  params={{ id: s.id }}
+                  to="/people/$id"
+                  params={{ id: p.id }}
                   className="text-xs text-muted no-underline transition-colors hover:text-accent dark:text-muted-dark"
                 >
                   View &rarr;
@@ -284,7 +319,7 @@ function StudentsPage() {
         families={[...families]}
         onSuccess={() => {
           void queryClient.invalidateQueries({
-            queryKey: ["admin", "students"],
+            queryKey: ["admin", "people"],
           });
           void queryClient.invalidateQueries({
             queryKey: ["admin", "families"],

@@ -898,7 +898,7 @@ describe("DFG Portal API", () => {
       });
       expect(patch.status).toBe(200);
 
-      const students = yield* reqEffect("GET", "/api/admin/students", { cookie: adminCookie });
+      const students = yield* reqEffect("GET", "/api/admin/people", { cookie: adminCookie });
       expect(students.status).toBe(200);
       const studentList = (yield* resJson(students)) as StudentSummary[];
       expect(studentList.some((student) => student.username === "student1")).toBe(true);
@@ -1683,6 +1683,159 @@ describe("DFG Portal API", () => {
         ),
       );
       expect(statuses).toEqual(cases.map(([method, path, , status]) => [method, path, status]));
+    }),
+  );
+
+  // Only an admin changes a role, through the route. A teacher is refused by the admin guard, an
+  // admin cannot change their own role, and a parent who is billing contact of a family with a
+  // student answers 409 at commit.
+  it.effect("an admin sets a person's role through the API", () =>
+    Effect.gen(function* () {
+      const createRoleUser = async (username: string, role: string) => {
+        const r = await testDb.query<{ id: string }>(
+          `select * from app_private.really_create_user($1::citext, $2, null, true, $3::citext, $4)`,
+          [username, "Role Test", `${username}@test.com`, `${username}123`],
+        );
+        await testDb.query(`update app_public.users set role = $1 where id = $2`, [
+          role,
+          r.rows[0].id,
+        ]);
+        return r.rows[0].id;
+      };
+      const kidId = yield* Effect.tryPromise(() => createRoleUser("role_api_kid", "student"));
+      yield* Effect.tryPromise(() => createRoleUser("role_api_teacher", "teacher"));
+      const teacherLogin = yield* reqEffect("POST", "/api/login", {
+        body: { id: "role_api_teacher", password: "role_api_teacher123" },
+      });
+      const teacherCookie = getCookie(teacherLogin)!;
+      const adminRow = yield* Effect.tryPromise(() =>
+        testDb.query<{ id: string }>(`select id from app_public.users where username = 'admin'`),
+      );
+      const adminId = adminRow.rows[0].id;
+
+      const promote = yield* reqEffect("PATCH", `/api/admin/people/${kidId}/role`, {
+        cookie: adminCookie,
+        body: { role: "parent" },
+      });
+      expect(promote.status).toBe(200);
+      expect(yield* resJson(promote)).toEqual({ id: kidId, role: "parent" });
+
+      const byTeacher = yield* reqEffect("PATCH", `/api/admin/people/${kidId}/role`, {
+        cookie: teacherCookie,
+        body: { role: "admin" },
+      });
+      expect(byTeacher.status).toBe(403);
+
+      const ownRole = yield* reqEffect("PATCH", `/api/admin/people/${adminId}/role`, {
+        cookie: adminCookie,
+        body: { role: "teacher" },
+      });
+      expect(ownRole.status).toBe(400);
+
+      const billingParentId = yield* Effect.tryPromise(() =>
+        createRoleUser("role_api_billing", "parent"),
+      );
+      const familyId = yield* Effect.tryPromise(() =>
+        testDb.query<{ id: string }>(
+          `insert into app_public.families (slug, name) values ('role-api-family', 'Role API Family') returning id`,
+        ),
+      );
+      const memberId = yield* Effect.tryPromise(() => createRoleUser("role_api_member", "student"));
+      yield* Effect.tryPromise(() =>
+        testDb.query(
+          `insert into app_public.family_memberships (family_id, user_id, is_owner, is_billing_contact)
+           values ($1, $2, true, true), ($1, $3, false, false)`,
+          [familyId.rows[0].id, billingParentId, memberId],
+        ),
+      );
+      const leaveParent = yield* reqEffect("PATCH", `/api/admin/people/${billingParentId}/role`, {
+        cookie: adminCookie,
+        body: { role: "teacher" },
+      });
+      expect(leaveParent.status).toBe(409);
+    }),
+  );
+
+  // The person endpoint serves each account's families and lessons to staff. A teacher reads it,
+  // and a student is refused by the Staff guard.
+  it.effect("the person endpoint serves families and lessons to staff and refuses a student", () =>
+    Effect.gen(function* () {
+      const createPerson = (username: string, role: string) =>
+        Effect.tryPromise(async () => {
+          const r = await testDb.query<{ id: string }>(
+            `select * from app_private.really_create_user($1::citext, $2, null, true, $3::citext, $4)`,
+            [username, "Person Test", `${username}@test.com`, `${username}123`],
+          );
+          await testDb.query(`update app_public.users set role = $1 where id = $2`, [
+            role,
+            r.rows[0].id,
+          ]);
+          return r.rows[0].id;
+        });
+      const loginCookie = (username: string) =>
+        reqEffect("POST", "/api/login", {
+          body: { id: username, password: `${username}123` },
+        }).pipe(Effect.map((res) => getCookie(res)!));
+
+      const parentId = yield* createPerson("person_api_parent", "parent");
+      const kidId = yield* createPerson("person_api_kid", "student");
+      yield* createPerson("person_api_teacher", "teacher");
+      const family = yield* Effect.tryPromise(() =>
+        testDb.query<{ id: string }>(
+          `insert into app_public.families (slug, name) values ('person-api-family', 'Person API Family') returning id`,
+        ),
+      );
+      const familyId = family.rows[0]!.id;
+      yield* Effect.tryPromise(() =>
+        testDb.query(
+          `insert into app_public.family_memberships (family_id, user_id, is_owner, is_billing_contact)
+           values ($1, $2, true, true), ($1, $3, false, false)`,
+          [familyId, parentId, kidId],
+        ),
+      );
+      const lesson = yield* Effect.tryPromise(() =>
+        testDb.query<{ id: string }>(
+          `insert into app_public.lessons (student_id, scheduled_at, duration_minutes, location_type, status)
+           values ($1, now() + interval '7 days', 30, 'online', 'scheduled') returning id`,
+          [kidId],
+        ),
+      );
+      const lessonId = lesson.rows[0]!.id;
+
+      const teacherCookie = yield* loginCookie("person_api_teacher");
+      const kidCookie = yield* loginCookie("person_api_kid");
+
+      const parentPage = yield* reqEffect("GET", `/api/admin/people/${parentId}`, {
+        cookie: adminCookie,
+      });
+      expect(parentPage.status).toBe(200);
+      const parentBody = (yield* resJson(parentPage)) as {
+        families: { id: string; name: string; is_owner: boolean; is_billing_contact: boolean }[];
+      };
+      expect(parentBody.families).toEqual([
+        {
+          id: familyId,
+          name: "Person API Family",
+          is_owner: true,
+          is_billing_contact: true,
+        },
+      ]);
+
+      const kidPage = yield* reqEffect("GET", `/api/admin/people/${kidId}`, {
+        cookie: adminCookie,
+      });
+      const kidBody = (yield* resJson(kidPage)) as { lessons: { id: string }[] };
+      expect(kidBody.lessons.map((l) => l.id)).toContain(lessonId);
+
+      const byTeacher = yield* reqEffect("GET", `/api/admin/people/${kidId}`, {
+        cookie: teacherCookie,
+      });
+      expect(byTeacher.status).toBe(200);
+
+      const byStudent = yield* reqEffect("GET", `/api/admin/people/${parentId}`, {
+        cookie: kidCookie,
+      });
+      expect(byStudent.status).toBe(403);
     }),
   );
 });

@@ -13,7 +13,7 @@ import { StudentDashboard } from "../../components/dashboard/StudentDashboard.js
 import { ParentOnboarding } from "../../components/dashboard/ParentOnboarding.js";
 import { ParentDashboard } from "../../components/dashboard/ParentDashboard.js";
 import { runServerEffect } from "../../lib/serverEffect.js";
-import { Students } from "../../../server/services/students.js";
+import { People } from "../../../server/services/people.js";
 import { Messages } from "../../../server/services/messages.js";
 import { Materials } from "../../../server/services/materials.js";
 import { Courses } from "../../../server/services/courses.js";
@@ -48,7 +48,7 @@ const getDashboardPageData = createServerFn({ method: "GET" }).handler(() =>
           const today = todayRange();
           const week = weekRange();
           const data = yield* Effect.all({
-            students: Students.use((studentService) => studentService.listStudents()),
+            students: People.use((people) => people.listPeople("student")),
             messages: Messages.use((messageService) =>
               messageService.messages({
                 limit: 50,
@@ -72,7 +72,9 @@ const getDashboardPageData = createServerFn({ method: "GET" }).handler(() =>
               }),
             ),
             courses: Courses.use((courseService) => courseService.listCourses()),
-            submissions: Practice.use((practiceService) => practiceService.listSubmissions(5000, 0)),
+            submissions: Practice.use((practiceService) =>
+              practiceService.listSubmissions(5000, 0),
+            ),
             testimonials: Testimonials.use((testimonialService) =>
               testimonialService.listTestimonials(),
             ),

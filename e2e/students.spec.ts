@@ -11,10 +11,43 @@ test.describe("students management", () => {
     });
 
     await loginViaUi(page, "test_admin", "testpassword123");
-    await page.getByTestId("nav-students").click();
-    await expect(page.getByTestId("students")).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Students" })).toBeVisible();
+    await page.getByTestId("nav-people").click();
+    await expect(page.getByTestId("people")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "People" })).toBeVisible();
     await expect(page.getByText("Alice Student")).toBeVisible();
+  });
+
+  test("admin changes a person's role on the detail page", async ({ page, testing }) => {
+    await testing.login();
+    await testing.login({
+      username: "test_role_person",
+      role: "student",
+      name: "Dana Role",
+      email: "dana.role@test.local",
+    });
+
+    await loginViaUi(page, "test_admin", "testpassword123");
+    await page.getByTestId("nav-people").click();
+    await page.getByText("Dana Role").click();
+    await expect(page.getByTestId("person-detail")).toBeVisible();
+
+    // Cancel leaves the role as it was.
+    await page.getByTestId("person-role").click();
+    await page.getByTestId("select-option-parent").click();
+    const dialog = page.getByRole("alertdialog", { name: "Change role" });
+    await expect(dialog).toContainText("Change Dana Role from Student to Parent?");
+    await dialog.getByRole("button", { name: "Cancel" }).click();
+    await expect(page.getByTestId("person-role")).toContainText("Student");
+
+    await page.getByTestId("person-role").click();
+    await page.getByTestId("select-option-parent").click();
+    await page
+      .getByRole("alertdialog", { name: "Change role" })
+      .getByRole("button", { name: "Confirm" })
+      .click();
+    await expect(page.getByTestId("person-role")).toContainText("Parent");
+    // A parent is not a learner, so the learner sections leave the page.
+    await expect(page.getByText("Enrolled Courses")).toHaveCount(0);
   });
 
   test("admin can invite a student to a family", async ({ page, testing }) => {
@@ -23,8 +56,8 @@ test.describe("students management", () => {
     await testing.seedInvitation({ email: "bob@test.local" });
 
     await loginViaUi(page, "test_admin", "testpassword123");
-    await page.getByTestId("nav-students").click();
-    await expect(page.getByTestId("students")).toBeVisible();
+    await page.getByTestId("nav-people").click();
+    await expect(page.getByTestId("people")).toBeVisible();
 
     await page.getByTestId("invite-student").click();
     const form = page.getByTestId("invite-form");
@@ -35,7 +68,7 @@ test.describe("students management", () => {
     await form.getByRole("button", { name: "Send Invite" }).click();
 
     // Modal closes, back to students page
-    await expect(page.getByTestId("students")).toBeVisible();
+    await expect(page.getByTestId("people")).toBeVisible();
   });
 
   test("student name links to detail page", async ({ page, testing }) => {
@@ -48,13 +81,11 @@ test.describe("students management", () => {
     });
 
     await loginViaUi(page, "test_admin", "testpassword123");
-    await page.getByTestId("nav-students").click();
+    await page.getByTestId("nav-people").click();
     await page.getByRole("link", { name: "Carol Musician" }).click();
 
-    await expect(page.getByTestId("student-detail")).toBeVisible();
-    await expect(
-      page.getByRole("heading", { name: "Carol Musician" }),
-    ).toBeVisible();
+    await expect(page.getByTestId("person-detail")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Carol Musician" })).toBeVisible();
   });
 
   test("admin manages a monthly prepaid recurring schedule and payment", async ({
@@ -70,7 +101,7 @@ test.describe("students management", () => {
     });
 
     await loginViaUi(page, "test_admin", "testpassword123");
-    await page.getByTestId("nav-students").click();
+    await page.getByTestId("nav-people").click();
     await page.getByRole("link", { name: "Riley Recurring" }).click();
     await expect(page.getByTestId("student-recurring-billing")).toBeVisible();
 
@@ -87,14 +118,8 @@ test.describe("students management", () => {
     await expect(rateCard).toContainText("Monthly prepaid");
 
     await rateCard.getByRole("button", { name: "Edit" }).click();
-    await page
-      .getByTestId("student-rate-form")
-      .getByLabel("Rate amount (USD)")
-      .fill("260");
-    await page
-      .getByTestId("student-rate-form")
-      .getByRole("button", { name: "Save rate" })
-      .click();
+    await page.getByTestId("student-rate-form").getByLabel("Rate amount (USD)").fill("260");
+    await page.getByTestId("student-rate-form").getByRole("button", { name: "Save rate" }).click();
     await expect(rateCard).toContainText("$260.00 / 60 min");
 
     await page.getByTestId("add-recurring-schedule").click();
@@ -133,8 +158,6 @@ test.describe("students management", () => {
     const paymentRow = page.getByTestId("monthly-payment-row");
     await expect(paymentRow).toContainText("Aug 1, 2026");
     await expect(paymentRow).toContainText("$260.00");
-    await expect(
-      paymentRow.getByTestId("payment-generation-status"),
-    ).not.toBeEmpty();
+    await expect(paymentRow.getByTestId("payment-generation-status")).not.toBeEmpty();
   });
 });

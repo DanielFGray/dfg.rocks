@@ -20,7 +20,7 @@ import { EditLessonModal } from "../../components/lessons/EditLessonModal.js";
 import { NewLessonModal } from "../../components/lessons/NewLessonModal.js";
 import { LessonCard } from "../../components/lessons/LessonCard.js";
 import { runServerEffect } from "../../lib/serverEffect.js";
-import { Students } from "../../../server/services/students.js";
+import { People } from "../../../server/services/people.js";
 import { Lessons } from "../../../server/services/lessons.js";
 import {
   serializeLesson,
@@ -42,7 +42,7 @@ const getLessonsPageData = createServerFn({ method: "GET" }).handler(() =>
             offset: 0,
           }),
         ),
-        Students.use((studentService) => studentService.listStudents()),
+        People.use((people) => people.listPeople("student")),
       ]).pipe(withAuthContext(session.session.id));
 
       return {

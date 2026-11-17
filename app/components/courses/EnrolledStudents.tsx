@@ -49,7 +49,7 @@ export function EnrolledStudents({
             >
               <div>
                 <Link
-                  to="/students/$id"
+                  to="/people/$id"
                   params={{ id: s.id }}
                   className="font-semibold text-primary no-underline transition-colors hover:text-accent dark:text-primary-dark"
                 >

@@ -84,6 +84,51 @@ describe("access policy for signed-in accounts", () => {
     expect(rows.rows.map((r) => r.id)).toEqual([ids.kid]);
   });
 
+  // Staff read every family's members, so a teacher can see any person's families. A student reads
+  // only the memberships of the families it belongs to, and a stranger reads none.
+  it("a teacher reads every family's memberships; a student reads only its own family's", async () => {
+    const teacherId = await createUser("acc_teacher", "teacher");
+    const teacherSession = (
+      await owner(`insert into app_private.sessions (user_id) values ($1) returning id`, [
+        teacherId,
+      ])
+    ).rows[0].id;
+    const otherParent = await createUser("acc_other_parent", "parent");
+    const otherKid = await createUser("acc_other_kid", "student");
+    const otherFamily = await owner(
+      `insert into app_public.families (slug, name) values ('acc-other-family', 'Other Family') returning id`,
+    );
+    const otherFamilyId = otherFamily.rows[0].id;
+    await owner(
+      `insert into app_public.family_memberships (family_id, user_id, is_owner, is_billing_contact)
+       values ($1, $2, true, true), ($1, $3, false, false)`,
+      [otherFamilyId, otherParent, otherKid],
+    );
+
+    const membershipsSeen = (sessionId: string) =>
+      asVisitor(sessionId, async (c) => {
+        const r = await c.query<{ family_id: string; user_id: string }>(
+          `select family_id, user_id from app_public.family_memberships`,
+        );
+        return r.rows;
+      });
+
+    const teacherRows = await membershipsSeen(teacherSession);
+    expect(
+      teacherRows
+        .filter((r) => r.family_id === otherFamilyId)
+        .map((r) => r.user_id)
+        .sort(),
+    ).toEqual([otherParent, otherKid].sort());
+    expect(teacherRows.some((r) => r.family_id === familyId)).toBe(true);
+
+    const kidRows = await membershipsSeen(sessions.kid);
+    expect(kidRows.length).toBeGreaterThan(0);
+    expect(kidRows.every((r) => r.family_id === familyId)).toBe(true);
+
+    expect(await membershipsSeen(sessions.stranger)).toEqual([]);
+  });
+
   it("a non-staff user can message staff but not another user", async () => {
     await asVisitor(sessions.stranger, (c) =>
       c.query(
@@ -208,6 +253,7 @@ describe("access policy for signed-in accounts", () => {
       "app_public.remove_from_family(uuid,uuid)",
       "app_public.request_account_deletion()",
       "app_public.resend_email_verification_code(uuid)",
+      "app_public.set_user_role(uuid,app_public.user_role)",
       "app_public.settle_single_booking_cancellation(uuid,integer)",
       "app_public.tg__graphql_subscription()",
       "app_public.tg_user_emails__forbid_if_verified()",

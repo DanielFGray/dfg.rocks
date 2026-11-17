@@ -13,7 +13,7 @@ test.describe("monthly payments", () => {
     await testing.login();
     await page.goto("/dashboard");
 
-    const students = await page.request.get("/api/admin/students", { headers: adminHeaders });
+    const students = await page.request.get("/api/admin/people", { headers: adminHeaders });
     expect(students.ok()).toBe(true);
     const student = ((await students.json()) as Array<{ id: string; username: string }>).find(
       (s) => s.username === "monthly_student",
@@ -75,7 +75,7 @@ test.describe("monthly payments", () => {
     await testing.login();
     await page.goto("/dashboard");
 
-    const students = await page.request.get("/api/admin/students", { headers: adminHeaders });
+    const students = await page.request.get("/api/admin/people", { headers: adminHeaders });
     expect(students.ok()).toBe(true);
     const student = ((await students.json()) as Array<{ id: string; username: string }>).find(
       (s) => s.username === "single_student",

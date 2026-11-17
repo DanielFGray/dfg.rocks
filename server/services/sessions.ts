@@ -187,6 +187,15 @@ export class Sessions extends Context.Service<Sessions>()("dfg-rocks/sessions", 
       return session;
     });
 
+    /** Admin or teacher, the roles the Staff API guard admits. */
+    const requireStaffSession = Effect.fnUntraced(function* (token: string | undefined) {
+      const session = yield* requireSession(token);
+      if (session.user.role !== "admin" && session.user.role !== "teacher") {
+        return yield* new HttpError({ status: 403, message: "Forbidden" });
+      }
+      return session;
+    });
+
     return {
       createSession: Effect.fnUntraced(function* (userId: string) {
         const user = yield* db
@@ -236,6 +245,7 @@ export class Sessions extends Context.Service<Sessions>()("dfg-rocks/sessions", 
       validateSessionToken,
       requireSession,
       requireAdminSession,
+      requireStaffSession,
 
       updateActiveStudent: Effect.fnUntraced(function* (
         sessionId: string,

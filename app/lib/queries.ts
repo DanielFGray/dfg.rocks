@@ -46,10 +46,14 @@ export function invalidateStudentQueries(queryClient: QueryClient, studentId?: s
     queryClient.invalidateQueries({ queryKey: ["my-lessons", studentId] });
     queryClient.invalidateQueries({ queryKey: ["my-lesson-notes", studentId] });
     // available-slots uses date as second param, so invalidate all dates for this student
-    queryClient.invalidateQueries({ queryKey: ["available-slots"], exact: false, predicate: (query) => {
-      const key = query.queryKey;
-      return key[0] === "available-slots" && key[2] === studentId;
-    }});
+    queryClient.invalidateQueries({
+      queryKey: ["available-slots"],
+      exact: false,
+      predicate: (query) => {
+        const key = query.queryKey;
+        return key[0] === "available-slots" && key[2] === studentId;
+      },
+    });
   } else {
     // Invalidate all student-scoped variants
     queryClient.invalidateQueries({ queryKey: ["assignments"], exact: false });
@@ -67,9 +71,9 @@ export function invalidateStudentQueries(queryClient: QueryClient, studentId?: s
 
 // ---- Admin queries ----
 
-export const adminStudentsQuery = queryOptions({
-  queryKey: ["admin", "students"],
-  queryFn: () => Effect.runPromise(api.studentsStaff.students()),
+export const adminPeopleQuery = queryOptions({
+  queryKey: ["admin", "people"],
+  queryFn: () => Effect.runPromise(api.peopleStaff.people()),
 });
 
 export const adminCoursesQuery = queryOptions({
@@ -123,10 +127,10 @@ export const courseStudentsQuery = (id: string) =>
     queryFn: () => Effect.runPromise(api.coursesAdmin.courseStudents({ params: { id } })),
   });
 
-export const studentDetailQuery = (id: string) =>
+export const personDetailQuery = (id: string) =>
   queryOptions({
-    queryKey: ["admin", "students", id],
-    queryFn: () => Effect.runPromise(api.studentsStaff.student({ params: { id } })),
+    queryKey: ["admin", "people", id],
+    queryFn: () => Effect.runPromise(api.peopleStaff.person({ params: { id } })),
   });
 
 // ---- Shared / student queries ----
@@ -211,9 +215,7 @@ export const availableSlotsQuery = (date: string, studentId?: string) =>
   queryOptions({
     queryKey: ["available-slots", date, studentId],
     queryFn: () =>
-      Effect.runPromise(
-        api.lessons.availableSlots({ query: { date, days: 7, duration: 60 } }),
-      ),
+      Effect.runPromise(api.lessons.availableSlots({ query: { date, days: 7, duration: 60 } })),
   });
 
 export function useSwitchActiveStudent() {

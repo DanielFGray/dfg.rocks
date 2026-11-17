@@ -158,19 +158,6 @@ export const EnrolledCourse = S.Struct({
 
 export type EnrolledCourse = S.Schema.Type<typeof EnrolledCourse>;
 
-export const StudentDetail = S.Struct({
-  id: S.String,
-  username: S.String,
-  name: S.String,
-  email: S.String,
-  role: UserRole,
-  is_verified: S.Boolean,
-  enrolled_courses: S.Array(EnrolledCourse),
-  assigned_materials: S.Array(AssignedMaterial),
-});
-
-export type StudentDetail = S.Schema.Type<typeof StudentDetail>;
-
 export const Submission = S.Struct({
   id: S.String,
   name: S.String,
@@ -341,6 +328,40 @@ export const Lesson = S.Struct({
 });
 
 export type Lesson = S.Schema.Type<typeof Lesson>;
+
+// A family a person belongs to, with the person's own flags in it.
+export const PersonFamily = S.Struct({
+  id: S.String,
+  name: S.String,
+  is_owner: S.Boolean,
+  is_billing_contact: S.Boolean,
+});
+
+export type PersonFamily = S.Schema.Type<typeof PersonFamily>;
+
+// An account as the people list shows it. name and email are null when the account has none.
+export const PersonSummary = S.Struct({
+  id: S.String,
+  username: S.String,
+  name: S.NullOr(S.String),
+  email: S.NullOr(S.String),
+  role: UserRole,
+  is_verified: S.Boolean,
+});
+
+export type PersonSummary = S.Schema.Type<typeof PersonSummary>;
+
+// The person page: any account, with its families and recent lessons. The learner fields are
+// empty for a non-student.
+export const PersonDetail = S.Struct({
+  ...PersonSummary.fields,
+  enrolled_courses: S.Array(EnrolledCourse),
+  assigned_materials: S.Array(AssignedMaterial),
+  families: S.Array(PersonFamily),
+  lessons: S.Array(Lesson),
+});
+
+export type PersonDetail = S.Schema.Type<typeof PersonDetail>;
 
 export const StudentRate = S.Struct({
   id: S.String,

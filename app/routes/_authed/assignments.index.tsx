@@ -6,10 +6,10 @@ import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { createServerFn } from "@tanstack/react-start";
 import { api } from "../../lib/api.js";
-import type { AssignedMaterial, Material, StudentDetail, User } from "../../../shared/schemas.js";
+import type { AssignedMaterial, Material, PersonDetail, User } from "../../../shared/schemas.js";
 import * as SharedSchemas from "../../../shared/schemas.js";
 import { formatNotationTrackLabel } from "../../../shared/notationTracks.js";
-import { studentDetailQuery } from "../../lib/queries.js";
+import { personDetailQuery } from "../../lib/queries.js";
 import { useAuth } from "../../lib/hooks/useAuth.js";
 import { getErrorMessage } from "../../lib/errors.js";
 import {
@@ -19,7 +19,7 @@ import {
 import { categorize, categoryColor, categoryLabel } from "../../components/library/helpers.js";
 import { runServerEffect } from "../../lib/serverEffect.js";
 import { Materials } from "../../../server/services/materials.js";
-import { Students } from "../../../server/services/students.js";
+import { People } from "../../../server/services/people.js";
 import { Sessions } from "../../../server/services/sessions.js";
 import { getCookie } from "@tanstack/react-start/server";
 import { serializeMaterial, normalizeStudents } from "../../../shared/responseMappers.js";
@@ -49,9 +49,9 @@ const getAssignmentsPageData = createServerFn({ method: "GET" }).handler(() =>
         const materialService = yield* Materials;
 
         if (session.user.role === "admin" || session.user.role === "teacher") {
-          const studentSvc = yield* Students;
+          const peopleSvc = yield* People;
           const [studentsResult, libraryResult] = yield* Effect.all([
-            studentSvc.listStudents(),
+            peopleSvc.listPeople("student"),
             materialService.library({
               limit: 1000,
               offset: 0,
@@ -105,7 +105,7 @@ export const Route = createFileRoute("/_authed/assignments/")({
 });
 
 function availableMaterialsForStudent(
-  studentDetail: StudentDetail,
+  studentDetail: PersonDetail,
   allMaterials: readonly Material[],
 ) {
   const assignedIds = new Set(studentDetail.assigned_materials.map((m) => m.id));
@@ -214,7 +214,7 @@ function StaffStudentCard({
   onAssign: (student: User) => void;
   onUnassign: (studentId: string, studentName: string, material: AssignedMaterial) => void;
 }) {
-  const { data: detail } = useSuspenseQuery(studentDetailQuery(student.id));
+  const { data: detail } = useSuspenseQuery(personDetailQuery(student.id));
   const available = availableMaterialsForStudent(detail, allMaterials);
 
   return (
@@ -272,7 +272,7 @@ function StaffStudentCard({
                   </div>
                   <Button
                     variant="ghost"
-                    onClick={() => onUnassign(detail.id, detail.name, material)}
+                    onClick={() => onUnassign(detail.id, detail.name ?? detail.username, material)}
                     className="ml-2 text-xs text-red-600 hover:text-red-300 dark:text-red-400"
                   >
                     Unassign
@@ -328,7 +328,7 @@ function StaffAssignmentsPage() {
         queryKey: ["assignments"],
         exact: false,
       });
-      void queryClient.invalidateQueries({ queryKey: ["admin", "students"] });
+      void queryClient.invalidateQueries({ queryKey: ["admin", "people"] });
       void router.invalidate();
     },
   });
@@ -345,13 +345,13 @@ function StaffAssignmentsPage() {
         queryKey: ["assignments"],
         exact: false,
       });
-      void queryClient.invalidateQueries({ queryKey: ["admin", "students"] });
+      void queryClient.invalidateQueries({ queryKey: ["admin", "people"] });
       void router.invalidate();
     },
   });
 
   const { data: assignTargetDetail } = useQuery({
-    ...studentDetailQuery(assignTarget?.id ?? "__none__"),
+    ...personDetailQuery(assignTarget?.id ?? "__none__"),
     enabled: assignTarget !== null,
   });
 

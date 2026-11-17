@@ -67,7 +67,7 @@ export function MessageThread({
       {/* Header */}
       <div className="shrink-0 border-b border-overlay/6 px-5 py-3 dark:border-overlay-dark/6">
         <h2 className="text-lg font-semibold text-primary dark:text-primary-dark">
-          <Link to="/students/$id" params={{ id: partnerId }}>
+          <Link to="/people/$id" params={{ id: partnerId }}>
             {partnerName}
           </Link>
         </h2>

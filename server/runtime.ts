@@ -19,7 +19,8 @@ import { FamiliesApiGroupLive, FamiliesAdminApiGroupLive } from "./api/families.
 import { RealtimeApiGroupLive } from "./api/realtime.js";
 import { CalendarConnectAdminApiGroupLive, CalendarAdminApiGroupLive } from "./api/calendar.js";
 import { GuardsLive } from "./api/guards.js";
-import { StudentsStaffApiGroupLive, StudentsAdminApiGroupLive } from "./api/students.js";
+import { StudentsAdminApiGroupLive } from "./api/students.js";
+import { PeopleStaffApiGroupLive, PeopleAdminApiGroupLive } from "./api/people.js";
 import { MonthlyBillingAdminApiGroupLive } from "./api/monthlyBilling.js";
 import { PayersAdminApiGroupLive } from "./api/payers.js";
 import { BillsAdminApiGroupLive } from "./api/bills.js";
@@ -58,6 +59,7 @@ import { Storage } from "./services/storage.js";
 import { TestimonialReminder } from "./services/testimonialReminder.js";
 import { Users } from "./services/users.js";
 import { Students } from "./services/students.js";
+import { People } from "./services/people.js";
 
 const infrastructureLayer = Layer.mergeAll(
   NodeHttpPlatform.layer,
@@ -116,6 +118,7 @@ const servicesLayer = Layer.mergeAll(
   TestimonialReminder.layer,
   Users.layer,
   Students.layer,
+  People.layer,
 ).pipe(Layer.provideMerge(infrastructureLayer));
 
 /** The services every request and server function uses, without the job runner. */
@@ -148,7 +151,8 @@ const GroupHandlersLive = Layer.mergeAll(
   RealtimeApiGroupLive,
   CalendarConnectAdminApiGroupLive,
   CalendarAdminApiGroupLive,
-  StudentsStaffApiGroupLive,
+  PeopleStaffApiGroupLive,
+  PeopleAdminApiGroupLive,
   StudentsAdminApiGroupLive,
   MonthlyBillingAdminApiGroupLive,
   PayersAdminApiGroupLive,
