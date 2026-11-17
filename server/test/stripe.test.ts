@@ -5,15 +5,16 @@ import * as HttpClientResponse from "effect/http/HttpClientResponse";
 import pg from "pg";
 import { PgAuthDB } from "../db.js";
 import { withAuthContext } from "../requestDatabase.js";
-import { Stripe } from "../services/stripe.js";
+import { Stripe, stripeApiVersion } from "../services/stripe.js";
 import { handleApiRequest } from "./apiHandler.js";
 import { insertSubscription } from "./subscriptionRow.js";
 
-/** One request the service sent to Stripe: its path, form fields and Authorization header. */
+/** One request the service sent to Stripe: its path, form fields, Authorization and Stripe-Version. */
 interface SentRequest {
   path: string;
   form: Record<string, string>;
   authorization: string | undefined;
+  stripeVersion: string | undefined;
 }
 
 const sent: SentRequest[] = [];
@@ -34,6 +35,7 @@ const fakeStripe = HttpClient.make((request, url) => {
     path: url.pathname,
     form,
     authorization: request.headers["authorization"],
+    stripeVersion: request.headers["stripe-version"],
   });
   const answers: Record<string, string> = {
     "/v1/checkout/sessions": checkoutPage,
@@ -144,12 +146,14 @@ it.layer(stripeTestLayer)("Stripe service", (it) => {
             {
               path: "/v1/checkout/sessions",
               authorization: "Bearer sk_test_placeholder",
+              stripeVersion: stripeApiVersion,
               form: {
                 mode: "subscription",
                 "line_items[0][price]": monthlyPrice,
                 "line_items[0][quantity]": "1",
                 "automatic_tax[enabled]": "true",
                 client_reference_id: ids.stranger,
+                "subscription_data[metadata][payer_id]": ids.stranger,
                 success_url: `${root}/family`,
                 cancel_url: `${root}/family`,
               },
@@ -180,6 +184,7 @@ it.layer(stripeTestLayer)("Stripe service", (it) => {
             customer: customerId,
             "customer_update[address]": "auto",
             client_reference_id: ids.parent,
+            "subscription_data[metadata][payer_id]": ids.parent,
             success_url: `${root}/family`,
             cancel_url: `${root}/family`,
           });
@@ -236,6 +241,7 @@ it.layer(stripeTestLayer)("Stripe service", (it) => {
           {
             path: "/v1/billing_portal/sessions",
             authorization: "Bearer sk_test_placeholder",
+            stripeVersion: stripeApiVersion,
             form: { customer: customerId, return_url: `${root}/family` },
           },
         ]);

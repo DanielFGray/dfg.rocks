@@ -73,6 +73,12 @@ export interface AppPrivateSessions {
   user_id: string;
 }
 
+export interface AppPrivateStripeEvents {
+  id: string;
+  received_at: Generated<Timestamp>;
+  type: string;
+}
+
 export interface AppPrivateUnregisteredEmailPasswordResets {
   /**
    * We store the number of attempts to help us detect accounts being attacked.
@@ -822,6 +828,7 @@ export interface AppPublicSubscriptions {
   price_id: string;
   status: string;
   stripe_customer_id: string;
+  stripe_event_created: Timestamp;
   stripe_subscription_id: string;
   updated_at: Generated<Timestamp>;
 }
@@ -1008,6 +1015,7 @@ export interface DB {
   "app_private.admin_settings": AppPrivateAdminSettings;
   "app_private.realtime_events": AppPrivateRealtimeEvents;
   "app_private.sessions": AppPrivateSessions;
+  "app_private.stripe_events": AppPrivateStripeEvents;
   "app_private.unregistered_email_password_resets": AppPrivateUnregisteredEmailPasswordResets;
   "app_private.user_authentication_secrets": AppPrivateUserAuthenticationSecrets;
   "app_private.user_email_secrets": AppPrivateUserEmailSecrets;

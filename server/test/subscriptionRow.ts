@@ -19,8 +19,9 @@ export async function insertSubscription(
 ): Promise<void> {
   await query(
     `insert into app_public.subscriptions
-       (payer_id, stripe_customer_id, stripe_subscription_id, status, price_id, current_period_end)
-     values ($1, $2, $3, $4, 'price_test', now() + make_interval(days => $5))`,
+       (payer_id, stripe_customer_id, stripe_subscription_id, status, price_id, current_period_end,
+        stripe_event_created)
+     values ($1, $2, $3, $4, 'price_test', now() + make_interval(days => $5), now())`,
     [
       row.payerId,
       row.customerId,

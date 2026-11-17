@@ -41,6 +41,7 @@ import { BillingLedger } from "./services/billingLedger.js";
 import { Files } from "./services/files.js";
 import { FamilyBilling } from "./services/familyBilling.js";
 import { Stripe } from "./services/stripe.js";
+import { StripeWebhook } from "./services/stripeWebhook.js";
 import { GoogleCalendar } from "./services/googleCalendar.js";
 import { LessonPolicy } from "./services/lessonPolicy.js";
 import { Contact } from "./services/contact.js";
@@ -104,6 +105,7 @@ const servicesLayer = Layer.mergeAll(
   Auth.layer,
   FamilyBilling.layer,
   Stripe.layer,
+  StripeWebhook.layer,
   Pdf.layer,
   BillingLedger.layer,
   rateLimitLayer,

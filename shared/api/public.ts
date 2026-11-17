@@ -98,6 +98,9 @@ export const publicGroup = HttpApiGroup.make("public")
       payload: AppleCallbackPayload,
     }),
   )
+  // Stripe's signature covers the raw body, so this endpoint declares no payload and reads the body
+  // itself. It has no Csrf middleware: Stripe sends no session or CSRF header.
+  .add(HttpApiEndpoint.post("stripeWebhook", "/stripe/webhook", { error: publicErrors }))
   .add(
     HttpApiEndpoint.post("verifyEmail", "/verify-email", {
       error: publicErrors,

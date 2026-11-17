@@ -5,17 +5,48 @@ import * as HttpClientResponse from "effect/http/HttpClientResponse";
 import type { SubscriptionPlan } from "../../shared/api/subscriptions.js";
 import { RequestDatabase } from "../requestDatabase.js";
 import { HttpError } from "../pgErrors.js";
+import { notConfigured } from "./stripeErrors.js";
 
 const stripeApi = "https://api.stripe.com/v1";
+
+/**
+ * The API version every call sends in `Stripe-Version`, and the version the webhook endpoint in
+ * Stripe must use. Pinned so responses and webhook payloads do not follow the account default:
+ * the webhook decodes the subscription shape this version defines. Design: docs/design/runtime.md.
+ */
+export const stripeApiVersion = "2026-10-28.endive";
 
 // Stripe's response carries many more fields; only the hosted page's address is used.
 const HostedPage = S.Struct({ url: S.String });
 
-const priceVariable = { monthly: "STRIPE_PRICE_MONTHLY", annual: "STRIPE_PRICE_ANNUAL" } as const;
+// The fields the webhook stores, checked against the Subscription object for API version
+// 2026-10-28.endive (docs.stripe.com/api/subscriptions/object): `customer` is a string (not
+// expanded), `status` and `cancel_at_period_end` are top-level, and `metadata` is a map. The
+// Subscription object no longer has current_period_end. Its period end is on each entry of
+// `items.data`, which also carries `price.id` (docs.stripe.com/api/subscription_items/object).
+// `payer_id` is copied from the Checkout Session's subscription_data.metadata. A subscription
+// without it was not created by this app, so the webhook records the event and writes nothing.
+export const StripeSubscription = S.Struct({
+  id: S.String,
+  customer: S.String,
+  status: S.String,
+  cancel_at_period_end: S.Boolean,
+  metadata: S.Struct({ payer_id: S.optionalKey(S.String.pipe(S.check(S.isUUID()))) }),
+  items: S.Struct({
+    data: S.NonEmptyArray(
+      S.Struct({
+        price: S.Struct({ id: S.String }),
+        current_period_end: S.Finite,
+      }),
+    ),
+  }),
+});
 
-/** A missing setting answers 503 for the subscription endpoints. The server still boots without it. */
-const notConfigured = () =>
-  new HttpError({ status: 503, message: "Subscriptions are not configured" });
+/** A Stripe call for a subscription failed for a reason other than the subscription being gone. */
+const subscriptionUnavailable = () =>
+  new HttpError({ status: 500, message: "Stripe subscription could not be retrieved" });
+
+const priceVariable = { monthly: "STRIPE_PRICE_MONTHLY", annual: "STRIPE_PRICE_ANNUAL" } as const;
 
 // Each call reads only the settings it uses: the portal needs no price, and one plan's missing
 // price does not stop the other plan.
@@ -27,7 +58,9 @@ const rootUrl = Config.NonEmptyString("VITE_ROOT_URL").pipe(Effect.mapError(notC
 /** The Checkout and Customer Portal calls. Each one is a Stripe REST call with form-encoded fields. */
 export class Stripe extends Context.Service<Stripe>()("dfg-rocks/stripe", {
   make: Effect.gen(function* () {
-    const client = (yield* HttpClient.HttpClient).pipe(HttpClient.filterStatusOk);
+    // `http` returns every status. `client` turns a non-2xx status into a failure.
+    const http = yield* HttpClient.HttpClient;
+    const client = http.pipe(HttpClient.filterStatusOk);
 
     const postForHostedPage = Effect.fnUntraced(function* (
       key: Redacted.Redacted,
@@ -36,6 +69,7 @@ export class Stripe extends Context.Service<Stripe>()("dfg-rocks/stripe", {
     ) {
       return yield* HttpClientRequest.post(`${stripeApi}${path}`).pipe(
         HttpClientRequest.bearerToken(key),
+        HttpClientRequest.setHeader("Stripe-Version", stripeApiVersion),
         HttpClientRequest.bodyUrlParams(fields),
         client.execute,
         Effect.flatMap(HttpClientResponse.schemaBodyJson(HostedPage)),
@@ -129,6 +163,9 @@ export class Stripe extends Context.Service<Stripe>()("dfg-rocks/stripe", {
           ["line_items[0][quantity]", "1"],
           ["automatic_tax[enabled]", "true"],
           ["client_reference_id", userId],
+          // Stripe copies this onto every customer.subscription.* event, so the webhook learns the
+          // payer from the subscription itself, whatever order the events arrive in.
+          ["subscription_data[metadata][payer_id]", userId],
           ["success_url", `${root}/family`],
           ["cancel_url", `${root}/family`],
           ...customerFields,
@@ -147,6 +184,47 @@ export class Stripe extends Context.Service<Stripe>()("dfg-rocks/stripe", {
             () => new HttpError({ status: 404, message: "You have no subscription to manage" }),
           ),
         );
+      }),
+
+      /**
+       * The subscription as Stripe holds it now: none when Stripe no longer has it (404). A webhook
+       * event is a snapshot from when it was sent, so the webhook reads the latest copy. Any other
+       * failure is an error, so the caller can refuse the delivery and let Stripe retry it.
+       */
+      retrieveSubscription: Effect.fn("retrieveSubscription")(function* (id: string) {
+        const key = yield* secretKey;
+        const response = yield* HttpClientRequest.get(
+          `${stripeApi}/subscriptions/${encodeURIComponent(id)}`,
+        ).pipe(
+          HttpClientRequest.bearerToken(key),
+          HttpClientRequest.setHeader("Stripe-Version", stripeApiVersion),
+          http.execute,
+          Effect.catch(() =>
+            Effect.logWarning("Stripe subscription request failed", { subscription: id }).pipe(
+              Effect.andThen(Effect.fail(subscriptionUnavailable())),
+            ),
+          ),
+        );
+        if (response.status === 404) {
+          return Option.none();
+        }
+        if (response.status < 200 || response.status >= 300) {
+          yield* Effect.logWarning("Stripe refused the subscription request", {
+            subscription: id,
+            status: response.status,
+          });
+          return yield* subscriptionUnavailable();
+        }
+        const subscription = yield* HttpClientResponse.schemaBodyJson(StripeSubscription)(
+          response,
+        ).pipe(
+          Effect.catch(() =>
+            Effect.logWarning("Stripe subscription body did not match", {
+              subscription: id,
+            }).pipe(Effect.andThen(Effect.fail(subscriptionUnavailable()))),
+          ),
+        );
+        return Option.some(subscription);
       }),
 
       /** A Customer Portal session for a customer, and the page to send the browser to. */

@@ -18,6 +18,9 @@ create table if not exists app_public.subscriptions (
   price_id text not null,
   current_period_end timestamptz not null,
   cancel_at_period_end boolean not null default false,
+  -- Stripe's `created` time of the event that wrote this row. Stripe does not order deliveries, so
+  -- the webhook overwrites a row only when this value is not newer than the event's time.
+  stripe_event_created timestamptz not null,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
