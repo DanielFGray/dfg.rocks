@@ -6,6 +6,7 @@
       "name": "dfg-rocks",
       "dependencies": {
         "@coderline/alphatab": "1.9.0",
+        "@danielfgray/stompbox": "github:DanielFGray/effect-stompbox#v0.2.0",
         "@effect/platform-bun": "4.1.4",
         "@effect/platform-node": "4.1.4",
         "@effect/sql-pg": "4.1.4",
@@ -29,7 +30,7 @@
         "html-to-text": "^10.0.1",
         "jose": "^6.2.17",
         "kysely": "0.29.9",
-        "lodash": "^4.18.1",
+        "lodash.template": "^4.18.1",
         "mjml": "^5.4.1",
         "nodemailer": "^10.6.0",
         "pdfkit": "^0.20.2",
@@ -50,7 +51,7 @@
         "@tailwindcss/vite": "^4.3.5",
         "@types/bun": "^1.4.4",
         "@types/html-to-text": "^9.0.4",
-        "@types/lodash": "^4.17.27",
+        "@types/lodash.template": "^4.5.3",
         "@types/mjml": "^5.4.2",
         "@types/node": "^26.6.6",
         "@types/pdfkit": "0.17.7",
@@ -113,6 +114,8 @@
     "@coderline/alphatab": ["@coderline/alphatab@1.9.0", "", { "peerDependencies": { "@coderline/alphatab-vite": "^1.9.0", "@coderline/alphatab-webpack": "^1.9.0" }, "optionalPeers": ["@coderline/alphatab-vite", "@coderline/alphatab-webpack"] }, "sha512-pG/Um03DdiTW7i9KR+rPTRRnzIW5oJBWs67altBXtCkxGvUG1RuvkgRTZO3GIaOD2vATjcw+5OevMZl9I2/T+Q=="],
 
     "@colordx/core": ["@colordx/core@5.8.0", "", {}, "sha512-cG0QJAO6VkaRUlIb0zOzX9gfJgs1pjoOL9gZ/PK1kfvBs0GCkADu5oQh6gPxXgQnZ3gV575h+lQRC0NlMDTclA=="],
+
+    "@danielfgray/stompbox": ["@danielfgray/stompbox@github:DanielFGray/effect-stompbox#fbbc09e", { "peerDependencies": { "@effect/platform-bun": "^4.1.0", "@effect/sql-pg": "^4.1.0", "effect": "^4.1.0", "graphile-worker": "^0.18.0", "html-to-text": "^10.0.1", "kysely": "^0.29.4", "lodash.template": "^4.18.1", "mjml": "^5.4.1", "nodemailer": "^10.5.0" }, "optionalPeers": ["@effect/platform-bun", "@effect/sql-pg", "graphile-worker", "html-to-text", "kysely", "lodash.template", "mjml", "nodemailer"] }, "DanielFGray-effect-stompbox-fbbc09e", "sha512-Icu8nIxv5pHRzWSJ8fgX9r6cKNs8GjZGYwRoRVJQW6e6VFsS6xiP4NMzCKifoUG8aVyUKYOUMQSzf6JxkSVtWA=="],
 
     "@effect/language-service": ["@effect/language-service@0.87.5", "", { "bin": { "effect-language-service": "cli.js" } }, "sha512-np/zJgk71/PyHxtoqyUKLYcpQhoRBI+L6+1Z0ILk35JSQ/lvXzwlwOwddYZLDkeC4bdF2ukKekqKlla/F88R5w=="],
 
@@ -493,6 +496,8 @@
     "@types/json5": ["@types/json5@2.2.0", "", { "dependencies": { "json5": "*" } }, "sha512-NrVug5woqbvNZ0WX+Gv4R+L4TGddtmFek2u8RtccAgFZWtS9QXF2xCXY22/M4nzkaKF0q9Fc6M/5rxLDhfwc/A=="],
 
     "@types/lodash": ["@types/lodash@4.17.27", "", {}, "sha512-VenMRv/eKNrspX9v3H4dbmjsrnCOYdYBG3kxXKk3dG6X+urBGcj2Prww3xw1U5K4FV/mE4h5GbWd0szEKf+9ew=="],
+
+    "@types/lodash.template": ["@types/lodash.template@4.5.3", "", { "dependencies": { "@types/lodash": "*" } }, "sha512-Mo0UYKLu1oXgkV9TVoXZLlXXjyIXlW7ZQRxi/4gQJmzJr63dmicE8gG0OkPjYTKBrBic852q0JzqrtNUWLBIyA=="],
 
     "@types/mjml": ["@types/mjml@5.4.2", "", { "dependencies": { "@types/mjml-core": "~5.1" } }, "sha512-f3Ueveyh+m1gD5jYVbUJhHAGBIhexi+N+XHqiuCyfkWixOWSiUTNSxuGt/NGlxNNePlqgV3BeJFsquGQQfXN7A=="],
 
@@ -1010,7 +1015,13 @@
 
     "lodash": ["lodash@4.18.1", "", {}, "sha512-dMInicTPVE8d1e5otfwmmjlxkZoUpiVLwyeTdUsi/Caj/gfzzblBcCE5sRHV/AsjuCmxWrte2TNGSYuCeCq+0Q=="],
 
+    "lodash._reinterpolate": ["lodash._reinterpolate@3.0.0", "", {}, "sha512-xYHt68QRoYGjeeM/XOE1uJtvXQAgvszfBhjV4yvsQH0u2i9I6cI6c6/eG4Hh3UAOVn0y/xAXwmTzEay49Q//HA=="],
+
     "lodash.memoize": ["lodash.memoize@4.1.2", "", {}, "sha512-t7j+NzmgnQzTAYXcsHYLgimltOV1MXHtlOWf6GjL9Kj8GK5FInw5JotxvbOs+IvV1/Dzo04/fCGfLVs7aXb4Ag=="],
+
+    "lodash.template": ["lodash.template@4.18.1", "", { "dependencies": { "lodash._reinterpolate": "^3.0.0", "lodash.templatesettings": "^4.0.0" } }, "sha512-5urZrLnV/VD6zHK5KsVtZgt7H19v51mIzoS0aBNH8yp3I8tbswrEjOABOPY8m8uB7NuibubLrMX+Y0PXsU9X+w=="],
+
+    "lodash.templatesettings": ["lodash.templatesettings@4.2.0", "", { "dependencies": { "lodash._reinterpolate": "^3.0.0" } }, "sha512-stgLz+i3Aa9mZgnjr/O+v9ruKZsPsndy7qPZOchbqk2cnTU1ZaldKK+v7m54WoKIyxiuMZTKT2H81F8BeAc3ZQ=="],
 
     "lodash.uniq": ["lodash.uniq@4.5.0", "", {}, "sha512-xfBaXQd9ryd9dlSDvnvI0lvxfLJlYAZzXomUYzLKtUeOQvOP5piqAWuGtrhWeqaXK9hhoM/iyJc5AV+XfsX3HQ=="],
 
