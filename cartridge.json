@@ -24,6 +24,7 @@
       "migrate": {
         "command": "bun",
         "args": ["run", "migrate"],
+        "staged": { "args": ["run", "migrate:staged"] },
         "secrets": [
           {
             "_tag": "PostgresCredentials",
