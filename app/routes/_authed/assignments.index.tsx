@@ -67,7 +67,7 @@ const getAssignmentsPageData = createServerFn({ method: "GET" }).handler(() =>
               original_filename: m.original_filename,
               mime_type: m.mime_type,
               file_size: m.file_size,
-              is_global: m.is_global,
+              visibility: m.visibility,
               notation_tracks: S.decodeUnknownSync(
                 S.NullishOr(S.Array(SharedSchemas.MaterialNotationTrack)),
               )(m.notation_tracks),

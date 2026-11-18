@@ -19,7 +19,7 @@ export const MaterialPreview = ({
 }: {
   material: Material;
   embedded?: boolean;
-  notationPlayerProps?: Omit<AlphaTabPlayerProps, "src">;
+  notationPlayerProps?: Omit<AlphaTabPlayerProps, "source">;
 }) => {
   const cat = categorize(material.mime_type, material.original_filename);
   const src = downloadUrl(material.id);
@@ -72,7 +72,7 @@ export const MaterialPreview = ({
             </div>
           }
         >
-          <AlphaTabPlayer src={src} {...notationPlayerProps} />
+          <AlphaTabPlayer source={{ url: src }} {...notationPlayerProps} />
         </Suspense>
       );
     default:

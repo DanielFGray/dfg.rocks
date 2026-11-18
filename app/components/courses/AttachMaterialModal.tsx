@@ -2,7 +2,7 @@ import { Effect } from "effect";
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { api } from "../../lib/api.js";
-import type { Material } from "../../../shared/schemas.js";
+import type { ContentVisibility, Material } from "../../../shared/schemas.js";
 import { Button } from "../ui/Button.js";
 import { Modal } from "../ui/Modal.js";
 import { UploadMaterialForm } from "../library/UploadMaterialForm.js";
@@ -32,11 +32,11 @@ export function AttachMaterialModal({
     onClose();
   };
 
-  const handleUpload = (file: File, title: string) => {
+  const handleUpload = (file: File, title: string, visibility: ContentVisibility) => {
     const formData = new FormData();
     formData.append("file", file);
     formData.append("title", title);
-    formData.append("is_global", "true");
+    formData.append("visibility", visibility);
     return Effect.runPromise(api.materialsAdmin.uploadMaterial({ payload: formData }));
   };
 

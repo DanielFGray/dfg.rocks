@@ -537,6 +537,97 @@ describe("access policy for signed-in accounts", () => {
     }
   });
 
+  // The level on a course or a material decides who reads it without an enrollment, a schedule, a
+  // subscription or an assignment. A stranger holds none of those, so it reads exactly the levels
+  // that need nothing more than an account. Accounts cannot lack a role yet, so the 'global' level
+  // is not told apart from 'public' here.
+  describe("content visibility", () => {
+    const course: Record<"public" | "global" | "course", string> = {
+      public: "",
+      global: "",
+      course: "",
+    };
+    const mod: Record<"public" | "global" | "course", string> = {
+      public: "",
+      global: "",
+      course: "",
+    };
+    const material: Record<"public" | "global" | "course" | "attached", string> = {
+      public: "",
+      global: "",
+      course: "",
+      attached: "",
+    };
+
+    beforeAll(async () => {
+      for (const level of ["public", "global", "course"] as const) {
+        course[level] = (
+          await owner(
+            `insert into app_public.courses (title, instrument, visibility)
+             values ($1, 'drums', $2) returning id`,
+            [`Visibility ${level}`, level],
+          )
+        ).rows[0].id;
+        mod[level] = (
+          await owner(
+            `insert into app_public.modules (course_id, title) values ($1, $2) returning id`,
+            [course[level], `Module ${level}`],
+          )
+        ).rows[0].id;
+        material[level] = await insertMaterial(`Visibility material ${level}`, level);
+      }
+      // A course-level material attached to a module of the public course.
+      material.attached = await insertMaterial("Visibility attached material", "course");
+      await owner(
+        `insert into app_public.module_materials (module_id, material_id) values ($1, $2)`,
+        [mod.public, material.attached],
+      );
+    });
+
+    // Other suites share this database and list courses, so leave none behind.
+    afterAll(async () => {
+      await owner(`delete from app_public.courses where id = any($1)`, [Object.values(course)]);
+      await owner(`delete from app_public.materials where id = any($1)`, [Object.values(material)]);
+    });
+
+    const seen = (table: string, column: string, wanted: string[]) =>
+      asVisitor(sessions.stranger, async (c) => {
+        const r = await c.query<{ id: string }>(
+          `select ${column} as id from app_public.${table} where ${column} = any($1)`,
+          [wanted],
+        );
+        return r.rows.map((row) => row.id).sort();
+      });
+
+    it("a stranger reads the public course and its module, not the course-level one", async () => {
+      expect(await seen("courses", "id", Object.values(course))).toEqual(
+        [course.public, course.global].sort(),
+      );
+      expect(await seen("modules", "id", Object.values(mod))).toEqual(
+        [mod.public, mod.global].sort(),
+      );
+    });
+
+    it("a stranger reads public and global materials, and one attached to a readable course", async () => {
+      const wanted = Object.values(material);
+      expect(await seen("materials", "id", wanted)).toEqual(
+        [material.public, material.global, material.attached].sort(),
+      );
+      expect(await seen("module_materials", "material_id", wanted)).toEqual([material.attached]);
+    });
+
+    it("an anonymous visitor reads no public content", async () => {
+      const rows = await asVisitor("00000000-0000-0000-0000-000000000000", async (c) => {
+        const r = await c.query(`select id from app_public.courses where id = $1`, [course.public]);
+        const m = await c.query(`select id from app_public.materials where id = $1`, [
+          material.public,
+        ]);
+        return [r.rowCount, m.rowCount];
+      });
+      expect(rows).toEqual([0, 0]);
+    });
+  });
+
   // Who may see a subscription row, and who pays for a reader: the reader, and the billing contact of
   // each family the reader belongs to. A parent in two families is covered by both contacts.
   describe("subscription visibility", () => {
@@ -663,4 +754,13 @@ function forceIpv4(urlString: string): string {
   const url = new URL(urlString);
   if (url.hostname === "localhost") url.hostname = "127.0.0.1";
   return url.toString();
+}
+
+async function insertMaterial(title: string, visibility: string): Promise<string> {
+  const r = await owner(
+    `insert into app_public.materials (title, original_filename, storage_key, mime_type, file_size, visibility)
+     values ($1, 'file.pdf', $2, 'application/pdf', 1, $3) returning id`,
+    [title, `/data/${crypto.randomUUID()}.pdf`, visibility],
+  );
+  return r.rows[0].id;
 }

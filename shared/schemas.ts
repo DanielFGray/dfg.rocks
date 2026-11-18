@@ -51,6 +51,11 @@ export const RichTextDocument = S.Struct({
 
 export type RichTextDocument = S.Schema.Type<typeof RichTextDocument>;
 
+/** Who may read a course or a material: any signed-in account, an admitted one (a role), or only through enrollment or assignment. */
+export const ContentVisibility = S.Literals(["public", "global", "course"]);
+
+export type ContentVisibility = S.Schema.Type<typeof ContentVisibility>;
+
 export const UserRole = S.Union([
   S.Literal("admin"),
   S.Literal("student"),
@@ -80,6 +85,7 @@ export const Course = S.Struct({
   title: S.String,
   description: S.String,
   instrument: S.String,
+  visibility: ContentVisibility,
 });
 
 export type Course = S.Schema.Type<typeof Course>;
@@ -107,7 +113,7 @@ export const Material = S.Struct({
   original_filename: S.String,
   mime_type: S.String,
   file_size: S.Finite,
-  is_global: S.Boolean,
+  visibility: ContentVisibility,
   notation_tracks: S.NullishOr(S.Array(MaterialNotationTrack)),
 });
 
@@ -121,7 +127,7 @@ export const AssignedMaterial = S.Struct({
   original_filename: S.String,
   mime_type: S.String,
   file_size: S.Finite,
-  is_global: S.Boolean,
+  visibility: ContentVisibility,
   notation_tracks: S.NullishOr(S.Array(MaterialNotationTrack)),
   assigned_track_index: S.NullishOr(S.Finite),
   listened_seconds: S.optional(S.Finite),
@@ -145,6 +151,7 @@ export const CourseDetail = S.Struct({
   title: S.String,
   description: S.String,
   instrument: S.String,
+  visibility: ContentVisibility,
   modules: S.Array(ModuleWithMaterials),
 });
 

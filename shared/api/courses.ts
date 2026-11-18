@@ -3,6 +3,7 @@ import * as HttpApiGroup from "effect/http-api/HttpApiGroup";
 import { Admin, Csrf, Session } from "./guards.js";
 import { Schema as S } from "effect";
 import {
+  ContentVisibility,
   Course,
   CourseDetail,
   RichTextDocument,
@@ -17,12 +18,14 @@ const CreateCoursePayload = S.Struct({
   title: S.String,
   description: S.optional(S.String),
   instrument: S.String,
+  visibility: S.optional(ContentVisibility),
 });
 
 const UpdateCoursePayload = S.Struct({
   title: S.optional(S.String),
   description: S.optional(S.String),
   instrument: S.optional(S.String),
+  visibility: S.optional(ContentVisibility),
 }).pipe(S.check(S.isMinProperties(1)));
 
 const CreateModulePayload = S.Struct({

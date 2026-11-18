@@ -11,6 +11,8 @@ export type AppPublicBillLineType = "adjustment" | "credit" | "fee" | "lesson" |
 
 export type AppPublicBillStatus = "cancelled" | "draft" | "issued" | "paid" | "void";
 
+export type AppPublicContentVisibility = "course" | "global" | "public";
+
 export type AppPublicDepositStatus = "captured" | "held" | "refunded";
 
 export type AppPublicLessonStatus = "cancelled" | "completed" | "no_show" | "scheduled";
@@ -326,6 +328,7 @@ export interface AppPublicCourses {
   instrument: Generated<string>;
   title: string;
   updated_at: Generated<Timestamp>;
+  visibility: Generated<AppPublicContentVisibility>;
 }
 
 export interface AppPublicCreditApplications {
@@ -565,7 +568,6 @@ export interface AppPublicMaterials {
   created_at: Generated<Timestamp>;
   file_size: Generated<number>;
   id: Generated<string>;
-  is_global: Generated<boolean>;
   mime_type: Generated<string>;
   /**
    * Detected AlphaTab track metadata for notation materials.
@@ -582,6 +584,7 @@ export interface AppPublicMaterials {
   storage_key: string;
   title: string;
   uploaded_by: string | null;
+  visibility: Generated<AppPublicContentVisibility>;
 }
 
 export interface AppPublicMessages {

@@ -1,11 +1,17 @@
 import { useRef, useState } from "react";
-import type { Material, MaterialNotationTrack } from "../../../shared/schemas.js";
+import type {
+  ContentVisibility,
+  Material,
+  MaterialNotationTrack,
+} from "../../../shared/schemas.js";
 import {
   formatNotationTrackLabel,
   toMaterialNotationTrack,
 } from "../../../shared/notationTracks.js";
 import { getErrorMessage } from "../../lib/errors.js";
+import { visibilityOptions } from "../../lib/visibility.js";
 import { Input } from "../ui/Input.js";
+import { Select } from "../ui/Select.js";
 import { Button } from "../ui/Button.js";
 import {
   categoryLabel,
@@ -46,7 +52,7 @@ export function UploadMaterialForm({
   onComplete,
   onCancel,
 }: {
-  onUpload: (file: File, title: string) => Promise<Material>;
+  onUpload: (file: File, title: string, visibility: ContentVisibility) => Promise<Material>;
   onComplete?: (materials: Material[], hadErrors: boolean) => void;
   onCancel: () => void;
 }) {
@@ -54,6 +60,7 @@ export function UploadMaterialForm({
   const [items, setItems] = useState<UploadItem[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  const [visibility, setVisibility] = useState<ContentVisibility>("course");
 
   const createUploadItem = (file: File): UploadItem => ({
     id: `material-upload-${nextItemIdRef.current++}`,
@@ -213,7 +220,7 @@ export function UploadMaterialForm({
       );
 
       try {
-        const material = await onUpload(item.file, item.title.trim());
+        const material = await onUpload(item.file, item.title.trim(), visibility);
         successfulMaterials.push(material);
         setItems((current) =>
           current.map((currentItem) =>
@@ -282,6 +289,16 @@ export function UploadMaterialForm({
           Select one or more files, then review the generated titles before uploading.
         </p>
       </div>
+
+      <Select
+        id="material-visibility"
+        name="visibility"
+        label="Who can read"
+        options={visibilityOptions}
+        value={visibility}
+        disabled={isSubmitting}
+        onChange={(value) => setVisibility(value as ContentVisibility)}
+      />
 
       {formError ? <p className="text-sm text-red-600 dark:text-red-400">{formError}</p> : null}
 
