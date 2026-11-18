@@ -1,6 +1,6 @@
 import { Array as Arr, Config, Context, Effect, Layer, Match, Option, Schema } from "effect";
 import { addJob, PgRootDB } from "../server/db.js";
-import type { QueuedEmail } from "./email/emailDelivery.js";
+import type { QueuedEmail } from "./email/mailKinds.js";
 
 /** Account notifications from the database's queued events. */
 export class AccountMail extends Context.Service<AccountMail>()("dfg-rocks/accountMail", {

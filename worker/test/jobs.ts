@@ -2,7 +2,8 @@
 import { NodeServices } from "@effect/platform-node";
 import { ConfigProvider, Effect, Layer, ManagedRuntime, Schema } from "effect";
 import * as FetchHttpClient from "effect/http/FetchHttpClient";
-import { WorkerJobs, type JobRun } from "../worker.js";
+import type { JobInfo } from "@danielfgray/stompbox/worker";
+import { WorkerJobs } from "../worker.js";
 import { testDatabaseEnv } from "../../scripts/testDatabase.js";
 
 /** Builds the production job list without starting a runner. */
@@ -20,7 +21,7 @@ export const workerTestLayer = WorkerJobs.layer.pipe(
   ),
 );
 
-export const jobRun = (name: string, queuedAt = new Date()): JobRun => ({
+export const jobRun = (name: string, queuedAt = new Date()): JobInfo => ({
   abortSignal: new AbortController().signal,
   job: { id: "test-job", task_identifier: name, attempts: 1, created_at: queuedAt },
 });
