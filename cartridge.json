@@ -79,7 +79,9 @@
         { "_tag": "KvSecret", "path": "secret/data/dfg-rocks", "key": "google_client_secret", "env": "GOOGLE_CLIENT_SECRET" },
         { "_tag": "KvSecret", "path": "secret/data/dfg-rocks", "key": "google_calendar_client_id", "env": "GOOGLE_CALENDAR_CLIENT_ID" },
         { "_tag": "KvSecret", "path": "secret/data/dfg-rocks", "key": "google_calendar_client_secret", "env": "GOOGLE_CALENDAR_CLIENT_SECRET" },
-        { "_tag": "KvSecret", "path": "secret/data/dfg-rocks", "key": "cloudflare_email_api_token", "env": "CLOUDFLARE_EMAIL_API_TOKEN" }
+        { "_tag": "KvSecret", "path": "secret/data/dfg-rocks", "key": "cloudflare_email_api_token", "env": "CLOUDFLARE_EMAIL_API_TOKEN" },
+        { "_tag": "KvSecret", "path": "secret/data/dfg-rocks", "key": "stripe_secret_key", "env": "STRIPE_SECRET_KEY" },
+        { "_tag": "KvSecret", "path": "secret/data/dfg-rocks", "key": "stripe_webhook_secret", "env": "STRIPE_WEBHOOK_SECRET" }
       ]
     }
   ]

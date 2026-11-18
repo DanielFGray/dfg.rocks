@@ -85,7 +85,7 @@ function subscriptionObject(options: SubscriptionOptions): Record<string, unknow
     items: {
       data: [
         {
-          price: { id: "price_test_monthly" },
+          price: { id: "price_test_monthly", metadata: { plan: "monthly" } },
           current_period_end: nowSeconds() + (options.periodEndInDays ?? 30) * 86400,
         },
       ],
@@ -116,7 +116,7 @@ function deliver(options: SubscriptionOptions & { type: string }): Promise<Respo
 
 async function subscriptionRow(subscriptionId: string) {
   const result = await ownerPool.query(
-    `select payer_id, stripe_customer_id, status, price_id, cancel_at_period_end, current_period_end
+    `select payer_id, stripe_customer_id, status, price_id, plan, cancel_at_period_end, current_period_end
        from app_public.subscriptions where stripe_subscription_id = $1`,
     [subscriptionId],
   );
@@ -192,6 +192,7 @@ describe("Stripe webhook", () => {
       stripe_customer_id: options.customerId,
       status: "active",
       price_id: "price_test_monthly",
+      plan: "monthly",
       cancel_at_period_end: false,
     });
   });

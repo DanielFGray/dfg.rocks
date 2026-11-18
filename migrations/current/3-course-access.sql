@@ -27,6 +27,11 @@ create table if not exists app_public.subscriptions (
 
 create index if not exists subscriptions_payer_id on app_public.subscriptions(payer_id);
 
+-- The plan the subscription's price was declared as (shared/pricing.ts), read from the price's
+-- metadata.plan, which the sync script writes. An archived price keeps its metadata, so an early
+-- subscriber keeps the plan name. Null when the price has no metadata.plan.
+alter table app_public.subscriptions add column if not exists plan text;
+
 drop trigger if exists _timestamps on app_public.subscriptions;
 create trigger _timestamps
   before insert or update on app_public.subscriptions

@@ -825,6 +825,7 @@ export interface AppPublicSubscriptions {
   current_period_end: Timestamp;
   id: Generated<string>;
   payer_id: string;
+  plan: string | null;
   price_id: string;
   status: string;
   stripe_customer_id: string;

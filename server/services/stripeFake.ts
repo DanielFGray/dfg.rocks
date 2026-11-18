@@ -2,6 +2,7 @@ import { Effect, Layer } from "effect";
 import * as HttpClient from "effect/http/HttpClient";
 import type * as HttpClientRequest from "effect/http/HttpClientRequest";
 import * as HttpClientResponse from "effect/http/HttpClientResponse";
+import { planPrices } from "../../shared/pricing.js";
 
 /**
  * Stands in for Stripe in E2E runs, which start with NODE_ENV=test. It answers the calls the app
@@ -10,11 +11,15 @@ import * as HttpClientResponse from "effect/http/HttpClientResponse";
  * browser test can see which page the app asked for and that the app followed it.
  */
 
-// The two prices the E2E server is configured with (see scripts/e2eServer.ts): flat amounts in cents.
-const prices = new Map([
-  ["price_e2e_monthly", { interval: "month", unitAmount: 1500 }],
-  ["price_e2e_annual", { interval: "year", unitAmount: 15000 }],
-]);
+// The sold plans' prices, from shared/pricing.ts, under the ids the testing API's subscriptions use.
+const prices = Object.values(planPrices).map((price) => ({
+  id: `price_e2e_${price.plan}`,
+  plan: price.plan,
+  lookupKey: price.lookupKey,
+  interval: price.interval,
+  unitAmount: price.amountCents,
+  currency: price.currency,
+}));
 
 const formFields = (request: HttpClientRequest.HttpClientRequest) =>
   request.body._tag === "Uint8Array"
@@ -44,23 +49,22 @@ export const stripeFakeHttp = Layer.succeed(
       opened.searchParams.set("portal", "opened");
       return Effect.succeed(json(200, { url: opened.toString() }));
     }
-    const priceMatch = /^\/v1\/prices\/([^/]+)$/.exec(url.pathname);
-    if (request.method === "GET" && priceMatch) {
-      const id = decodeURIComponent(priceMatch[1] ?? "");
-      const price = prices.get(id);
-      if (price === undefined) {
-        return Effect.succeed(json(404, { error: { message: "No such price" } }));
-      }
-      return Effect.succeed(
-        json(200, {
-          id,
+    if (request.method === "GET" && url.pathname === "/v1/prices") {
+      const lookupKeys = url.searchParams.getAll("lookup_keys[]");
+      const data = prices
+        .filter((price) => lookupKeys.includes(price.lookupKey))
+        .map((price) => ({
+          id: price.id,
           object: "price",
           active: true,
-          currency: "usd",
+          lookup_key: price.lookupKey,
+          metadata: { plan: price.plan },
+          currency: price.currency,
           unit_amount: price.unitAmount,
-          recurring: { interval: price.interval, interval_count: 1 },
-        }),
-      );
+          recurring:
+            price.interval === null ? null : { interval: price.interval, interval_count: 1 },
+        }));
+      return Effect.succeed(json(200, { object: "list", data, has_more: false }));
     }
     return Effect.succeed(
       json(404, { error: { message: `Not faked: ${request.method} ${url.pathname}` } }),

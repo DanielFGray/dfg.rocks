@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from "@effect/vitest";
-import { ConfigProvider, Effect, Layer, Option } from "effect";
+import { Effect, Layer, Option } from "effect";
 import * as HttpClient from "effect/http/HttpClient";
 import * as HttpClientResponse from "effect/http/HttpClientResponse";
 import { TestClock } from "effect/testing";
@@ -43,20 +43,24 @@ const fakeStripe = HttpClient.make((request, url) => {
     "/v1/billing_portal/sessions": portalPage,
   };
   const page = answers[url.pathname];
-  if (!stripeFails && url.pathname.startsWith("/v1/prices/")) {
-    const id = url.pathname.slice("/v1/prices/".length);
-    const monthly = id === monthlyPrice;
+  if (!stripeFails && url.pathname === "/v1/prices") {
+    const asked = url.searchParams.getAll("lookup_keys[]");
+    const data =
+      monthlyPriceListed && asked.includes("monthly")
+        ? [
+            {
+              id: monthlyPriceId,
+              object: "price",
+              active: true,
+              lookup_key: "monthly",
+              currency: "usd",
+              unit_amount: 1000,
+              recurring: { interval: "month", interval_count: 1 },
+            },
+          ]
+        : [];
     return Effect.succeed(
-      HttpClientResponse.fromWeb(
-        request,
-        Response.json({
-          id,
-          object: "price",
-          currency: "usd",
-          unit_amount: monthly ? 1500 : 15000,
-          recurring: { interval: monthly ? "month" : "year" },
-        }),
-      ),
+      HttpClientResponse.fromWeb(request, Response.json({ object: "list", data })),
     );
   }
   if (stripeFails || page === undefined || body._tag !== "Uint8Array") {
@@ -69,8 +73,14 @@ const fakeStripe = HttpClient.make((request, url) => {
 
 const runId = Math.random().toString(36).slice(2, 8);
 const root = requiredEnv("VITE_ROOT_URL");
-const monthlyPrice = requiredEnv("STRIPE_PRICE_MONTHLY");
-const annualPrice = requiredEnv("STRIPE_PRICE_ANNUAL");
+// The price the fake Stripe lists under the lookup key `monthly`.
+const monthlyPriceId = "price_test_monthly";
+// Turned off to make Stripe answer as if the price sync had not run.
+let monthlyPriceListed = true;
+
+// The sold prices are cached for an hour, and earlier tests fill the cache. Moving the clock past
+// the hour makes the next read ask Stripe again.
+const expireCachedPrices = TestClock.adjust("2 hours");
 
 const stripeTestLayer = Layer.mergeAll(
   PgAuthDB.layer,
@@ -201,20 +211,28 @@ it.layer(stripeTestLayer)("Stripe service", (it) => {
           const customer = yield* stripe
             .checkoutCustomer(ids.stranger)
             .pipe(withAuthContext(sessions.stranger));
+          yield* expireCachedPrices;
           const url = yield* stripe.createCheckoutSession(ids.stranger, "monthly", customer);
 
           expect(customer).toEqual(Option.none());
           expect(url).toBe(checkoutPage);
           expect(sent).toEqual([
             {
+              path: "/v1/prices",
+              authorization: "Bearer sk_test_placeholder",
+              stripeVersion: stripeApiVersion,
+              form: {},
+            },
+            {
               path: "/v1/checkout/sessions",
               authorization: "Bearer sk_test_placeholder",
               stripeVersion: stripeApiVersion,
               form: {
                 mode: "subscription",
-                "line_items[0][price]": monthlyPrice,
+                "line_items[0][price]": monthlyPriceId,
                 "line_items[0][quantity]": "1",
                 "automatic_tax[enabled]": "true",
+                allow_promotion_codes: "true",
                 client_reference_id: ids.stranger,
                 "subscription_data[metadata][payer_id]": ids.stranger,
                 success_url: `${root}/subscribe/success`,
@@ -226,24 +244,26 @@ it.layer(stripeTestLayer)("Stripe service", (it) => {
     );
 
     it.effect(
-      "reuses the payer's Stripe customer and lets Stripe update its address, on the annual plan",
+      "reuses the payer's Stripe customer and lets Stripe update its address",
       () =>
         Effect.gen(function* () {
-          const customerId = customerFor("checkout_annual");
+          const customerId = customerFor("checkout_customer");
           yield* Effect.promise(() => subscribe(ids.parent, customerId));
           sent.length = 0;
+          yield* expireCachedPrices;
           const stripe = yield* Stripe;
           const customer = yield* stripe
             .checkoutCustomer(ids.parent)
             .pipe(withAuthContext(sessions.parent));
-          yield* stripe.createCheckoutSession(ids.parent, "annual", customer);
+          yield* stripe.createCheckoutSession(ids.parent, "monthly", customer);
 
-          expect(sent).toHaveLength(1);
-          expect(sent[0].form).toEqual({
+          expect(sent).toHaveLength(2);
+          expect(sent[1].form).toEqual({
             mode: "subscription",
-            "line_items[0][price]": annualPrice,
+            "line_items[0][price]": monthlyPriceId,
             "line_items[0][quantity]": "1",
             "automatic_tax[enabled]": "true",
+            allow_promotion_codes: "true",
             customer: customerId,
             "customer_update[address]": "auto",
             client_reference_id: ids.parent,
@@ -298,6 +318,7 @@ it.layer(stripeTestLayer)("Stripe service", (it) => {
 
     it.effect("answers 502 when Stripe fails, and names no Stripe detail", () =>
       Effect.gen(function* () {
+        yield* expireCachedPrices;
         stripeFails = true;
         const stripe = yield* Stripe;
         const error = yield* stripe
@@ -323,6 +344,7 @@ it.layer(stripeTestLayer)("Stripe service", (it) => {
     // Runs first: a failed read must leave no cached prices for the tests after it.
     it.effect("answers 502 when Stripe cannot price a plan", () =>
       Effect.gen(function* () {
+        yield* expireCachedPrices;
         stripeFails = true;
         const stripe = yield* Stripe;
         const error = yield* stripe.planPrices().pipe(
@@ -337,39 +359,45 @@ it.layer(stripeTestLayer)("Stripe service", (it) => {
       }),
     );
 
-    it.effect("answers 503 while the price settings are missing", () =>
+    it.effect("answers 503 while Stripe has no active price under a plan's lookup key", () =>
       Effect.gen(function* () {
+        yield* expireCachedPrices;
         const stripe = yield* Stripe;
-        const error = yield* stripe
-          .planPrices()
-          .pipe(Effect.provide(ConfigProvider.layer(ConfigProvider.fromUnknown({}))), Effect.flip);
+        monthlyPriceListed = false;
+        const error = yield* stripe.planPrices().pipe(
+          Effect.ensuring(
+            Effect.sync(() => {
+              monthlyPriceListed = true;
+            }),
+          ),
+          Effect.flip,
+        );
         expect(error).toMatchObject({ _tag: "HttpError", status: 503 });
+        // A 503 is not cached: once Stripe lists the price, the next read succeeds.
+        yield* stripe.planPrices();
       }),
     );
 
-    it.effect("reads each price from Stripe once an hour, and again after the hour", () =>
+    it.effect("reads the plan prices from Stripe once an hour, and again after the hour", () =>
       Effect.gen(function* () {
+        yield* expireCachedPrices;
         sent.length = 0;
         const stripe = yield* Stripe;
         const prices = yield* stripe.planPrices();
         yield* stripe.planPrices();
 
         expect(prices).toEqual([
-          { plan: "monthly", amount: 1500, currency: "usd", interval: "month" },
-          { plan: "annual", amount: 15000, currency: "usd", interval: "year" },
+          { plan: "monthly", amount: 1000, currency: "usd", interval: "month" },
         ]);
-        expect(sent.map((request) => request.path)).toEqual([
-          `/v1/prices/${monthlyPrice}`,
-          `/v1/prices/${annualPrice}`,
-        ]);
+        expect(sent.map((request) => request.path)).toEqual(["/v1/prices"]);
 
         yield* TestClock.adjust("59 minutes");
         yield* stripe.planPrices();
-        expect(sent).toHaveLength(2);
+        expect(sent).toHaveLength(1);
 
         yield* TestClock.adjust("2 minutes");
         yield* stripe.planPrices();
-        expect(sent).toHaveLength(4);
+        expect(sent).toHaveLength(2);
       }),
     );
   });

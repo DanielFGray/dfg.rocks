@@ -1,11 +1,11 @@
 import { test, expect } from "./helpers.js";
 
-// Stripe is faked for E2E (server/services/stripeFake.ts): the prices are $15.00 a month and
-// $150.00 a year, Checkout and the portal return to the app, and no request leaves the server. The
+// Stripe is faked for E2E (server/services/stripeFake.ts): the monthly price is $10.00 a month (from
+// shared/pricing.ts), Checkout and the portal return to the app, and no request leaves the server. The
 // subscription rows are seeded through the testing API, as the webhook would write them.
 
 test.describe("subscriptions", () => {
-  test("a signed-out reader sees both plans, and Subscribe goes to sign-in and back", async ({
+  test("a signed-out reader sees the monthly plan, and Subscribe goes to sign-in and back", async ({
     page,
     testing,
   }) => {
@@ -14,8 +14,7 @@ test.describe("subscriptions", () => {
     await page.context().clearCookies({ name: "session" });
 
     await page.goto("/pricing");
-    await expect(page.getByTestId("price-monthly")).toHaveText("$15.00");
-    await expect(page.getByTestId("price-annual")).toHaveText("$150.00");
+    await expect(page.getByTestId("price-monthly")).toHaveText("$10.00");
 
     await page.getByTestId("subscribe-monthly").click();
     await expect(page).toHaveURL(/\/login\?redirect=/);
@@ -33,12 +32,12 @@ test.describe("subscriptions", () => {
     await testing.login({ username: "test_sub_checkout", role: "student" });
 
     await page.goto("/pricing");
-    await page.getByTestId("subscribe-annual").click();
+    await page.getByTestId("subscribe-monthly").click();
 
     await expect(page).toHaveURL(/\/subscribe\/success$/);
     await expect(page.getByTestId("subscription-pending")).toBeVisible();
 
-    await testing.seedSubscription({ username: "test_sub_checkout", plan: "annual" });
+    await testing.seedSubscription({ username: "test_sub_checkout", plan: "monthly" });
     await expect(page.getByTestId("subscribed")).toBeVisible({ timeout: 15_000 });
   });
 
@@ -73,11 +72,11 @@ test.describe("subscriptions", () => {
     await testing.login({ username: "test_sub_ends", role: "student" });
     await testing.seedSubscription({
       username: "test_sub_ends",
-      plan: "annual",
+      plan: "monthly",
       cancelAtPeriodEnd: true,
     });
     await page.goto("/settings");
-    await expect(page.getByTestId("subscription-status")).toContainText("Annual ends on");
+    await expect(page.getByTestId("subscription-status")).toContainText("Monthly ends on");
   });
 
   test("a family member whose billing contact pays sees who pays, and cannot manage it", async ({

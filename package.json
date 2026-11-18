@@ -12,6 +12,7 @@
     "start": "NODE_ENV=production bun server/main.ts",
     "preview": "bun -b vite preview",
     "gm": "bun --env-file=.env -b graphile-migrate",
+    "stripe:sync": "bun --env-file=.env -b scripts/stripe-sync-prices.ts",
     "db:up": "ops dev db up",
     "db:latest": "bun --cwd=worker --env-file=../.env graphile-worker --schema-only && bun run gm watch --once",
     "db:watch": "run-s 'gm watch'",

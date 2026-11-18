@@ -46,7 +46,7 @@ type TestingApi = {
   }): Promise<void>;
   seedSubscription(data: {
     username: string;
-    plan: "monthly" | "annual";
+    plan: "monthly";
     status?: string;
     periodEndInDays?: number;
     cancelAtPeriodEnd?: boolean;

@@ -19,16 +19,17 @@ import { sql } from "kysely";
 import {
   CheckoutEligibility,
   PayerRelation,
+  SubscriptionPlan,
   type MySubscriptionResponse,
   type PlanPrice,
-  type SubscriptionPlan,
   type SubscriptionView,
 } from "../../shared/api/subscriptions.js";
+import { planPrices } from "../../shared/pricing.js";
 import { RequestDatabase } from "../requestDatabase.js";
 import { HttpError } from "../pgErrors.js";
 import { notConfigured } from "./stripeErrors.js";
 
-const stripeApi = "https://api.stripe.com/v1";
+export const stripeApi = "https://api.stripe.com/v1";
 
 /**
  * The API version every call sends in `Stripe-Version`, and the version the webhook endpoint in
@@ -40,18 +41,27 @@ export const stripeApiVersion = "2026-10-28.endive";
 // Stripe's response carries many more fields; only the hosted page's address is used.
 const HostedPage = S.Struct({ url: S.String });
 
-// The fields the pricing page shows, from the Price object for API version 2026-10-28.endive
-// (docs.stripe.com/api/prices/object). `unit_amount` is null for a tiered price, which this app does
-// not sell, so a null amount is refused rather than shown.
-const StripePrice = S.Struct({
-  unit_amount: S.NullOr(S.Finite),
-  currency: S.String,
-  recurring: S.NullOr(S.Struct({ interval: S.String })),
+// The Price objects of a list call for API version 2026-10-28.endive (docs.stripe.com/api/prices/object).
+// `unit_amount` is null for a tiered price, which this app does not sell, so a null amount is refused
+// rather than shown. `lookup_key` is null for a price nobody named.
+const StripePriceList = S.Struct({
+  data: S.Array(
+    S.Struct({
+      id: S.String,
+      lookup_key: S.NullOr(S.String),
+      unit_amount: S.NullOr(S.Finite),
+      currency: S.String,
+      recurring: S.NullOr(S.Struct({ interval: S.String })),
+    }),
+  ),
 });
 
-// How long the two plan prices are reused before Stripe is asked again. A price change on Stripe
+// How long the plan prices are reused before Stripe is asked again. A price change on Stripe
 // appears on the pricing page within this window.
 const priceCacheTtlMillis = 60 * 60 * 1000;
+
+// A plan price as Checkout needs it: the Stripe price id beside what the pricing page shows.
+type ResolvedPrice = PlanPrice & { readonly priceId: string };
 
 // The fields the webhook stores, checked against the Subscription object for API version
 // 2026-10-28.endive (docs.stripe.com/api/subscriptions/object): `customer` is a string (not
@@ -60,6 +70,7 @@ const priceCacheTtlMillis = 60 * 60 * 1000;
 // `items.data`, which also carries `price.id` (docs.stripe.com/api/subscription_items/object).
 // `payer_id` is copied from the Checkout Session's subscription_data.metadata. A subscription
 // without it was not created by this app, so the webhook records the event and writes nothing.
+// `price.metadata.plan` names the plan (set by scripts/stripe-sync-prices.ts), which the row stores.
 export const StripeSubscription = S.Struct({
   id: S.String,
   customer: S.String,
@@ -69,7 +80,10 @@ export const StripeSubscription = S.Struct({
   items: S.Struct({
     data: S.NonEmptyArray(
       S.Struct({
-        price: S.Struct({ id: S.String }),
+        price: S.Struct({
+          id: S.String,
+          metadata: S.Struct({ plan: S.optionalKey(S.String) }),
+        }),
         current_period_end: S.Finite,
       }),
     ),
@@ -80,33 +94,24 @@ export const StripeSubscription = S.Struct({
 const subscriptionUnavailable = () =>
   new HttpError({ status: 500, message: "Stripe subscription could not be retrieved" });
 
-export const priceVariable = {
-  monthly: "STRIPE_PRICE_MONTHLY",
-  annual: "STRIPE_PRICE_ANNUAL",
-} as const;
-const plans = ["monthly", "annual"] as const;
-
-// Each call reads only the settings it uses: the portal needs no price, and one plan's missing
-// price does not stop the other plan.
+// Each call reads only the settings it uses: the portal needs no price.
 const secretKey = Config.Redacted("STRIPE_SECRET_KEY").pipe(Effect.mapError(notConfigured));
-const priceId = (plan: SubscriptionPlan) =>
-  Config.NonEmptyString(priceVariable[plan]).pipe(Effect.mapError(notConfigured));
 const rootUrl = Config.NonEmptyString("VITE_ROOT_URL").pipe(Effect.mapError(notConfigured));
-
-/**
- * The plan a stored price belongs to, or none when it is neither plan. A deployment without the
- * price settings still reports a subscription, with its plan unnamed, instead of failing the page.
- */
-const planOfPrice = Effect.fnUntraced(function* (price: string) {
-  const monthly = yield* Config.NonEmptyString(priceVariable.monthly).pipe(Config.option);
-  const annual = yield* Config.NonEmptyString(priceVariable.annual).pipe(Config.option);
-  if (Option.contains(monthly, price)) return Option.some<SubscriptionPlan>("monthly");
-  if (Option.contains(annual, price)) return Option.some<SubscriptionPlan>("annual");
-  return Option.none<SubscriptionPlan>();
-});
 
 // How long one Stripe price read may take. Without a limit, a slow Stripe holds the pricing page open.
 const priceRequestTimeout = Duration.seconds(10);
+
+/**
+ * The lookup key of a sold price. A price the sync has not created is absent in Stripe, so the read
+ * is refused with 503 until `bun run stripe:sync` runs; a 503 is not cached.
+ */
+const pricedAs = (listed: typeof StripePriceList.Type, plan: SubscriptionPlan) => {
+  const lookupKey = planPrices[plan].lookupKey;
+  const price = listed.data.find((candidate) => candidate.lookup_key === lookupKey);
+  return price === undefined
+    ? Option.none<(typeof StripePriceList.Type.data)[number]>()
+    : Option.some(price);
+};
 
 /** The Checkout and Customer Portal calls. Each one is a Stripe REST call with form-encoded fields. */
 export class Stripe extends Context.Service<Stripe>()("dfg-rocks/stripe", {
@@ -115,10 +120,10 @@ export class Stripe extends Context.Service<Stripe>()("dfg-rocks/stripe", {
     const http = yield* HttpClient.HttpClient;
     const client = http.pipe(HttpClient.filterStatusOk);
 
-    // The plan prices, kept for `priceCacheTtlMillis`. A failed read is not kept, so the next
+    // The sold prices, kept for `priceCacheTtlMillis`. A failed read is not kept, so the next
     // request asks Stripe again.
     const priceCache = yield* Ref.make(
-      Option.none<{ readonly plans: ReadonlyArray<PlanPrice>; readonly expiresAt: number }>(),
+      Option.none<{ readonly prices: ReadonlyArray<ResolvedPrice>; readonly expiresAt: number }>(),
     );
 
     const postForHostedPage = Effect.fnUntraced(function* (
@@ -143,19 +148,20 @@ export class Stripe extends Context.Service<Stripe>()("dfg-rocks/stripe", {
       );
     });
 
-    const priceOf = Effect.fnUntraced(function* (key: Redacted.Redacted, plan: SubscriptionPlan) {
-      const id = yield* priceId(plan);
-      const price = yield* HttpClientRequest.get(
-        `${stripeApi}/prices/${encodeURIComponent(id)}`,
-      ).pipe(
+    // One list call for every sold plan: the active prices whose lookup keys are the plan names.
+    const fetchPrices = Effect.fnUntraced(function* (key: Redacted.Redacted) {
+      const query = new URLSearchParams({ active: "true" });
+      for (const plan of SubscriptionPlan.literals) {
+        query.append("lookup_keys[]", planPrices[plan].lookupKey);
+      }
+      const listed = yield* HttpClientRequest.get(`${stripeApi}/prices?${query}`).pipe(
         HttpClientRequest.bearerToken(key),
         HttpClientRequest.setHeader("Stripe-Version", stripeApiVersion),
         client.execute,
-        Effect.flatMap(HttpClientResponse.schemaBodyJson(StripePrice)),
+        Effect.flatMap(HttpClientResponse.schemaBodyJson(StripePriceList)),
         Effect.timeout(priceRequestTimeout),
         Effect.catch((error) =>
           Effect.logWarning("Stripe price request failed", {
-            plan,
             error: error._tag,
             message: error.message,
             cause: Cause.pretty(Cause.fail(error)),
@@ -166,16 +172,33 @@ export class Stripe extends Context.Service<Stripe>()("dfg-rocks/stripe", {
           ),
         ),
       );
-      if (price.unit_amount === null || price.recurring === null) {
-        yield* Effect.logWarning("Stripe price is not a recurring flat amount", { plan });
-        return yield* new HttpError({ status: 502, message: "Stripe price is not usable" });
-      }
-      return {
-        plan,
-        amount: price.unit_amount,
-        currency: price.currency,
-        interval: price.recurring.interval,
-      } satisfies PlanPrice;
+      const resolve = Effect.fnUntraced(function* (plan: SubscriptionPlan) {
+        const price = yield* Option.match(pricedAs(listed, plan), {
+          onNone: () =>
+            Effect.logWarning("Stripe has no active price for a plan; run the price sync", {
+              plan,
+            }).pipe(
+              Effect.andThen(
+                Effect.fail(
+                  new HttpError({ status: 503, message: "Subscription prices are not set up" }),
+                ),
+              ),
+            ),
+          onSome: Effect.succeed,
+        });
+        if (price.unit_amount === null || price.recurring === null) {
+          yield* Effect.logWarning("Stripe price is not a recurring flat amount", { plan });
+          return yield* new HttpError({ status: 502, message: "Stripe price is not usable" });
+        }
+        return {
+          plan,
+          priceId: price.id,
+          amount: price.unit_amount,
+          currency: price.currency,
+          interval: price.recurring.interval,
+        } satisfies ResolvedPrice;
+      });
+      return yield* Effect.forEach(SubscriptionPlan.literals, resolve);
     });
 
     /**
@@ -226,13 +249,7 @@ export class Stripe extends Context.Service<Stripe>()("dfg-rocks/stripe", {
       const rows = yield* RequestDatabase.use((db) => {
         const query = db
           .selectFrom("app_public.subscriptions")
-          .select([
-            "status",
-            "price_id",
-            "current_period_end",
-            "cancel_at_period_end",
-            live.as("live"),
-          ])
+          .select(["status", "plan", "current_period_end", "cancel_at_period_end", live.as("live")])
           .where("payer_id", which === "own" ? "=" : "<>", userId)
           .orderBy(live, "desc")
           .orderBy("created_at", "desc")
@@ -241,34 +258,44 @@ export class Stripe extends Context.Service<Stripe>()("dfg-rocks/stripe", {
       });
       const row = rows[0];
       if (row === undefined) return Option.none<SubscriptionView>();
-      const plan = yield* planOfPrice(row.price_id);
+      // The stored plan is the webhook's copy of the price's lookup key. A value that is not a sold
+      // plan (a price this app does not sell, or none) reads as no plan.
+      const plan = S.decodeUnknownOption(S.NullOr(SubscriptionPlan))(row.plan).pipe(
+        Option.getOrNull,
+      );
       return Option.some({
         status: row.status,
-        plan: Option.getOrNull(plan),
+        plan,
         current_period_end: row.current_period_end,
         cancel_at_period_end: row.cancel_at_period_end,
         live: row.live,
       } satisfies SubscriptionView);
     });
 
+    // The sold prices, from the cache while it is fresh. Refused with 503 while a sold plan has no
+    // Stripe price, and with 502 when Stripe cannot answer.
+    const resolvedPrices = Effect.fn("resolvedPrices")(function* () {
+      const now = yield* Clock.currentTimeMillis;
+      const cached = yield* Ref.get(priceCache);
+      if (Option.isSome(cached) && cached.value.expiresAt > now) {
+        return cached.value.prices;
+      }
+      const key = yield* secretKey;
+      const prices = yield* fetchPrices(key);
+      yield* Ref.set(priceCache, Option.some({ prices, expiresAt: now + priceCacheTtlMillis }));
+      return prices;
+    });
+
     return {
-      /**
-       * The monthly and annual prices, as Stripe states them. Refused with 503 while the price settings
-       * are missing, and with 502 when Stripe cannot answer.
-       */
+      /** The sold plans' prices, as Stripe states them, for the pricing page. */
       planPrices: Effect.fn("planPrices")(function* () {
-        const now = yield* Clock.currentTimeMillis;
-        const cached = yield* Ref.get(priceCache);
-        if (Option.isSome(cached) && cached.value.expiresAt > now) {
-          return cached.value.plans;
-        }
-        const key = yield* secretKey;
-        const prices = yield* Effect.forEach(plans, (plan) => priceOf(key, plan));
-        yield* Ref.set(
-          priceCache,
-          Option.some({ plans: prices, expiresAt: now + priceCacheTtlMillis }),
-        );
-        return prices;
+        const prices = yield* resolvedPrices();
+        return prices.map(({ plan, amount, currency, interval }): PlanPrice => ({
+          plan,
+          amount,
+          currency,
+          interval,
+        }));
       }),
 
       /**
@@ -334,7 +361,15 @@ export class Stripe extends Context.Service<Stripe>()("dfg-rocks/stripe", {
         customer: Option.Option<string>,
       ) {
         const key = yield* secretKey;
-        const price = yield* priceId(plan);
+        // resolvedPrices holds every sold plan, so a plan without a price is a broken invariant.
+        const price = yield* Effect.fromOption(
+          Option.fromNullishOr(
+            (yield* resolvedPrices()).find((candidate) => candidate.plan === plan),
+          ),
+        ).pipe(
+          Effect.map((candidate) => candidate.priceId),
+          Effect.orDie,
+        );
         const root = yield* rootUrl;
         // customer_update is valid only with a customer. Without one, Stripe creates the customer
         // and asks for the email and address during Checkout.
@@ -350,6 +385,7 @@ export class Stripe extends Context.Service<Stripe>()("dfg-rocks/stripe", {
           ["line_items[0][price]", price],
           ["line_items[0][quantity]", "1"],
           ["automatic_tax[enabled]", "true"],
+          ["allow_promotion_codes", "true"],
           ["client_reference_id", userId],
           // Stripe copies this onto every customer.subscription.* event, so the webhook learns the
           // payer from the subscription itself, whatever order the events arrive in.

@@ -38,7 +38,7 @@ function PricingPage() {
 
   return (
     <Main data-testid="pricing">
-      <h1 className="mb-2 text-3xl font-bold tracking-tight">Lessons by subscription</h1>
+      <h1 className="mb-2 text-3xl font-bold tracking-tight">Online courses</h1>
       <p className="mb-8 text-muted dark:text-muted-dark">
         A subscription covers the whole family: every student in it can read the courses.
       </p>

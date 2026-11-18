@@ -193,7 +193,7 @@ cd "$(git rev-parse --show-toplevel)"
 
 TOTAL_STAGES=11
 WEBHOOK_EVENTS="customer.subscription.created,customer.subscription.updated,customer.subscription.deleted"
-STRIPE_KEYS=(stripe_secret_key stripe_webhook_secret stripe_price_monthly stripe_price_annual)
+STRIPE_KEYS=(stripe_secret_key stripe_webhook_secret)
 WRITTEN_KV=()
 
 # set_kv KEY VALUE stores one key at secret/data/dfg-rocks with the ops login token. An empty
@@ -213,6 +213,23 @@ set_kv() {
   fi
 }
 
+# run_sync KEY runs scripts/stripe-sync-prices.ts against the account KEY belongs to: a dry run first,
+# then the real sync after a confirmation. An empty KEY (the stored one was kept) skips it.
+run_sync() {
+  local key="$1"
+  if [[ -z "$key" ]]; then
+    SKIPPED+=("plan sync: run STRIPE_SECRET_KEY=<key> bun run stripe:sync")
+    warn "No key was pasted, so the sync is skipped."
+    return
+  fi
+  STRIPE_SECRET_KEY="$key" bun run stripe:sync -- --dry-run
+  if confirm "Run the sync for real?"; then
+    STRIPE_SECRET_KEY="$key" bun run stripe:sync
+  else
+    SKIPPED+=("plan sync: run STRIPE_SECRET_KEY=<key> bun run stripe:sync")
+  fi
+}
+
 banner "Stripe go-live for dfg.rocks"
 
 stage "Tools: ops login and the Stripe CLI"
@@ -229,8 +246,8 @@ fi
 note "$(stripe --version)"
 pause
 
-stage "cartridge.json: the four Stripe secrets"
-say "The server reads four Stripe settings from OpenBao. cartridge.json must name them"
+stage "cartridge.json: the two Stripe secrets"
+say "The server reads two Stripe settings from OpenBao. cartridge.json must name them"
 say "before 'ops secret set' accepts them. This edits the file locally; stage 7 commits it."
 if jq -e '[.services[0].secrets[] | select(._tag == "KvSecret") | .key] | index("stripe_secret_key")' cartridge.json >/dev/null; then
   note "cartridge.json already names the Stripe secrets."
@@ -238,44 +255,34 @@ else
   tmp=$(mktemp)
   jq '.services[0].secrets += [
         {"_tag":"KvSecret","path":"secret/data/dfg-rocks","key":"stripe_secret_key","env":"STRIPE_SECRET_KEY"},
-        {"_tag":"KvSecret","path":"secret/data/dfg-rocks","key":"stripe_webhook_secret","env":"STRIPE_WEBHOOK_SECRET"},
-        {"_tag":"KvSecret","path":"secret/data/dfg-rocks","key":"stripe_price_monthly","env":"STRIPE_PRICE_MONTHLY"},
-        {"_tag":"KvSecret","path":"secret/data/dfg-rocks","key":"stripe_price_annual","env":"STRIPE_PRICE_ANNUAL"}
+        {"_tag":"KvSecret","path":"secret/data/dfg-rocks","key":"stripe_webhook_secret","env":"STRIPE_WEBHOOK_SECRET"}
       ]' cartridge.json > "$tmp" && mv "$tmp" cartridge.json
   printf '  %s✓ added%s %s to cartridge.json\n' "$GREEN" "$RESET" "${STRIPE_KEYS[*]}"
 fi
 warn "Do not push develop until stage 7: a deploy fails while a named secret is unset."
 pause
 
-stage "Test mode: the product and its two prices"
-open_url "https://dashboard.stripe.com/test/products/create"
-step "Name the product (for example 'dfg.rocks subscription')."
-step "Add a recurring price, billing period Monthly, with the monthly amount."
-step "Add a second recurring price, billing period Yearly, with the annual amount."
-step "For each price, choose whether tax is included in the price or added on top (Stripe Tax needs one)."
-step "Save. Open each price: its ID (price_...) is at the top right."
-ask TEST_PRICE_MONTHLY "Paste the monthly price ID (price_...):"
-ask TEST_PRICE_ANNUAL "Paste the annual price ID (price_...):"
+stage "Test mode: secret key"
+open_url "https://dashboard.stripe.com/test/apikeys"
+step "On the Secret key row, click Reveal test key and copy it (sk_test_...)."
+ask_secret TEST_SECRET_KEY "Paste the test secret key (hidden; Enter keeps the stored one):"
+set_kv stripe_secret_key "$TEST_SECRET_KEY"
+
+stage "Test mode: sync the plans to Stripe"
+say "shared/pricing.ts declares the plans. The sync creates the product and prices in Stripe."
+run_sync "$TEST_SECRET_KEY"
 
 stage "Test mode: Customer Portal and Stripe Tax"
 say "Manage subscription opens the Customer Portal, and checkout asks Stripe Tax for the tax."
 open_url "https://dashboard.stripe.com/test/settings/billing/portal"
 step "Turn on: cancel subscriptions, update payment methods, view invoice history."
-step "Under switching plans, add the product, so a customer can move between monthly and annual."
+step "Under switching plans, add the product the sync created (stage 4)."
 step "Save."
 pause "Press Enter when the portal is saved"
 open_url "https://dashboard.stripe.com/test/settings/tax"
 step "Set the head office address and the default tax category for the product."
 step "Add a tax registration for each place the studio must collect tax."
 pause "Press Enter when Stripe Tax is set up"
-
-stage "Test mode: secret key and prices into OpenBao"
-open_url "https://dashboard.stripe.com/test/apikeys"
-step "On the Secret key row, click Reveal test key and copy it (sk_test_...)."
-ask_secret TEST_SECRET_KEY "Paste the test secret key (hidden; Enter keeps the stored one):"
-set_kv stripe_secret_key "$TEST_SECRET_KEY"
-set_kv stripe_price_monthly "$TEST_PRICE_MONTHLY"
-set_kv stripe_price_annual "$TEST_PRICE_ANNUAL"
 
 stage "Test mode: the webhook secret from the Stripe CLI"
 say "Stripe cannot reach the tailnet-only staged copy, so the Stripe CLI on this machine"
@@ -315,19 +322,14 @@ if ! confirm "Did every check pass?"; then
   exit 1
 fi
 
-stage "Live mode: activate, then Tax, Portal and the product"
+stage "Live mode: activate, then Tax and Portal"
 open_url "https://dashboard.stripe.com/"
 step "Leave test mode. Follow the banner to activate payments: business details and bank account."
 pause "Press Enter when Stripe says the account can take live payments"
-open_url "https://dashboard.stripe.com/test/products"
-step "Open the product and use 'Copy to live mode' (or create it again in live mode)."
-step "In live mode, open each price and copy its ID."
-ask LIVE_PRICE_MONTHLY "Paste the live monthly price ID (price_...):"
-ask LIVE_PRICE_ANNUAL "Paste the live annual price ID (price_...):"
 open_url "https://dashboard.stripe.com/settings/billing/portal"
-step "Repeat the portal settings from stage 4 in live mode, and save."
+step "Repeat the portal settings from stage 5 in live mode, and save."
 open_url "https://dashboard.stripe.com/settings/tax"
-step "Repeat the Stripe Tax settings from stage 4 in live mode."
+step "Repeat the Stripe Tax settings from stage 5 in live mode."
 pause "Press Enter when the live portal and Tax are set up"
 
 stage "Live mode: webhook and keys into OpenBao"
@@ -339,12 +341,12 @@ ask_secret LIVE_WEBHOOK_SECRET "Paste the live signing secret (hidden):"
 open_url "https://dashboard.stripe.com/apikeys"
 step "Reveal the live secret key (sk_live_...) and copy it."
 ask_secret LIVE_SECRET_KEY "Paste the live secret key (hidden):"
+say "Sync the plans to the live account with the live key."
+run_sync "$LIVE_SECRET_KEY"
 warn "From here the staged copy also runs on live keys: a purchase there charges a real card."
-if confirm "Store the four live values in OpenBao now?"; then
+if confirm "Store the two live values in OpenBao now?"; then
   set_kv stripe_secret_key "$LIVE_SECRET_KEY"
   set_kv stripe_webhook_secret "$LIVE_WEBHOOK_SECRET"
-  set_kv stripe_price_monthly "$LIVE_PRICE_MONTHLY"
-  set_kv stripe_price_annual "$LIVE_PRICE_ANNUAL"
 else
   SKIPPED+=("live Stripe values: re-run this wizard and store them at stage 10")
 fi

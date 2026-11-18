@@ -17,7 +17,6 @@ export const subscriptionPlansQuery = queryOptions({
 
 export const planName: Record<SubscriptionPlan, string> = {
   monthly: "Monthly",
-  annual: "Annual",
 };
 
 /** A plan's price for display. Stripe states amounts in minor units; the app's currency has two decimal places. */

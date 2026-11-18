@@ -15,6 +15,7 @@ import {
   InternalServerErrorSchema,
   NotFoundErrorSchema,
 } from "../../shared/httpApiErrors.js";
+import { SubscriptionPlan } from "../../shared/api/subscriptions.js";
 import { adaptHttpApiErrors } from "../httpApiErrors.js";
 import { Testing } from "../services/testing.js";
 import {
@@ -90,7 +91,7 @@ const TestingSeedFamilyMembershipQuery = S.Struct({
 
 const TestingSeedSubscriptionQuery = S.Struct({
   username: S.String,
-  plan: S.Literals(["monthly", "annual"]),
+  plan: SubscriptionPlan,
   status: S.optional(S.String),
   period_end_days: S.optional(S.FiniteFromString),
   cancel_at_period_end: S.optional(BooleanFromString),

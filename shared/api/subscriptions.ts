@@ -4,8 +4,8 @@ import { Csrf, Session } from "./guards.js";
 import { Schema as S } from "effect";
 import { signedInErrors, TooManyRequestsErrorSchema } from "../httpApiErrors.js";
 
-/** The plans a payer can buy. Each maps to a Stripe price the server reads from configuration. */
-export const SubscriptionPlan = S.Literals(["monthly", "annual"]);
+/** The plans a payer can buy. Each is a price in shared/pricing.ts, found in Stripe by its lookup key. */
+export const SubscriptionPlan = S.Literals(["monthly"]);
 export type SubscriptionPlan = typeof SubscriptionPlan.Type;
 
 /** One plan's price as Stripe states it: `amount` in the currency's smallest unit, billed every `interval`. */
