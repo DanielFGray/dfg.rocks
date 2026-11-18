@@ -23,7 +23,8 @@ import {
 import { Modal } from "../ui/Modal.js";
 
 export interface AlphaTabPlayerProps {
-  src: string;
+  /** A score file by URL, or alphaTex source. */
+  source: { url: string } | { tex: string };
   defaultTrackIndex?: number | null;
   /** Whole seconds of playing time not yet reported; the app adds them up. */
   onPlaybackSeconds?: (seconds: number) => void;
@@ -48,7 +49,7 @@ const partClass = {
 };
 
 export function AlphaTabPlayer({
-  src,
+  source,
   defaultTrackIndex,
   onPlaybackSeconds,
   onDurationSeconds,
@@ -56,7 +57,7 @@ export function AlphaTabPlayer({
 }: AlphaTabPlayerProps) {
   const [trainerOpen, setTrainerOpen] = useState(false);
   const { host, state, actions } = useScorePlayer({
-    source: { url: src },
+    source,
     defaultTrack: defaultTrackIndex ?? undefined,
     onPracticeTime: onPlaybackSeconds,
     // The same label the upload form and the assignment page show for a track.

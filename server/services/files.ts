@@ -5,6 +5,7 @@ import { sql } from "kysely";
 import { Effect, Option, Context, Layer } from "effect";
 import { RequestDatabase } from "../requestDatabase.js";
 import { HttpError } from "../pgErrors.js";
+import type { ContentVisibility } from "../../shared/schemas.js";
 import { extractNotationTracksFromBytes } from "./notationService.js";
 import { Storage, type StorageLocation } from "./storage.js";
 
@@ -26,7 +27,7 @@ type MaterialRecord = {
   original_filename: string;
   mime_type: string;
   file_size: number;
-  is_global: boolean;
+  visibility: ContentVisibility;
   notation_tracks: unknown;
 };
 
@@ -51,7 +52,7 @@ function toMaterialResponse(material: MaterialRecord): MaterialRecord {
     original_filename: material.original_filename,
     mime_type: material.mime_type,
     file_size: material.file_size,
-    is_global: material.is_global,
+    visibility: material.visibility,
     notation_tracks: material.notation_tracks,
   };
 }
@@ -68,7 +69,7 @@ const findMaterialByContentHashEffect = Effect.fnUntraced(function* (contentHash
             "original_filename",
             "mime_type",
             eb.cast<number>("file_size", "integer").as("file_size"),
-            "is_global",
+            "visibility",
             "notation_tracks",
             "storage_backend",
             "storage_key",
@@ -100,7 +101,7 @@ export class Files extends Context.Service<Files>()("dfg-rocks/files", {
       upload: Effect.fn("fileUpload")(function* (
         file: File | Multipart.PersistedFile,
         title: string,
-        isGlobal: boolean,
+        visibility: ContentVisibility,
         uploadedBy: string,
       ) {
         let fileSize: number;
@@ -169,7 +170,7 @@ export class Files extends Context.Service<Files>()("dfg-rocks/files", {
                   content_hash: contentHash,
                   mime_type: mimeType,
                   file_size: bytes.byteLength,
-                  is_global: isGlobal,
+                  visibility,
                   notation_tracks:
                     notationTracks === null ? null : sql`${JSON.stringify(notationTracks)}::jsonb`,
                   uploaded_by: uploadedBy,
@@ -180,7 +181,7 @@ export class Files extends Context.Service<Files>()("dfg-rocks/files", {
                   "original_filename",
                   "mime_type",
                   eb.cast<number>("file_size", "integer").as("file_size"),
-                  "is_global",
+                  "visibility",
                   "notation_tracks",
                 ]),
             )

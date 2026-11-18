@@ -81,7 +81,7 @@ export class People extends Context.Service<People>()("dfg-rocks/people", {
                   "m.original_filename",
                   "m.mime_type",
                   eb.cast("m.file_size", "integer").as("file_size"),
-                  "m.is_global",
+                  "m.visibility",
                   "m.notation_tracks",
                   "sm.assigned_track_index",
                   eb.fn.coalesce("ap.listened_seconds", eb.val(0)).as("listened_seconds"),

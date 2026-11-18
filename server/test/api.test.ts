@@ -440,23 +440,23 @@ describe("DFG Portal API", () => {
     Effect.fnUntraced(function* () {
       const bytes = Buffer.from(`%PDF-1.4\n% dedupe test ${Date.now()}\n`);
 
-      const uploadMaterial = (title: string, filename: string, isGlobal: boolean) => {
+      const uploadMaterial = (title: string, filename: string, visibility: "global" | "course") => {
         const formData = new FormData();
         formData.append("file", new File([bytes], filename, { type: "application/pdf" }));
         formData.append("title", title);
-        formData.append("is_global", isGlobal ? "true" : "false");
+        formData.append("visibility", visibility);
         return reqEffect("POST", "/api/admin/materials/upload", {
           body: formData,
           cookie: adminCookie,
         });
       };
 
-      const firstUpload = yield* uploadMaterial("Original Title", "original-upload.pdf", true);
+      const firstUpload = yield* uploadMaterial("Original Title", "original-upload.pdf", "global");
       expect(firstUpload.status).toBe(200);
       const firstMaterial = yield* resJson(firstUpload);
       expect(firstMaterial.title).toBe("Original Title");
       expect(firstMaterial.original_filename).toBe("original-upload.pdf");
-      expect(firstMaterial.is_global).toBe(true);
+      expect(firstMaterial.visibility).toBe("global");
 
       const firstRow = (yield* Effect.tryPromise(() =>
         testDb.query(
@@ -483,13 +483,17 @@ describe("DFG Portal API", () => {
         error: "Internal Server Error",
       });
 
-      const secondUpload = yield* uploadMaterial("Conflicting Title", "renamed-upload.pdf", false);
+      const secondUpload = yield* uploadMaterial(
+        "Conflicting Title",
+        "renamed-upload.pdf",
+        "course",
+      );
       expect(secondUpload.status).toBe(200);
       const secondMaterial = yield* resJson(secondUpload);
       expect(secondMaterial.id).toBe((firstMaterial as any).id);
       expect(secondMaterial.title).toBe("Original Title");
       expect(secondMaterial.original_filename).toBe("original-upload.pdf");
-      expect(secondMaterial.is_global).toBe(true);
+      expect(secondMaterial.visibility).toBe("global");
 
       const matchingRows = yield* Effect.tryPromise(() =>
         testDb.query(
@@ -520,7 +524,7 @@ describe("DFG Portal API", () => {
         }),
       );
       formData.append("title", "Unreadable Material");
-      formData.append("is_global", "false");
+      formData.append("visibility", "course");
       const upload = yield* reqEffect("POST", "/api/admin/materials/upload", {
         body: formData,
         cookie: adminCookie,
@@ -666,14 +670,14 @@ describe("DFG Portal API", () => {
       ];
       const notationMat = (yield* Effect.tryPromise(() =>
         testDb.query(
-          `insert into app_public.materials (title, original_filename, storage_key, mime_type, file_size, is_global, notation_tracks) values ($1, $2, $3, $4, $5, $6, $7::jsonb) returning id`,
+          `insert into app_public.materials (title, original_filename, storage_key, mime_type, file_size, visibility, notation_tracks) values ($1, $2, $3, $4, $5, $6, $7::jsonb) returning id`,
           [
             "Etude in G",
             "etude.gp5",
             "/data/etude.gp5",
             "application/octet-stream",
             4096,
-            false,
+            "course",
             JSON.stringify(notationTracks),
           ],
         ),
@@ -791,15 +795,15 @@ describe("DFG Portal API", () => {
 
       const globalMat = (yield* Effect.tryPromise(() =>
         testDb.query(
-          `insert into app_public.materials (title, original_filename, storage_key, mime_type, file_size, is_global) values ($1, $2, $3, $4, $5, $6) returning id`,
-          ["Chord Chart", "chords.pdf", "/data/chords.pdf", "application/pdf", 12345, true],
+          `insert into app_public.materials (title, original_filename, storage_key, mime_type, file_size, visibility) values ($1, $2, $3, $4, $5, $6) returning id`,
+          ["Chord Chart", "chords.pdf", "/data/chords.pdf", "application/pdf", 12345, "global"],
         ),
       )).rows[0];
 
       const privateMat = (yield* Effect.tryPromise(() =>
         testDb.query(
-          `insert into app_public.materials (title, original_filename, storage_key, mime_type, file_size, is_global) values ($1, $2, $3, $4, $5, $6) returning id`,
-          ["Private Notes", "notes.pdf", "/data/notes.pdf", "application/pdf", 5432, false],
+          `insert into app_public.materials (title, original_filename, storage_key, mime_type, file_size, visibility) values ($1, $2, $3, $4, $5, $6) returning id`,
+          ["Private Notes", "notes.pdf", "/data/notes.pdf", "application/pdf", 5432, "course"],
         ),
       )).rows[0];
 
@@ -833,8 +837,11 @@ describe("DFG Portal API", () => {
       const courses = yield* reqEffect("GET", "/api/courses", { cookie: studentCookie });
       expect(courses.status).toBe(200);
       const courseList = yield* resJson(courses);
-      expect(courseList).toHaveLength(1);
-      expect(courseList[0].title).toBe("Guitar 101");
+      // The enrolled course, and the free course the migrations seed, which any account reads.
+      expect(courseList.map((c: { title: string }) => c.title).sort()).toEqual([
+        "Drum rudiments",
+        "Guitar 101",
+      ]);
 
       const detail = yield* reqEffect("GET", `/api/courses/${courseId}`, { cookie: studentCookie });
       expect(detail.status).toBe(200);
@@ -866,7 +873,10 @@ describe("DFG Portal API", () => {
 
       const empty = yield* reqEffect("GET", "/api/courses", { cookie: studentCookie });
       expect(empty.status).toBe(200);
-      expect(yield* resJson(empty)).toHaveLength(0);
+      // Only the free course is left once the enrollment ends.
+      expect((yield* resJson(empty)).map((c: { title: string }) => c.title)).toEqual([
+        "Drum rudiments",
+      ]);
 
       expect(
         (yield* reqEffect("DELETE", `/api/admin/modules/${moduleId}`, { cookie: adminCookie }))
@@ -1410,14 +1420,14 @@ describe("DFG Portal API", () => {
       const notationTracks = [{ index: 0, name: "Piano", short_name: "Pno", is_percussion: false }];
       const material = yield* Effect.tryPromise(() =>
         testDb.query(
-          `insert into app_public.materials (title, original_filename, storage_key, mime_type, file_size, is_global, notation_tracks) values ($1, $2, $3, $4, $5, $6, $7::jsonb) returning id`,
+          `insert into app_public.materials (title, original_filename, storage_key, mime_type, file_size, visibility, notation_tracks) values ($1, $2, $3, $4, $5, $6, $7::jsonb) returning id`,
           [
             "Twinkle Twinkle",
             "twinkle.gp5",
             "/data/twinkle.gp5",
             "application/octet-stream",
             2048,
-            false,
+            "course",
             JSON.stringify(notationTracks),
           ],
         ),

@@ -3,6 +3,8 @@ import { useState } from "react";
 import { useForm } from "@tanstack/react-form";
 import { useMutation } from "@tanstack/react-query";
 import { api } from "../lib/api.js";
+import { visibilityOptions } from "../lib/visibility.js";
+import type { ContentVisibility } from "../../shared/schemas.js";
 import { fieldError } from "../lib/form.js";
 import { requiredValidator } from "../lib/validators.js";
 import { Modal } from "./ui/Modal.js";
@@ -25,6 +27,7 @@ type CourseData = {
   title: string;
   instrument: string;
   description: string;
+  visibility: ContentVisibility;
 };
 
 type CourseFormModalProps = {
@@ -36,8 +39,12 @@ type CourseFormModalProps = {
 
 export function CourseFormModal({ open, onClose, course, onSuccess }: CourseFormModalProps) {
   const createMutation = useMutation({
-    mutationFn: (payload: { title: string; instrument: string; description?: string }) =>
-      Effect.runPromise(api.coursesAdmin.createCourse({ payload })),
+    mutationFn: (payload: {
+      title: string;
+      instrument: string;
+      description?: string;
+      visibility: ContentVisibility;
+    }) => Effect.runPromise(api.coursesAdmin.createCourse({ payload })),
   });
 
   const updateMutation = useMutation({
@@ -49,6 +56,7 @@ export function CourseFormModal({ open, onClose, course, onSuccess }: CourseForm
       title: string;
       instrument: string;
       description?: string;
+      visibility: ContentVisibility;
     }) => Effect.runPromise(api.coursesAdmin.updateCourse({ params: { id }, payload })),
   });
 
@@ -57,12 +65,14 @@ export function CourseFormModal({ open, onClose, course, onSuccess }: CourseForm
       title: course?.title ?? "",
       instrument: course?.instrument ?? "",
       description: course?.description ?? "",
+      visibility: course?.visibility ?? "course",
     },
     onSubmit: async ({ value }) => {
       const payload = {
         title: value.title,
         instrument: value.instrument,
         description: value.description || undefined,
+        visibility: value.visibility,
       };
       const opts = {
         onSuccess: () => {
@@ -86,6 +96,7 @@ export function CourseFormModal({ open, onClose, course, onSuccess }: CourseForm
       title: course?.title ?? "",
       instrument: course?.instrument ?? "",
       description: course?.description ?? "",
+      visibility: course?.visibility ?? "course",
     });
   }
   if (!open && wasOpen) {
@@ -141,6 +152,19 @@ export function CourseFormModal({ open, onClose, course, onSuccess }: CourseForm
               onChange={(v) => field.handleChange(v)}
               onBlur={() => field.handleBlur()}
               placeholder="Brief description of the course"
+            />
+          )}
+        </form.Field>
+        <form.Field name="visibility">
+          {(field) => (
+            <Select
+              id="course-visibility"
+              name="visibility"
+              label="Who can read"
+              options={visibilityOptions}
+              value={field.state.value}
+              onChange={(v) => field.handleChange(v as ContentVisibility)}
+              onBlur={() => field.handleBlur()}
             />
           )}
         </form.Field>

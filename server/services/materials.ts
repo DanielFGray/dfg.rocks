@@ -19,7 +19,7 @@ export class Materials extends Context.Service<Materials>()("dfg-rocks/materials
             "original_filename",
             "mime_type",
             eb.cast("file_size", "integer").as("file_size"),
-            "is_global",
+            "visibility",
             "notation_tracks",
           ])
           .orderBy("created_at", "desc")
@@ -38,7 +38,7 @@ export class Materials extends Context.Service<Materials>()("dfg-rocks/materials
           "m.original_filename",
           "m.mime_type",
           eb.cast("m.file_size", "integer").as("file_size"),
-          "m.is_global",
+          "m.visibility",
           "m.notation_tracks",
           "sm.assigned_track_index",
         ]);

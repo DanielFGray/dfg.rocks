@@ -28,7 +28,7 @@ type TestingApi = {
     original_filename?: string;
     mime_type?: string;
     file_size?: number;
-    is_global?: boolean;
+    visibility?: "public" | "global" | "course";
     source_file_path?: string;
   }): Promise<void>;
   assignMaterial(

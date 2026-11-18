@@ -234,7 +234,7 @@ export const MaterialsAdminApiGroupLive = HttpApiBuilder.group(
           const auth = yield* CurrentSession;
           return (yield* Files.use((fileService) =>
             fileService
-              .upload(payload.file, payload.title, payload.is_global, auth.user.id)
+              .upload(payload.file, payload.title, payload.visibility, auth.user.id)
               .pipe(withAuthContext(auth.session.id)),
           )) as MaterialResponse;
         }, adaptAdminErrors),

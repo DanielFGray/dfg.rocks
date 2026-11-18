@@ -16,7 +16,7 @@ test.describe("assignments management", () => {
       original_filename: "admin-assignment.musicxml",
       mime_type: "application/octet-stream",
       source_file_path: notationFixturePath,
-      is_global: false,
+      visibility: "course",
     });
 
     await loginViaUi(page, "test_admin", "testpassword123");
@@ -62,7 +62,7 @@ test.describe("assignments management", () => {
     await testing.seedMaterial({
       title: "Realtime Assignment Material",
       original_filename: "realtime-assignment.pdf",
-      is_global: false,
+      visibility: "course",
     });
 
     const studentContext = await browser.newContext();
@@ -125,7 +125,7 @@ test.describe("assignments management", () => {
     await testing.seedMaterial({
       title: "Test Assignment Material Teacher",
       original_filename: "teacher-assignment.pdf",
-      is_global: false,
+      visibility: "course",
     });
 
     await loginViaUi(page, "test_assignment_teacher", "testpassword123");
@@ -168,7 +168,7 @@ test.describe("assignments management", () => {
       original_filename: "playback.musicxml",
       mime_type: "application/octet-stream",
       source_file_path: notationFixturePath,
-      is_global: false,
+      visibility: "course",
     });
     await testing.assignMaterial("test_assignment_student_playback", "Test: Playback Material", 1);
 
@@ -201,7 +201,7 @@ test.describe("assignments management", () => {
       original_filename: "student-review.musicxml",
       mime_type: "application/octet-stream",
       source_file_path: notationFixturePath,
-      is_global: false,
+      visibility: "course",
     });
     await testing.assignMaterial(
       "test_assignment_student_progress",
@@ -226,7 +226,9 @@ test.describe("assignments management", () => {
       .click();
     await expect(page.getByTestId("assignment-detail")).toBeVisible();
     await expect(page.getByText("student-review.musicxml · Bass")).toBeVisible();
-    await expect(page.getByRole("combobox", { name: "Track" })).toHaveValue("1", { timeout: 15_000 });
+    await expect(page.getByRole("combobox", { name: "Track" })).toHaveValue("1", {
+      timeout: 15_000,
+    });
 
     await expect(page.getByText("No self-reviews yet.")).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Save Review" })).toHaveCount(0);

@@ -5,9 +5,11 @@ import { Tooltip } from "../ui/Tooltip.js";
 export function EditorToolbar({
   editor,
   onEmbedMaterial,
+  onInsertScore,
 }: {
   editor: Editor;
   onEmbedMaterial: () => void;
+  onInsertScore: () => void;
 }) {
   return (
     <div className="flex flex-wrap items-center gap-1 rounded-t-lg border-b border-overlay/6 bg-overlay/2 px-3 py-2 dark:border-overlay-dark/6 dark:bg-overlay-dark/2">
@@ -68,6 +70,9 @@ export function EditorToolbar({
       <div className="mx-1 h-5 w-px bg-overlay/8 dark:bg-overlay-dark/8" />
       <Button variant="ghost" onClick={onEmbedMaterial} className="px-2.5 py-1 text-xs text-accent">
         + Material
+      </Button>
+      <Button variant="ghost" onClick={onInsertScore} className="px-2.5 py-1 text-xs text-accent">
+        + Score
       </Button>
     </div>
   );

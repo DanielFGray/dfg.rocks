@@ -2,7 +2,7 @@ import crypto from "crypto";
 import fs from "fs/promises";
 import { Clock, Effect, Option, Context, Layer } from "effect";
 import { sql } from "kysely";
-import type { LessonStatus, LocationType } from "../../shared/schemas.js";
+import type { ContentVisibility, LessonStatus, LocationType } from "../../shared/schemas.js";
 import type { SubscriptionPlan } from "../../shared/api/subscriptions.js";
 import { HttpError } from "../pgErrors.js";
 import { extractNotationTracksFromBytes, resolveAssignedTrackIndex } from "./notationService.js";
@@ -272,7 +272,7 @@ export class Testing extends Context.Service<Testing>()("dfg-rocks/testing", {
         original_filename?: string;
         mime_type?: string;
         file_size?: number;
-        is_global?: boolean;
+        visibility?: ContentVisibility;
         source_file_path?: string;
       }) {
         const originalFilename =
@@ -304,7 +304,7 @@ export class Testing extends Context.Service<Testing>()("dfg-rocks/testing", {
                 content_hash: null,
                 mime_type: body.mime_type ?? "application/pdf",
                 file_size: body.file_size ?? bytes.byteLength,
-                is_global: body.is_global ?? false,
+                visibility: body.visibility ?? "course",
                 notation_tracks:
                   notationTracks === null ? null : sql`${JSON.stringify(notationTracks)}::jsonb`,
               })

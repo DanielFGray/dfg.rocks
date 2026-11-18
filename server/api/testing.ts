@@ -20,6 +20,7 @@ import { adaptHttpApiErrors } from "../httpApiErrors.js";
 import { Testing } from "../services/testing.js";
 import {
   BooleanFromString,
+  ContentVisibility,
   FamilyInviteRole,
   LessonStatus,
   LocationType,
@@ -61,7 +62,7 @@ const SeedMaterialPayload = S.Struct({
   original_filename: S.optional(S.String),
   mime_type: S.optional(S.String),
   file_size: S.optional(S.Finite),
-  is_global: S.optional(S.Boolean),
+  visibility: S.optional(ContentVisibility),
   source_file_path: S.optional(S.String),
 });
 

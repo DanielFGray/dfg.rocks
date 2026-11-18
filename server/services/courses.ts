@@ -3,7 +3,12 @@ import { RequestDatabase } from "../requestDatabase.js";
 import { sql } from "kysely";
 import { HttpError } from "../pgErrors.js";
 import * as S from "effect/Schema";
-import { Module, type RichTextDocument, Material } from "../../shared/schemas.js";
+import {
+  Module,
+  type ContentVisibility,
+  type RichTextDocument,
+  Material,
+} from "../../shared/schemas.js";
 import { extractMaterialIds } from "../../shared/content.js";
 import * as Struct from "effect/Struct";
 
@@ -14,7 +19,7 @@ export class Courses extends Context.Service<Courses>()("dfg-rocks/courses", {
       const db = yield* RequestDatabase;
       let q = db
         .selectFrom("app_public.courses")
-        .select(["id", "title", "description", "instrument"]);
+        .select(["id", "title", "description", "instrument", "visibility"]);
       if (studentId) {
         q = q.where(sql<boolean>`app_public.can_read_course(id, ${studentId}::uuid)`);
       }
@@ -28,7 +33,7 @@ export class Courses extends Context.Service<Courses>()("dfg-rocks/courses", {
             .with("course_data", (qb) =>
               qb
                 .selectFrom("app_public.courses")
-                .select(["id", "title", "description", "instrument"])
+                .select(["id", "title", "description", "instrument", "visibility"])
                 .where("id", "=", courseId),
             )
             .with("mods", (qb) =>
@@ -51,7 +56,7 @@ export class Courses extends Context.Service<Courses>()("dfg-rocks/courses", {
                   "mat.original_filename",
                   "mat.mime_type",
                   eb.cast("mat.file_size", "integer").as("file_size"),
-                  "mat.is_global",
+                  "mat.visibility",
                   "mat.notation_tracks",
                   "mm.sort_order",
                 ])
@@ -113,7 +118,9 @@ export class Courses extends Context.Service<Courses>()("dfg-rocks/courses", {
     listCourses: Effect.fn("listCourses")(function* () {
       const db = yield* RequestDatabase;
       return yield* db.execute(
-        db.selectFrom("app_public.courses").select(["id", "title", "description", "instrument"]),
+        db
+          .selectFrom("app_public.courses")
+          .select(["id", "title", "description", "instrument", "visibility"]),
       );
     }),
     listCourseStudents: Effect.fn("listCourseStudents")(function* (courseId: string) {
@@ -138,6 +145,7 @@ export class Courses extends Context.Service<Courses>()("dfg-rocks/courses", {
       title: string;
       description: string;
       instrument: string;
+      visibility?: ContentVisibility;
     }) {
       const db = yield* RequestDatabase;
       return yield* db
@@ -145,7 +153,7 @@ export class Courses extends Context.Service<Courses>()("dfg-rocks/courses", {
           db
             .insertInto("app_public.courses")
             .values(values)
-            .returning(["id", "title", "description", "instrument"]),
+            .returning(["id", "title", "description", "instrument", "visibility"]),
         )
         .pipe(
           Effect.head,
@@ -161,6 +169,7 @@ export class Courses extends Context.Service<Courses>()("dfg-rocks/courses", {
         title: string;
         description: string;
         instrument: string;
+        visibility: ContentVisibility;
       }>,
     ) {
       const db = yield* RequestDatabase;
@@ -170,7 +179,7 @@ export class Courses extends Context.Service<Courses>()("dfg-rocks/courses", {
             .updateTable("app_public.courses")
             .set(updates)
             .where("id", "=", id)
-            .returning(["id", "title", "description", "instrument"]),
+            .returning(["id", "title", "description", "instrument", "visibility"]),
         )
         .pipe(Effect.head, Effect.option, Effect.map(Option.getOrUndefined));
     }),
