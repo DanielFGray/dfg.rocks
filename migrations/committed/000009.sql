@@ -1,3 +1,10 @@
+--! Previous: sha1:98f993b17e8d87c7d2ae1034e5559d8c9b4f5d92
+--! Hash: sha1:21be104abd1be1368ed34f0a4fdcfdb648636604
+
+--! split: 1-current.sql
+-- Enter migration here
+
+--! split: 8-public-course-anonymous.sql
 /*
  * A public course is readable by anyone, with no account: a visitor whose request carries no
  * session reads the course, its modules, its module_materials and its public materials.
