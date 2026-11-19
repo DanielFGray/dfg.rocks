@@ -56,7 +56,7 @@ export function AlphaTabPlayer({
   onSessionEnd,
 }: AlphaTabPlayerProps) {
   const [trainerOpen, setTrainerOpen] = useState(false);
-  const { host, state, actions } = useScorePlayer({
+  const { host, keyRoot, state, actions } = useScorePlayer({
     source,
     defaultTrack: defaultTrackIndex ?? undefined,
     onPracticeTime: onPlaybackSeconds,
@@ -79,7 +79,7 @@ export function AlphaTabPlayer({
   const trackVolume = state.track === null ? 1 : (state.mixer.tracks[state.track]?.volume ?? 1);
 
   return (
-    <div className="mb-8">
+    <div ref={keyRoot} className="mb-8">
       <div
         className={`sticky top-[calc(env(safe-area-inset-top,0)+var(--portal-nav-visible-height))] z-30 bg-inherit backdrop-blur-md ${viewportClass}`}
       >
@@ -229,6 +229,7 @@ export function AlphaTabPlayer({
               loopCount: { "data-testid": "alphatab-trainer-loop-count" },
               step: { "data-testid": "alphatab-trainer-step-input" },
               stepMode: { "data-testid": "alphatab-trainer-step-mode" },
+              clear: { "data-testid": "alphatab-loop-reset" },
             }}
           />
         </div>
