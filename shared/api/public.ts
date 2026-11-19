@@ -15,6 +15,7 @@ import {
   TooManyRequestsErrorSchema,
 } from "../httpApiErrors.js";
 import { params } from "./fields.js";
+import { PlansResponse } from "./subscriptions.js";
 
 /** The contact form. `website` is a field people never see; a bot that fills it is refused. */
 export const ContactPayload = S.Struct({
@@ -87,6 +88,13 @@ export const publicGroup = HttpApiGroup.make("public")
       success: SuccessResponse,
     }).middleware(Csrf),
   )
+  // Prices are public: the pricing page lists them before a reader signs in.
+  .add(
+    HttpApiEndpoint.get("subscriptionPlans", "/subscriptions/plans", {
+      error: publicErrors,
+      success: PlansResponse,
+    }),
+  )
   .add(HttpApiEndpoint.get("oauthGoogle", "/oauth/google", { error: publicErrors }))
   .add(
     HttpApiEndpoint.get("oauthGoogleCallback", "/oauth/google/callback", { error: publicErrors }),
@@ -98,6 +106,9 @@ export const publicGroup = HttpApiGroup.make("public")
       payload: AppleCallbackPayload,
     }),
   )
+  // Stripe's signature covers the raw body, so this endpoint declares no payload and reads the body
+  // itself. It has no Csrf middleware: Stripe sends no session or CSRF header.
+  .add(HttpApiEndpoint.post("stripeWebhook", "/stripe/webhook", { error: publicErrors }))
   .add(
     HttpApiEndpoint.post("verifyEmail", "/verify-email", {
       error: publicErrors,

@@ -3,7 +3,7 @@ import * as Result from "effect/Result";
 import * as S from "effect/Schema";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
-import Link from "@tiptap/extension-link";
+import { AlphaTexNode } from "./AlphaTexNode.js";
 import { MaterialEmbedNode } from "./MaterialEmbedNode.js";
 import { MaterialsContext } from "./MaterialsContext.js";
 import { EditorToolbar } from "./EditorToolbar.js";
@@ -35,7 +35,11 @@ export function ModuleEditor({
   const materialMap = new Map(knownMaterials.map((m) => [m.id, m]));
 
   const editor = useEditor({
-    extensions: [StarterKit, Link.configure({ openOnClick: false }), MaterialEmbedNode],
+    extensions: [
+      StarterKit.configure({ link: { openOnClick: false } }),
+      MaterialEmbedNode,
+      AlphaTexNode,
+    ],
     content: content ?? undefined,
     onUpdate: ({ editor }) => {
       onChange(decodeDocument(editor.getJSON()));
@@ -56,7 +60,17 @@ export function ModuleEditor({
   return (
     <MaterialsContext.Provider value={materialMap}>
       <div className="rounded-lg border border-overlay/6 bg-card dark:border-overlay-dark/6 dark:bg-card-dark">
-        <EditorToolbar editor={editor} onEmbedMaterial={() => setPickerOpen(true)} />
+        <EditorToolbar
+          editor={editor}
+          onEmbedMaterial={() => setPickerOpen(true)}
+          onInsertScore={() =>
+            editor
+              .chain()
+              .focus()
+              .insertContent({ type: "alphaTex", attrs: { tex: "" } })
+              .run()
+          }
+        />
         <EditorContent
           editor={editor}
           className="prose max-w-none px-5 py-4 dark:prose-invert [&_.ProseMirror]:min-h-[300px] [&_.ProseMirror]:outline-hidden [&_.ProseMirror_p.is-editor-empty:first-child]:before:pointer-events-none [&_.ProseMirror_p.is-editor-empty:first-child]:before:float-left [&_.ProseMirror_p.is-editor-empty:first-child]:before:h-0 [&_.ProseMirror_p.is-editor-empty:first-child]:before:text-muted [&_.ProseMirror_p.is-editor-empty:first-child]:before:content-['Start_writing...'] dark:[&_.ProseMirror_p.is-editor-empty:first-child]:before:text-muted-dark"

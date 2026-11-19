@@ -15,10 +15,12 @@ import {
   InternalServerErrorSchema,
   NotFoundErrorSchema,
 } from "../../shared/httpApiErrors.js";
+import { SubscriptionPlan } from "../../shared/api/subscriptions.js";
 import { adaptHttpApiErrors } from "../httpApiErrors.js";
 import { Testing } from "../services/testing.js";
 import {
   BooleanFromString,
+  ContentVisibility,
   FamilyInviteRole,
   LessonStatus,
   LocationType,
@@ -60,7 +62,7 @@ const SeedMaterialPayload = S.Struct({
   original_filename: S.optional(S.String),
   mime_type: S.optional(S.String),
   file_size: S.optional(S.Finite),
-  is_global: S.optional(S.Boolean),
+  visibility: S.optional(ContentVisibility),
   source_file_path: S.optional(S.String),
 });
 
@@ -86,6 +88,14 @@ const TestingSeedFamilyMembershipQuery = S.Struct({
   family_slug: S.String,
   is_owner: S.optional(BooleanFromString),
   is_billing_contact: S.optional(BooleanFromString),
+});
+
+const TestingSeedSubscriptionQuery = S.Struct({
+  username: S.String,
+  plan: SubscriptionPlan,
+  status: S.optional(S.String),
+  period_end_days: S.optional(S.FiniteFromString),
+  cancel_at_period_end: S.optional(BooleanFromString),
 });
 
 const TestingSeedInvitationQuery = S.Struct({
@@ -162,6 +172,12 @@ export const testingGroup = HttpApiGroup.make("testing")
     HttpApiEndpoint.get("seedFamilyMembership", "/testing/seed-family-membership", {
       error: testingErrors,
       query: TestingSeedFamilyMembershipQuery,
+    }),
+  )
+  .add(
+    HttpApiEndpoint.get("seedSubscription", "/testing/seed-subscription", {
+      error: testingErrors,
+      query: TestingSeedSubscriptionQuery,
     }),
   )
   .add(
@@ -287,6 +303,21 @@ export const TestingApiGroupLive = HttpApiBuilder.group(testingApi, "testing", (
             slug: query.slug,
             name: query.name,
             ownerUsername: query.owner_username,
+          }),
+        );
+        return HttpServerResponse.jsonUnsafe({ success: true });
+      }, adaptTestingHandler),
+    )
+    .handle(
+      "seedSubscription",
+      Effect.fnUntraced(function* ({ query }) {
+        yield* Testing.use((testingService) =>
+          testingService.seedSubscription({
+            username: query.username,
+            plan: query.plan,
+            status: query.status ?? "active",
+            periodEndInDays: query.period_end_days ?? 30,
+            cancelAtPeriodEnd: query.cancel_at_period_end ?? false,
           }),
         );
         return HttpServerResponse.jsonUnsafe({ success: true });

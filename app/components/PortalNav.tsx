@@ -21,6 +21,7 @@ const navItems: Array<{
   label: string;
   mobileLabel?: string;
   adminOnly?: boolean;
+  staffOnly?: boolean;
   nonAdminOnly?: boolean;
   parentOnly?: boolean;
 }> = [
@@ -36,7 +37,7 @@ const navItems: Array<{
     label: "My Lessons",
     nonAdminOnly: true,
   },
-  { to: "/students", id: "nav-students", label: "Students", adminOnly: true },
+  { to: "/people", id: "nav-people", label: "People", staffOnly: true },
   { to: "/billing/monthly", id: "nav-payments", label: "Payments", adminOnly: true },
   { to: "/billing", id: "nav-billing", label: "Billing", adminOnly: true },
   {
@@ -54,7 +55,7 @@ const navItems: Array<{
 export function PortalNav() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [navVisible, setNavVisible] = useState(true);
-  const { isAdmin, user, isParent, familyStudents, activeStudentId } = useAuth();
+  const { isAdmin, isStaff, user, isParent, familyStudents, activeStudentId } = useAuth();
   const switchStudent = useSwitchActiveStudent();
   const navigate = useNavigate();
   const router = useRouter();
@@ -74,6 +75,7 @@ export function PortalNav() {
   const visibleItems = navItems.filter(
     (it) =>
       (it.adminOnly ? isAdmin : true) &&
+      (it.staffOnly ? isStaff : true) &&
       (it.nonAdminOnly ? !isAdmin : true) &&
       (it.parentOnly ? isParent : true),
   );

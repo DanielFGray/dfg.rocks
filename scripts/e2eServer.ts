@@ -11,6 +11,9 @@ const childEnv: NodeJS.ProcessEnv = {
   ...testDatabaseEnv(),
   // Vite inlines VITE_* variables at build time, so the build needs the E2E origin.
   VITE_ROOT_URL: `http://127.0.0.1:${port}`,
+  // Stripe is faked in NODE_ENV=test (server/services/stripeFake.ts). The key only has to be set;
+  // no request reaches Stripe.
+  STRIPE_SECRET_KEY: "sk_test_e2e_fake",
   HOST: "127.0.0.1",
   PORT: port,
 };

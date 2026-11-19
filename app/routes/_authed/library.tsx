@@ -7,7 +7,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { getCookie } from "@tanstack/react-start/server";
 import { Sessions } from "../../../server/services/sessions.js";
 import { api } from "../../lib/api.js";
-import type { Material } from "../../../shared/schemas.js";
+import type { ContentVisibility, Material } from "../../../shared/schemas.js";
 import { runServerEffect } from "../../lib/serverEffect.js";
 import { serializeLibraryMaterial } from "../../../shared/responseMappers.js";
 import { Materials } from "../../../server/services/materials.js";
@@ -104,11 +104,11 @@ function LibraryPage() {
     setExpandedId((prev) => (prev === id ? null : id));
   };
 
-  const handleUpload = (file: File, title: string) => {
+  const handleUpload = (file: File, title: string, visibility: ContentVisibility) => {
     const formData = new FormData();
     formData.append("file", file);
     formData.append("title", title);
-    formData.append("is_global", "true");
+    formData.append("visibility", visibility);
     return Effect.runPromise(api.materialsAdmin.uploadMaterial({ payload: formData }));
   };
 

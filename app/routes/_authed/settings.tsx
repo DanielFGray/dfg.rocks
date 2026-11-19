@@ -6,6 +6,7 @@ import { getCookie } from "@tanstack/react-start/server";
 import { AdminSection } from "../../components/settings/AdminSection.js";
 import { EmailSection } from "../../components/settings/EmailSection.js";
 import { DeleteAccountSection } from "../../components/settings/DeleteAccountSection.js";
+import { SubscriptionSettings } from "../../components/subscriptions/SubscriptionSettings.js";
 import { TestimonialEditor } from "../../components/testimonials/TestimonialEditor.js";
 import { runServerEffect } from "../../lib/serverEffect.js";
 import { Account } from "../../../server/services/account.js";
@@ -97,6 +98,8 @@ function SettingsPage() {
   return (
     <main data-testid="settings" className="mx-auto max-w-[1100px] px-5 pt-20 pb-16 md:px-8">
       <h1 className="mb-8 text-3xl font-bold tracking-tight">Account Settings</h1>
+
+      <SubscriptionSettings />
 
       {isAdmin ? (
         <AdminSection

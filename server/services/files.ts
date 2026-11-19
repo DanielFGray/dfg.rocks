@@ -5,6 +5,7 @@ import { sql } from "kysely";
 import { Effect, Option, Context, Layer } from "effect";
 import { RequestDatabase } from "../requestDatabase.js";
 import { HttpError } from "../pgErrors.js";
+import type { ContentVisibility } from "../../shared/schemas.js";
 import { extractNotationTracksFromBytes } from "./notationService.js";
 import { Storage, type StorageLocation } from "./storage.js";
 
@@ -26,7 +27,7 @@ type MaterialRecord = {
   original_filename: string;
   mime_type: string;
   file_size: number;
-  is_global: boolean;
+  visibility: ContentVisibility;
   notation_tracks: unknown;
 };
 
@@ -51,7 +52,7 @@ function toMaterialResponse(material: MaterialRecord): MaterialRecord {
     original_filename: material.original_filename,
     mime_type: material.mime_type,
     file_size: material.file_size,
-    is_global: material.is_global,
+    visibility: material.visibility,
     notation_tracks: material.notation_tracks,
   };
 }
@@ -68,7 +69,7 @@ const findMaterialByContentHashEffect = Effect.fnUntraced(function* (contentHash
             "original_filename",
             "mime_type",
             eb.cast<number>("file_size", "integer").as("file_size"),
-            "is_global",
+            "visibility",
             "notation_tracks",
             "storage_backend",
             "storage_key",
@@ -100,7 +101,7 @@ export class Files extends Context.Service<Files>()("dfg-rocks/files", {
       upload: Effect.fn("fileUpload")(function* (
         file: File | Multipart.PersistedFile,
         title: string,
-        isGlobal: boolean,
+        visibility: ContentVisibility,
         uploadedBy: string,
       ) {
         let fileSize: number;
@@ -169,7 +170,7 @@ export class Files extends Context.Service<Files>()("dfg-rocks/files", {
                   content_hash: contentHash,
                   mime_type: mimeType,
                   file_size: bytes.byteLength,
-                  is_global: isGlobal,
+                  visibility,
                   notation_tracks:
                     notationTracks === null ? null : sql`${JSON.stringify(notationTracks)}::jsonb`,
                   uploaded_by: uploadedBy,
@@ -180,7 +181,7 @@ export class Files extends Context.Service<Files>()("dfg-rocks/files", {
                   "original_filename",
                   "mime_type",
                   eb.cast<number>("file_size", "integer").as("file_size"),
-                  "is_global",
+                  "visibility",
                   "notation_tracks",
                 ]),
             )
@@ -210,7 +211,9 @@ export class Files extends Context.Service<Files>()("dfg-rocks/files", {
         );
       }),
 
-      download: Effect.fnUntraced(function* (materialId: string, userId: string) {
+      // RLS on app_public.materials is the access check: a material the reader cannot read
+      // is absent from this query and answers 404, the same as a material that does not exist.
+      download: Effect.fnUntraced(function* (materialId: string) {
         const material = yield* RequestDatabase.use((db) =>
           db
             .execute(
@@ -223,8 +226,6 @@ export class Files extends Context.Service<Files>()("dfg-rocks/files", {
                   "storage_backend",
                   "storage_key",
                   "mime_type",
-                  "is_global",
-                  "uploaded_by",
                 ])
                 .where("id", "=", materialId),
             )
@@ -236,50 +237,6 @@ export class Files extends Context.Service<Files>()("dfg-rocks/files", {
               }),
             ),
         );
-        const user = yield* RequestDatabase.use((db) =>
-          db
-            .execute(
-              db.selectFrom("app_public.users").select(["id", "role"]).where("id", "=", userId),
-            )
-            .pipe(
-              Effect.head,
-              Effect.catchTags({
-                NoSuchElementError: () => new HttpError({ status: 404, message: "User not found" }),
-              }),
-            ),
-        );
-        if (user.role !== "admin") {
-          let hasAccess = material.is_global;
-          if (!hasAccess) {
-            const assignedRows = yield* RequestDatabase.use((db) =>
-              db.execute(
-                db
-                  .selectFrom("app_public.student_materials")
-                  .select(["material_id"])
-                  .where("student_id", "=", userId)
-                  .where("material_id", "=", materialId),
-              ),
-            );
-            if (assignedRows[0]) hasAccess = true;
-          }
-          if (!hasAccess) {
-            const enrolledRows = yield* RequestDatabase.use((db) =>
-              db.execute(
-                db
-                  .selectFrom("app_public.module_materials as mm")
-                  .innerJoin("app_public.modules as mod", "mod.id", "mm.module_id")
-                  .innerJoin("app_public.enrollments as e", "e.course_id", "mod.course_id")
-                  .where("mm.material_id", "=", materialId)
-                  .where("e.student_id", "=", userId)
-                  .select(["mm.material_id"]),
-              ),
-            );
-            if (enrolledRows[0]) hasAccess = true;
-          }
-          if (!hasAccess) {
-            return yield* new HttpError({ status: 403, message: "Access denied" });
-          }
-        }
         const location = toStorageLocation(material);
         const exists = yield* storage.exists(location);
         if (!exists) {

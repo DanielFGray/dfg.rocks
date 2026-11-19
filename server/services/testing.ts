@@ -1,8 +1,9 @@
 import crypto from "crypto";
 import fs from "fs/promises";
-import { Effect, Option, Context, Layer } from "effect";
+import { Clock, Effect, Option, Context, Layer } from "effect";
 import { sql } from "kysely";
-import type { LessonStatus, LocationType } from "../../shared/schemas.js";
+import type { ContentVisibility, LessonStatus, LocationType } from "../../shared/schemas.js";
+import type { SubscriptionPlan } from "../../shared/api/subscriptions.js";
 import { HttpError } from "../pgErrors.js";
 import { extractNotationTracksFromBytes, resolveAssignedTrackIndex } from "./notationService.js";
 import { Sessions } from "./sessions.js";
@@ -271,7 +272,7 @@ export class Testing extends Context.Service<Testing>()("dfg-rocks/testing", {
         original_filename?: string;
         mime_type?: string;
         file_size?: number;
-        is_global?: boolean;
+        visibility?: ContentVisibility;
         source_file_path?: string;
       }) {
         const originalFilename =
@@ -303,7 +304,7 @@ export class Testing extends Context.Service<Testing>()("dfg-rocks/testing", {
                 content_hash: null,
                 mime_type: body.mime_type ?? "application/pdf",
                 file_size: body.file_size ?? bytes.byteLength,
-                is_global: body.is_global ?? false,
+                visibility: body.visibility ?? "course",
                 notation_tracks:
                   notationTracks === null ? null : sql`${JSON.stringify(notationTracks)}::jsonb`,
               })
@@ -398,6 +399,31 @@ export class Testing extends Context.Service<Testing>()("dfg-rocks/testing", {
         return family.id;
       }),
 
+      seedSubscription: Effect.fnUntraced(function* (values: {
+        username: string;
+        plan: SubscriptionPlan;
+        status: string;
+        periodEndInDays: number;
+        cancelAtPeriodEnd: boolean;
+      }) {
+        const user = yield* queries.userIdByUsername(values.username).pipe(Effect.head);
+        const now = yield* Clock.currentTimeMillis;
+        yield* db.execute(
+          db.insertInto("app_public.subscriptions").values({
+            payer_id: user.id,
+            stripe_customer_id: `cus_e2e_${user.id}`,
+            stripe_subscription_id: `sub_${crypto.randomUUID()}`,
+            status: values.status,
+            // The fake's price for the plan (server/services/stripeFake.ts).
+            price_id: `price_e2e_${values.plan}`,
+            plan: values.plan,
+            current_period_end: new Date(now + values.periodEndInDays * 24 * 60 * 60 * 1000),
+            cancel_at_period_end: values.cancelAtPeriodEnd,
+            stripe_event_created: new Date(now),
+          }),
+        );
+      }),
+
       seedFamilyMembership: Effect.fnUntraced(function* (values: {
         username: string;
         familySlug: string;
@@ -456,7 +482,7 @@ export class Testing extends Context.Service<Testing>()("dfg-rocks/testing", {
             family_id: familyId,
             user_id: admin.id,
             is_owner: true,
-            is_billing_contact: true,
+            is_billing_contact: false,
           });
         }
 

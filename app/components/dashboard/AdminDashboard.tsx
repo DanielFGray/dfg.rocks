@@ -1,5 +1,12 @@
 import { Link } from "@tanstack/react-router";
-import type { Course, Message, Lesson, Submission, Testimonial, User } from "../../../shared/schemas.js";
+import type {
+  Course,
+  Message,
+  Lesson,
+  Submission,
+  Testimonial,
+  User,
+} from "../../../shared/schemas.js";
 import { useAuth } from "../../lib/hooks/useAuth.js";
 import { Button } from "../ui/Button.js";
 import { Card } from "../ui/Card.js";
@@ -295,7 +302,7 @@ export function AdminDashboard({
           <Link to="/lessons" className="no-underline">
             <Button variant="outline">Manage Lessons</Button>
           </Link>
-          <Link to="/students" className="no-underline">
+          <Link to="/people" className="no-underline">
             <Button variant="outline">Students</Button>
           </Link>
           <Link to="/submissions" className="no-underline">

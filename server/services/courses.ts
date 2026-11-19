@@ -3,7 +3,12 @@ import { RequestDatabase } from "../requestDatabase.js";
 import { sql } from "kysely";
 import { HttpError } from "../pgErrors.js";
 import * as S from "effect/Schema";
-import { Module, type RichTextDocument, Material } from "../../shared/schemas.js";
+import {
+  Module,
+  type ContentVisibility,
+  type RichTextDocument,
+  Material,
+} from "../../shared/schemas.js";
 import { extractMaterialIds } from "../../shared/content.js";
 import * as Struct from "effect/Struct";
 
@@ -14,16 +19,9 @@ export class Courses extends Context.Service<Courses>()("dfg-rocks/courses", {
       const db = yield* RequestDatabase;
       let q = db
         .selectFrom("app_public.courses")
-        .select(["id", "title", "description", "instrument"]);
+        .select(["id", "title", "description", "instrument", "visibility"]);
       if (studentId) {
-        q = q.where((eb) =>
-          eb("id", "in", (sq) =>
-            sq
-              .selectFrom("app_public.enrollments")
-              .select("course_id")
-              .where("student_id", "=", studentId),
-          ),
-        );
+        q = q.where(sql<boolean>`app_public.can_read_course(id, ${studentId}::uuid)`);
       }
       return yield* db.execute(q);
     }),
@@ -35,7 +33,7 @@ export class Courses extends Context.Service<Courses>()("dfg-rocks/courses", {
             .with("course_data", (qb) =>
               qb
                 .selectFrom("app_public.courses")
-                .select(["id", "title", "description", "instrument"])
+                .select(["id", "title", "description", "instrument", "visibility"])
                 .where("id", "=", courseId),
             )
             .with("mods", (qb) =>
@@ -58,7 +56,7 @@ export class Courses extends Context.Service<Courses>()("dfg-rocks/courses", {
                   "mat.original_filename",
                   "mat.mime_type",
                   eb.cast("mat.file_size", "integer").as("file_size"),
-                  "mat.is_global",
+                  "mat.visibility",
                   "mat.notation_tracks",
                   "mm.sort_order",
                 ])
@@ -105,10 +103,24 @@ export class Courses extends Context.Service<Courses>()("dfg-rocks/courses", {
 
       return { ...course, modules: modulesWithMaterials };
     }),
+    /**
+     * Whether the course exists, whatever the caller may read. A caller asks after a course it cannot
+     * read, to tell a locked course from a missing one. Runs in the caller's visitor transaction.
+     */
+    courseExists: Effect.fn("courseExists")(function* (courseId: string) {
+      const db = yield* RequestDatabase;
+      const rows = yield* db.execute(
+        db.selectNoFrom(sql<boolean>`app_public.course_exists(${courseId}::uuid)`.as("exists")),
+      );
+      return rows[0]?.exists === true;
+    }),
+
     listCourses: Effect.fn("listCourses")(function* () {
       const db = yield* RequestDatabase;
       return yield* db.execute(
-        db.selectFrom("app_public.courses").select(["id", "title", "description", "instrument"]),
+        db
+          .selectFrom("app_public.courses")
+          .select(["id", "title", "description", "instrument", "visibility"]),
       );
     }),
     listCourseStudents: Effect.fn("listCourseStudents")(function* (courseId: string) {
@@ -133,6 +145,7 @@ export class Courses extends Context.Service<Courses>()("dfg-rocks/courses", {
       title: string;
       description: string;
       instrument: string;
+      visibility?: ContentVisibility;
     }) {
       const db = yield* RequestDatabase;
       return yield* db
@@ -140,7 +153,7 @@ export class Courses extends Context.Service<Courses>()("dfg-rocks/courses", {
           db
             .insertInto("app_public.courses")
             .values(values)
-            .returning(["id", "title", "description", "instrument"]),
+            .returning(["id", "title", "description", "instrument", "visibility"]),
         )
         .pipe(
           Effect.head,
@@ -156,6 +169,7 @@ export class Courses extends Context.Service<Courses>()("dfg-rocks/courses", {
         title: string;
         description: string;
         instrument: string;
+        visibility: ContentVisibility;
       }>,
     ) {
       const db = yield* RequestDatabase;
@@ -165,7 +179,7 @@ export class Courses extends Context.Service<Courses>()("dfg-rocks/courses", {
             .updateTable("app_public.courses")
             .set(updates)
             .where("id", "=", id)
-            .returning(["id", "title", "description", "instrument"]),
+            .returning(["id", "title", "description", "instrument", "visibility"]),
         )
         .pipe(Effect.head, Effect.option, Effect.map(Option.getOrUndefined));
     }),

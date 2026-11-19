@@ -19,7 +19,8 @@ import { FamiliesApiGroupLive, FamiliesAdminApiGroupLive } from "./api/families.
 import { RealtimeApiGroupLive } from "./api/realtime.js";
 import { CalendarConnectAdminApiGroupLive, CalendarAdminApiGroupLive } from "./api/calendar.js";
 import { GuardsLive } from "./api/guards.js";
-import { StudentsStaffApiGroupLive, StudentsAdminApiGroupLive } from "./api/students.js";
+import { StudentsAdminApiGroupLive } from "./api/students.js";
+import { PeopleStaffApiGroupLive, PeopleAdminApiGroupLive } from "./api/people.js";
 import { MonthlyBillingAdminApiGroupLive } from "./api/monthlyBilling.js";
 import { PayersAdminApiGroupLive } from "./api/payers.js";
 import { BillsAdminApiGroupLive } from "./api/bills.js";
@@ -27,6 +28,7 @@ import { PaymentsAdminApiGroupLive } from "./api/payments.js";
 import { CreditsAdminApiGroupLive } from "./api/credits.js";
 import { BillingRatesAdminApiGroupLive } from "./api/billingRates.js";
 import { FamilyBillingApiGroupLive } from "./api/familyBilling.js";
+import { SubscriptionsApiGroupLive } from "./api/subscriptions.js";
 import { HealthApiGroupLive } from "./api/health.js";
 import { PublicApiGroupLive } from "./api/public.js";
 import { PgAuthDB, PgRootDB } from "./db.js";
@@ -38,6 +40,8 @@ import type { InProcessApi } from "./inProcessApi.js";
 import { BillingLedger } from "./services/billingLedger.js";
 import { Files } from "./services/files.js";
 import { FamilyBilling } from "./services/familyBilling.js";
+import { Stripe } from "./services/stripe.js";
+import { StripeWebhook } from "./services/stripeWebhook.js";
 import { GoogleCalendar } from "./services/googleCalendar.js";
 import { LessonPolicy } from "./services/lessonPolicy.js";
 import { Contact } from "./services/contact.js";
@@ -58,6 +62,7 @@ import { Storage } from "./services/storage.js";
 import { TestimonialReminder } from "./services/testimonialReminder.js";
 import { Users } from "./services/users.js";
 import { Students } from "./services/students.js";
+import { People } from "./services/people.js";
 
 const infrastructureLayer = Layer.mergeAll(
   NodeHttpPlatform.layer,
@@ -90,6 +95,16 @@ const rateLimitLayer = Layer.unwrap(
   ),
 );
 
+// E2E runs (NODE_ENV=test) answer Stripe's HTTP calls from a fake, so the test server never sends a
+// request to Stripe. The fake module loads only then, as the testing routes do.
+const stripeLayer = Layer.unwrap(
+  Effect.gen(function* () {
+    if ((yield* Config.String("NODE_ENV")) !== "test") return Stripe.layer;
+    const { stripeFakeHttp } = yield* Effect.promise(() => import("./services/stripeFake.js"));
+    return Stripe.layerWithHttp(stripeFakeHttp);
+  }),
+);
+
 const servicesLayer = Layer.mergeAll(
   Realtime.layer,
   GoogleCalendar.layer,
@@ -99,6 +114,8 @@ const servicesLayer = Layer.mergeAll(
   LessonPolicy.layer,
   Auth.layer,
   FamilyBilling.layer,
+  stripeLayer,
+  StripeWebhook.layer,
   Pdf.layer,
   BillingLedger.layer,
   rateLimitLayer,
@@ -116,6 +133,7 @@ const servicesLayer = Layer.mergeAll(
   TestimonialReminder.layer,
   Users.layer,
   Students.layer,
+  People.layer,
 ).pipe(Layer.provideMerge(infrastructureLayer));
 
 /** The services every request and server function uses, without the job runner. */
@@ -148,7 +166,8 @@ const GroupHandlersLive = Layer.mergeAll(
   RealtimeApiGroupLive,
   CalendarConnectAdminApiGroupLive,
   CalendarAdminApiGroupLive,
-  StudentsStaffApiGroupLive,
+  PeopleStaffApiGroupLive,
+  PeopleAdminApiGroupLive,
   StudentsAdminApiGroupLive,
   MonthlyBillingAdminApiGroupLive,
   PayersAdminApiGroupLive,
@@ -157,6 +176,7 @@ const GroupHandlersLive = Layer.mergeAll(
   CreditsAdminApiGroupLive,
   BillingRatesAdminApiGroupLive,
   FamilyBillingApiGroupLive,
+  SubscriptionsApiGroupLive,
 );
 
 const ApiLive = HttpApiBuilder.layer(Contract).pipe(

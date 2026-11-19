@@ -25,6 +25,10 @@ const rules = {
   "forgot-password": { limit: 5, window: "1 hour", whenStoreDown: "deny" },
   "reset-password": { limit: 10, window: "1 hour", whenStoreDown: "allow" },
   contact: { limit: 5, window: "1 minute", whenStoreDown: "deny" },
+  // Each checkout call creates a Stripe session, and each portal call opens one. An outage of the
+  // store must not open either gate.
+  checkout: { limit: 10, window: "1 minute", whenStoreDown: "deny" },
+  "billing-portal": { limit: 10, window: "1 minute", whenStoreDown: "deny" },
   "accept-invite": { limit: 10, window: "1 minute", whenStoreDown: "allow" },
 } satisfies Record<string, Rule>;
 

@@ -1,28 +1,17 @@
 import { Effect } from "effect";
-import { withAuthContext } from "../../../server/requestDatabase.js";
-import * as S from "effect/Schema";
 import { useState } from "react";
-import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
-import { requireAdmin } from "../../lib/adminRoute.js";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { createServerFn } from "@tanstack/react-start";
-import { getCookie } from "@tanstack/react-start/server";
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { useMutation, useQuery, useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { useForm } from "@tanstack/react-form";
 import { api } from "../../lib/api.js";
 import { requiredValidator } from "../../lib/validators.js";
 import { fieldError } from "../../lib/form.js";
-import type { AssignedMaterial, Course, Material, StudentDetail } from "../../../shared/schemas.js";
+import type { AssignedMaterial, PersonFamily, UserRole } from "../../../shared/schemas.js";
+import { useAuth } from "../../lib/hooks/useAuth.js";
+import { requireStaff } from "../../lib/adminRoute.js";
+import { adminCoursesQuery, libraryQuery, personDetailQuery } from "../../lib/queries.js";
+import { Select } from "../../components/ui/Select.js";
 import { findNotationTrack, formatNotationTrackLabel } from "../../../shared/notationTracks.js";
-import { runServerEffect } from "../../lib/serverEffect.js";
-import { Students } from "../../../server/services/students.js";
-import { Materials } from "../../../server/services/materials.js";
-import { Courses } from "../../../server/services/courses.js";
-import {
-  serializeCourse,
-  serializeLibraryMaterial,
-  serializeStudentDetail,
-} from "../../../shared/responseMappers.js";
-import { Sessions } from "../../../server/services/sessions.js";
 import { Button } from "../../components/ui/Button.js";
 import { Card } from "../../components/ui/Card.js";
 import { ComboBox } from "../../components/ui/ComboBox.js";
@@ -31,55 +20,48 @@ import { ConfirmDialog } from "../../components/ui/ConfirmDialog.js";
 import { EmptyState } from "../../components/ui/EmptyState.js";
 import { StudentRecurringBilling } from "../../components/students/StudentRecurringBilling.js";
 
-type StudentDetailPageData = {
-  student: StudentDetail;
-  allCourses: Course[];
-  allMaterials: Material[];
-};
+const ROLE_OPTIONS: { value: UserRole; label: string }[] = [
+  { value: "student", label: "Student" },
+  { value: "parent", label: "Parent" },
+  { value: "teacher", label: "Teacher" },
+  { value: "admin", label: "Admin" },
+];
 
-const getStudentDetailPageData = createServerFn({ method: "GET" })
-  .validator(S.toStandardSchemaV1(S.Struct({ studentId: S.String })))
-  .handler(({ data }) =>
-    runServerEffect(
-      Effect.gen(function* () {
-        const session = yield* Sessions.use((sessions) =>
-          sessions.requireAdminSession(getCookie("session")),
-        );
-        const [student, allCourses, allMaterials] = yield* Effect.all([
-          Students.use((studentService) => studentService.getStudent(data.studentId)),
-          Courses.use((courseService) => courseService.listCourses()),
-          Materials.use((materialService) =>
-            materialService.library({
-              limit: 1000,
-              offset: 0,
-            }),
-          ),
-        ]).pipe(withAuthContext(session.session.id));
-        return {
-          student: serializeStudentDetail(student),
-          allCourses: allCourses.map(serializeCourse),
-          allMaterials: allMaterials.map(serializeLibraryMaterial),
-        } satisfies StudentDetailPageData;
-      }),
-    ),
-  );
+function roleLabel(role: UserRole): string {
+  return ROLE_OPTIONS.find((option) => option.value === role)?.label ?? role;
+}
 
-export const Route = createFileRoute("/_authed/students/$id")({
-  beforeLoad: requireAdmin,
-  head: () => ({ meta: [{ title: "Student Detail | DFG Portal" }] }),
-  loader: ({ params }) => getStudentDetailPageData({ data: { studentId: params.id } }),
-  component: StudentDetailPage,
+function familyRoleLabel(family: PersonFamily): string {
+  const flags = [
+    family.is_owner ? "Owner" : null,
+    family.is_billing_contact ? "Billing contact" : null,
+  ].filter((flag): flag is string => flag !== null);
+  return flags.length > 0 ? flags.join(" · ") : "Member";
+}
+
+// Staff open this page. Each admin-only action on it calls an admin endpoint, so the page renders
+// those actions for admins alone; a teacher reads the same data.
+export const Route = createFileRoute("/_authed/people/$id")({
+  beforeLoad: requireStaff,
+  head: () => ({ meta: [{ title: "Person | DFG Portal" }] }),
+  component: PersonPage,
   pendingComponent: () => <div>Loading...</div>,
 });
 
-function StudentDetailPage() {
+function PersonPage() {
   const { id } = Route.useParams();
   const queryClient = useQueryClient();
-  const router = useRouter();
-  const { student, allCourses, allMaterials } = Route.useLoaderData();
+  const { user: viewer, isAdmin } = useAuth();
+  const { data: person } = useSuspenseQuery(personDetailQuery(id));
 
-  const enrolledIds = new Set(student.enrolled_courses.map((c) => c.id));
-  const assignedIds = new Set(student.assigned_materials.map((m) => m.id));
+  // Only admins reach the course and material lists, so the queries wait for admin.
+  const { data: courses } = useQuery({ ...adminCoursesQuery, enabled: isAdmin });
+  const { data: library } = useQuery({ ...libraryQuery, enabled: isAdmin });
+  const allCourses = courses ?? [];
+  const allMaterials = library ?? [];
+
+  const enrolledIds = new Set(person.enrolled_courses.map((c) => c.id));
+  const assignedIds = new Set(person.assigned_materials.map((m) => m.id));
 
   const availableCourses = allCourses.filter((c) => !enrolledIds.has(c.id));
   const availableMaterials = allMaterials.filter((m) => !assignedIds.has(m.id));
@@ -95,10 +77,29 @@ function StudentDetailPage() {
   } | null>(null);
   const [unassignTarget, setUnassignTarget] = useState<AssignedMaterial | null>(null);
 
-  const invalidateStudent = () => {
-    void queryClient.invalidateQueries({ queryKey: ["admin", "students", id] });
-    void router.invalidate();
+  // The people list and this person's detail share the ["admin", "people"] prefix.
+  const invalidatePerson = () => {
+    void queryClient.invalidateQueries({ queryKey: ["admin", "people"] });
   };
+
+  const [roleError, setRoleError] = useState<string | null>(null);
+  const [pendingRole, setPendingRole] = useState<UserRole | null>(null);
+  const roleMutation = useMutation({
+    mutationFn: (role: UserRole) =>
+      Effect.runPromise(api.peopleAdmin.setUserRole({ params: { id }, payload: { role } })),
+    onSuccess: () => {
+      setRoleError(null);
+      invalidatePerson();
+    },
+    onError: (err: unknown) => {
+      setRoleError(err instanceof Error ? err.message : "Failed to change role");
+    },
+    onSettled: () => setPendingRole(null),
+  });
+  // An admin cannot change their own role; the server refuses it too.
+  const canChangeRole = isAdmin && viewer?.id !== id;
+  // Learner sections (courses, materials, recurring billing) apply to students only.
+  const isLearner = person.role === "student";
 
   const enrollMutation = useMutation({
     mutationFn: (courseId: string) =>
@@ -108,7 +109,7 @@ function StudentDetailPage() {
           payload: { course_id: courseId },
         }),
       ),
-    onSettled: () => invalidateStudent(),
+    onSettled: () => invalidatePerson(),
   });
 
   const unenrollMutation = useMutation({
@@ -118,7 +119,7 @@ function StudentDetailPage() {
           params: { id, courseId },
         }),
       ),
-    onSettled: () => invalidateStudent(),
+    onSettled: () => invalidatePerson(),
   });
 
   const assignMutation = useMutation({
@@ -138,7 +139,7 @@ function StudentDetailPage() {
           },
         }),
       ),
-    onSettled: () => invalidateStudent(),
+    onSettled: () => invalidatePerson(),
   });
 
   const unassignMutation = useMutation({
@@ -148,7 +149,7 @@ function StudentDetailPage() {
           params: { id, materialId },
         }),
       ),
-    onSettled: () => invalidateStudent(),
+    onSettled: () => invalidatePerson(),
   });
 
   const openEnroll = () => setEnrollModalOpen(true);
@@ -217,72 +218,62 @@ function StudentDetailPage() {
     },
   });
 
+  const displayName = person.name ?? person.username;
+
   return (
-    <main data-testid="student-detail" className="mx-auto max-w-[900px] px-5 pt-20 pb-16 md:px-8">
+    <main data-testid="person-detail" className="mx-auto max-w-[900px] px-5 pt-20 pb-16 md:px-8">
       <div className="mb-8">
         <div className="mb-2 flex items-center gap-3">
           <Link
-            to="/students"
+            to="/people"
             className="text-sm text-muted no-underline transition-colors hover:text-primary dark:text-muted-dark dark:hover:text-primary-dark"
           >
-            &larr; Students
+            &larr; People
           </Link>
         </div>
-        <h1 className="text-3xl font-bold tracking-tight">{student.name}</h1>
+        <h1 className="text-3xl font-bold tracking-tight">{displayName}</h1>
         <p className="mt-1 text-muted dark:text-muted-dark">
-          @{student.username} &middot; {student.email}
+          @{person.username}
+          {person.email ? <> &middot; {person.email}</> : null}
         </p>
+        {canChangeRole ? (
+          <div className="mt-4 max-w-xs">
+            <Select
+              id="person-role"
+              data-testid="person-role"
+              name="role"
+              label="Role"
+              value={person.role}
+              onChange={(role) => {
+                if (role !== person.role) setPendingRole(role as UserRole);
+              }}
+              options={ROLE_OPTIONS}
+              disabled={roleMutation.isPending}
+              error={roleError ?? undefined}
+            />
+          </div>
+        ) : (
+          <p className="mt-4 text-sm text-muted dark:text-muted-dark">
+            Role: <span className="font-medium capitalize">{person.role}</span>
+          </p>
+        )}
       </div>
 
-      <section className="mb-10">
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-xl font-semibold text-primary dark:text-primary-dark">
-            Enrolled Courses
-          </h2>
-          {availableCourses.length > 0 ? (
-            <Button
-              variant="outline"
-              onClick={openEnroll}
-              data-testid="enroll-student"
-              className="px-3 py-1.5 text-xs"
-            >
-              + Enroll
-            </Button>
-          ) : null}
-        </div>
-        {student.enrolled_courses.length === 0 ? (
-          <EmptyState
-            message="Not enrolled in any courses."
-            action={
-              availableCourses.length > 0
-                ? { label: "Enroll in Course", onClick: openEnroll }
-                : undefined
-            }
-          />
+      <section className="mb-10" data-testid="person-families">
+        <h2 className="mb-4 text-xl font-semibold text-primary dark:text-primary-dark">Families</h2>
+        {person.families.length === 0 ? (
+          <EmptyState message="Not in a family." />
         ) : (
           <div className="flex flex-col gap-3">
-            {student.enrolled_courses.map((c) => (
-              <Card key={c.id}>
+            {person.families.map((family) => (
+              <Card key={family.id}>
                 <div className="flex items-center justify-between">
-                  <div>
-                    <Link
-                      to="/courses/$id"
-                      params={{ id: c.id }}
-                      className="font-semibold text-primary no-underline transition-colors hover:text-accent dark:text-primary-dark"
-                    >
-                      {c.title}
-                    </Link>
-                    <span className="ml-3 text-sm text-muted dark:text-muted-dark">
-                      {c.instrument}
-                    </span>
-                  </div>
-                  <Button
-                    variant="ghost"
-                    onClick={openUnenroll(c)}
-                    className="px-2 py-1 text-xs text-red-600 hover:text-red-300 dark:text-red-400"
-                  >
-                    Unenroll
-                  </Button>
+                  <span className="font-semibold text-primary dark:text-primary-dark">
+                    {family.name}
+                  </span>
+                  <span className="text-sm text-muted dark:text-muted-dark">
+                    {familyRoleLabel(family)}
+                  </span>
                 </div>
               </Card>
             ))}
@@ -290,62 +281,149 @@ function StudentDetailPage() {
         )}
       </section>
 
-      <section>
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-xl font-semibold text-primary dark:text-primary-dark">
-            Assigned Materials
+      {person.lessons.length > 0 ? (
+        <section className="mb-10" data-testid="person-lessons">
+          <h2 className="mb-4 text-xl font-semibold text-primary dark:text-primary-dark">
+            Lessons
           </h2>
-          {availableMaterials.length > 0 ? (
-            <Button
-              variant="outline"
-              onClick={openAssign}
-              data-testid="assign-material"
-              className="px-3 py-1.5 text-xs"
-            >
-              + Assign
-            </Button>
-          ) : null}
-        </div>
-        {student.assigned_materials.length === 0 ? (
-          <EmptyState
-            message="No materials assigned."
-            action={
-              availableMaterials.length > 0
-                ? { label: "Assign Material", onClick: openAssign }
-                : undefined
-            }
-          />
-        ) : (
           <div className="flex flex-col gap-2">
-            {student.assigned_materials.map((m) => (
+            {person.lessons.map((lesson) => (
               <div
-                key={m.id}
+                key={lesson.id}
                 className="flex items-center gap-3 rounded-lg border border-overlay/6 bg-card px-4 py-3 text-sm dark:border-overlay-dark/6 dark:bg-card-dark"
               >
                 <span className="flex-1 font-medium text-primary dark:text-primary-dark">
-                  {m.title}
+                  {lesson.scheduled_at.toLocaleString()}
                 </span>
                 <span className="text-xs text-muted/60 dark:text-muted-dark/60">
-                  {m.original_filename}
-                  {(() => {
-                    const track = findNotationTrack(m.notation_tracks, m.assigned_track_index);
-                    return track ? ` · ${formatNotationTrackLabel(track)}` : "";
-                  })()}
+                  {lesson.duration_minutes} min · {lesson.location_type} · {lesson.status}
                 </span>
-                <Button
-                  variant="ghost"
-                  onClick={openUnassign(m)}
-                  className="ml-2 text-xs text-red-600 hover:text-red-300 dark:text-red-400"
-                >
-                  Unassign
-                </Button>
               </div>
             ))}
           </div>
-        )}
-      </section>
+        </section>
+      ) : null}
 
-      <StudentRecurringBilling studentId={id} />
+      {isLearner ? (
+        <section className="mb-10">
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="text-xl font-semibold text-primary dark:text-primary-dark">
+              Enrolled Courses
+            </h2>
+            {isAdmin && availableCourses.length > 0 ? (
+              <Button
+                variant="outline"
+                onClick={openEnroll}
+                data-testid="enroll-student"
+                className="px-3 py-1.5 text-xs"
+              >
+                + Enroll
+              </Button>
+            ) : null}
+          </div>
+          {person.enrolled_courses.length === 0 ? (
+            <EmptyState
+              message="Not enrolled in any courses."
+              action={
+                isAdmin && availableCourses.length > 0
+                  ? { label: "Enroll in Course", onClick: openEnroll }
+                  : undefined
+              }
+            />
+          ) : (
+            <div className="flex flex-col gap-3">
+              {person.enrolled_courses.map((c) => (
+                <Card key={c.id}>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <Link
+                        to="/courses/$id"
+                        params={{ id: c.id }}
+                        className="font-semibold text-primary no-underline transition-colors hover:text-accent dark:text-primary-dark"
+                      >
+                        {c.title}
+                      </Link>
+                      <span className="ml-3 text-sm text-muted dark:text-muted-dark">
+                        {c.instrument}
+                      </span>
+                    </div>
+                    {isAdmin ? (
+                      <Button
+                        variant="ghost"
+                        onClick={openUnenroll(c)}
+                        className="px-2 py-1 text-xs text-red-600 hover:text-red-300 dark:text-red-400"
+                      >
+                        Unenroll
+                      </Button>
+                    ) : null}
+                  </div>
+                </Card>
+              ))}
+            </div>
+          )}
+        </section>
+      ) : null}
+
+      {isLearner ? (
+        <section>
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="text-xl font-semibold text-primary dark:text-primary-dark">
+              Assigned Materials
+            </h2>
+            {isAdmin && availableMaterials.length > 0 ? (
+              <Button
+                variant="outline"
+                onClick={openAssign}
+                data-testid="assign-material"
+                className="px-3 py-1.5 text-xs"
+              >
+                + Assign
+              </Button>
+            ) : null}
+          </div>
+          {person.assigned_materials.length === 0 ? (
+            <EmptyState
+              message="No materials assigned."
+              action={
+                isAdmin && availableMaterials.length > 0
+                  ? { label: "Assign Material", onClick: openAssign }
+                  : undefined
+              }
+            />
+          ) : (
+            <div className="flex flex-col gap-2">
+              {person.assigned_materials.map((m) => (
+                <div
+                  key={m.id}
+                  className="flex items-center gap-3 rounded-lg border border-overlay/6 bg-card px-4 py-3 text-sm dark:border-overlay-dark/6 dark:bg-card-dark"
+                >
+                  <span className="flex-1 font-medium text-primary dark:text-primary-dark">
+                    {m.title}
+                  </span>
+                  <span className="text-xs text-muted/60 dark:text-muted-dark/60">
+                    {m.original_filename}
+                    {(() => {
+                      const track = findNotationTrack(m.notation_tracks, m.assigned_track_index);
+                      return track ? ` · ${formatNotationTrackLabel(track)}` : "";
+                    })()}
+                  </span>
+                  {isAdmin ? (
+                    <Button
+                      variant="ghost"
+                      onClick={openUnassign(m)}
+                      className="ml-2 text-xs text-red-600 hover:text-red-300 dark:text-red-400"
+                    >
+                      Unassign
+                    </Button>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      ) : null}
+
+      {isLearner && isAdmin ? <StudentRecurringBilling studentId={id} /> : null}
 
       <Modal open={enrollModalOpen} onClose={closeEnroll} title="Enroll in Course">
         <form
@@ -478,7 +556,7 @@ function StudentDetailPage() {
       <ConfirmDialog
         open={unenrollTarget !== null}
         title="Unenroll Student"
-        message={unenrollTarget ? `Remove ${student.name} from "${unenrollTarget.title}"?` : ""}
+        message={unenrollTarget ? `Remove ${displayName} from "${unenrollTarget.title}"?` : ""}
         confirmLabel="Unenroll"
         variant="danger"
         onConfirm={confirmUnenroll}
@@ -488,11 +566,26 @@ function StudentDetailPage() {
       <ConfirmDialog
         open={unassignTarget !== null}
         title="Unassign Material"
-        message={unassignTarget ? `Remove "${unassignTarget.title}" from ${student.name}?` : ""}
+        message={unassignTarget ? `Remove "${unassignTarget.title}" from ${displayName}?` : ""}
         confirmLabel="Unassign"
         variant="danger"
         onConfirm={confirmUnassign}
         onCancel={cancelUnassign}
+      />
+
+      <ConfirmDialog
+        open={pendingRole !== null}
+        title="Change role"
+        message={
+          pendingRole
+            ? `Change ${displayName} from ${roleLabel(person.role)} to ${roleLabel(pendingRole)}?`
+            : ""
+        }
+        confirmLabel="Confirm"
+        onConfirm={() => {
+          if (pendingRole) roleMutation.mutate(pendingRole);
+        }}
+        onCancel={() => setPendingRole(null)}
       />
     </main>
   );

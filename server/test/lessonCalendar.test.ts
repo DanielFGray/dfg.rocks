@@ -7,7 +7,7 @@ import { GoogleCalendar } from "../services/googleCalendar.js";
 import { LessonPolicy } from "../services/lessonPolicy.js";
 import { Lessons } from "../services/lessons.js";
 import { CalendarSync, CalendarSyncJob } from "../../worker/calendar/calendarSync.js";
-import { taskIn } from "../../worker/worker.js";
+import { effectTask } from "@danielfgray/stompbox/worker";
 import { jobRun, JobTestError } from "../../worker/test/jobs.js";
 
 import { HttpError } from "../pgErrors.js";
@@ -453,7 +453,7 @@ const runCalendarJob = (input: unknown) =>
     const context = yield* Effect.context();
     yield* Effect.tryPromise({
       try: () =>
-        taskIn(context)(CalendarSyncJob, calendar.sync)(
+        effectTask(context)(CalendarSyncJob, calendar.sync)(
           input,
           jobRun("lessons__sync_calendar_event"),
         ),

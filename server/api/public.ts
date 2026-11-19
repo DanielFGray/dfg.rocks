@@ -20,6 +20,8 @@ import { Contact } from "../services/contact.js";
 import { OAuth } from "../services/oauth.js";
 import { checkRateLimit, clientIdentifierFromHeaders } from "../rateLimit.js";
 import { Users } from "../services/users.js";
+import { Stripe } from "../services/stripe.js";
+import { StripeWebhook } from "../services/stripeWebhook.js";
 import { setSessionCookie } from "./raw.js";
 
 const publicErrorStatuses = [400, 403, 404, 409, 429, 500, 502, 503] as const;
@@ -52,6 +54,14 @@ const fetchGoogleUserInfo = Effect.fnUntraced(function* (accessToken: string) {
 
 export const PublicApiGroupLive = HttpApiBuilder.group(Contract, "public", (handlers) =>
   handlers
+    .handle(
+      "subscriptionPlans",
+      Effect.fnUntraced(function* () {
+        const plans = yield* Stripe.use((stripe) => stripe.planPrices());
+        return { plans };
+      }, adaptPublicHttpApiErrors),
+    )
+
     .handle(
       "contact",
       Effect.fnUntraced(function* ({ request, payload }) {
@@ -156,6 +166,21 @@ export const PublicApiGroupLive = HttpApiBuilder.group(Contract, "public", (hand
         );
         response = yield* setSessionCookie(response, session.token, session.expiresAt);
         return response;
+      }, adaptPublicHttpApiErrors),
+    )
+
+    .handleRaw(
+      "stripeWebhook",
+      Effect.fnUntraced(function* ({ request }) {
+        // The signature covers these bytes, so they are read unchanged, not as decoded text.
+        const body = yield* request.arrayBuffer.pipe(
+          Effect.mapError(
+            () => new HttpError({ status: 400, message: "Stripe request body could not be read" }),
+          ),
+        );
+        const webhook = yield* StripeWebhook;
+        yield* webhook.receive(new Uint8Array(body), request.headers["stripe-signature"]);
+        return HttpServerResponse.jsonUnsafe({ received: true });
       }, adaptPublicHttpApiErrors),
     )
 

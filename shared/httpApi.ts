@@ -12,7 +12,8 @@ import { accountsGroup } from "./api/accounts.js";
 import { testimonialsGroup, testimonialsAdminGroup } from "./api/testimonials.js";
 import { familiesGroup, familiesAdminGroup } from "./api/families.js";
 import { calendarConnectAdminGroup, calendarAdminGroup } from "./api/calendar.js";
-import { studentsStaffGroup, studentsAdminGroup } from "./api/students.js";
+import { studentsAdminGroup } from "./api/students.js";
+import { peopleStaffGroup, peopleAdminGroup } from "./api/people.js";
 import { monthlyBillingAdminGroup } from "./api/monthlyBilling.js";
 import { payersAdminGroup } from "./api/payers.js";
 import { billsAdminGroup } from "./api/bills.js";
@@ -20,6 +21,7 @@ import { paymentsAdminGroup } from "./api/payments.js";
 import { creditsAdminGroup } from "./api/credits.js";
 import { billingRatesAdminGroup } from "./api/billingRates.js";
 import { familyBillingGroup } from "./api/familyBilling.js";
+import { subscriptionsGroup } from "./api/subscriptions.js";
 
 /** Every endpoint the server serves, except the testing routes. The browser client uses it too. */
 export const Contract = HttpApi.make("dfg")
@@ -38,7 +40,8 @@ export const Contract = HttpApi.make("dfg")
   .add(calendarConnectAdminGroup)
   .add(calendarAdminGroup)
   .add(practiceAdminGroup)
-  .add(studentsStaffGroup)
+  .add(peopleStaffGroup)
+  .add(peopleAdminGroup)
   .add(studentsAdminGroup)
   .add(coursesAdminGroup)
   .add(materialsAdminGroup)
@@ -51,4 +54,5 @@ export const Contract = HttpApi.make("dfg")
   .add(paymentsAdminGroup)
   .add(creditsAdminGroup)
   .add(billingRatesAdminGroup)
-  .add(familyBillingGroup);
+  .add(familyBillingGroup)
+  .add(subscriptionsGroup);

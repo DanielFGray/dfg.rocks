@@ -27,7 +27,7 @@ const assertCanTrackOwnAssignments = Effect.fnUntraced(function* (auth: SignedIn
   }
 });
 
-const materialDownloadErrorStatuses = [401, 403, 404, 500] as const;
+const materialDownloadErrorStatuses = [401, 404, 500] as const;
 
 const adaptMaterialDownloadErrors = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
   adaptHttpApiErrors(effect, materialDownloadErrorStatuses);
@@ -163,7 +163,7 @@ export const MaterialsApiGroupLive = HttpApiBuilder.group(Contract, "materials",
         const auth = yield* CurrentSession;
         const { params } = context;
         const fileInfo = yield* Files.use((fileService) =>
-          fileService.download(params.id, auth.user.id).pipe(withAuthContext(auth.session.id)),
+          fileService.download(params.id).pipe(withAuthContext(auth.session.id)),
         );
         return HttpServerResponse.fromWeb(
           new Response(fileInfo.stream as unknown as BodyInit, {
@@ -234,7 +234,7 @@ export const MaterialsAdminApiGroupLive = HttpApiBuilder.group(
           const auth = yield* CurrentSession;
           return (yield* Files.use((fileService) =>
             fileService
-              .upload(payload.file, payload.title, payload.is_global, auth.user.id)
+              .upload(payload.file, payload.title, payload.visibility, auth.user.id)
               .pipe(withAuthContext(auth.session.id)),
           )) as MaterialResponse;
         }, adaptAdminErrors),

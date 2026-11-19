@@ -26,7 +26,7 @@ uploads/
 mprocs.log
 
 # worker ethereal email cache
-worker/.ethereal
+.ethereal
 
 # google auth config
 google-auth-*
@@ -38,6 +38,6 @@ google-auth-*
 .idea/
 .claude/
 
-# Copied from @coderline/alphatab by its Vite plugin
+# Copied from @coderline/alphatab by the gigbag.js Vite plugin (alphaTabAssets)
 public/font/
 public/soundfont/

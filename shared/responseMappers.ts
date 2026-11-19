@@ -3,13 +3,14 @@ import * as Schemas from "./schemas.js";
 import type {
   AssignedMaterial,
   Course,
+  ContentVisibility,
   CourseDetail,
   Family,
   Lesson,
   LessonNote,
   Material,
   Message,
-  StudentDetail,
+  PersonDetail,
   Testimonial,
   User,
   UserEmail,
@@ -38,7 +39,7 @@ export function serializeMaterial<
     original_filename: string;
     mime_type: string;
     file_size: unknown;
-    is_global: boolean;
+    visibility: ContentVisibility;
     notation_tracks: unknown;
     assigned_track_index: number | null;
   },
@@ -49,7 +50,7 @@ export function serializeMaterial<
     original_filename: material.original_filename,
     mime_type: material.mime_type,
     file_size: S.decodeUnknownSync(S.Finite)(material.file_size),
-    is_global: material.is_global,
+    visibility: material.visibility,
     notation_tracks: S.decodeUnknownSync(S.NullishOr(S.Array(Schemas.MaterialNotationTrack)))(
       material.notation_tracks,
     ),
@@ -63,7 +64,7 @@ export function serializeLibraryMaterial(material: {
   original_filename: string;
   mime_type: string;
   file_size: unknown;
-  is_global: boolean;
+  visibility: ContentVisibility;
   notation_tracks: unknown;
 }): Material {
   return S.decodeSync(Schemas.Material)({
@@ -81,7 +82,7 @@ export function serializeAssignedMaterial(material: {
   original_filename: string;
   mime_type: string;
   file_size: number;
-  is_global: boolean;
+  visibility: ContentVisibility;
   notation_tracks: unknown;
   assigned_track_index: number | null;
   listened_seconds?: number;
@@ -97,6 +98,7 @@ export function serializeCourse(course: {
   title: string;
   description: string;
   instrument: string;
+  visibility: ContentVisibility;
 }): Course {
   return S.decodeSync(Schemas.Course)(course);
 }
@@ -105,8 +107,21 @@ export function serializeCourseDetail(course: unknown): CourseDetail {
   return S.decodeUnknownSync(Schemas.CourseDetail)(course);
 }
 
-export function serializeStudentDetail(student: unknown): StudentDetail {
-  return S.decodeUnknownSync(Schemas.StudentDetail)(student);
+/**
+ * A person page, from the account with its learner lists, families and lessons. Families are
+ * decoded here; lessons go through serializeLesson, which decodes raw rows.
+ */
+export function serializePersonDetail(
+  person: Omit<PersonDetail, "families" | "lessons"> & {
+    families: readonly unknown[];
+    lessons: readonly Parameters<typeof serializeLesson>[0][];
+  },
+): PersonDetail {
+  return {
+    ...person,
+    families: person.families.map((family) => S.decodeUnknownSync(Schemas.PersonFamily)(family)),
+    lessons: person.lessons.map(serializeLesson),
+  };
 }
 
 export function serializeFamily(family: {

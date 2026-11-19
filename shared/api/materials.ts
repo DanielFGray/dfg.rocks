@@ -5,7 +5,7 @@ import * as HttpApiSchema from "effect/http-api/HttpApiSchema";
 import * as Multipart from "effect/http/Multipart";
 import { Schema as S } from "effect";
 import {
-  BooleanFromString,
+  ContentVisibility,
   AssignedMaterial,
   AssignmentNote,
   AssignmentProgress,
@@ -43,7 +43,7 @@ const AssignmentNotePayload = S.Struct({
 const UploadMaterialPayload = S.Struct({
   file: Multipart.SingleFileSchema,
   title: S.String,
-  is_global: BooleanFromString,
+  visibility: ContentVisibility,
 }).pipe(HttpApiSchema.asMultipart());
 
 export const materialsGroup = HttpApiGroup.make("materials")

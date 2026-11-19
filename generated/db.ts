@@ -11,6 +11,8 @@ export type AppPublicBillLineType = "adjustment" | "credit" | "fee" | "lesson" |
 
 export type AppPublicBillStatus = "cancelled" | "draft" | "issued" | "paid" | "void";
 
+export type AppPublicContentVisibility = "course" | "global" | "public";
+
 export type AppPublicDepositStatus = "captured" | "held" | "refunded";
 
 export type AppPublicLessonStatus = "cancelled" | "completed" | "no_show" | "scheduled";
@@ -71,6 +73,12 @@ export interface AppPrivateSessions {
    */
   secret_hash: Generated<Buffer>;
   user_id: string;
+}
+
+export interface AppPrivateStripeEvents {
+  id: string;
+  received_at: Generated<Timestamp>;
+  type: string;
 }
 
 export interface AppPrivateUnregisteredEmailPasswordResets {
@@ -320,6 +328,7 @@ export interface AppPublicCourses {
   instrument: Generated<string>;
   title: string;
   updated_at: Generated<Timestamp>;
+  visibility: Generated<AppPublicContentVisibility>;
 }
 
 export interface AppPublicCreditApplications {
@@ -559,7 +568,6 @@ export interface AppPublicMaterials {
   created_at: Generated<Timestamp>;
   file_size: Generated<number>;
   id: Generated<string>;
-  is_global: Generated<boolean>;
   mime_type: Generated<string>;
   /**
    * Detected AlphaTab track metadata for notation materials.
@@ -576,6 +584,7 @@ export interface AppPublicMaterials {
   storage_key: string;
   title: string;
   uploaded_by: string | null;
+  visibility: Generated<AppPublicContentVisibility>;
 }
 
 export interface AppPublicMessages {
@@ -813,6 +822,21 @@ export interface AppPublicStudentRates {
   updated_at: Generated<Timestamp>;
 }
 
+export interface AppPublicSubscriptions {
+  cancel_at_period_end: Generated<boolean>;
+  created_at: Generated<Timestamp>;
+  current_period_end: Timestamp;
+  id: Generated<string>;
+  payer_id: string;
+  plan: string | null;
+  price_id: string;
+  status: string;
+  stripe_customer_id: string;
+  stripe_event_created: Timestamp;
+  stripe_subscription_id: string;
+  updated_at: Generated<Timestamp>;
+}
+
 export interface AppPublicTaxExemptions {
   created_at: Generated<Timestamp>;
   created_by: string;
@@ -995,6 +1019,7 @@ export interface DB {
   "app_private.admin_settings": AppPrivateAdminSettings;
   "app_private.realtime_events": AppPrivateRealtimeEvents;
   "app_private.sessions": AppPrivateSessions;
+  "app_private.stripe_events": AppPrivateStripeEvents;
   "app_private.unregistered_email_password_resets": AppPrivateUnregisteredEmailPasswordResets;
   "app_private.user_authentication_secrets": AppPrivateUserAuthenticationSecrets;
   "app_private.user_email_secrets": AppPrivateUserEmailSecrets;
@@ -1034,6 +1059,7 @@ export interface DB {
   "app_public.student_payers": AppPublicStudentPayers;
   "app_public.student_rate_history": AppPublicStudentRateHistory;
   "app_public.student_rates": AppPublicStudentRates;
+  "app_public.subscriptions": AppPublicSubscriptions;
   "app_public.tax_exemptions": AppPublicTaxExemptions;
   "app_public.tax_rates": AppPublicTaxRates;
   "app_public.testimonials": AppPublicTestimonials;

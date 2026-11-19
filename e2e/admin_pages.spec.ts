@@ -5,8 +5,8 @@ import { test, expect, loginViaUi } from "./helpers.js";
 const adminPages = [
   "/billing",
   "/lessons",
-  "/students",
-  "/students/00000000-0000-0000-0000-000000000000",
+  "/people",
+  "/people/00000000-0000-0000-0000-000000000000",
   "/submissions",
 ];
 

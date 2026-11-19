@@ -33,6 +33,15 @@ const pg_errcodes: Record<string, (msg: string) => HttpError> = {
   NTFND: (msg) => new HttpError({ status: 404, message: msg || "Not found" }),
   /** Denied -- business rule violation */
   DNIED: (msg) => new HttpError({ status: 400, message: msg || "Operation denied" }),
+  /**
+   * A family's billing contact must be a parent, and a family with students needs one. The
+   * request is well formed; the family's current members block it, so it is a conflict.
+   */
+  BLCNT: (msg) =>
+    new HttpError({
+      status: 409,
+      message: msg || "A family's billing contact must be a parent",
+    }),
   /** Email already verified by another account */
   EMTKN: (msg) =>
     new HttpError({ status: 409, message: msg || "An account already uses this email address" }),

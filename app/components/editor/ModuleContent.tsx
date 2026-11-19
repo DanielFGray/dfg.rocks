@@ -1,6 +1,6 @@
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
-import Link from "@tiptap/extension-link";
+import { AlphaTexNode } from "./AlphaTexNode.js";
 import { MaterialEmbedNode } from "./MaterialEmbedNode.js";
 import { MaterialsContext } from "./MaterialsContext.js";
 import type { Material, RichTextDocument } from "../../../shared/schemas.js";
@@ -15,7 +15,11 @@ export function ModuleContent({
   const materialMap = new Map(materials.map((m) => [m.id, m]));
 
   const editor = useEditor({
-    extensions: [StarterKit, Link.configure({ openOnClick: true }), MaterialEmbedNode],
+    extensions: [
+      StarterKit.configure({ link: { openOnClick: true } }),
+      MaterialEmbedNode,
+      AlphaTexNode,
+    ],
     content: content ?? undefined,
     editable: false,
   });

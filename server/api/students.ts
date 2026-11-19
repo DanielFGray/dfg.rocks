@@ -6,44 +6,6 @@ import { CurrentSession } from "../../shared/api/guards.js";
 import { Students } from "../services/students.js";
 import { adaptAdminErrors } from "../httpApiErrors.js";
 
-export const StudentsStaffApiGroupLive = HttpApiBuilder.group(
-  Contract,
-  "studentsStaff",
-  (handlers) =>
-    handlers
-      .handle(
-        "students",
-        Effect.fnUntraced(function* () {
-          const auth = yield* CurrentSession;
-          const rows = yield* Students.use((studentService) =>
-            studentService.listStudents().pipe(withAuthContext(auth.session.id)),
-          );
-          return rows.map((row) => ({
-            ...row,
-            name: row.name ?? "",
-            email: row.email ?? "",
-            role: row.role,
-          }));
-        }, adaptAdminErrors),
-      )
-      .handle(
-        "student",
-        Effect.fnUntraced(function* (context) {
-          const auth = yield* CurrentSession;
-          const { params } = context;
-          const raw = yield* Students.use((studentService) =>
-            studentService.getStudent(params.id).pipe(withAuthContext(auth.session.id)),
-          );
-          return {
-            ...raw,
-            name: raw.name ?? "",
-            email: raw.email ?? "",
-            role: raw.role,
-          };
-        }, adaptAdminErrors),
-      ),
-);
-
 export const StudentsAdminApiGroupLive = HttpApiBuilder.group(
   Contract,
   "studentsAdmin",
