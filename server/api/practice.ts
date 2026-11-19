@@ -54,6 +54,41 @@ export const PracticeApiGroupLive = HttpApiBuilder.group(Contract, "practice", (
         );
         return row;
       }, adaptSignedInErrors),
+    )
+    .handle(
+      "practiceTakes",
+      Effect.fnUntraced(function* ({ query }) {
+        const auth = yield* CurrentSession;
+        const effective = resolveEffectiveStudent(auth);
+        const studentId =
+          query.student_id ?? (effective.isActing ? effective.studentId : undefined);
+        return yield* Practice.use((practiceService) =>
+          practiceService
+            .practiceTakes(query.material_id, studentId)
+            .pipe(withAuthContext(auth.session.id)),
+        );
+      }, adaptSignedInErrors),
+    )
+    .handle(
+      "createPracticeTake",
+      Effect.fnUntraced(function* ({ payload }) {
+        const auth = yield* CurrentSession;
+        // A take belongs to the signed-in student; a parent acting for a child cannot save one.
+        return yield* Practice.use((practiceService) =>
+          practiceService
+            .createPracticeTake({
+              studentId: auth.user.id,
+              materialId: payload.material_id,
+              bpm: payload.bpm,
+              subdivision: payload.subdivision,
+              notesHeard: payload.notes_heard,
+              onTimePct: payload.on_time_pct,
+              meanOffsetMs: payload.mean_offset_ms,
+              spreadMs: payload.spread_ms,
+            })
+            .pipe(withAuthContext(auth.session.id)),
+        );
+      }, adaptSignedInErrors),
     ),
 );
 

@@ -123,6 +123,53 @@ export class Practice extends Context.Service<Practice>()("dfg-rocks/practice", 
           }),
         );
     }),
+    practiceTakes: Effect.fn("practiceTakes")(function* (materialId: string, studentId?: string) {
+      const db = yield* RequestDatabase;
+      let query = db
+        .selectFrom("app_public.practice_takes")
+        .selectAll()
+        .where("material_id", "=", materialId)
+        .orderBy("taken_at", "asc");
+      if (studentId) {
+        query = query.where("student_id", "=", studentId);
+      }
+      return yield* db.execute(query);
+    }),
+    createPracticeTake: Effect.fn("createPracticeTake")(function* (values: {
+      studentId: string;
+      materialId: string;
+      bpm: number;
+      subdivision: number;
+      notesHeard: number;
+      onTimePct: number;
+      meanOffsetMs: number;
+      spreadMs: number;
+    }) {
+      const db = yield* RequestDatabase;
+      return yield* db
+        .execute(
+          db
+            .insertInto("app_public.practice_takes")
+            .values({
+              student_id: values.studentId,
+              material_id: values.materialId,
+              bpm: values.bpm,
+              subdivision: values.subdivision,
+              notes_heard: values.notesHeard,
+              on_time_pct: values.onTimePct,
+              mean_offset_ms: values.meanOffsetMs,
+              spread_ms: values.spreadMs,
+            })
+            .returningAll(),
+        )
+        .pipe(
+          Effect.head,
+          Effect.catchTags({
+            NoSuchElementError: () =>
+              new HttpError({ status: 500, message: "Failed to save practice take" }),
+          }),
+        );
+    }),
     listSubmissions: Effect.fn("listSubmissions")(function* (limit: number, offset: number) {
       const db = yield* RequestDatabase;
       return yield* db.execute(
