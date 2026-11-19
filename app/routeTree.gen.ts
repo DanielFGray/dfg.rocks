@@ -31,12 +31,12 @@ import { Route as AuthedMessagesRouteImport } from './routes/_authed/messages'
 import { Route as AuthedMyLessonsRouteImport } from './routes/_authed/my-lessons'
 import { Route as AuthedSettingsRouteImport } from './routes/_authed/settings'
 import { Route as AuthedSubmissionsRouteImport } from './routes/_authed/submissions'
+import { Route as CoursesIdRouteImport } from './routes/courses.$id'
 import { Route as AuthedAssignmentsIndexRouteImport } from './routes/_authed/assignments.index'
 import { Route as AuthedAssignmentsMaterialIdRouteImport } from './routes/_authed/assignments.$materialId'
 import { Route as AuthedBillingIndexRouteImport } from './routes/_authed/billing.index'
 import { Route as AuthedBillingMonthlyRouteImport } from './routes/_authed/billing.monthly'
 import { Route as AuthedCoursesIndexRouteImport } from './routes/_authed/courses.index'
-import { Route as AuthedCoursesIdRouteImport } from './routes/_authed/courses.$id'
 import { Route as AuthedFamilyBillingRouteImport } from './routes/_authed/family/billing'
 import { Route as AuthedPeopleIndexRouteImport } from './routes/_authed/people.index'
 import { Route as AuthedPeopleIdRouteImport } from './routes/_authed/people.$id'
@@ -158,6 +158,11 @@ const AuthedSubmissionsRoute = AuthedSubmissionsRouteImport.update({
   path: '/submissions',
   getParentRoute: () => AuthedRoute,
 } as any)
+const CoursesIdRoute = CoursesIdRouteImport.update({
+  id: '/courses/$id',
+  path: '/courses/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthedAssignmentsIndexRoute = AuthedAssignmentsIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -182,11 +187,6 @@ const AuthedBillingMonthlyRoute = AuthedBillingMonthlyRouteImport.update({
 const AuthedCoursesIndexRoute = AuthedCoursesIndexRouteImport.update({
   id: '/courses/',
   path: '/courses/',
-  getParentRoute: () => AuthedRoute,
-} as any)
-const AuthedCoursesIdRoute = AuthedCoursesIdRouteImport.update({
-  id: '/courses/$id',
-  path: '/courses/$id',
   getParentRoute: () => AuthedRoute,
 } as any)
 const AuthedFamilyBillingRoute = AuthedFamilyBillingRouteImport.update({
@@ -274,9 +274,9 @@ export interface FileRoutesByFullPath {
   '/my-lessons': typeof AuthedMyLessonsRoute
   '/settings': typeof AuthedSettingsRoute
   '/submissions': typeof AuthedSubmissionsRoute
+  '/courses/$id': typeof CoursesIdRoute
   '/assignments/$materialId': typeof AuthedAssignmentsMaterialIdRoute
   '/billing/monthly': typeof AuthedBillingMonthlyRoute
-  '/courses/$id': typeof AuthedCoursesIdRoute
   '/family/billing': typeof AuthedFamilyBillingRouteWithChildren
   '/people/$id': typeof AuthedPeopleIdRoute
   '/subscribe/success': typeof AuthedSubscribeSuccessRoute
@@ -312,9 +312,9 @@ export interface FileRoutesByTo {
   '/my-lessons': typeof AuthedMyLessonsRoute
   '/settings': typeof AuthedSettingsRoute
   '/submissions': typeof AuthedSubmissionsRoute
+  '/courses/$id': typeof CoursesIdRoute
   '/assignments/$materialId': typeof AuthedAssignmentsMaterialIdRoute
   '/billing/monthly': typeof AuthedBillingMonthlyRoute
-  '/courses/$id': typeof AuthedCoursesIdRoute
   '/people/$id': typeof AuthedPeopleIdRoute
   '/subscribe/success': typeof AuthedSubscribeSuccessRoute
   '/assignments': typeof AuthedAssignmentsIndexRoute
@@ -353,9 +353,9 @@ export interface FileRoutesById {
   '/_authed/my-lessons': typeof AuthedMyLessonsRoute
   '/_authed/settings': typeof AuthedSettingsRoute
   '/_authed/submissions': typeof AuthedSubmissionsRoute
+  '/courses/$id': typeof CoursesIdRoute
   '/_authed/assignments/$materialId': typeof AuthedAssignmentsMaterialIdRoute
   '/_authed/billing/monthly': typeof AuthedBillingMonthlyRoute
-  '/_authed/courses/$id': typeof AuthedCoursesIdRoute
   '/_authed/family/billing': typeof AuthedFamilyBillingRouteWithChildren
   '/_authed/people/$id': typeof AuthedPeopleIdRoute
   '/_authed/subscribe/success': typeof AuthedSubscribeSuccessRoute
@@ -395,9 +395,9 @@ export interface FileRouteTypes {
     | '/my-lessons'
     | '/settings'
     | '/submissions'
+    | '/courses/$id'
     | '/assignments/$materialId'
     | '/billing/monthly'
-    | '/courses/$id'
     | '/family/billing'
     | '/people/$id'
     | '/subscribe/success'
@@ -433,9 +433,9 @@ export interface FileRouteTypes {
     | '/my-lessons'
     | '/settings'
     | '/submissions'
+    | '/courses/$id'
     | '/assignments/$materialId'
     | '/billing/monthly'
-    | '/courses/$id'
     | '/people/$id'
     | '/subscribe/success'
     | '/assignments'
@@ -473,9 +473,9 @@ export interface FileRouteTypes {
     | '/_authed/my-lessons'
     | '/_authed/settings'
     | '/_authed/submissions'
+    | '/courses/$id'
     | '/_authed/assignments/$materialId'
     | '/_authed/billing/monthly'
-    | '/_authed/courses/$id'
     | '/_authed/family/billing'
     | '/_authed/people/$id'
     | '/_authed/subscribe/success'
@@ -503,6 +503,7 @@ export interface RootRouteChildren {
   PricingRoute: typeof PricingRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
   VerifyEmailRoute: typeof VerifyEmailRoute
+  CoursesIdRoute: typeof CoursesIdRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -661,6 +662,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedSubmissionsRouteImport
       parentRoute: typeof AuthedRoute
     }
+    '/courses/$id': {
+      id: '/courses/$id'
+      path: '/courses/$id'
+      fullPath: '/courses/$id'
+      preLoaderRoute: typeof CoursesIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/_authed/assignments/': {
       id: '/_authed/assignments/'
       path: '/'
@@ -694,13 +702,6 @@ declare module '@tanstack/react-router' {
       path: '/courses'
       fullPath: '/courses/'
       preLoaderRoute: typeof AuthedCoursesIndexRouteImport
-      parentRoute: typeof AuthedRoute
-    }
-    '/_authed/courses/$id': {
-      id: '/_authed/courses/$id'
-      path: '/courses/$id'
-      fullPath: '/courses/$id'
-      preLoaderRoute: typeof AuthedCoursesIdRouteImport
       parentRoute: typeof AuthedRoute
     }
     '/_authed/family/billing': {
@@ -869,7 +870,6 @@ interface AuthedRouteChildren {
   AuthedMyLessonsRoute: typeof AuthedMyLessonsRoute
   AuthedSettingsRoute: typeof AuthedSettingsRoute
   AuthedSubmissionsRoute: typeof AuthedSubmissionsRoute
-  AuthedCoursesIdRoute: typeof AuthedCoursesIdRoute
   AuthedPeopleIdRoute: typeof AuthedPeopleIdRoute
   AuthedSubscribeSuccessRoute: typeof AuthedSubscribeSuccessRoute
   AuthedCoursesIndexRoute: typeof AuthedCoursesIndexRoute
@@ -890,7 +890,6 @@ const AuthedRouteChildren: AuthedRouteChildren = {
   AuthedMyLessonsRoute: AuthedMyLessonsRoute,
   AuthedSettingsRoute: AuthedSettingsRoute,
   AuthedSubmissionsRoute: AuthedSubmissionsRoute,
-  AuthedCoursesIdRoute: AuthedCoursesIdRoute,
   AuthedPeopleIdRoute: AuthedPeopleIdRoute,
   AuthedSubscribeSuccessRoute: AuthedSubscribeSuccessRoute,
   AuthedCoursesIndexRoute: AuthedCoursesIndexRoute,
@@ -913,6 +912,7 @@ const rootRouteChildren: RootRouteChildren = {
   PricingRoute: PricingRoute,
   ResetPasswordRoute: ResetPasswordRoute,
   VerifyEmailRoute: VerifyEmailRoute,
+  CoursesIdRoute: CoursesIdRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

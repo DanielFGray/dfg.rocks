@@ -616,15 +616,51 @@ describe("access policy for signed-in accounts", () => {
       expect(await seen("module_materials", "material_id", wanted)).toEqual([material.attached]);
     });
 
-    it("an anonymous visitor reads no public content", async () => {
-      const rows = await asVisitor("00000000-0000-0000-0000-000000000000", async (c) => {
-        const r = await c.query(`select id from app_public.courses where id = $1`, [course.public]);
-        const m = await c.query(`select id from app_public.materials where id = $1`, [
-          material.public,
-        ]);
-        return [r.rowCount, m.rowCount];
+    // A request with no session sets an empty session id, as a visitor with no account does.
+    const anonymousSeen = (table: string, column: string, wanted: string[]) =>
+      asVisitor("", async (c) => {
+        const r = await c.query<{ id: string }>(
+          `select ${column} as id from app_public.${table} where ${column} = any($1)`,
+          [wanted],
+        );
+        return r.rows.map((row) => row.id).sort();
       });
-      expect(rows).toEqual([0, 0]);
+
+    it("an anonymous visitor reads the public course, its module and public materials, nothing more", async () => {
+      expect(await anonymousSeen("courses", "id", Object.values(course))).toEqual([course.public]);
+      expect(await anonymousSeen("modules", "id", Object.values(mod))).toEqual([mod.public]);
+      const wanted = Object.values(material);
+      expect(await anonymousSeen("materials", "id", wanted)).toEqual(
+        [material.public, material.attached].sort(),
+      );
+      expect(await anonymousSeen("module_materials", "material_id", wanted)).toEqual([
+        material.attached,
+      ]);
+    });
+
+    it("an anonymous visitor is not a reader of a global or course-level course", async () => {
+      const answers = await asVisitor("", async (c) => {
+        const r = await c.query<{ level: string; ok: boolean }>(
+          `select c.visibility::text as level, app_public.can_read_course(c.id) as ok
+             from app_public.courses c
+            where c.id = any($1)`,
+          [Object.values(course)],
+        );
+        return r.rows;
+      });
+      // Row security hides the other two levels, so the visitor cannot ask about them at all.
+      expect(answers).toEqual([{ level: "public", ok: true }]);
+    });
+
+    it("an anonymous visitor cannot ask whether another reader may read a course", async () => {
+      const ok = await asVisitor("", async (c) => {
+        const r = await c.query<{ ok: boolean }>(
+          `select app_public.can_read_course($1, $2) as ok`,
+          [course.course, ids.stranger],
+        );
+        return r.rows[0].ok;
+      });
+      expect(ok).toBe(false);
     });
   });
 

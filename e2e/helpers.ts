@@ -22,7 +22,7 @@ type TestingApi = {
       description?: string;
       sort_order?: number;
     }>;
-  }): Promise<void>;
+  }): Promise<string>;
   seedMaterial(data: {
     title: string;
     original_filename?: string;
@@ -202,6 +202,7 @@ export const test = base.extend<{
           data,
         });
         expect(res.ok(), `testing/seed-course failed: ${await res.text()}`).toBe(true);
+        return ((await res.json()) as { courseId: string }).courseId;
       },
 
       async seedMaterial(data) {

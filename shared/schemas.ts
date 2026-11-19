@@ -51,7 +51,7 @@ export const RichTextDocument = S.Struct({
 
 export type RichTextDocument = S.Schema.Type<typeof RichTextDocument>;
 
-/** Who may read a course or a material: any signed-in account, an admitted one (a role), or only through enrollment or assignment. */
+/** Who may read a course or a material: anyone, an admitted one (a role), or only through enrollment or assignment. */
 export const ContentVisibility = S.Literals(["public", "global", "course"]);
 
 export type ContentVisibility = S.Schema.Type<typeof ContentVisibility>;
