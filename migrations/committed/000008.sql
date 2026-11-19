@@ -1,3 +1,554 @@
+--! Previous: sha1:58517ccd33b9e1ce1c75777794050dec6baebced
+--! Hash: sha1:98f993b17e8d87c7d2ae1034e5559d8c9b4f5d92
+
+--! split: 1-current.sql
+-- Enter migration here
+
+--! split: 2-family-billing-contact.sql
+/*
+ * A family's billing contact is a parent, and a family with students always has one.
+ *
+ * Staff who create a family own it, so they can invite parents and create children,
+ * but they never pay for it. A student may join a family only once a parent is its
+ * billing contact.
+ *
+ * A deferred constraint trigger checks the rule when the transaction commits. A
+ * transaction may therefore move billing contact in steps (clear the old contact, set
+ * the new one, or remove a parent and add another) and only the final state must hold.
+ */
+
+-- Rule check ----------------------------------------------------------------------
+
+create or replace function app_private.assert_family_billing_contact(p_family_id uuid) returns void as $$
+begin
+  -- Lock the family row so two transactions that each change one side of the rule (a
+  -- student joins as the last parent leaves) cannot both pass. `for no key update` does not
+  -- conflict with the key-share locks that foreign keys to the family take, so inserts that
+  -- reference the family do not wait on this check. Each check statement below takes a fresh
+  -- snapshot after the lock, so it sees the other transaction's commit.
+  perform 1 from app_public.families where id = p_family_id for no key update;
+
+  if exists (
+    select 1
+      from app_public.family_memberships fm
+      join app_public.users u on u.id = fm.user_id
+     where fm.family_id = p_family_id
+       and fm.is_billing_contact
+       and u.role <> 'parent'
+  ) then
+    raise exception 'A family''s billing contact must be a parent' using errcode = 'BLCNT';
+  end if;
+
+  if exists (
+    select 1
+      from app_public.family_memberships fm
+      join app_public.users u on u.id = fm.user_id
+     where fm.family_id = p_family_id
+       and u.role = 'student'
+  ) and not exists (
+    select 1
+      from app_public.family_memberships fm
+     where fm.family_id = p_family_id
+       and fm.is_billing_contact
+  ) then
+    raise exception 'A family needs a parent as its billing contact before it can have students' using errcode = 'BLCNT';
+  end if;
+end;
+$$ language plpgsql volatile security definer set search_path to pg_catalog, pg_temp;
+
+-- Membership changes check the family they touched. A delete or a move between families
+-- touches the old family too.
+create or replace function app_private.tg_family_memberships__billing_contact() returns trigger as $$
+begin
+  if TG_OP <> 'DELETE' then
+    perform app_private.assert_family_billing_contact(NEW.family_id);
+  end if;
+  if TG_OP = 'DELETE' or (TG_OP = 'UPDATE' and OLD.family_id is distinct from NEW.family_id) then
+    perform app_private.assert_family_billing_contact(OLD.family_id);
+  end if;
+  return null;
+end;
+$$ language plpgsql volatile security definer set search_path to pg_catalog, pg_temp;
+
+drop trigger if exists _300_family_billing_contact on app_public.family_memberships;
+create constraint trigger _300_family_billing_contact
+  after insert or update of family_id, user_id, is_billing_contact or delete
+  on app_public.family_memberships
+  deferrable initially deferred
+  for each row execute function app_private.tg_family_memberships__billing_contact();
+
+-- A role change moves a member in or out of the rule without touching a membership row.
+create or replace function app_private.tg_users__billing_contact_role() returns trigger as $$
+begin
+  perform app_private.assert_family_billing_contact(fm.family_id)
+    from app_public.family_memberships fm
+   where fm.user_id = NEW.id;
+  return null;
+end;
+$$ language plpgsql volatile security definer set search_path to pg_catalog, pg_temp;
+
+drop trigger if exists _300_family_billing_contact on app_public.users;
+create constraint trigger _300_family_billing_contact
+  after update of role on app_public.users
+  deferrable initially deferred
+  for each row
+  when (OLD.role is distinct from NEW.role)
+  execute function app_private.tg_users__billing_contact_role();
+
+-- Backfill ------------------------------------------------------------------------
+
+/*
+ * Brings existing families to the rule. Each family without a parent billing contact
+ * gets its earliest-joined parent, and a family with students but no parent to hand it to
+ * fails the migration, so the migration never leaves data that breaks the rule. Safe to
+ * run again: a family that already has a parent contact is not touched. The deferred
+ * trigger above checks the same rule at commit, so this block only chooses who takes
+ * the contact; it never needs to be called again.
+ */
+drop function if exists app_private.assign_family_billing_contacts();
+
+do $$
+declare
+  v_slugs text;
+begin
+  -- Clear first: the unique billing-contact index is not deferrable, so the old
+  -- contact must be gone before the new one is set.
+  update app_public.family_memberships fm
+     set is_billing_contact = false
+   where fm.is_billing_contact
+     and exists (
+       select 1 from app_public.users u
+        where u.id = fm.user_id and u.role <> 'parent'
+     );
+
+  update app_public.family_memberships fm
+     set is_billing_contact = true
+   where fm.id in (
+     select distinct on (candidate.family_id) candidate.id
+       from app_public.family_memberships candidate
+       join app_public.users u on u.id = candidate.user_id
+      where u.role = 'parent'
+        and not exists (
+          select 1 from app_public.family_memberships contact
+           where contact.family_id = candidate.family_id
+             and contact.is_billing_contact
+        )
+      order by candidate.family_id, candidate.created_at, candidate.id
+   );
+
+  select string_agg(f.slug::text, ', ' order by f.slug) into v_slugs
+    from app_public.families f
+   where exists (
+       select 1 from app_public.family_memberships fm
+         join app_public.users u on u.id = fm.user_id
+        where fm.family_id = f.id and u.role = 'student'
+     )
+     and not exists (
+       select 1 from app_public.family_memberships fm
+        where fm.family_id = f.id and fm.is_billing_contact
+     );
+
+  if v_slugs is not null then
+    raise exception 'Families with students have no parent to be their billing contact: %', v_slugs;
+  end if;
+end;
+$$;
+
+-- Membership operations -----------------------------------------------------------
+
+-- create_family makes staff the owner, so a joining user takes ownership only in a
+-- family that has none. A joining parent takes billing contact when the family has
+-- none, so a student who joins later has a payer. Staff and students never take it.
+create or replace function app_private.join_family(p_family_id uuid, p_user_id uuid) returns void as $$
+begin
+  -- Lock the family first. A concurrent join then waits for this one to commit, and the
+  -- insert below takes its snapshot after that wait, so it sees the owner and billing
+  -- contact this join committed. Without the lock, both joins can read "no billing contact"
+  -- and the second is dropped by the conflict clause.
+  perform 1 from app_public.families where id = p_family_id for no key update;
+
+  -- Name the (family_id, user_id) key so any other violation, such as a second billing
+  -- contact, is raised instead of skipped.
+  insert into app_public.family_memberships (family_id, user_id, is_owner, is_billing_contact)
+  select
+    p_family_id,
+    u.id,
+    u.role <> 'student' and not exists (
+      select 1 from app_public.family_memberships
+       where family_id = p_family_id and is_owner
+    ),
+    u.role = 'parent' and not exists (
+      select 1 from app_public.family_memberships
+       where family_id = p_family_id and is_billing_contact
+    )
+  from app_public.users u
+  where u.id = p_user_id
+  on conflict (family_id, user_id) do nothing;
+end;
+$$ language plpgsql volatile security definer set search_path to pg_catalog, pg_temp;
+
+-- Staff who create a family own it. They are not its billing contact; the first
+-- parent to join becomes it.
+create or replace function app_public.create_family(slug citext, name text) returns app_public.families as $$
+declare
+  v_org app_public.families;
+begin
+  if app_public.current_user_role() is distinct from 'admin'
+     and app_public.current_user_role() is distinct from 'teacher' then
+    raise exception 'Only staff can create a family' using errcode = 'DNIED';
+  end if;
+  insert into app_public.families (slug, name) values (slug, name) returning * into v_org;
+  insert into app_public.family_memberships (family_id, user_id, is_owner, is_billing_contact)
+    values (v_org.id, app_public.current_user_id(), true, false);
+  return v_org;
+end;
+$$ language plpgsql volatile security definer set search_path = pg_catalog, public, pg_temp;
+
+-- Removing a member clears their own billing contact flag. The deferred check then
+-- refuses the removal if the family still has students and no other parent takes over.
+create or replace function app_public.remove_from_family(
+  family_id uuid,
+  user_id uuid
+) returns void as $$
+declare
+  v_my_membership app_public.family_memberships;
+begin
+  select * into v_my_membership
+    from app_public.family_memberships
+    where family_memberships.family_id = remove_from_family.family_id
+    and family_memberships.user_id = app_public.current_user_id();
+
+  if v_my_membership is null then
+    -- I'm not a member of that family
+    return;
+  elsif v_my_membership.is_owner then
+    if remove_from_family.user_id = app_public.current_user_id() then
+      -- Need to transfer ownership before I can leave
+      return;
+    end if;
+  elsif v_my_membership.user_id <> remove_from_family.user_id then
+    -- Not allowed to delete it
+    return;
+  end if;
+
+  delete from app_public.family_memberships
+    where family_memberships.family_id = remove_from_family.family_id
+    and family_memberships.user_id = remove_from_family.user_id;
+end;
+$$ language plpgsql volatile security definer set search_path to pg_catalog, public, pg_temp;
+
+-- Deleting a user removes their memberships. Billing contact is not handed to the
+-- owner: if the deleted user was the contact of a family with students, the deferred
+-- check refuses the deletion until another parent is the contact.
+create or replace function app_public.tg_users__deletion_family_checks_and_actions() returns trigger as $$
+begin
+  if exists(
+    select 1 from app_public.family_memberships
+     where user_id = OLD.id
+       and is_owner is true
+  ) then
+    raise exception 'You cannot delete your account until you are not the owner of any families.' using errcode = 'OWNER';
+  end if;
+
+  return OLD;
+end;
+$$ language plpgsql volatile set search_path to pg_catalog, public, pg_temp;
+
+--! split: 3-course-access.sql
+/*
+ * Who pays for a reader: subscriptions, the payer rule (family_payers) and the ledger
+ * policies that follow it. 7-content-visibility.sql builds the course-access rule on them.
+ *
+ * Every statement here reruns safely: `graphile-migrate watch` applies this file after
+ * each edit, and the release commit applies it again on a database that already has it.
+ */
+
+-- Subscriptions -------------------------------------------------------------------------
+
+create table if not exists app_public.subscriptions (
+  id uuid primary key default gen_random_uuid(),
+  payer_id uuid not null references app_public.users(id) on delete cascade,
+  stripe_customer_id text not null,
+  stripe_subscription_id text not null unique,
+  status text not null,
+  price_id text not null,
+  current_period_end timestamptz not null,
+  cancel_at_period_end boolean not null default false,
+  -- Stripe's `created` time of the event that wrote this row. Stripe does not order deliveries, so
+  -- the webhook overwrites a row only when this value is not newer than the event's time.
+  stripe_event_created timestamptz not null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists subscriptions_payer_id on app_public.subscriptions(payer_id);
+
+-- The plan the subscription's price was declared as (shared/pricing.ts), read from the price's
+-- metadata.plan, which the sync script writes. An archived price keeps its metadata, so an early
+-- subscriber keeps the plan name. Null when the price has no metadata.plan.
+alter table app_public.subscriptions add column if not exists plan text;
+
+drop trigger if exists _timestamps on app_public.subscriptions;
+create trigger _timestamps
+  before insert or update on app_public.subscriptions
+  for each row execute function app_private.tg__timestamps();
+
+comment on table app_public.subscriptions is
+  E'A Stripe subscription paid by a payer. Written by the Stripe webhook as the root role; the visitor reads only its own payer''s rows.';
+
+-- The payer rule ------------------------------------------------------------------------
+
+-- A subscription is live while Stripe holds it in a paid state and its period has not ended.
+-- past_due keeps access while Stripe retries the card. can_read_course and the billing status
+-- both ask this function, so the rule is written once.
+create or replace function app_public.subscription_is_live(
+  p_status text,
+  p_current_period_end timestamptz
+) returns boolean as $$
+  select p_status in ('active', 'past_due', 'trialing') and p_current_period_end > now();
+$$ language sql stable set search_path to pg_catalog, pg_temp;
+
+-- The users who pay for the reader: the reader, and the billing contact of every family the reader
+-- belongs to. The ledger policies, the subscription policy and can_read_course all ask this
+-- function, so the rule is written once. A caller may ask only about readers it may see (itself,
+-- staff, or a member of one of the reader's families); for anyone else the set is empty.
+create or replace function app_public.family_payers(
+  p_reader_id uuid default app_public.current_user_id()
+) returns setof uuid as $$
+  select payer.user_id
+    from (
+      select p_reader_id as user_id
+      union
+      select fm.user_id
+        from app_public.family_memberships fm
+       where fm.is_billing_contact
+         and fm.family_id in (
+           select family_id from app_public.family_memberships where user_id = p_reader_id
+         )
+    ) payer
+   where p_reader_id = app_public.current_user_id()
+      or app_public.current_user_role() in ('admin', 'teacher')
+      or p_reader_id in (
+        select fm.user_id
+          from app_public.family_memberships fm
+         where fm.family_id in (select app_public.current_user_member_family_ids())
+      );
+$$ language sql stable security definer set search_path to pg_catalog, pg_temp;
+
+comment on function app_public.family_payers(uuid) is
+  E'The payers of a reader: the reader, and the billing contact of each family the reader belongs to. Empty for a reader the caller may not see.';
+
+-- How the current user relates to who pays: "self" (no family), "billing_contact" (the user pays
+-- for the family), "family_member" (the family has a billing contact who pays), or
+-- "no_billing_contact" (the family has none yet, so nobody pays).
+create or replace function app_public.payer_relation() returns text as $$
+  select case
+    when exists (
+      select 1 from app_public.family_memberships fm
+       where fm.user_id = app_public.current_user_id() and fm.is_billing_contact
+    ) then 'billing_contact'
+    when not exists (
+      select 1 from app_public.family_memberships fm
+       where fm.user_id = app_public.current_user_id()
+    ) then 'self'
+    when exists (
+      select 1 from app_public.family_memberships fm
+       where fm.is_billing_contact
+         and fm.family_id in (select app_public.current_user_member_family_ids())
+    ) then 'family_member'
+    else 'no_billing_contact'
+  end;
+$$ language sql stable security definer set search_path to pg_catalog, pg_temp;
+
+-- Whether the current user may start a subscription: 'covered' when a live subscription already
+-- reaches the user, 'allowed' for a user who pays for themself or is a family's billing contact,
+-- and otherwise why not. Reads the subscriptions under the caller's row security.
+create or replace function app_public.checkout_eligibility() returns text as $$
+  select case
+    when exists (
+      select 1 from app_public.subscriptions s
+       where s.payer_id in (select app_public.family_payers())
+         and app_public.subscription_is_live(s.status, s.current_period_end)
+    ) then 'covered'
+    else case app_public.payer_relation()
+      when 'self' then 'allowed'
+      when 'billing_contact' then 'allowed'
+      when 'family_member' then 'not_billing_contact'
+      else 'no_billing_contact'
+    end
+  end;
+$$ language sql stable security definer set search_path to pg_catalog, pg_temp;
+
+alter table app_public.subscriptions enable row level security;
+
+drop policy if exists select_visible on app_public.subscriptions;
+create policy select_visible on app_public.subscriptions for select
+  using (
+    app_public.current_user_role() in ('admin', 'teacher')
+    or payer_id in (select app_public.family_payers())
+  );
+
+grant select on app_public.subscriptions to :DATABASE_VISITOR;
+
+-- Schedule time zones ---------------------------------------------------------------------
+
+-- can_read_course converts "now" into each schedule's zone, so one unknown zone would make every
+-- course read fail for everyone. Refuse unknown zones when a schedule is written, and refuse the
+-- migration while an existing schedule already holds one.
+do $$
+declare
+  v_bad text;
+begin
+  select string_agg(id::text, ', ') into v_bad
+    from app_public.recurring_schedules
+   where timezone not in (select name from pg_timezone_names);
+  if v_bad is not null then
+    raise exception 'Recurring schedules have a time zone PostgreSQL does not know: %', v_bad;
+  end if;
+end;
+$$;
+
+create or replace function app_private.tg_recurring_schedules__timezone() returns trigger as $$
+begin
+  if not exists (select 1 from pg_timezone_names where name = NEW.timezone) then
+    raise exception 'Time zone "%" is not a known IANA time zone', NEW.timezone using errcode = 'DNIED';
+  end if;
+  return NEW;
+end;
+$$ language plpgsql set search_path to pg_catalog, pg_temp;
+
+drop trigger if exists _timezone on app_public.recurring_schedules;
+create trigger _timezone
+  before insert or update of timezone on app_public.recurring_schedules
+  for each row execute function app_private.tg_recurring_schedules__timezone();
+
+-- The ledger policies ------------------------------------------------------------------
+
+-- A reader sees the ledger rows of the payers family_payers() returns, the same rule that decides
+-- which subscriptions cover them. These replace the policies of migrations/committed/000004.sql.
+drop policy if exists select_bills on app_public.bills;
+create policy select_bills on app_public.bills for select using (
+  app_public.current_user_role() = 'admin'
+  or payer_id in (select app_public.family_payers())
+);
+
+drop policy if exists select_payments on app_public.payments;
+create policy select_payments on app_public.payments for select using (
+  app_public.current_user_role() = 'admin'
+  or payer_id in (select app_public.family_payers())
+);
+
+drop policy if exists select_credits on app_public.credits;
+create policy select_credits on app_public.credits for select using (
+  app_public.current_user_role() = 'admin'
+  or payer_id in (select app_public.family_payers())
+);
+
+drop policy if exists select_discounts on app_public.discounts;
+create policy select_discounts on app_public.discounts for select using (
+  app_public.current_user_role() = 'admin'
+  or payer_id in (select app_public.family_payers())
+);
+
+drop policy if exists select_tax_exemptions on app_public.tax_exemptions;
+create policy select_tax_exemptions on app_public.tax_exemptions for select using (
+  app_public.current_user_role() = 'admin'
+  or payer_id in (select app_public.family_payers())
+);
+
+drop function if exists app_public.current_user_visible_payer_ids();
+drop function if exists app_public.subscription_payers(uuid);
+
+--! split: 4-user-role.sql
+/*
+ * An admin sets any account's role. The visitor may update only a user's profile columns
+ * (username, name, bio, avatar_url), so the role change runs here, as the function owner.
+ *
+ * Refusals, in the order they are checked:
+ *   - the caller is not an admin (DNIED)
+ *   - the caller names its own account (DNIED): an admin cannot change their own role
+ *
+ * The last admin cannot be demoted, and no separate check is needed for it. Every call takes
+ * the admin-row lock before it reads the caller's role. A call that waits on another call's
+ * lock therefore reads the caller's role after that call commits, so the caller is still an
+ * admin when the change runs. The caller is never the target, so each committed change leaves
+ * its caller an admin.
+ *
+ * This argument needs READ COMMITTED, where each statement sees the data committed before it
+ * starts. Under REPEATABLE READ the waiting call fails with a serialization error instead, which
+ * is also a refusal.
+ *
+ * A parent who is the billing contact of a family with students is refused by the deferred
+ * trigger in 2-family-billing-contact.sql, at commit, so this function does not repeat that rule.
+ *
+ * Reruns safely: `graphile-migrate watch` applies this file after each edit, and the release
+ * commit applies it again on a database that already has it.
+ */
+
+create or replace function app_public.set_user_role(p_user_id uuid, p_role app_public.user_role)
+returns app_public.users as $$
+declare
+  v_user app_public.users;
+begin
+  -- Lock first, in id order. A concurrent call waits here; once it commits, the lock re-checks
+  -- `role = 'admin'`, so the role checks below run on the committed state. Each check takes a
+  -- fresh snapshot, because each statement does.
+  perform 1 from app_public.users where role = 'admin' order by id for update;
+
+  if app_public.current_user_role() is distinct from 'admin' then
+    raise exception 'Only an admin can change a role' using errcode = 'DNIED';
+  end if;
+
+  if p_user_id = app_public.current_user_id() then
+    raise exception 'You cannot change your own role' using errcode = 'DNIED';
+  end if;
+
+  update app_public.users set role = p_role where id = p_user_id returning * into v_user;
+  if not found then
+    raise exception 'User not found' using errcode = 'NTFND';
+  end if;
+  return v_user;
+end;
+$$ language plpgsql volatile security definer set search_path = pg_catalog, pg_temp;
+
+grant execute on function app_public.set_user_role(uuid, app_public.user_role) to :DATABASE_VISITOR;
+
+--! split: 5-staff-read-memberships.sql
+/*
+ * Staff (admin and teacher) read every family's memberships, so the person page can show a
+ * person's families to a teacher. The policy keeps its name and its one clause; only the role
+ * list changes. Member and invited readers keep their own policies (select_member,
+ * select_invited) and see only their families.
+ *
+ * Reruns safely: `graphile-migrate watch` applies this file after each edit, and the release
+ * commit applies it again on a database that already has it.
+ */
+
+drop policy if exists select_admin on app_public.family_memberships;
+create policy select_admin on app_public.family_memberships for select using (
+  app_public.current_user_role() in ('admin', 'teacher')
+);
+
+--! split: 6-stripe-events.sql
+/*
+ * The Stripe events the webhook has received. The primary key makes a redelivered event a no-op:
+ * the webhook inserts the event id in the same transaction as the event's effect, so an event
+ * whose effect fails leaves no id behind and Stripe's retry applies it.
+ *
+ * Every statement here reruns safely: `graphile-migrate watch` applies this file after each edit,
+ * and the release commit applies it again on a database that already has it.
+ */
+
+create table if not exists app_private.stripe_events (
+  id text primary key,
+  type text not null,
+  received_at timestamptz not null default now()
+);
+
+comment on table app_private.stripe_events is
+  E'Stripe event ids the webhook has applied. Written by the webhook as the root role; no visitor reads it.';
+
+--! split: 7-content-visibility.sql
 /*
  * Who may read a course and a material is one of three levels, set on the row:
  *   public  any signed-in account, whatever its role (a free account has no role)
