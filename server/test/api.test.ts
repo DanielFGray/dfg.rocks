@@ -1847,4 +1847,74 @@ describe("DFG Portal API", () => {
       expect(byStudent.status).toBe(403);
     }),
   );
+
+  it.effect("a student saves a practice take and lists it; staff read it; others cannot", () =>
+    Effect.gen(function* () {
+      const material = yield* Effect.tryPromise(() =>
+        testDb.query<{ id: string }>(
+          `insert into app_public.materials (title, original_filename, storage_key, mime_type, file_size, visibility)
+           values ('Take Piece', 'take.gp5', $1, 'application/octet-stream', 1, 'course') returning id`,
+          [`/data/${crypto.randomUUID()}.gp5`],
+        ),
+      );
+      const materialId = material.rows[0]!.id;
+      const take = {
+        material_id: materialId,
+        bpm: 96,
+        subdivision: 2,
+        notes_heard: 40,
+        on_time_pct: 82.5,
+        mean_offset_ms: -14.2,
+        spread_ms: 21.7,
+      };
+
+      const anonymous = yield* reqEffect("POST", "/api/practice-takes", { body: take });
+      expect(anonymous.status).toBe(401);
+
+      const invalid = yield* reqEffect("POST", "/api/practice-takes", {
+        body: { ...take, on_time_pct: 140 },
+        cookie: studentCookie,
+      });
+      expect(invalid.status).toBe(400);
+
+      const saved = yield* reqEffect("POST", "/api/practice-takes", {
+        body: take,
+        cookie: studentCookie,
+      });
+      expect(saved.status).toBe(200);
+      const row = yield* resJson(saved);
+      expect(row).toMatchObject({ ...take, student_id: studentId });
+
+      const listed = yield* reqEffect("GET", `/api/practice-takes?material_id=${materialId}`, {
+        cookie: studentCookie,
+      });
+      expect(listed.status).toBe(200);
+      const listedRows = (yield* resJson(listed)) as { id: string }[];
+      expect(listedRows.map((r) => r.id)).toEqual([row.id]);
+
+      const byStaff = yield* reqEffect(
+        "GET",
+        `/api/practice-takes?material_id=${materialId}&student_id=${studentId}`,
+        { cookie: adminCookie },
+      );
+      expect(((yield* resJson(byStaff)) as { id: string }[]).map((r) => r.id)).toEqual([row.id]);
+
+      yield* Effect.tryPromise(() =>
+        testDb.query(
+          `select * from app_private.really_create_user('take_other'::citext, 'Take Other', null, true, 'take_other@test.com'::citext, 'take_other123')`,
+        ),
+      );
+      const otherLogin = yield* reqEffect("POST", "/api/login", {
+        body: { id: "take_other", password: "take_other123" },
+      });
+      const otherCookie = getCookie(otherLogin)!;
+      const byOther = yield* reqEffect(
+        "GET",
+        `/api/practice-takes?material_id=${materialId}&student_id=${studentId}`,
+        { cookie: otherCookie },
+      );
+      expect(byOther.status).toBe(200);
+      expect(yield* resJson(byOther)).toEqual([]);
+    }),
+  );
 });

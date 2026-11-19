@@ -194,6 +194,21 @@ export const PracticeLog = S.Struct({
 
 export type PracticeLog = S.Schema.Type<typeof PracticeLog>;
 
+export const PracticeTake = S.Struct({
+  id: S.String,
+  student_id: S.String,
+  material_id: S.String,
+  taken_at: S.DateFromString,
+  bpm: S.Finite,
+  subdivision: S.Finite,
+  notes_heard: S.Finite,
+  on_time_pct: S.Finite,
+  mean_offset_ms: S.Finite,
+  spread_ms: S.Finite,
+});
+
+export type PracticeTake = S.Schema.Type<typeof PracticeTake>;
+
 export const AssignmentProgress = S.Struct({
   material_id: S.String,
   listened_seconds: S.Finite,

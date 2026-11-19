@@ -2,12 +2,17 @@ import * as HttpApiEndpoint from "effect/http-api/HttpApiEndpoint";
 import * as HttpApiGroup from "effect/http-api/HttpApiGroup";
 import { Admin, Csrf, Session } from "./guards.js";
 import { Schema as S } from "effect";
-import { PracticeLog, Submission, SuccessResponse } from "../schemas.js";
+import { PracticeLog, PracticeTake, Submission, SuccessResponse } from "../schemas.js";
 import { params, PaginationQuery } from "./fields.js";
 import { signedInErrors, adminErrors } from "../httpApiErrors.js";
 
 const PracticeLogQuery = S.Struct({
   material_id: S.optional(S.String),
+});
+
+const PracticeTakeQuery = S.Struct({
+  material_id: S.String,
+  student_id: S.optional(S.String),
 });
 
 const UpdateSubmissionPayload = S.Struct({
@@ -23,6 +28,19 @@ export const CreatePracticeLogPayload = S.Struct({
 export const RatePracticeLogPayload = S.Struct({
   material_id: S.String,
   rating: S.Finite.pipe(S.check(S.isBetween({ minimum: 1, maximum: 5 }))),
+});
+
+const PositiveInt = S.Int.pipe(S.check(S.isGreaterThan(0)));
+
+/** A Listen take: bpm, subdivision and how closely the played notes matched the click. */
+export const CreatePracticeTakePayload = S.Struct({
+  material_id: S.String,
+  bpm: S.Finite.pipe(S.check(S.isGreaterThan(0))),
+  subdivision: PositiveInt,
+  notes_heard: S.Int.pipe(S.check(S.isGreaterThanOrEqualTo(0))),
+  on_time_pct: S.Finite.pipe(S.check(S.isBetween({ minimum: 0, maximum: 100 }))),
+  mean_offset_ms: S.Finite,
+  spread_ms: S.Finite.pipe(S.check(S.isGreaterThanOrEqualTo(0))),
 });
 
 export const practiceGroup = HttpApiGroup.make("practice")
@@ -45,6 +63,20 @@ export const practiceGroup = HttpApiGroup.make("practice")
       error: signedInErrors,
       payload: RatePracticeLogPayload,
       success: PracticeLog,
+    }),
+  )
+  .add(
+    HttpApiEndpoint.get("practiceTakes", "/practice-takes", {
+      error: signedInErrors,
+      query: PracticeTakeQuery,
+      success: S.Array(PracticeTake),
+    }),
+  )
+  .add(
+    HttpApiEndpoint.post("createPracticeTake", "/practice-takes", {
+      error: signedInErrors,
+      payload: CreatePracticeTakePayload,
+      success: PracticeTake,
     }),
   )
   .middleware(Session)

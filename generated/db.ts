@@ -710,6 +710,19 @@ export interface AppPublicPracticeLogs {
   student_id: string;
 }
 
+export interface AppPublicPracticeTakes {
+  bpm: number;
+  id: Generated<string>;
+  material_id: string;
+  mean_offset_ms: number;
+  notes_heard: number;
+  on_time_pct: number;
+  spread_ms: number;
+  student_id: string;
+  subdivision: number;
+  taken_at: Generated<Timestamp>;
+}
+
 export interface AppPublicRecurringSchedules {
   active: Generated<boolean>;
   created_at: Generated<Timestamp>;
@@ -1053,6 +1066,7 @@ export interface DB {
   "app_public.payment_allocations": AppPublicPaymentAllocations;
   "app_public.payments": AppPublicPayments;
   "app_public.practice_logs": AppPublicPracticeLogs;
+  "app_public.practice_takes": AppPublicPracticeTakes;
   "app_public.recurring_schedules": AppPublicRecurringSchedules;
   "app_public.refunds": AppPublicRefunds;
   "app_public.student_materials": AppPublicStudentMaterials;

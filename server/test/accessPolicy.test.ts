@@ -175,6 +175,55 @@ describe("access policy for signed-in accounts", () => {
     await expect(book("studio")).rejects.toMatchObject({ code: "42501" });
   });
 
+  describe("practice takes", () => {
+    const take = (studentId: string, materialId: string) => [
+      studentId,
+      materialId,
+      120,
+      2,
+      24,
+      87.5,
+      -12.3,
+      18.4,
+    ];
+    const INSERT_TAKE = `insert into app_public.practice_takes
+      (student_id, material_id, bpm, subdivision, notes_heard, on_time_pct, mean_offset_ms, spread_ms)
+      values ($1, $2, $3, $4, $5, $6, $7, $8)`;
+    const takesSeen = (sessionId: string) =>
+      asVisitor(sessionId, async (c) => {
+        const r = await c.query<{ student_id: string }>(
+          `select student_id from app_public.practice_takes`,
+        );
+        return r.rows.map((row) => row.student_id);
+      });
+
+    it("the student, their family, teachers and admins read a take; others read none", async () => {
+      const materialId = await insertMaterial("Take material", "course");
+      const teacherId = await createUser("take_teacher", "teacher");
+      const adminSession = await sessionFor(ids.admin);
+      const teacherSession = await sessionFor(teacherId);
+      await owner(INSERT_TAKE, take(ids.kid, materialId));
+
+      expect(await takesSeen(sessions.kid)).toEqual([ids.kid]);
+      expect(await takesSeen(sessions.parent)).toEqual([ids.kid]);
+      expect(await takesSeen(teacherSession)).toContain(ids.kid);
+      expect(await takesSeen(adminSession)).toContain(ids.kid);
+      expect(await takesSeen(sessions.stranger)).toEqual([]);
+      expect(await takesSeen("")).toEqual([]);
+    });
+
+    it("a student saves a take for themself and for no one else", async () => {
+      const materialId = await insertMaterial("Take material 2", "course");
+      await asVisitor(sessions.kid, (c) => c.query(INSERT_TAKE, take(ids.kid, materialId)));
+      await expect(
+        asVisitor(sessions.stranger, (c) => c.query(INSERT_TAKE, take(ids.kid, materialId))),
+      ).rejects.toMatchObject({ code: "42501" });
+      await expect(
+        asVisitor("", (c) => c.query(INSERT_TAKE, take(ids.kid, materialId))),
+      ).rejects.toMatchObject({ code: "42501" });
+    });
+  });
+
   it("a non-staff user cannot create a family, a child, or an invitation", async () => {
     await expect(
       asVisitor(sessions.stranger, (c) =>
@@ -759,6 +808,13 @@ async function createUser(username: string, role: string): Promise<string> {
     [username, `${username.replace(/_/g, "-")}@test.com`, `${username}123`],
   );
   await owner(`update app_public.users set role = $1 where id = $2`, [role, r.rows[0].id]);
+  return r.rows[0].id;
+}
+
+async function sessionFor(userId: string): Promise<string> {
+  const r = await owner(`insert into app_private.sessions (user_id) values ($1) returning id`, [
+    userId,
+  ]);
   return r.rows[0].id;
 }
 
