@@ -35,7 +35,6 @@
   },
   "dependencies": {
     "@coderline/alphatab": "1.9.0",
-    "gigbag.js": "github:DanielFGray/alphatab-kit#v0.4.1",
     "@danielfgray/stompbox": "github:DanielFGray/effect-stompbox#v0.2.0",
     "@effect/platform-bun": "4.1.4",
     "@effect/platform-node": "4.1.4",
@@ -54,6 +53,7 @@
     "@tw-classed/react": "^2.0.0",
     "arctic": "^3.7.0",
     "effect": "4.1.4",
+    "gigbag.js": "github:DanielFGray/alphatab-kit#v0.4.3",
     "graphile-migrate": "2.0.0-rc.6",
     "graphile-worker": "^0.18.0",
     "html-to-text": "^10.0.1",
