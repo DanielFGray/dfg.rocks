@@ -1,44 +1,60 @@
 import { Effect, Option } from "effect";
-import { withAuthContext } from "../../../server/requestDatabase.js";
+import { withAuthContext } from "../../server/requestDatabase.js";
 import * as S from "effect/Schema";
 import { useState } from "react";
-import { createFileRoute, Link, notFound, useNavigate, useRouter } from "@tanstack/react-router";
+import {
+  createFileRoute,
+  Link,
+  notFound,
+  redirect,
+  useNavigate,
+  useRouter,
+} from "@tanstack/react-router";
 import { useMutation } from "@tanstack/react-query";
 import { createServerFn } from "@tanstack/react-start";
 import { getCookie } from "@tanstack/react-start/server";
 import { useForm } from "@tanstack/react-form";
-import { api } from "../../lib/api.js";
-import { useAuth } from "../../lib/hooks/useAuth.js";
-import { requiredValidator } from "../../lib/validators.js";
-import { fieldError } from "../../lib/form.js";
-import type { CourseDetail, Module, ModuleWithMaterials, User } from "../../../shared/schemas.js";
-import { CourseFormModal } from "../../components/CourseFormModal.js";
-import { ModuleCard } from "../../components/courses/ModuleCard.js";
-import { EnrolledStudents } from "../../components/courses/EnrolledStudents.js";
-import { Button } from "../../components/ui/Button.js";
-import { ComboBox } from "../../components/ui/ComboBox.js";
-import { Modal } from "../../components/ui/Modal.js";
-import { ConfirmDialog } from "../../components/ui/ConfirmDialog.js";
-import { EmptyState } from "../../components/ui/EmptyState.js";
-import { Input } from "../../components/ui/Input.js";
-import { Main } from "../../components/ui/Container.js";
-import { SubscribeCallout } from "../../components/subscriptions/SubscribeCallout.js";
-import { runServerEffect } from "../../lib/serverEffect.js";
-import { normalizeStudents, serializeCourseDetail } from "../../../shared/responseMappers.js";
-import { Sessions } from "../../../server/services/sessions.js";
-import { Courses } from "../../../server/services/courses.js";
-import { People } from "../../../server/services/people.js";
+import { api } from "../lib/api.js";
+import { useAuth } from "../lib/hooks/useAuth.js";
+import { requiredValidator } from "../lib/validators.js";
+import { fieldError } from "../lib/form.js";
+import type { CourseDetail, Module, ModuleWithMaterials, User } from "../../shared/schemas.js";
+import { PortalNav } from "../components/PortalNav.js";
+import { CourseFormModal } from "../components/CourseFormModal.js";
+import { ModuleCard } from "../components/courses/ModuleCard.js";
+import { EnrolledStudents } from "../components/courses/EnrolledStudents.js";
+import { Button } from "../components/ui/Button.js";
+import { ComboBox } from "../components/ui/ComboBox.js";
+import { Modal } from "../components/ui/Modal.js";
+import { ConfirmDialog } from "../components/ui/ConfirmDialog.js";
+import { EmptyState } from "../components/ui/EmptyState.js";
+import { Input } from "../components/ui/Input.js";
+import { Main } from "../components/ui/Container.js";
+import { SubscribeCallout } from "../components/subscriptions/SubscribeCallout.js";
+import { normalizeLoginRedirect } from "../lib/loginRedirect.js";
+import { runServerEffect } from "../lib/serverEffect.js";
+import { normalizeStudents, serializeCourseDetail } from "../../shared/responseMappers.js";
+import { Sessions } from "../../server/services/sessions.js";
+import { Courses } from "../../server/services/courses.js";
+import { People } from "../../server/services/people.js";
 
 type CourseDetailLoaded = {
   kind: "loaded";
+  signedIn: boolean;
   course: CourseDetail & { modules: readonly ModuleWithMaterials[] };
   enrolledStudents: readonly User[];
   allStudents: readonly User[];
 };
 
-// A course the reader may not read is hidden by row security, so it is `locked` when it exists and
-// `missing` when it does not. A missing course leads the route to its not-found page.
-type CourseDetailPageData = CourseDetailLoaded | { kind: "locked" } | { kind: "missing" };
+// Anyone may read a public course, with or without an account. A course the reader may not read is
+// hidden by row security, so it is `locked` for a signed-in reader and `sign-in` for a visitor with
+// no account (the route sends that visitor to sign in), or `missing` when it does not exist. A
+// missing course leads the route to its not-found page.
+type CourseDetailPageData =
+  | CourseDetailLoaded
+  | { kind: "locked"; signedIn: true }
+  | { kind: "sign-in" }
+  | { kind: "missing" };
 
 const CourseId = S.String.pipe(S.check(S.isUUID()));
 
@@ -47,9 +63,12 @@ const getCourseDetailData = createServerFn({ method: "GET" })
   .handler(({ data }) =>
     runServerEffect(
       Effect.gen(function* () {
+        // No session is a visitor with no account, not an error: a public course is theirs to read.
         const session = yield* Sessions.use((sessions) =>
-          sessions.requireSession(getCookie("session")),
+          sessions.validateSessionToken(getCookie("session")),
         );
+        const isAdmin = session?.user.role === "admin";
+        const signedIn = session !== null;
         // A course id that is not a uuid names no course, so it is missing without a query.
         return yield* Option.match(S.decodeOption(CourseId)(data.courseId), {
           onNone: () => Effect.succeed({ kind: "missing" } satisfies CourseDetailPageData),
@@ -72,16 +91,19 @@ const getCourseDetailData = createServerFn({ method: "GET" })
                       courseService.courseExists(courseId),
                     );
                     return (
-                      exists && session.user.role !== "admin"
-                        ? { kind: "locked" }
-                        : { kind: "missing" }
+                      !exists || isAdmin
+                        ? { kind: "missing" }
+                        : signedIn
+                          ? { kind: "locked", signedIn: true }
+                          : { kind: "sign-in" }
                     ) satisfies CourseDetailPageData;
                   }),
                 onSome: (loadedCourse) =>
                   Effect.gen(function* () {
-                    if (session.user.role !== "admin") {
+                    if (!isAdmin) {
                       return {
                         kind: "loaded",
+                        signedIn,
                         course: serializeCourseDetail(loadedCourse),
                         enrolledStudents: [],
                         allStudents: [],
@@ -93,13 +115,14 @@ const getCourseDetailData = createServerFn({ method: "GET" })
                     ]);
                     return {
                       kind: "loaded",
+                      signedIn,
                       course: serializeCourseDetail(loadedCourse),
                       enrolledStudents: normalizeStudents(enrolledStudents),
                       allStudents: normalizeStudents(allStudents),
                     } satisfies CourseDetailPageData;
                   }),
               });
-            }).pipe(withAuthContext(session.session.id)),
+            }).pipe(withAuthContext(session?.session.id)),
         });
       }),
     ),
@@ -109,11 +132,21 @@ const getCourseDetailData = createServerFn({ method: "GET" })
  * Route
  * --------------------------------------------------------------------------- */
 
-export const Route = createFileRoute("/_authed/courses/$id")({
+// This route sits outside the sign-in gate so a visitor can read a public course. Its loader sends
+// a visitor to sign in for any other course. The page renders on the client, where the signed-in
+// account is read, as the gated routes do.
+export const Route = createFileRoute("/courses/$id")({
+  ssr: "data-only",
   head: () => ({ meta: [{ title: "Course Detail | DFG Portal" }] }),
-  loader: async ({ params }) => {
+  loader: async ({ params, location }) => {
     const data = await getCourseDetailData({ data: { courseId: params.id } });
     if (data.kind === "missing") throw notFound();
+    if (data.kind === "sign-in") {
+      throw redirect({
+        to: "/login",
+        search: { redirect: normalizeLoginRedirect(location.href) },
+      });
+    }
     return data;
   },
   component: CourseDetailPage,
@@ -122,24 +155,33 @@ export const Route = createFileRoute("/_authed/courses/$id")({
 
 function CourseDetailPage() {
   const data = Route.useLoaderData();
+  // The portal navigation is for an account; a visitor reads the course alone.
   if (data.kind === "locked") {
     return (
-      <Main data-testid="course-locked">
-        <h1 className="mb-8 text-3xl font-bold tracking-tight">Course</h1>
-        <SubscribeCallout message="This course is part of a subscription." />
-      </Main>
+      <>
+        <PortalNav />
+        <Main data-testid="course-locked">
+          <h1 className="mb-8 text-3xl font-bold tracking-tight">Course</h1>
+          <SubscribeCallout message="This course is part of a subscription." />
+        </Main>
+      </>
     );
   }
   return (
-    <CourseDetailView
-      course={data.course}
-      enrolledStudents={data.enrolledStudents}
-      allStudents={data.allStudents}
-    />
+    <>
+      {data.signedIn ? <PortalNav /> : null}
+      <CourseDetailView
+        signedIn={data.signedIn}
+        course={data.course}
+        enrolledStudents={data.enrolledStudents}
+        allStudents={data.allStudents}
+      />
+    </>
   );
 }
 
 function CourseDetailView({
+  signedIn,
   course,
   enrolledStudents,
   allStudents,
@@ -266,14 +308,16 @@ function CourseDetailView({
     <main className="mx-auto max-w-[900px] px-5 pt-20 pb-16 md:px-8">
       {/* ---- Back link + title ---- */}
       <div className="mb-8">
-        <div className="mb-2 flex items-center gap-3">
-          <Link
-            to="/courses"
-            className="text-sm text-muted no-underline transition-colors hover:text-primary dark:text-muted-dark dark:hover:text-primary-dark"
-          >
-            &larr; Courses
-          </Link>
-        </div>
+        {signedIn ? (
+          <div className="mb-2 flex items-center gap-3">
+            <Link
+              to="/courses"
+              className="text-sm text-muted no-underline transition-colors hover:text-primary dark:text-muted-dark dark:hover:text-primary-dark"
+            >
+              &larr; Courses
+            </Link>
+          </div>
+        ) : null}
         <div className="flex items-center gap-4">
           <h1 className="text-3xl font-bold tracking-tight">{course.title}</h1>
           {isAdmin ? (

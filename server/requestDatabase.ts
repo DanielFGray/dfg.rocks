@@ -8,9 +8,12 @@ export class RequestDatabase extends Context.Service<RequestDatabase, Database>(
   "dfg-rocks/requestDatabase",
 ) {}
 
-/** Binds the visitor role and session for this transaction only. */
+/**
+ * Binds the visitor role and session for this transaction only. A request with no session passes
+ * `undefined`: the visitor then has no user, and row security admits only what anyone may read.
+ */
 export const withAuthContext =
-  (sessionId: string) =>
+  (sessionId: string | undefined) =>
   <A, E, R>(effect: Effect.Effect<A, E, R>) =>
     Effect.gen(function* () {
       const db = yield* PgAuthDB;
@@ -23,7 +26,11 @@ export const withAuthContext =
                 .fn<void>("set_config", [sql.lit("role"), eb.val(databaseVisitor), eb.lit(true)])
                 .as("_1"),
               eb
-                .fn<void>("set_config", [sql.lit("my.session_id"), eb.val(sessionId), eb.lit(true)])
+                .fn<void>("set_config", [
+                  sql.lit("my.session_id"),
+                  eb.val(sessionId ?? ""),
+                  eb.lit(true),
+                ])
                 .as("_2"),
             ]),
           )
