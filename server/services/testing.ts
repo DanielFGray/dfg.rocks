@@ -151,7 +151,25 @@ export class Testing extends Context.Service<Testing>()("dfg-rocks/testing", {
         );
       }),
 
+      seedSubmission: Effect.fnUntraced(function* (
+        body: Readonly<{ name: string; email: string; spam_reason?: string }>,
+      ) {
+        yield* db.execute(
+          db.insertInto("app_public.contact_submissions").values({
+            name: body.name,
+            email: body.email,
+            instrument: "drums",
+            format: "in-person",
+            spam_reason: body.spam_reason ?? null,
+          }),
+        );
+      }),
+
       clear: Effect.fnUntraced(function* () {
+        // Seeded submissions use a test- email; the public form cannot create one.
+        yield* db.execute(
+          db.deleteFrom("app_public.contact_submissions").where("email", "like", "test-%"),
+        );
         const testUsers = yield* db.execute(
           db.selectFrom("app_public.users").select("id").where("username", "like", "test_%"),
         );

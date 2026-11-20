@@ -179,6 +179,7 @@ export const Submission = S.Struct({
   location_country: S.NullishOr(S.String),
   location_region: S.NullishOr(S.String),
   location_city: S.NullishOr(S.String),
+  spam_reason: S.NullishOr(S.String),
 });
 
 export type Submission = S.Schema.Type<typeof Submission>;

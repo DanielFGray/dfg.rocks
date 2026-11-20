@@ -14,6 +14,7 @@ import {
   ServiceUnavailableErrorSchema,
   TooManyRequestsErrorSchema,
 } from "../httpApiErrors.js";
+import { ContactFormat, ContactInstrument } from "../contactOptions.js";
 import { params } from "./fields.js";
 import { PlansResponse } from "./subscriptions.js";
 
@@ -22,8 +23,8 @@ export const ContactPayload = S.Struct({
   name: S.String.pipe(S.check(S.isNonEmpty())),
   email: S.String.pipe(S.check(S.isNonEmpty())),
   phone: S.optional(S.String),
-  instrument: S.String.pipe(S.check(S.isNonEmpty())),
-  format: S.String.pipe(S.check(S.isNonEmpty())),
+  instrument: ContactInstrument,
+  format: ContactFormat,
   message: S.optional(S.String),
   website: S.optional(S.String),
 });

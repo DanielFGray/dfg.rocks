@@ -43,6 +43,12 @@ const TestingTestimonialReminderQuery = S.Struct({
   next_prompt_at: S.optional(S.String),
 });
 
+const SeedSubmissionPayload = S.Struct({
+  name: S.String,
+  email: S.String,
+  spam_reason: S.optional(S.String),
+});
+
 const SeedCoursePayload = S.Struct({
   title: S.String,
   instrument: S.String,
@@ -138,6 +144,12 @@ export const testingGroup = HttpApiGroup.make("testing")
     }),
   )
   .add(HttpApiEndpoint.get("clear", "/testing/clear", { error: testingErrors }))
+  .add(
+    HttpApiEndpoint.post("seedSubmission", "/testing/seed-submission", {
+      error: testingErrors,
+      payload: SeedSubmissionPayload,
+    }),
+  )
   .add(
     HttpApiEndpoint.post("seedCourse", "/testing/seed-course", {
       error: testingErrors,
@@ -252,6 +264,13 @@ export const TestingApiGroupLive = HttpApiBuilder.group(testingApi, "testing", (
       Effect.fnUntraced(function* () {
         yield* Testing.use((testingService) => testingService.clear());
         return HttpServerResponse.redirect("/login");
+      }, adaptTestingHandler),
+    )
+    .handle(
+      "seedSubmission",
+      Effect.fnUntraced(function* ({ payload }) {
+        yield* Testing.use((testingService) => testingService.seedSubmission(payload));
+        return HttpServerResponse.jsonUnsafe({ success: true });
       }, adaptTestingHandler),
     )
     .handle(

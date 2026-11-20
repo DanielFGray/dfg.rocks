@@ -319,6 +319,10 @@ export interface AppPublicContactSubmissions {
   message: Generated<string>;
   name: string;
   phone: string | null;
+  /**
+   * Why the submission counts as spam, such as proxy (an anonymizing proxy in a datacenter); null for a real inquiry.
+   */
+  spam_reason: string | null;
 }
 
 export interface AppPublicCourses {

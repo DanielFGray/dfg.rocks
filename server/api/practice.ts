@@ -103,7 +103,7 @@ export const PracticeAdminApiGroupLive = HttpApiBuilder.group(
           const auth = yield* CurrentSession;
           const rows = yield* Practice.use((practiceService) =>
             practiceService
-              .listSubmissions(query.limit ?? 50, query.offset ?? 0)
+              .listSubmissions(query.limit ?? 50, query.offset ?? 0, query.spam === "true")
               .pipe(withAuthContext(auth.session.id)),
           );
           return rows;

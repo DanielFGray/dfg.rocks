@@ -8,6 +8,10 @@ export interface GeoLocation {
   city: string;
   lat: number;
   lon: number;
+  /** ip-api.com says the address is a proxy, VPN or Tor exit. */
+  proxy: boolean;
+  /** ip-api.com says the address belongs to a hosting provider or datacenter. */
+  hosting: boolean;
 }
 
 /** How long a lookup may take before the visitor's location counts as unknown. */
@@ -27,6 +31,8 @@ const IpApiResponse = S.Struct({
   city: S.optional(S.String),
   lat: S.optional(S.Finite),
   lon: S.optional(S.Finite),
+  proxy: S.optional(S.Boolean),
+  hosting: S.optional(S.Boolean),
 });
 
 export class Geolocation extends Context.Service<Geolocation>()("dfg-rocks/geolocation", {
@@ -42,7 +48,7 @@ export class Geolocation extends Context.Service<Geolocation>()("dfg-rocks/geolo
         const timeout = yield* GeolocationTimeout;
         return yield* client
           .get(
-            `http://ip-api.com/json/${encodeURIComponent(ip)}?fields=status,message,country,countryCode,region,regionName,city,lat,lon`,
+            `http://ip-api.com/json/${encodeURIComponent(ip)}?fields=status,message,country,countryCode,region,regionName,city,lat,lon,proxy,hosting`,
           )
           .pipe(
             Effect.flatMap(HttpClientResponse.schemaBodyJson(IpApiResponse)),
@@ -56,6 +62,8 @@ export class Geolocation extends Context.Service<Geolocation>()("dfg-rocks/geolo
                   city: data.city ?? "",
                   lat: data.lat ?? 0,
                   lon: data.lon ?? 0,
+                  proxy: data.proxy ?? false,
+                  hosting: data.hosting ?? false,
                 })),
               ),
             ),

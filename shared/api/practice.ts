@@ -15,6 +15,12 @@ const PracticeTakeQuery = S.Struct({
   student_id: S.optional(S.String),
 });
 
+const SubmissionsQuery = S.Struct({
+  ...PaginationQuery.fields,
+  // "true" lists only the submissions saved as spam; otherwise they are left out.
+  spam: S.optional(S.Literals(["true", "false"])),
+});
+
 const UpdateSubmissionPayload = S.Struct({
   is_read: S.Boolean,
 });
@@ -86,7 +92,7 @@ export const practiceAdminGroup = HttpApiGroup.make("practiceAdmin")
   .add(
     HttpApiEndpoint.get("submissions", "/submissions", {
       error: adminErrors,
-      query: PaginationQuery,
+      query: SubmissionsQuery,
       success: S.Array(Submission),
     }),
   )
