@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 import { spawn, spawnSync } from "node:child_process";
-import { resetTestDatabase, testDatabaseEnv } from "./testDatabase.js";
+import { migrateTestDatabase, testDatabaseEnv } from "./testDatabase.js";
 
 // E2E runs against the production build, so tests see what ships and no file
 // write can trigger a dev-server reload mid-test. The server still runs with
@@ -18,7 +18,7 @@ const childEnv: NodeJS.ProcessEnv = {
   PORT: port,
 };
 
-resetTestDatabase();
+migrateTestDatabase();
 
 const build = spawnSync("bun", ["run", "build"], { env: childEnv, stdio: "inherit" });
 if (build.status !== 0) process.exit(build.status ?? 1);

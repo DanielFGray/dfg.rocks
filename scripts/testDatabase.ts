@@ -17,14 +17,12 @@ export function testDatabaseEnv(env: NodeJS.ProcessEnv = process.env) {
 }
 
 /**
- * Drops and re-provisions the test database through `ops`, then installs the
- * graphile-worker schema and applies committed and current migrations.
+ * Installs the graphile-worker schema and applies committed and current migrations to
+ * the test database. `ops dev db test` has already reset it and holds its lock, so every
+ * test script runs under that wrapper (see package.json).
  */
-export function resetTestDatabase(env: NodeJS.ProcessEnv = process.env) {
-  const testEnv = { ...env, ...testDatabaseEnv(env) };
-  const name = new URL(testEnv.DATABASE_URL).pathname.slice(1);
-  run("ops", ["dev", "db", "reset", name], env);
-  run("bun", ["run", "db:latest"], testEnv);
+export function migrateTestDatabase(env: NodeJS.ProcessEnv = process.env) {
+  run("bun", ["run", "db:latest"], { ...env, ...testDatabaseEnv(env) });
 }
 
 function run(command: string, args: string[], env: NodeJS.ProcessEnv) {
