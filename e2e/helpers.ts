@@ -76,6 +76,10 @@ type TestingApi = {
 const loginViaUi = async (page: Page, username: string, password: string) => {
   // `testing.login()` seeds users by issuing a real session. UI-login tests
   // must start without that fixture session or route/auth requests can race.
+  // Leave the old page first: a page from an earlier login can still send a query (the dashboard
+  // refetches when the active student changes), and one sent after the cookie is cleared gets a 401
+  // that the browser error guard reports.
+  await page.goto("about:blank");
   await page.context().clearCookies({ name: "session" });
   await page.goto("/login");
   await page.waitForLoadState("networkidle");
