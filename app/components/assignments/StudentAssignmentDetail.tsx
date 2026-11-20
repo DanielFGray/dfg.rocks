@@ -15,6 +15,7 @@ import { findNotationTrack, formatNotationTrackLabel } from "../../../shared/not
 import { MaterialPreview } from "../library/MaterialPreview.js";
 import { categorize } from "../library/helpers.js";
 import { Button } from "../ui/Button.js";
+import { PracticeTakes } from "./PracticeTakes.js";
 
 export function getAssignedTrackLabel(material: {
   notation_tracks: Material["notation_tracks"];
@@ -121,7 +122,8 @@ export function StudentAssignmentDetail({
   initialProgress: AssignmentProgress | null;
   initialReviews: AssignmentReview[];
 }) {
-  const { user, isParent } = useAuth();
+  const { user, isParent, activeStudentId } = useAuth();
+  const takesStudentId = isParent ? activeStudentId : user?.id;
   const canTrackAssignments = user?.role === "student" || isParent;
   const queryClient = useQueryClient();
   const category = categorize(material.mime_type, material.original_filename);
@@ -327,6 +329,12 @@ export function StudentAssignmentDetail({
             ))}
           </div>
         )}
+
+        {category === "notation" && takesStudentId ? (
+          <div className="mt-6 border-t border-overlay/6 pt-4 dark:border-overlay-dark/6">
+            <PracticeTakes materialId={material.id} studentId={takesStudentId} />
+          </div>
+        ) : null}
 
         {canTrackAssignments ? (
           <div className="mt-6 border-t border-overlay/6 pt-4 dark:border-overlay-dark/6">
