@@ -27,9 +27,12 @@ const getSubmissionsPageData = createServerFn({ method: "GET" }).handler(() =>
       if (session.user.role !== "admin") {
         throw new HttpError({ status: 403, message: "Forbidden" });
       }
-      return (yield* Practice.use((practiceService) =>
-        practiceService.listSubmissions(5000, 0).pipe(withAuthContext(session.session.id)),
-      )) satisfies ReadonlyArray<Submission>;
+      return yield* Practice.use((practiceService) =>
+        Effect.all({
+          inbox: practiceService.listSubmissions(5000, 0),
+          spam: practiceService.listSubmissions(5000, 0, true),
+        }).pipe(withAuthContext(session.session.id)),
+      );
     }),
   ),
 );
@@ -46,7 +49,12 @@ export const Route = createFileRoute("/_authed/submissions")({
 
 function SubmissionsPage() {
   const router = useRouter();
-  const allSubmissions = Route.useLoaderData();
+  const { inbox, spam } = Route.useLoaderData() satisfies {
+    inbox: ReadonlyArray<Submission>;
+    spam: ReadonlyArray<Submission>;
+  };
+  const [showSpam, setShowSpam] = useState(false);
+  const allSubmissions = showSpam ? spam : inbox;
 
   const [page, setPage] = useState(0);
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -86,15 +94,29 @@ function SubmissionsPage() {
     <Main data-testid="submissions">
       <div className="mb-8 flex items-center justify-between">
         <h1 className="text-3xl font-bold tracking-tight">Contact Submissions</h1>
-        {allSubmissions.length > 0 ? (
-          <span className="rounded-full bg-accent/12 px-3 py-1 text-sm font-semibold text-accent">
-            {allSubmissions.length} total
-          </span>
-        ) : null}
+        <div className="flex items-center gap-3">
+          {allSubmissions.length > 0 ? (
+            <span className="rounded-full bg-accent/12 px-3 py-1 text-sm font-semibold text-accent">
+              {allSubmissions.length} total
+            </span>
+          ) : null}
+          <Button
+            variant="outline"
+            data-testid="spam-filter"
+            aria-pressed={showSpam}
+            onClick={() => {
+              setShowSpam(!showSpam);
+              setPage(0);
+            }}
+            className="px-3 py-1.5 text-xs whitespace-nowrap"
+          >
+            {showSpam ? "Show inbox" : `Show spam (${spam.length})`}
+          </Button>
+        </div>
       </div>
 
       {paged.length === 0 ? (
-        <EmptyState message="No contact submissions yet." />
+        <EmptyState message={showSpam ? "No spam." : "No contact submissions yet."} />
       ) : (
         <>
           <div className="flex flex-col gap-2">

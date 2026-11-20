@@ -1,3 +1,5 @@
+import type { ContactFormat, ContactInstrument } from "../shared/contactOptions.js";
+
 export const site = {
   name: "Daniel",
   business: "Daniel Gray",
@@ -104,15 +106,16 @@ export const contact = {
   heading: "Let's make some music together!",
   description:
     "Send me a message and I'll get back to you within 24 hours. No commitment, no pressure.",
+  // Each list is checked against shared/contactOptions.ts: the server accepts only these values.
   instruments: [
     { value: "drums", label: "Drums / Percussion" },
     { value: "guitar", label: "Guitar" },
     { value: "piano", label: "Piano / Keys" },
     { value: "other", label: "Something else" },
-  ],
+  ] satisfies ReadonlyArray<{ value: typeof ContactInstrument.Type; label: string }>,
   formats: [
     { value: "in-person", label: "In-Person" },
     { value: "online", label: "Online" },
     { value: "not-sure", label: "Not sure yet" },
-  ],
+  ] satisfies ReadonlyArray<{ value: typeof ContactFormat.Type; label: string }>,
 };

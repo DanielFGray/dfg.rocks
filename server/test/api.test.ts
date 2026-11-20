@@ -43,7 +43,12 @@ const TEST_ROOT_URL = "http://127.0.0.1:3000";
 // this value, not from the request.
 const CONFIGURED_ROOT_URL = "https://dfg.test";
 type TitledItem = { title: string };
-type SubmissionSummary = { id: string; email: string; is_read: boolean };
+type SubmissionSummary = {
+  id: string;
+  email: string;
+  is_read: boolean;
+  spam_reason: string | null;
+};
 type StudentSummary = { username: string };
 
 function makeTestRequest(
@@ -911,6 +916,47 @@ describe("DFG Portal API", () => {
       expect(students.status).toBe(200);
       const studentList = (yield* resJson(students)) as StudentSummary[];
       expect(studentList.some((student) => student.username === "student1")).toBe(true);
+    }),
+  );
+
+  it.effect(
+    "admin: the submissions list leaves spam out and the spam filter shows it",
+    Effect.fnUntraced(function* () {
+      yield* Effect.tryPromise(() =>
+        testDb.query(
+          `insert into app_public.contact_submissions (name, email, instrument, format, spam_reason)
+           values ('Spam Row', 'spam-row@example.com', 'drums', 'in-person', 'proxy')`,
+        ),
+      );
+      const list = (path: string) =>
+        reqEffect("GET", path, { cookie: adminCookie }).pipe(
+          Effect.flatMap(resJson),
+          Effect.map((rows) => rows as SubmissionSummary[]),
+        );
+
+      const inbox = yield* list("/api/admin/submissions");
+      expect(inbox.some((row) => row.email === "jane@example.com")).toBe(true);
+      expect(inbox.some((row) => row.email === "spam-row@example.com")).toBe(false);
+      expect(inbox.every((row) => row.spam_reason === null)).toBe(true);
+
+      const spam = yield* list("/api/admin/submissions?spam=true");
+      expect(spam.map((row) => row.email)).toContain("spam-row@example.com");
+      expect(spam.every((row) => row.spam_reason !== null)).toBe(true);
+    }),
+  );
+
+  it.effect(
+    "public: the contact form refuses an instrument or format outside the form's options",
+    Effect.fnUntraced(function* () {
+      const base = { name: "Jane Doe", email: "bad-option@example.com" };
+      const badInstrument = yield* reqEffect("POST", "/api/contact", {
+        body: { ...base, instrument: "kazoo", format: "online" },
+      });
+      expect(badInstrument.status).toBe(400);
+      const badFormat = yield* reqEffect("POST", "/api/contact", {
+        body: { ...base, instrument: "guitar", format: "carrier-pigeon" },
+      });
+      expect(badFormat.status).toBe(400);
     }),
   );
 

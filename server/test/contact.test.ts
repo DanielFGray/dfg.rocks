@@ -1,5 +1,6 @@
 import { describe, expect, it } from "@effect/vitest";
 import { Effect, Layer, Option } from "effect";
+import { sql } from "kysely";
 import * as HttpClient from "effect/http/HttpClient";
 import * as HttpClientResponse from "effect/http/HttpClientResponse";
 import { PgRootDB } from "../db.js";
@@ -13,8 +14,8 @@ const runId = Math.random().toString(36).slice(2, 8);
 const submission = (email: string) => ({
   name: "Jane Doe",
   email,
-  instrument: "piano",
-  format: "in-person",
+  instrument: "piano" as const,
+  format: "in-person" as const,
   message: "Looking for lessons",
 });
 
@@ -30,6 +31,35 @@ const savedRow = (email: string) =>
     return Option.fromNullishOr(rows[0]);
   });
 
+const spamReasonOf = (email: string) =>
+  Effect.gen(function* () {
+    const db = yield* PgRootDB;
+    const rows = yield* db.execute(
+      db
+        .selectFrom("app_public.contact_submissions")
+        .select("spam_reason")
+        .where("email", "=", email),
+    );
+    return rows.map((row) => row.spam_reason);
+  });
+
+const emailJobCount = (email: string) =>
+  Effect.gen(function* () {
+    const db = yield* PgRootDB;
+    const rows = yield* db.execute(
+      db.selectNoFrom(
+        sql<number>`(
+          select count(*)::int
+            from graphile_worker._private_jobs jobs
+            join graphile_worker._private_tasks tasks on tasks.id = jobs.task_id
+           where tasks.identifier = 'send_email'
+             and jobs.payload -> 'variables' ->> 'email' = ${email}
+        )`.as("count"),
+      ),
+    );
+    return rows[0]?.count;
+  });
+
 // ip-api.com as the Geolocation service sees it, keyed by the looked-up address.
 const ipApi = HttpClient.make((request, url) =>
   Effect.succeed(
@@ -37,9 +67,32 @@ const ipApi = HttpClient.make((request, url) =>
       request,
       url.pathname.endsWith("/198.51.100.20")
         ? Response.json({ status: "success", countryCode: "US", region: "TX", city: "Houston" })
-        : url.pathname.endsWith("/198.51.100.30")
-          ? Response.json({ status: "success", countryCode: "US", region: "CA", city: "Fresno" })
-          : new Response("quota exceeded", { status: 429 }),
+        : url.pathname.endsWith("/198.51.100.50")
+          ? Response.json({
+              status: "success",
+              countryCode: "US",
+              region: "TX",
+              city: "Dallas",
+              proxy: true,
+              hosting: true,
+            })
+          : url.pathname.endsWith("/198.51.100.51")
+            ? Response.json({
+                status: "success",
+                countryCode: "US",
+                region: "TX",
+                city: "Houston",
+                proxy: false,
+                hosting: true,
+              })
+            : url.pathname.endsWith("/198.51.100.30")
+              ? Response.json({
+                  status: "success",
+                  countryCode: "US",
+                  region: "CA",
+                  city: "Fresno",
+                })
+              : new Response("quota exceeded", { status: 429 }),
     ),
   ),
 );
@@ -64,6 +117,27 @@ describe("contact form", () => {
             location_city: "Houston",
           }),
         );
+      }),
+    );
+
+    it.effect("saves a proxy and hosting address as spam and queues no email", () =>
+      Effect.gen(function* () {
+        const email = `spam_${runId}@example.com`;
+        const contact = yield* Contact;
+        yield* contact.submitContact(submission(email), Option.some("198.51.100.50"));
+        expect(yield* spamReasonOf(email)).toEqual(["proxy"]);
+        expect(yield* emailJobCount(email)).toBe(0);
+      }),
+    );
+
+    // Apple Private Relay sets one of the two flags for real iPhone users.
+    it.effect("accepts an address flagged only as hosting, with its email", () =>
+      Effect.gen(function* () {
+        const email = `relay_${runId}@example.com`;
+        const contact = yield* Contact;
+        yield* contact.submitContact(submission(email), Option.some("198.51.100.51"));
+        expect(yield* spamReasonOf(email)).toEqual([null]);
+        expect(yield* emailJobCount(email)).toBe(1);
       }),
     );
 

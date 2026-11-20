@@ -170,12 +170,18 @@ export class Practice extends Context.Service<Practice>()("dfg-rocks/practice", 
           }),
         );
     }),
-    listSubmissions: Effect.fn("listSubmissions")(function* (limit: number, offset: number) {
+    /** The inbox leaves spam out; `spam: true` lists only the rows saved as spam. */
+    listSubmissions: Effect.fn("listSubmissions")(function* (
+      limit: number,
+      offset: number,
+      spam = false,
+    ) {
       const db = yield* RequestDatabase;
       return yield* db.execute(
         db
           .selectFrom("app_public.contact_submissions")
           .selectAll()
+          .where("spam_reason", spam ? "is not" : "is", null)
           .orderBy("created_at", "desc")
           .limit(limit)
           .offset(offset),

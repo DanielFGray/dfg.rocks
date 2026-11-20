@@ -13,6 +13,7 @@ type TestingApi = {
     email?: string;
   }): Promise<void>;
   clear(): Promise<void>;
+  seedSubmission(data: { name: string; email: string; spam_reason?: string }): Promise<void>;
   seedCourse(data: {
     title: string;
     instrument: string;
@@ -199,6 +200,11 @@ export const test = base.extend<{
 
       async clear() {
         await get("clear");
+      },
+
+      async seedSubmission(data) {
+        const res = await page.request.post(`${api_url}/api/testing/seed-submission`, { data });
+        expect(res.ok(), `testing/seed-submission failed: ${await res.text()}`).toBe(true);
       },
 
       async seedCourse(data) {

@@ -15,6 +15,10 @@ export class Contact extends Context.Service<Contact>()("dfg-rocks/contact", {
        * Saves a submission and queues its notification email. Refuses a filled honeypot field, and
        * a visitor located outside Texas. A visitor whose location is unknown (no address, or the
        * lookup failed) is accepted, so a lead is not lost while the lookup service is down.
+       *
+       * An address that ip-api.com marks as both proxy and hosting is spam: the row is saved with a
+       * spam reason, no email is queued, and the caller sees success like any other visitor. Either
+       * flag alone is not enough: Apple Private Relay sets one of them for real iPhone users.
        */
       submitContact: Effect.fn("submitContact")(function* (
         values: typeof ContactPayload.Type,
@@ -40,6 +44,15 @@ export class Contact extends Context.Service<Contact>()("dfg-rocks/contact", {
               "Sorry, I only accept lesson inquiries from the Houston / Galveston area in Texas. If you're outside Texas, I hope you find a great teacher near you!",
           });
         }
+        const spamReason = Option.exists(location, (found) => found.proxy && found.hosting)
+          ? "proxy"
+          : null;
+        if (spamReason) {
+          yield* Effect.logInfo("Contact saved as spam", {
+            ip: Option.getOrNull(ip),
+            spamReason,
+          });
+        }
         // One transaction: the submission and its notification email exist together or not at all.
         yield* rootDb.withTransaction(
           Effect.gen(function* () {
@@ -55,8 +68,10 @@ export class Contact extends Context.Service<Contact>()("dfg-rocks/contact", {
                 location_country: locationField(location, "country"),
                 location_region: locationField(location, "region"),
                 location_city: locationField(location, "city"),
+                spam_reason: spamReason,
               }),
             );
+            if (spamReason) return;
             yield* addJob(rootDb, "send_email", {
               options: {
                 to: adminEmail,
