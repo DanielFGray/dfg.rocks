@@ -10,7 +10,7 @@ bun run dev:app          # The dev process: Vite in middleware mode, API and job
 bun run typecheck        # tsc --noEmit -p tsconfig.app.json
 bun run db:up            # Start the shared ops cluster and write DB URLs to .env
 bun run db:setup         # db:up, then db:reset
-bun run db:reset         # Re-provision dfg_rocks through ops, then db:latest
+bun run db:reset         # Re-provision dfg_rocks_dev through ops, then db:latest
 bun run db:latest        # Install the worker schema, apply committed and current/ migrations
 bun run gm <command>     # graphile-migrate with .env loaded
 bun run db:types         # Regenerate Kysely types from DB schema
@@ -19,7 +19,7 @@ bun run test:e2e         # Playwright E2E tests
 
 ## Local database
 
-Local Postgres is the shared cluster from `ops dev db` (container `ops-dev-pg17`, 127.0.0.1:5417), declared by `cartridge.json`. `ops dev db up` creates `dfg_rocks`, `dfg_rocks_shadow` and `dfg_rocks_test` with the same roles and extensions as production, and writes `DATABASE_URL`, `AUTH_DATABASE_URL`, `SHADOW_DATABASE_URL` and `TEST_DATABASE_URL` to `.env`. It writes no root URL. Unit, worker and E2E tests use `dfg_rocks_test` through `scripts/testDatabase.ts`, which resets it with `ops dev db reset`. `bun -b` does not load `.env`, so scripts that run a binary pass `--env-file=.env`.
+Local Postgres is the shared cluster from `ops dev db` (container `ops-dev-pg17`, 127.0.0.1:5417), declared by `cartridge.json`. `ops dev db up` creates `dfg_rocks_dev`, `dfg_rocks_dev_shadow` and `dfg_rocks_dev_test` with the same roles and extensions as production, and writes `DATABASE_URL`, `AUTH_DATABASE_URL`, `SHADOW_DATABASE_URL` and `TEST_DATABASE_URL` to `.env`. It writes no root URL. Every checkout and worktree shares these databases, so `bun run db:reset` resets them for all of them. Each test script runs under `ops dev db test --`, which takes the app's test-database lock, resets the `_test` database and runs the command; a second run waits. `scripts/testDatabase.ts` then applies migrations to the `_test` database. Run one e2e file with `bun run test:e2e <file>`, so it holds the lock. `bun -b` does not load `.env`, so scripts that run a binary pass `--env-file=.env`.
 
 ## Deploy and boot
 
