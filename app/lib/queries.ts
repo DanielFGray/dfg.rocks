@@ -2,6 +2,7 @@ import { Effect } from "effect";
 import { queryOptions, useMutation, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { api } from "./api.js";
 import { decodeAuthState, getAuthUser, type AuthState } from "./auth.js";
+import type { CreatePracticeTakePayload } from "../../shared/api/practice.js";
 import { todayRange, weekRange } from "../../shared/dateRanges.js";
 
 // The server function returns JSON text; the cache holds the decoded state, so code that reads
@@ -41,6 +42,7 @@ export function invalidateStudentQueries(queryClient: QueryClient, studentId?: s
   if (studentId) {
     queryClient.invalidateQueries({ queryKey: ["assignments", studentId] });
     queryClient.invalidateQueries({ queryKey: ["practice-logs", studentId] });
+    queryClient.invalidateQueries({ queryKey: ["practice-takes", studentId] });
     queryClient.invalidateQueries({ queryKey: ["courses", studentId] });
     queryClient.invalidateQueries({ queryKey: ["my-lessons", "scheduled", studentId] });
     queryClient.invalidateQueries({ queryKey: ["my-lessons", studentId] });
@@ -58,6 +60,7 @@ export function invalidateStudentQueries(queryClient: QueryClient, studentId?: s
     // Invalidate all student-scoped variants
     queryClient.invalidateQueries({ queryKey: ["assignments"], exact: false });
     queryClient.invalidateQueries({ queryKey: ["practice-logs"], exact: false });
+    queryClient.invalidateQueries({ queryKey: ["practice-takes"], exact: false });
     queryClient.invalidateQueries({ queryKey: ["courses"], exact: false });
     queryClient.invalidateQueries({ queryKey: ["my-lessons", "scheduled"], exact: false });
     queryClient.invalidateQueries({ queryKey: ["my-lessons"], exact: false });
@@ -159,6 +162,22 @@ export function practiceLogsQuery(studentId?: string) {
     queryKey: ["practice-logs", studentId],
     queryFn: () => Effect.runPromise(api.practice.practiceLogs({ query: {} })),
   });
+}
+
+/** A student's saved click takes for one score. Always scoped to a student: unscoped, the API also returns family members' (or, for staff, every student's) takes. */
+export function practiceTakesQuery(materialId: string, studentId: string) {
+  return queryOptions({
+    queryKey: ["practice-takes", studentId, materialId],
+    queryFn: () =>
+      Effect.runPromise(
+        api.practice.practiceTakes({ query: { material_id: materialId, student_id: studentId } }),
+      ),
+  });
+}
+
+/** Saves a take for the signed-in student; callers invalidate ["practice-takes"]. */
+export function savePracticeTake(payload: typeof CreatePracticeTakePayload.Type) {
+  return Effect.runPromise(api.practice.createPracticeTake({ payload }));
 }
 
 export function coursesQuery(studentId?: string) {

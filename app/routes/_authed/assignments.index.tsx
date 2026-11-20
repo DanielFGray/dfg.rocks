@@ -16,6 +16,7 @@ import {
   formatDuration,
   getAssignedTrackLabel,
 } from "../../components/assignments/StudentAssignmentDetail.js";
+import { PracticeTakes } from "../../components/assignments/PracticeTakes.js";
 import { categorize, categoryColor, categoryLabel } from "../../components/library/helpers.js";
 import { runServerEffect } from "../../lib/serverEffect.js";
 import { Materials } from "../../../server/services/materials.js";
@@ -256,27 +257,36 @@ function StaffStudentCard({
               return (
                 <div
                   key={material.id}
-                  className="flex items-center gap-3 rounded-lg border border-overlay/6 bg-card px-4 py-3 text-sm dark:border-overlay-dark/6 dark:bg-card-dark"
+                  className="rounded-lg border border-overlay/6 bg-card px-4 py-3 text-sm dark:border-overlay-dark/6 dark:bg-card-dark"
                 >
-                  <div className="min-w-0 flex-1">
-                    <span className="block truncate font-medium text-primary dark:text-primary-dark">
-                      {material.title}
-                    </span>
-                    <span className="mt-0.5 block truncate text-xs text-muted/60 dark:text-muted-dark/60">
-                      {material.original_filename}
-                      {assignedTrackLabel ? ` · ${assignedTrackLabel}` : ""}
-                      {category === "notation"
-                        ? ` · Playback ${formatDuration(material.listened_seconds ?? 0)}`
-                        : ""}
-                    </span>
+                  <div className="flex items-center gap-3">
+                    <div className="min-w-0 flex-1">
+                      <span className="block truncate font-medium text-primary dark:text-primary-dark">
+                        {material.title}
+                      </span>
+                      <span className="mt-0.5 block truncate text-xs text-muted/60 dark:text-muted-dark/60">
+                        {material.original_filename}
+                        {assignedTrackLabel ? ` · ${assignedTrackLabel}` : ""}
+                        {category === "notation"
+                          ? ` · Playback ${formatDuration(material.listened_seconds ?? 0)}`
+                          : ""}
+                      </span>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      onClick={() =>
+                        onUnassign(detail.id, detail.name ?? detail.username, material)
+                      }
+                      className="ml-2 text-xs text-red-600 hover:text-red-300 dark:text-red-400"
+                    >
+                      Unassign
+                    </Button>
                   </div>
-                  <Button
-                    variant="ghost"
-                    onClick={() => onUnassign(detail.id, detail.name ?? detail.username, material)}
-                    className="ml-2 text-xs text-red-600 hover:text-red-300 dark:text-red-400"
-                  >
-                    Unassign
-                  </Button>
+                  {category === "notation" ? (
+                    <div className="mt-3">
+                      <PracticeTakes materialId={material.id} studentId={detail.id} />
+                    </div>
+                  ) : null}
                 </div>
               );
             })}
