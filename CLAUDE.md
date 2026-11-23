@@ -167,6 +167,7 @@ Benign warning, no functionality impact.
 - TanStack Router file-based routing with typed routes
 - TailwindCSS for styling, `data-testid` attributes for E2E selectors
 - Write one colour class per property, such as `text-muted`. The colours in `app/styles.css` change in dark mode, so add `dark:` only for a colour that is not one of those tokens, such as `dark:text-red-400`.
+- UI primitives in `app/components/ui` merge a caller's className with tailwind-variants (`tv` recipes, `cn`). Use Button's `size` and `tone` props, not padding or colour classes; build tables from `ui/Table`.
 - React Aria Components for form inputs (TextField, Input, etc.)
 
 ## Key Files
