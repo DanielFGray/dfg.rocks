@@ -240,6 +240,14 @@ export const AssignmentReview = S.Struct({
 
 export type AssignmentReview = S.Schema.Type<typeof AssignmentReview>;
 
+/** One student's time on an assignment and their self-reviews of it, newest review first. */
+export const AssignmentTracking = S.Struct({
+  listened_seconds: S.Finite,
+  reviews: S.Array(AssignmentReview),
+});
+
+export type AssignmentTracking = S.Schema.Type<typeof AssignmentTracking>;
+
 export const Message = S.Struct({
   id: S.String,
   sender_id: S.String,

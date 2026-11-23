@@ -98,6 +98,32 @@ export class Materials extends Context.Service<Materials>()("dfg-rocks/materials
           .where("material_id", "=", materialId),
       );
     }),
+    /**
+     * The student's listening time and self-reviews for one assignment. RLS also shows a
+     * parent every child's rows, so the student is chosen here.
+     */
+    assignmentTracking: Effect.fn("assignmentTracking")(function* (values: {
+      studentId: string;
+      materialId: string;
+    }) {
+      const db = yield* RequestDatabase;
+      const [progress] = yield* db.execute(
+        db
+          .selectFrom("app_public.assignment_progress")
+          .select("listened_seconds")
+          .where("student_id", "=", values.studentId)
+          .where("material_id", "=", values.materialId),
+      );
+      const reviews = yield* db.execute(
+        db
+          .selectFrom("app_public.assignment_reviews")
+          .select(["id", "material_id", "stars", "listened_seconds", "created_at"])
+          .where("student_id", "=", values.studentId)
+          .where("material_id", "=", values.materialId)
+          .orderBy("created_at", "desc"),
+      );
+      return { listened_seconds: progress?.listened_seconds ?? 0, reviews };
+    }),
     recordAssignmentPlayback: Effect.fn("recordAssignmentPlayback")(function* (values: {
       studentId: string;
       materialId: string;
@@ -147,8 +173,13 @@ export class Materials extends Context.Service<Materials>()("dfg-rocks/materials
         .execute(
           db
             .selectFrom("app_public.student_materials as sm")
-            .leftJoin("app_public.assignment_progress as ap", "ap.material_id", "sm.material_id")
+            .leftJoin("app_public.assignment_progress as ap", (join) =>
+              join
+                .onRef("ap.material_id", "=", "sm.material_id")
+                .onRef("ap.student_id", "=", "sm.student_id"),
+            )
             .select(["sm.material_id", "ap.listened_seconds"])
+            .where("sm.student_id", "=", values.studentId)
             .where("sm.material_id", "=", values.materialId),
         )
         .pipe(

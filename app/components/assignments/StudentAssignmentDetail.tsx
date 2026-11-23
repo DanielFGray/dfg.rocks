@@ -1,16 +1,10 @@
 import { Effect } from "effect";
-import { useCallback, useEffect, useRef, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useCallback, useRef, useState } from "react";
+import { queryOptions, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../../lib/api.js";
 import { getErrorMessage } from "../../lib/errors.js";
 import { useAuth } from "../../lib/hooks/useAuth.js";
-import type {
-  AssignedMaterial,
-  AssignmentProgress,
-  AssignmentReview,
-  Material,
-  PracticeLog,
-} from "../../../shared/schemas.js";
+import type { AssignedMaterial, AssignmentTracking, Material, PracticeLog } from "../../../shared/schemas.js";
 import { findNotationTrack, formatNotationTrackLabel } from "../../../shared/notationTracks.js";
 import { MaterialPreview } from "../library/MaterialPreview.js";
 import type { StaticScore } from "gigbag.js/static";
@@ -114,25 +108,34 @@ function StarsDisplay({ stars }: { stars: number }) {
   );
 }
 
+/**
+ * The student's listening time and self-reviews. It sits under ["assignments"], so the realtime
+ * events for progress and reviews refresh it.
+ */
+const assignmentTrackingQuery = (materialId: string) =>
+  queryOptions({
+    queryKey: ["assignments", materialId, "tracking"],
+    queryFn: () => Effect.runPromise(api.materials.assignmentTracking({ params: { materialId } })),
+  });
+
+/** Render it with `key={material.id}`, so its state starts over for each assignment. */
 export function StudentAssignmentDetail({
   material,
   staticScore,
-  initialProgress,
-  initialReviews,
 }: {
   material: AssignedMaterial;
   /** The assigned track drawn on the server; see MaterialPreview. */
   staticScore?: StaticScore | null;
-  initialProgress: AssignmentProgress | null;
-  initialReviews: AssignmentReview[];
 }) {
   const { user, isParent, activeStudentId } = useAuth();
   const takesStudentId = isParent ? activeStudentId : user?.id;
   const canTrackAssignments = user?.role === "student" || isParent;
   const queryClient = useQueryClient();
   const category = categorize(material.mime_type, material.original_filename);
-  const [progress, setProgress] = useState<AssignmentProgress | null>(initialProgress);
-  const [reviews, setReviews] = useState<AssignmentReview[]>(initialReviews);
+  const tracking = assignmentTrackingQuery(material.id);
+  const { data: trackingData } = useQuery({ ...tracking, enabled: canTrackAssignments });
+  const updateTracking = (update: (current: AssignmentTracking) => AssignmentTracking) =>
+    queryClient.setQueryData(tracking.queryKey, (current) => current && update(current));
   const [selectedStars, setSelectedStars] = useState<number | null>(null);
   const [durationSeconds, setDurationSeconds] = useState<number | null>(null);
   const [playbackError, setPlaybackError] = useState<string | null>(null);
@@ -141,24 +144,6 @@ export function StudentAssignmentDetail({
   const [ratingSaved, setRatingSaved] = useState(false);
   const unloggedPlaybackRef = useRef(0);
   const autoLoggedRef = useRef(false);
-
-  useEffect(() => {
-    setProgress(initialProgress);
-  }, [initialProgress]);
-
-  useEffect(() => {
-    setReviews(initialReviews);
-  }, [initialReviews]);
-
-  useEffect(() => {
-    setSelectedStars(null);
-    setDurationSeconds(null);
-    setPlaybackError(null);
-    setReviewError(null);
-    setPracticeRating(null);
-    unloggedPlaybackRef.current = 0;
-    autoLoggedRef.current = false;
-  }, [material.id]);
 
   const playbackMutation = useMutation({
     mutationFn: (seconds: number) =>
@@ -170,7 +155,7 @@ export function StudentAssignmentDetail({
       ),
     onSuccess: (data) => {
       setPlaybackError(null);
-      setProgress(data);
+      updateTracking((current) => ({ ...current, listened_seconds: data.listened_seconds }));
     },
     onError: (error) => {
       setPlaybackError(mutationErrorMessage(error, "Failed to save playback time"));
@@ -188,7 +173,7 @@ export function StudentAssignmentDetail({
     onSuccess: (data) => {
       setReviewError(null);
       setSelectedStars(null);
-      setReviews((current) => [data, ...current]);
+      updateTracking((current) => ({ ...current, reviews: [data, ...current.reviews] }));
     },
     onError: (error) => {
       setReviewError(mutationErrorMessage(error, "Failed to save self-review"));
@@ -243,7 +228,8 @@ export function StudentAssignmentDetail({
       Effect.runPromise(api.practice.practiceLogs({ query: { material_id: material.id } })),
   });
 
-  const listenedSeconds = progress?.listened_seconds ?? 0;
+  const listenedSeconds = trackingData?.listened_seconds ?? 0;
+  const reviews = trackingData?.reviews ?? [];
   const latestReview = reviews[0] ?? null;
   const reviewUnlocked =
     category !== "notation" ||

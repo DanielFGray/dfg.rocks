@@ -303,4 +303,62 @@ test.describe("assignments management", () => {
     await expect(page.locator(".at-frame-static svg.at-static-part").first()).toBeVisible();
     await expect(page.locator(".at-frame-player")).toBeHidden();
   });
+  test("realtime refreshes keep saved self-reviews and do not draw the score again", async ({
+    page,
+    testing,
+  }) => {
+    await testing.login();
+    await testing.login({
+      username: "test_assignment_student_refresh",
+      role: "student",
+      name: "Refresh Student",
+    });
+    await testing.seedMaterial({
+      title: "Test: Refresh Material",
+      original_filename: "refresh.musicxml",
+      mime_type: "application/octet-stream",
+      source_file_path: notationFixturePath,
+      visibility: "course",
+    });
+    await testing.assignMaterial("test_assignment_student_refresh", "Test: Refresh Material", 0);
+
+    await loginViaUi(page, "test_assignment_student_refresh", "testpassword123");
+    await page.getByTestId("nav-assignments").click();
+    await page
+      .getByTestId("assignment-open-link")
+      .filter({ hasText: "Test: Refresh Material" })
+      .click();
+    await expect(page.locator(".at-frame")).toBeVisible();
+
+    // Each save below sends a realtime event, which reruns the page loader. A drawn score is
+    // the only response that carries musicFontSize.
+    let serverFnResponses = 0;
+    const drawsAfterOpen: string[] = [];
+    page.on("response", async (response) => {
+      if (!response.url().includes("/_serverFn/")) return;
+      const body = await response.text().catch(() => "");
+      serverFnResponses += 1;
+      if (body.includes("musicFontSize")) drawsAfterOpen.push(response.url());
+    });
+    const materialId = page.url().split("/").pop();
+    for (const seconds of [5, 5]) {
+      const saved = await page.request.post(`/api/assignments/${materialId}/playback`, {
+        data: { seconds },
+        headers: { "x-requested-with": "dfg" },
+      });
+      expect(saved.status()).toBe(200);
+    }
+    await expect.poll(() => serverFnResponses).toBeGreaterThanOrEqual(2);
+    expect(drawsAfterOpen).toEqual([]);
+
+    const review = await page.request.post(`/api/assignments/${materialId}/reviews`, {
+      data: { stars: 4 },
+      headers: { "x-requested-with": "dfg" },
+    });
+    expect(review.status()).toBe(200);
+
+    await expect(page.getByLabel("4 out of 5 stars")).toBeVisible();
+    await page.reload();
+    await expect(page.getByLabel("4 out of 5 stars")).toBeVisible();
+  });
 });

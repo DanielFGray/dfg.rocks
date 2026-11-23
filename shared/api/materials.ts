@@ -10,6 +10,7 @@ import {
   AssignmentNote,
   AssignmentProgress,
   AssignmentReview,
+  AssignmentTracking,
   Material,
   SuccessResponse,
 } from "../schemas.js";
@@ -78,6 +79,13 @@ export const materialsGroup = HttpApiGroup.make("materials")
         success: SuccessResponse,
       },
     ),
+  )
+  .add(
+    HttpApiEndpoint.get("assignmentTracking", "/assignments/:materialId/tracking", {
+      error: signedInErrors,
+      params: params("materialId"),
+      success: AssignmentTracking,
+    }),
   )
   .add(
     HttpApiEndpoint.post("recordAssignmentPlayback", "/assignments/:materialId/playback", {
