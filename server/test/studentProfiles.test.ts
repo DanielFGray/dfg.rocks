@@ -97,12 +97,12 @@ describe("student profiles", () => {
 
   it("staff edit the profile", async () => {
     await saveProfile(teacherSession, studentId, "Back after five years off");
-    await saveInstrument(teacherSession, studentId, "drums", "over_5_years");
+    await saveInstrument(teacherSession, studentId, "drums", "over_10_years");
     const rows = await db.owner.query(
       `select experience from app_public.student_instruments where user_id = $1 and instrument = 'drums'`,
       [studentId],
     );
-    expect(rows.rows[0].experience).toBe("over_5_years");
+    expect(rows.rows[0].experience).toBe("over_10_years");
     expect((await readProfile(studentSession, studentId))[0].background).toBe(
       "Back after five years off",
     );

@@ -22,6 +22,7 @@ import { GuardsLive } from "./api/guards.js";
 import { StudentsAdminApiGroupLive } from "./api/students.js";
 import { PeopleStaffApiGroupLive, PeopleAdminApiGroupLive } from "./api/people.js";
 import { InvitationsStaffApiGroupLive, InvitationsPublicApiGroupLive } from "./api/invitations.js";
+import { OnboardingApiGroupLive } from "./api/onboarding.js";
 import { MonthlyBillingAdminApiGroupLive } from "./api/monthlyBilling.js";
 import { PayersAdminApiGroupLive } from "./api/payers.js";
 import { BillsAdminApiGroupLive } from "./api/bills.js";
@@ -57,6 +58,7 @@ import { Materials } from "./services/materials.js";
 import { Courses } from "./services/courses.js";
 import { Families } from "./services/families.js";
 import { Invitations } from "./services/invitations.js";
+import { Onboarding } from "./services/onboarding.js";
 import { Account } from "./services/account.js";
 import { Testimonials } from "./services/testimonials.js";
 import { Sessions } from "./services/sessions.js";
@@ -128,6 +130,7 @@ const servicesLayer = Layer.mergeAll(
   Account.layer,
   Families.layer,
   Invitations.layer,
+  Onboarding.layer,
   Courses.layer,
   Materials.layer,
   Practice.layer,
@@ -173,6 +176,7 @@ const GroupHandlersLive = Layer.mergeAll(
   PeopleAdminApiGroupLive,
   InvitationsStaffApiGroupLive,
   InvitationsPublicApiGroupLive,
+  OnboardingApiGroupLive,
   StudentsAdminApiGroupLive,
   MonthlyBillingAdminApiGroupLive,
   PayersAdminApiGroupLive,

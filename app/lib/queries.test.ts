@@ -11,6 +11,7 @@ const parentState: AuthState = {
     role: "parent",
     is_verified: true,
   },
+  needsOnboarding: false,
   isParent: true,
   familyStudents: [],
   activeStudentId: "s1",

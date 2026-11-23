@@ -22,7 +22,7 @@ export const FamiliesApiGroupLive = HttpApiBuilder.group(Contract, "families", (
         }
         const child = yield* Families.use((familyService) =>
           familyService
-            .createChild(auth.user.id, payload.name)
+            .createChild(payload.name, payload.instruments)
             .pipe(withAuthContext(auth.session.id)),
         );
         // The owner connection can reference the child only after the visitor transaction commits.

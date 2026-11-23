@@ -2,6 +2,7 @@ import { Effect, Option, Context, Layer } from "effect";
 import { addJob, PgRootDB } from "../db.js";
 import { RequestDatabase } from "../requestDatabase.js";
 import { sql } from "kysely";
+import { needsOnboarding } from "./onboarding.js";
 import type { UserRow } from "./users.js";
 import { Users } from "./users.js";
 import { catchPgErrors, HttpError } from "../pgErrors.js";
@@ -44,7 +45,7 @@ export class Auth extends Context.Service<Auth>()("dfg-rocks/auth", {
           .execute(
             authDb
               .selectFrom("app_public.users")
-              .select(["id", "username", "name", "role", "is_verified"])
+              .select(["id", "username", "name", "role", "is_verified", "onboarded_at"])
               .select((eb) =>
                 eb
                   .selectFrom("app_public.user_emails")
@@ -146,6 +147,7 @@ export class Auth extends Context.Service<Auth>()("dfg-rocks/auth", {
 
       return {
         user: userResult,
+        needsOnboarding: profile ? needsOnboarding(profile) : false,
         isParent,
         familyStudents: familyStudents.map((s) => ({
           id: s.id,

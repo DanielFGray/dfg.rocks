@@ -29,6 +29,8 @@ const ResetPasswordPayload = S.Struct({
 
 export const MeResponse = S.Struct({
   user: S.NullOr(User),
+  /** The signed-in student or parent has not finished onboarding (app/routes/_authed/onboarding.tsx). */
+  needsOnboarding: S.Boolean,
   isParent: S.Boolean,
   familyStudents: S.Array(User),
   activeStudentId: S.NullishOr(S.String),
@@ -42,6 +44,16 @@ export const MeResponse = S.Struct({
 });
 
 export type MeResponse = S.Schema.Type<typeof MeResponse>;
+
+/** What `me` answers when no session is signed in. */
+export const signedOutMe: MeResponse = {
+  user: null,
+  needsOnboarding: false,
+  isParent: false,
+  familyStudents: [],
+  activeStudentId: null,
+  activeStudent: null,
+};
 
 const authErrors = [
   BadRequestErrorSchema,

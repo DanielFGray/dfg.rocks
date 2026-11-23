@@ -50,7 +50,7 @@ test.describe("account invitations", () => {
     // Opening the page uses nothing up: a mail scanner may fetch the link first.
     await page.reload();
     await page.getByTestId("invite-continue").click();
-    await expect(page.getByTestId("dashboard")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByTestId("onboarding-step-welcome")).toBeVisible({ timeout: 15_000 });
     const me = await (await page.request.get("/api/me")).json();
     expect(me.user).toMatchObject({ username: "Test_Jane", role: "student", is_verified: true });
 
@@ -96,7 +96,7 @@ test.describe("account invitations", () => {
     await expect(page.getByTestId("invite-invalid")).toBeVisible();
     await page.goto(second);
     await page.getByTestId("invite-continue").click();
-    await expect(page.getByTestId("dashboard")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByTestId("onboarding-step-welcome")).toBeVisible({ timeout: 15_000 });
     const me = await (await page.request.get("/api/me")).json();
     expect(me.user).toMatchObject({ username: "Test_Parent_Pat", role: "parent" });
   });

@@ -35,6 +35,7 @@ const TestingLoginQuery = S.Struct({
   ),
   name: S.optional(S.String),
   email: S.optional(S.String),
+  onboarded: S.optional(BooleanFromString),
 });
 
 const TestingTestimonialReminderQuery = S.Struct({
@@ -255,6 +256,7 @@ export const TestingApiGroupLive = HttpApiBuilder.group(testingApi, "testing", (
             role: query.role,
             name: query.name,
             email: query.email,
+            onboarded: query.onboarded,
           }),
         );
         let response = HttpServerResponse.redirect("/dashboard");

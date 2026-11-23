@@ -49,12 +49,15 @@ export class Testing extends Context.Service<Testing>()("dfg-rocks/testing", {
         role = "admin",
         email = `${username}@test.local`,
         name: _name,
+        onboarded = true,
       }: {
         username?: string;
         password?: string;
         role?: "admin" | "teacher" | "student" | "parent";
         name?: string;
         email?: string;
+        /** False leaves the account at first login, so the portal shows onboarding. */
+        onboarded?: boolean;
       }) {
         const name = _name ?? username;
 
@@ -105,11 +108,15 @@ export class Testing extends Context.Service<Testing>()("dfg-rocks/testing", {
           }
         }
 
-        if (role !== "student") {
-          yield* db.execute(
-            db.updateTable("app_public.users").set({ role }).where("id", "=", userId),
-          );
-        }
+        yield* db.execute(
+          db
+            .updateTable("app_public.users")
+            .set({
+              role,
+              onboarded_at: onboarded ? sql<Date>`coalesce(onboarded_at, now())` : null,
+            })
+            .where("id", "=", userId),
+        );
 
         yield* db.execute(
           db

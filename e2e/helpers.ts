@@ -9,6 +9,8 @@ type TestingApi = {
     username?: string;
     password?: string;
     role?: UserRole;
+    /** False leaves the account at first login, so the portal shows onboarding. */
+    onboarded?: boolean;
     name?: string;
     email?: string;
   }): Promise<void>;
@@ -188,7 +190,12 @@ export const test = base.extend<{
 
     const testing: TestingApi = {
       async login(opts = {}) {
-        const q = qs({ username: "test_admin", role: "admin", ...opts });
+        const q = qs({
+          username: "test_admin",
+          role: "admin",
+          ...opts,
+          onboarded: opts.onboarded === undefined ? undefined : String(opts.onboarded),
+        });
         const res = await fetch(`${api_url}/api/testing/login?${q}`, { redirect: "manual" });
         const succeeded = res.ok || (res.status >= 300 && res.status < 400);
         if (!succeeded) {

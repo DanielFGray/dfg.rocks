@@ -790,6 +790,7 @@ export interface AppPublicRefunds {
 export interface AppPublicStudentInstruments {
   experience: string;
   instrument: string;
+  other_instrument: string | null;
   user_id: string;
 }
 
@@ -964,6 +965,10 @@ export interface AppPublicUsers {
    * Public-facing name (or pseudonym) of the user.
    */
   name: string | null;
+  /**
+   * When the person finished onboarding; null until then. A student or parent with null sees onboarding at login.
+   */
+  onboarded_at: Timestamp | null;
   role: Generated<AppPublicUserRole>;
   updated_at: Generated<Timestamp>;
   /**

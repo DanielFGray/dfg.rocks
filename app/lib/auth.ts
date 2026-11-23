@@ -5,7 +5,7 @@ import { Auth } from "../../server/services/auth.js";
 import { Effect } from "effect";
 import { Sessions } from "../../server/services/sessions.js";
 import { withAuthContext } from "../../server/requestDatabase.js";
-import type { MeResponse } from "../../shared/api/auth.js";
+import { type MeResponse, signedOutMe } from "../../shared/api/auth.js";
 
 export type AuthUser = {
   id: string;
@@ -29,6 +29,7 @@ function toPlainAuthState(state: AuthState): AuthState {
   });
   return {
     user: state.user ? plainUser(state.user) : null,
+    needsOnboarding: state.needsOnboarding,
     isParent: state.isParent,
     familyStudents: state.familyStudents.map(plainUser),
     activeStudentId: state.activeStudentId,
@@ -49,13 +50,7 @@ export const getAuthUser = createServerFn({ method: "GET" }).handler(async () =>
         service.validateSessionToken(getCookie("session")),
       );
       if (!session) {
-        return {
-          user: null,
-          isParent: false,
-          familyStudents: [],
-          activeStudentId: null,
-          activeStudent: null,
-        };
+        return signedOutMe;
       }
       return yield* Auth.use((service) =>
         service.me(session.session.id, session.user.id, session.session.active_student_id),

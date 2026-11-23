@@ -85,7 +85,7 @@ export const familiesGroup = HttpApiGroup.make("families")
       error: signedInErrors,
       payload: CreateChildPayload,
       success: CreateChildResponse,
-    }),
+    }).middleware(Csrf),
   )
   .add(
     HttpApiEndpoint.get("family", "/family", {

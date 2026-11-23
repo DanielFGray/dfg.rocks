@@ -6,6 +6,7 @@ import { sql } from "kysely";
 import * as S from "effect/Schema";
 import { UserRole, FamilyInviteRole } from "../../shared/schemas.js";
 import { type UserRow, Users } from "./users.js";
+import type { StudentInstrument } from "../../shared/studentProfile.js";
 
 /** Families, their members and invitations. */
 export class Families extends Context.Service<Families>()("dfg-rocks/families", {
@@ -18,33 +19,15 @@ export class Families extends Context.Service<Families>()("dfg-rocks/families", 
         .select(["id", "family_id", "code", "email", "invited_role", "expires_at"])
         .where("id", "=", invitationId);
     return {
-      createChild: Effect.fnUntraced(function* (userId: string, name: string) {
+      /**
+       * Adds a child to the parent's family, with the child's instruments. A parent in no
+       * family gets one (app_public.add_my_child).
+       */
+      createChild: Effect.fnUntraced(function* (
+        name: string,
+        instruments: readonly StudentInstrument[] = [],
+      ) {
         const db = yield* RequestDatabase;
-        const memberships = yield* db.execute(
-          db
-            .selectFrom("app_public.family_memberships")
-            .select("family_id")
-            .where("user_id", "=", userId)
-            .limit(2),
-        );
-
-        if (memberships.length === 0) {
-          return yield* new HttpError({
-            status: 400,
-            message: "You must belong to a family to add a student",
-          });
-        }
-
-        if (memberships.length > 1) {
-          return yield* new HttpError({
-            status: 400,
-            message:
-              "You belong to multiple families. Please contact an admin to choose which family this student should join.",
-          });
-        }
-
-        const familyId = memberships[0]!.family_id;
-
         type ChildRow = {
           id: string;
           username: string;
@@ -56,10 +39,14 @@ export class Families extends Context.Service<Families>()("dfg-rocks/families", 
         const child = yield* db
           .execute(
             db
-              .selectFrom(sql<ChildRow>`app_public.create_child(${familyId}, ${name})`.as("child"))
+              .selectFrom(
+                sql<ChildRow>`app_public.add_my_child(${name}, ${JSON.stringify(instruments)}::jsonb)`.as(
+                  "child",
+                ),
+              )
               .selectAll(),
           )
-          .pipe(Effect.head);
+          .pipe(Effect.head, catchPgErrors);
 
         return {
           id: child.id,

@@ -25,6 +25,21 @@ Staff see unclaimed accounts under "Pending invites" on the People page.
 
 ## Student profile
 
-Onboarding asks what the student wants to learn. `app_public.student_profiles` holds one row per account with the free-text `background`. `app_public.student_instruments` holds one row per instrument, using the contact form's values (`shared/contactOptions.ts`). Each row has an experience range: `none`, `under_1_year`, `1_to_3_years`, `3_to_5_years` or `over_5_years`. The student and staff read and write both tables. Family members only read them, as they read a student's practice.
+Onboarding asks what the student wants to learn. `app_public.student_profiles` holds one row per account with the free-text `background`. `app_public.student_instruments` holds one row per instrument, using the contact form's values (`shared/contactOptions.ts`). An `other` row names the instrument in `other_instrument`. Each row has an experience range: `none`, `under_1_year`, `1_to_3_years`, `3_to_5_years`, `5_to_10_years` or `over_10_years`. The student and staff read and write both tables. Family members only read them, as they read a student's practice.
 
-Planned next (epic `ep-a247db`): claiming by login link, Google or password reset; the first-login onboarding; parent and student invites with Join/Decline; deleting unclaimed accounts that parents or students made.
+## Onboarding
+
+A student or parent sees onboarding once, at first login. `app_public.users.onboarded_at` is null until they finish it; the migration that added the column set it for every account that existed then. `/api/me` returns `needsOnboarding` (`server/services/onboarding.ts`): `onboarded_at` is null and the role is student or parent. Staff never see onboarding.
+
+The `_authed` layout sends a person who needs onboarding to `/onboarding` from every portal page, and sends everyone else from `/onboarding` to the dashboard. The page hides the portal navigation.
+
+- Student steps: welcome with the inviter's message, account, instruments with experience, background.
+- Parent steps: welcome, account, students. Each student is saved when the parent adds it, through `POST /api/create-child`.
+
+The account step edits name and username and offers a first password when the account has none. A password needs at least 8 characters.
+
+`POST /api/onboarding/finish` saves the answers in one visitor transaction: the name and username, the first password (`app_public.set_initial_password`, which never replaces a password), the student profile, then `app_public.finish_onboarding()`. A taken username saves nothing.
+
+`app_public.add_my_child(name, instruments)` adds a student to the parent's family together with the student's instruments. A parent with no family gets one named after them, with the parent as owner and billing contact. A parent in more than one family is refused, because the family the child joins is not clear. A child account starts with `onboarded_at` null, so a child who later logs in sees the student steps.
+
+Planned next (epic `ep-a247db`): claiming by login link, Google or password reset; parent and student invites with Join/Decline; deleting unclaimed accounts that parents or students made; the profile in Settings and on the person page.
