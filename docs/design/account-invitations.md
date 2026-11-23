@@ -23,4 +23,8 @@ The link's secret is the invited address's `app_private.user_email_secrets.verif
 
 Staff see unclaimed accounts under "Pending invites" on the People page.
 
+## Student profile
+
+Onboarding asks what the student wants to learn. `app_public.student_profiles` holds one row per account with the free-text `background`. `app_public.student_instruments` holds one row per instrument, using the contact form's values (`shared/contactOptions.ts`). Each row has an experience range: `none`, `under_1_year`, `1_to_3_years`, `3_to_5_years` or `over_5_years`. The student and staff read and write both tables. Family members only read them, as they read a student's practice.
+
 Planned next (epic `ep-a247db`): claiming by login link, Google or password reset; the first-login onboarding; parent and student invites with Join/Decline; deleting unclaimed accounts that parents or students made.

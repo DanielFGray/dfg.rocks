@@ -787,6 +787,12 @@ export interface AppPublicRefunds {
   reversed_by: string | null;
 }
 
+export interface AppPublicStudentInstruments {
+  experience: string;
+  instrument: string;
+  user_id: string;
+}
+
 export interface AppPublicStudentMaterials {
   assigned_at: Generated<Timestamp>;
   /**
@@ -800,6 +806,13 @@ export interface AppPublicStudentMaterials {
 export interface AppPublicStudentPayers {
   payer_id: string | null;
   student_id: string | null;
+}
+
+export interface AppPublicStudentProfiles {
+  background: Generated<string>;
+  created_at: Generated<Timestamp>;
+  updated_at: Generated<Timestamp>;
+  user_id: string;
 }
 
 export interface AppPublicStudentRateHistory {
@@ -1076,8 +1089,10 @@ export interface DB {
   "app_public.practice_takes": AppPublicPracticeTakes;
   "app_public.recurring_schedules": AppPublicRecurringSchedules;
   "app_public.refunds": AppPublicRefunds;
+  "app_public.student_instruments": AppPublicStudentInstruments;
   "app_public.student_materials": AppPublicStudentMaterials;
   "app_public.student_payers": AppPublicStudentPayers;
+  "app_public.student_profiles": AppPublicStudentProfiles;
   "app_public.student_rate_history": AppPublicStudentRateHistory;
   "app_public.student_rates": AppPublicStudentRates;
   "app_public.subscriptions": AppPublicSubscriptions;
