@@ -276,6 +276,7 @@ describe("access policy for signed-in accounts", () => {
     );
     expect(executable.rows.map((r) => r.fn)).toEqual([
       "app_public.accept_invitation_to_family(uuid,text)",
+      "app_public.add_my_child(text,jsonb)",
       "app_public.can_book_for_family_student(uuid)",
       "app_public.can_read_course(uuid,uuid)",
       "app_public.change_password(text,text)",
@@ -295,7 +296,9 @@ describe("access policy for signed-in accounts", () => {
       "app_public.enqueue_prepaid_lesson_generation(uuid)",
       "app_public.family_for_invitation(uuid,text)",
       "app_public.family_payers(uuid)",
+      "app_public.finish_onboarding()",
       "app_public.forgot_password(citext)",
+      "app_public.invite_account(text,citext,app_public.user_role,uuid,text)",
       "app_public.invite_to_family(uuid,citext,citext,text)",
       "app_public.is_acting_for_family_student(uuid)",
       "app_public.logout()",
@@ -305,7 +308,9 @@ describe("access policy for signed-in accounts", () => {
       "app_public.payer_relation()",
       "app_public.remove_from_family(uuid,uuid)",
       "app_public.request_account_deletion()",
+      "app_public.resend_account_invitation(uuid)",
       "app_public.resend_email_verification_code(uuid)",
+      "app_public.set_initial_password(text)",
       "app_public.set_user_role(uuid,app_public.user_role)",
       "app_public.settle_single_booking_cancellation(uuid,integer)",
       "app_public.tg__graphql_subscription()",

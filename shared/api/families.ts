@@ -20,12 +20,6 @@ export const QrInviteResponse = S.Struct({
   expiresAt: S.String,
 });
 
-const InviteFamilyPayload = S.Struct({
-  username: S.optional(S.String),
-  email: S.optional(S.String),
-  invited_role: FamilyInviteRole,
-});
-
 const QrInvitePayload = S.Struct({
   name: S.optional(S.String),
   slug: S.optional(S.String),
@@ -91,7 +85,7 @@ export const familiesGroup = HttpApiGroup.make("families")
       error: signedInErrors,
       payload: CreateChildPayload,
       success: CreateChildResponse,
-    }),
+    }).middleware(Csrf),
   )
   .add(
     HttpApiEndpoint.get("family", "/family", {
@@ -151,14 +145,6 @@ export const familiesAdminGroup = HttpApiGroup.make("familiesAdmin")
       error: adminErrors,
       payload: CreateFamilyPayload,
       success: Family,
-    }),
-  )
-  .add(
-    HttpApiEndpoint.post("inviteFamily", "/families/:familyId/invite", {
-      error: adminErrors,
-      params: params("familyId"),
-      payload: InviteFamilyPayload,
-      success: SuccessResponse,
     }),
   )
   .add(

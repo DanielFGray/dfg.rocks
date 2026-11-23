@@ -35,6 +35,7 @@ const TestingLoginQuery = S.Struct({
   ),
   name: S.optional(S.String),
   email: S.optional(S.String),
+  onboarded: S.optional(BooleanFromString),
 });
 
 const TestingTestimonialReminderQuery = S.Struct({
@@ -113,6 +114,10 @@ const TestingSeedInvitationQuery = S.Struct({
 
 const TestingSeedDeleteAccountQuery = S.Struct({
   username: S.String,
+});
+
+const TestingInvitationLinkQuery = S.Struct({
+  email: S.String,
 });
 
 const TestingSeedLessonQuery = S.Struct({
@@ -205,6 +210,18 @@ export const testingGroup = HttpApiGroup.make("testing")
     }),
   )
   .add(
+    HttpApiEndpoint.get("invitationLink", "/testing/invitation-link", {
+      error: testingErrors,
+      query: TestingInvitationLinkQuery,
+    }),
+  )
+  .add(
+    HttpApiEndpoint.get("expireInvitation", "/testing/expire-invitation", {
+      error: testingErrors,
+      query: TestingInvitationLinkQuery,
+    }),
+  )
+  .add(
     HttpApiEndpoint.get("seedLesson", "/testing/seed-lesson", {
       error: testingErrors,
       query: TestingSeedLessonQuery,
@@ -239,6 +256,7 @@ export const TestingApiGroupLive = HttpApiBuilder.group(testingApi, "testing", (
             role: query.role,
             name: query.name,
             email: query.email,
+            onboarded: query.onboarded,
           }),
         );
         let response = HttpServerResponse.redirect("/dashboard");
@@ -379,6 +397,23 @@ export const TestingApiGroupLive = HttpApiBuilder.group(testingApi, "testing", (
           testingService.seedDeleteAccount(query.username),
         );
         return HttpServerResponse.redirect(`/confirm-delete-account?token=${token}`);
+      }, adaptTestingHandler),
+    )
+    .handle(
+      "invitationLink",
+      Effect.fnUntraced(function* ({ query }) {
+        const link = yield* Testing.use((testingService) =>
+          testingService.invitationLink(query.email),
+        );
+        return HttpServerResponse.redirect(
+          `/invite?${new URLSearchParams({ id: link.id, token: link.token })}`,
+        );
+      }, adaptTestingHandler),
+    )
+    .handle(
+      "expireInvitation",
+      Effect.fnUntraced(function* ({ query }) {
+        yield* Testing.use((testingService) => testingService.expireInvitation(query.email));
       }, adaptTestingHandler),
     )
     .handle(

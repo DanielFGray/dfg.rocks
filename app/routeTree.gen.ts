@@ -14,6 +14,7 @@ import { Route as AuthedRouteImport } from './routes/_authed'
 import { Route as AcceptInviteRouteImport } from './routes/accept-invite'
 import { Route as ConfirmDeleteAccountRouteImport } from './routes/confirm-delete-account'
 import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
+import { Route as InviteRouteImport } from './routes/invite'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as MagicLoginRouteImport } from './routes/magic-login'
 import { Route as PricingRouteImport } from './routes/pricing'
@@ -29,6 +30,7 @@ import { Route as AuthedLessonsRouteImport } from './routes/_authed/lessons'
 import { Route as AuthedLibraryRouteImport } from './routes/_authed/library'
 import { Route as AuthedMessagesRouteImport } from './routes/_authed/messages'
 import { Route as AuthedMyLessonsRouteImport } from './routes/_authed/my-lessons'
+import { Route as AuthedOnboardingRouteImport } from './routes/_authed/onboarding'
 import { Route as AuthedSettingsRouteImport } from './routes/_authed/settings'
 import { Route as AuthedSubmissionsRouteImport } from './routes/_authed/submissions'
 import { Route as CoursesIdRouteImport } from './routes/courses.$id'
@@ -71,6 +73,11 @@ const ConfirmDeleteAccountRoute = ConfirmDeleteAccountRouteImport.update({
 const ForgotPasswordRoute = ForgotPasswordRouteImport.update({
   id: '/forgot-password',
   path: '/forgot-password',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const InviteRoute = InviteRouteImport.update({
+  id: '/invite',
+  path: '/invite',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LoginRoute = LoginRouteImport.update({
@@ -146,6 +153,11 @@ const AuthedMessagesRoute = AuthedMessagesRouteImport.update({
 const AuthedMyLessonsRoute = AuthedMyLessonsRouteImport.update({
   id: '/my-lessons',
   path: '/my-lessons',
+  getParentRoute: () => AuthedRoute,
+} as any)
+const AuthedOnboardingRoute = AuthedOnboardingRouteImport.update({
+  id: '/onboarding',
+  path: '/onboarding',
   getParentRoute: () => AuthedRoute,
 } as any)
 const AuthedSettingsRoute = AuthedSettingsRouteImport.update({
@@ -257,6 +269,7 @@ export interface FileRoutesByFullPath {
   '/accept-invite': typeof AcceptInviteRoute
   '/confirm-delete-account': typeof ConfirmDeleteAccountRoute
   '/forgot-password': typeof ForgotPasswordRoute
+  '/invite': typeof InviteRoute
   '/login': typeof LoginRoute
   '/magic-login': typeof MagicLoginRoute
   '/pricing': typeof PricingRoute
@@ -272,6 +285,7 @@ export interface FileRoutesByFullPath {
   '/library': typeof AuthedLibraryRoute
   '/messages': typeof AuthedMessagesRoute
   '/my-lessons': typeof AuthedMyLessonsRoute
+  '/onboarding': typeof AuthedOnboardingRoute
   '/settings': typeof AuthedSettingsRoute
   '/submissions': typeof AuthedSubmissionsRoute
   '/courses/$id': typeof CoursesIdRoute
@@ -297,6 +311,7 @@ export interface FileRoutesByTo {
   '/accept-invite': typeof AcceptInviteRoute
   '/confirm-delete-account': typeof ConfirmDeleteAccountRoute
   '/forgot-password': typeof ForgotPasswordRoute
+  '/invite': typeof InviteRoute
   '/login': typeof LoginRoute
   '/magic-login': typeof MagicLoginRoute
   '/pricing': typeof PricingRoute
@@ -310,6 +325,7 @@ export interface FileRoutesByTo {
   '/library': typeof AuthedLibraryRoute
   '/messages': typeof AuthedMessagesRoute
   '/my-lessons': typeof AuthedMyLessonsRoute
+  '/onboarding': typeof AuthedOnboardingRoute
   '/settings': typeof AuthedSettingsRoute
   '/submissions': typeof AuthedSubmissionsRoute
   '/courses/$id': typeof CoursesIdRoute
@@ -336,6 +352,7 @@ export interface FileRoutesById {
   '/accept-invite': typeof AcceptInviteRoute
   '/confirm-delete-account': typeof ConfirmDeleteAccountRoute
   '/forgot-password': typeof ForgotPasswordRoute
+  '/invite': typeof InviteRoute
   '/login': typeof LoginRoute
   '/magic-login': typeof MagicLoginRoute
   '/pricing': typeof PricingRoute
@@ -351,6 +368,7 @@ export interface FileRoutesById {
   '/_authed/library': typeof AuthedLibraryRoute
   '/_authed/messages': typeof AuthedMessagesRoute
   '/_authed/my-lessons': typeof AuthedMyLessonsRoute
+  '/_authed/onboarding': typeof AuthedOnboardingRoute
   '/_authed/settings': typeof AuthedSettingsRoute
   '/_authed/submissions': typeof AuthedSubmissionsRoute
   '/courses/$id': typeof CoursesIdRoute
@@ -378,6 +396,7 @@ export interface FileRouteTypes {
     | '/accept-invite'
     | '/confirm-delete-account'
     | '/forgot-password'
+    | '/invite'
     | '/login'
     | '/magic-login'
     | '/pricing'
@@ -393,6 +412,7 @@ export interface FileRouteTypes {
     | '/library'
     | '/messages'
     | '/my-lessons'
+    | '/onboarding'
     | '/settings'
     | '/submissions'
     | '/courses/$id'
@@ -418,6 +438,7 @@ export interface FileRouteTypes {
     | '/accept-invite'
     | '/confirm-delete-account'
     | '/forgot-password'
+    | '/invite'
     | '/login'
     | '/magic-login'
     | '/pricing'
@@ -431,6 +452,7 @@ export interface FileRouteTypes {
     | '/library'
     | '/messages'
     | '/my-lessons'
+    | '/onboarding'
     | '/settings'
     | '/submissions'
     | '/courses/$id'
@@ -456,6 +478,7 @@ export interface FileRouteTypes {
     | '/accept-invite'
     | '/confirm-delete-account'
     | '/forgot-password'
+    | '/invite'
     | '/login'
     | '/magic-login'
     | '/pricing'
@@ -471,6 +494,7 @@ export interface FileRouteTypes {
     | '/_authed/library'
     | '/_authed/messages'
     | '/_authed/my-lessons'
+    | '/_authed/onboarding'
     | '/_authed/settings'
     | '/_authed/submissions'
     | '/courses/$id'
@@ -498,6 +522,7 @@ export interface RootRouteChildren {
   AcceptInviteRoute: typeof AcceptInviteRoute
   ConfirmDeleteAccountRoute: typeof ConfirmDeleteAccountRoute
   ForgotPasswordRoute: typeof ForgotPasswordRoute
+  InviteRoute: typeof InviteRoute
   LoginRoute: typeof LoginRoute
   MagicLoginRoute: typeof MagicLoginRoute
   PricingRoute: typeof PricingRoute
@@ -541,6 +566,13 @@ declare module '@tanstack/react-router' {
       path: '/forgot-password'
       fullPath: '/forgot-password'
       preLoaderRoute: typeof ForgotPasswordRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/invite': {
+      id: '/invite'
+      path: '/invite'
+      fullPath: '/invite'
+      preLoaderRoute: typeof InviteRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/login': {
@@ -646,6 +678,13 @@ declare module '@tanstack/react-router' {
       path: '/my-lessons'
       fullPath: '/my-lessons'
       preLoaderRoute: typeof AuthedMyLessonsRouteImport
+      parentRoute: typeof AuthedRoute
+    }
+    '/_authed/onboarding': {
+      id: '/_authed/onboarding'
+      path: '/onboarding'
+      fullPath: '/onboarding'
+      preLoaderRoute: typeof AuthedOnboardingRouteImport
       parentRoute: typeof AuthedRoute
     }
     '/_authed/settings': {
@@ -868,6 +907,7 @@ interface AuthedRouteChildren {
   AuthedLibraryRoute: typeof AuthedLibraryRoute
   AuthedMessagesRoute: typeof AuthedMessagesRoute
   AuthedMyLessonsRoute: typeof AuthedMyLessonsRoute
+  AuthedOnboardingRoute: typeof AuthedOnboardingRoute
   AuthedSettingsRoute: typeof AuthedSettingsRoute
   AuthedSubmissionsRoute: typeof AuthedSubmissionsRoute
   AuthedPeopleIdRoute: typeof AuthedPeopleIdRoute
@@ -888,6 +928,7 @@ const AuthedRouteChildren: AuthedRouteChildren = {
   AuthedLibraryRoute: AuthedLibraryRoute,
   AuthedMessagesRoute: AuthedMessagesRoute,
   AuthedMyLessonsRoute: AuthedMyLessonsRoute,
+  AuthedOnboardingRoute: AuthedOnboardingRoute,
   AuthedSettingsRoute: AuthedSettingsRoute,
   AuthedSubmissionsRoute: AuthedSubmissionsRoute,
   AuthedPeopleIdRoute: AuthedPeopleIdRoute,
@@ -907,6 +948,7 @@ const rootRouteChildren: RootRouteChildren = {
   AcceptInviteRoute: AcceptInviteRoute,
   ConfirmDeleteAccountRoute: ConfirmDeleteAccountRoute,
   ForgotPasswordRoute: ForgotPasswordRoute,
+  InviteRoute: InviteRoute,
   LoginRoute: LoginRoute,
   MagicLoginRoute: MagicLoginRoute,
   PricingRoute: PricingRoute,

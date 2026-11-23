@@ -18,7 +18,7 @@ import { WorkerDirectory } from "./config.js";
 import { CalendarSync, CalendarSyncJob } from "./calendar/calendarSync.js";
 import { BillingLedger } from "../server/services/billingLedger.js";
 import { RecurringSchedule, PrepaidPeriod } from "../server/services/recurringSchedule.js";
-import { Families, SendInvitation } from "../server/services/families.js";
+import { Invitations, SendInvitation } from "../server/services/invitations.js";
 import { TestimonialReminder } from "../server/services/testimonialReminder.js";
 import { PgRootDB } from "../server/db.js";
 
@@ -30,7 +30,7 @@ export class WorkerJobs extends Context.Service<WorkerJobs>()("dfg-rocks/worker/
     const calendar = yield* CalendarSync;
     const billing = yield* BillingLedger;
     const recurring = yield* RecurringSchedule;
-    const families = yield* Families;
+    const invitations = yield* Invitations;
     const reminders = yield* TestimonialReminder;
     const context = yield* Effect.context<PgRootDB>();
     const task = effectTask(context);
@@ -47,7 +47,7 @@ export class WorkerJobs extends Context.Service<WorkerJobs>()("dfg-rocks/worker/
       ),
       user__send_delete_account_email: task(DeleteAccount, mail.sendDeleteAccount),
       user_emails__send_verification: task(SendVerification, mail.sendVerification),
-      family_invitations__send_invite: task(SendInvitation, families.sendInvitation),
+      family_invitations__send_invite: task(SendInvitation, invitations.sendInvitation),
       bills__issue_monthly: task(empty, () => billing.issueMonthly().pipe(Effect.asVoid)),
       lessons__generate_prepaid_period: task(PrepaidPeriod, recurring.generatePrepaidPeriod),
       testimonials__reminder_sweep: task(empty, () => reminders.sweep()),
@@ -63,7 +63,7 @@ export class WorkerJobs extends Context.Service<WorkerJobs>()("dfg-rocks/worker/
         CalendarSync.layer,
         BillingLedger.layer,
         RecurringSchedule.layer,
-        Families.layer,
+        Invitations.layer,
         TestimonialReminder.layer,
         PgRootDB.layer,
       ),

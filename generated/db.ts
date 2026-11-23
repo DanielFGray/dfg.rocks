@@ -420,11 +420,14 @@ export interface AppPublicFamilies {
 
 export interface AppPublicFamilyInvitations {
   code: string | null;
+  created_at: Generated<Timestamp>;
   email: string | null;
   expires_at: Timestamp | null;
-  family_id: string;
+  family_id: string | null;
   id: Generated<string>;
+  invited_by: string | null;
   invited_role: string | null;
+  message: string | null;
   user_id: string | null;
 }
 
@@ -784,6 +787,13 @@ export interface AppPublicRefunds {
   reversed_by: string | null;
 }
 
+export interface AppPublicStudentInstruments {
+  experience: string;
+  instrument: string;
+  other_instrument: string | null;
+  user_id: string;
+}
+
 export interface AppPublicStudentMaterials {
   assigned_at: Generated<Timestamp>;
   /**
@@ -797,6 +807,13 @@ export interface AppPublicStudentMaterials {
 export interface AppPublicStudentPayers {
   payer_id: string | null;
   student_id: string | null;
+}
+
+export interface AppPublicStudentProfiles {
+  background: Generated<string>;
+  created_at: Generated<Timestamp>;
+  updated_at: Generated<Timestamp>;
+  user_id: string;
 }
 
 export interface AppPublicStudentRateHistory {
@@ -948,6 +965,10 @@ export interface AppPublicUsers {
    * Public-facing name (or pseudonym) of the user.
    */
   name: string | null;
+  /**
+   * When the person finished onboarding; null until then. A student or parent with null sees onboarding at login.
+   */
+  onboarded_at: Timestamp | null;
   role: Generated<AppPublicUserRole>;
   updated_at: Generated<Timestamp>;
   /**
@@ -1073,8 +1094,10 @@ export interface DB {
   "app_public.practice_takes": AppPublicPracticeTakes;
   "app_public.recurring_schedules": AppPublicRecurringSchedules;
   "app_public.refunds": AppPublicRefunds;
+  "app_public.student_instruments": AppPublicStudentInstruments;
   "app_public.student_materials": AppPublicStudentMaterials;
   "app_public.student_payers": AppPublicStudentPayers;
+  "app_public.student_profiles": AppPublicStudentProfiles;
   "app_public.student_rate_history": AppPublicStudentRateHistory;
   "app_public.student_rates": AppPublicStudentRates;
   "app_public.subscriptions": AppPublicSubscriptions;

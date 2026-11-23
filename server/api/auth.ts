@@ -1,3 +1,4 @@
+import { signedOutMe } from "../../shared/api/auth.js";
 import * as HttpApiBuilder from "effect/http-api/HttpApiBuilder";
 import * as HttpServerResponse from "effect/http/HttpServerResponse";
 import { Effect } from "effect";
@@ -99,13 +100,7 @@ export const AuthApiGroupLive = HttpApiBuilder.group(Contract, "auth", (handlers
           service.validateSessionToken(request.cookies.session),
         );
         if (!session) {
-          return {
-            user: null,
-            isParent: false,
-            familyStudents: [],
-            activeStudentId: null,
-            activeStudent: null,
-          };
+          return signedOutMe;
         }
         return yield* Auth.use((service) =>
           service.me(session.session.id, session.user.id, session.session.active_student_id),

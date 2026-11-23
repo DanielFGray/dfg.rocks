@@ -1,4 +1,5 @@
 import * as S from "effect/Schema";
+import { StudentInstrument } from "./studentProfile.js";
 import * as SchemaTransformation from "effect/SchemaTransformation";
 
 // Query strings and form fields carry booleans as "true" / "false".
@@ -968,6 +969,8 @@ export type CreditApplication = S.Schema.Type<typeof CreditApplication>;
 
 export const CreateChildPayload = S.Struct({
   name: S.String.pipe(S.check(S.isMinLength(1)), S.check(S.isMaxLength(200))),
+  /** The instruments the child wants to learn, saved to the child's profile. */
+  instruments: S.optional(S.Array(StudentInstrument)),
 });
 
 export type CreateChildPayload = S.Schema.Type<typeof CreateChildPayload>;

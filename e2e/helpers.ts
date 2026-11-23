@@ -9,6 +9,8 @@ type TestingApi = {
     username?: string;
     password?: string;
     role?: UserRole;
+    /** False leaves the account at first login, so the portal shows onboarding. */
+    onboarded?: boolean;
     name?: string;
     email?: string;
   }): Promise<void>;
@@ -59,6 +61,10 @@ type TestingApi = {
     expires_at?: string;
   }): Promise<string>;
   seedDeleteAccountLink(data: { username: string }): Promise<string>;
+  /** The login link in the account invitation emailed to this address. */
+  invitationLink(email: string): Promise<string>;
+  /** Moves the account invitation to this address past its expiry. */
+  expireInvitation(email: string): Promise<void>;
   seedLesson(data: {
     username: string;
     scheduled_at?: string;
@@ -184,7 +190,12 @@ export const test = base.extend<{
 
     const testing: TestingApi = {
       async login(opts = {}) {
-        const q = qs({ username: "test_admin", role: "admin", ...opts });
+        const q = qs({
+          username: "test_admin",
+          role: "admin",
+          ...opts,
+          onboarded: opts.onboarded === undefined ? undefined : String(opts.onboarded),
+        });
         const res = await fetch(`${api_url}/api/testing/login?${q}`, { redirect: "manual" });
         const succeeded = res.ok || (res.status >= 300 && res.status < 400);
         if (!succeeded) {
@@ -265,6 +276,15 @@ export const test = base.extend<{
       async seedDeleteAccountLink(data) {
         const res = await get("seed-delete-account", { username: data.username });
         return redirectUrl(res);
+      },
+
+      async invitationLink(email) {
+        const res = await get("invitation-link", { email });
+        return redirectUrl(res);
+      },
+
+      async expireInvitation(email) {
+        await get("expire-invitation", { email });
       },
 
       async seedLesson(data) {

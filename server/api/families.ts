@@ -22,7 +22,7 @@ export const FamiliesApiGroupLive = HttpApiBuilder.group(Contract, "families", (
         }
         const child = yield* Families.use((familyService) =>
           familyService
-            .createChild(auth.user.id, payload.name)
+            .createChild(payload.name, payload.instruments)
             .pipe(withAuthContext(auth.session.id)),
         );
         // The owner connection can reference the child only after the visitor transaction commits.
@@ -145,22 +145,6 @@ export const FamiliesAdminApiGroupLive = HttpApiBuilder.group(
             familyService.listFamilies().pipe(withAuthContext(auth.session.id)),
           );
           return rows;
-        }, adaptAdminErrors),
-      )
-      .handle(
-        "inviteFamily",
-        Effect.fnUntraced(function* ({ params, payload }) {
-          const auth = yield* CurrentSession;
-          yield* Families.use((familyService) =>
-            familyService
-              .inviteFamily(params.familyId, {
-                username: payload.username,
-                email: payload.email,
-                invitedRole: payload.invited_role,
-              })
-              .pipe(withAuthContext(auth.session.id)),
-          );
-          return { success: true as const };
         }, adaptAdminErrors),
       )
       .handle(

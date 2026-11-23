@@ -49,12 +49,15 @@ export class Testing extends Context.Service<Testing>()("dfg-rocks/testing", {
         role = "admin",
         email = `${username}@test.local`,
         name: _name,
+        onboarded = true,
       }: {
         username?: string;
         password?: string;
         role?: "admin" | "teacher" | "student" | "parent";
         name?: string;
         email?: string;
+        /** False leaves the account at first login, so the portal shows onboarding. */
+        onboarded?: boolean;
       }) {
         const name = _name ?? username;
 
@@ -105,11 +108,15 @@ export class Testing extends Context.Service<Testing>()("dfg-rocks/testing", {
           }
         }
 
-        if (role !== "student") {
-          yield* db.execute(
-            db.updateTable("app_public.users").set({ role }).where("id", "=", userId),
-          );
-        }
+        yield* db.execute(
+          db
+            .updateTable("app_public.users")
+            .set({
+              role,
+              onboarded_at: onboarded ? sql<Date>`coalesce(onboarded_at, now())` : null,
+            })
+            .where("id", "=", userId),
+        );
 
         yield* db.execute(
           db
@@ -536,6 +543,49 @@ export class Testing extends Context.Service<Testing>()("dfg-rocks/testing", {
             .where("user_id", "=", user.id),
         );
         return token;
+      }),
+
+      /** The link the invitation email to this address carries, as the worker would build it. */
+      invitationLink: Effect.fnUntraced(function* (email: string) {
+        return yield* db
+          .execute(
+            db
+              .selectFrom("app_public.family_invitations as invitation")
+              .innerJoin(
+                "app_public.user_emails as address",
+                "address.user_id",
+                "invitation.user_id",
+              )
+              .innerJoin(
+                "app_private.user_email_secrets as secret",
+                "secret.user_email_id",
+                "address.id",
+              )
+              .select(["invitation.id", "secret.verification_token as token"])
+              .where("invitation.family_id", "is", null)
+              .where("address.email", "=", sql<string>`${email}::citext`)
+              .where("secret.verification_token", "is not", null),
+          )
+          .pipe(
+            Effect.head,
+            Effect.map((row) => ({ id: row.id, token: row.token ?? "" })),
+          );
+      }),
+
+      /** Moves the account invitation to this address one minute past its expiry. */
+      expireInvitation: Effect.fnUntraced(function* (email: string) {
+        yield* db.execute(
+          db
+            .updateTable("app_public.family_invitations")
+            .set({ expires_at: sql<Date>`now() - interval '1 minute'` })
+            .where("family_id", "is", null)
+            .where("user_id", "in", (eb) =>
+              eb
+                .selectFrom("app_public.user_emails")
+                .select("user_id")
+                .where("email", "=", sql<string>`${email}::citext`),
+            ),
+        );
       }),
 
       seedLesson: Effect.fnUntraced(function* (values: {

@@ -156,3 +156,33 @@ export const acceptInvitation = createServerFn({ method: "POST" })
     });
     throw redirect({ to: "/dashboard" });
   });
+
+const ClaimInvitationSchema = S.Struct({
+  id: S.String.pipe(S.check(S.isNonEmpty())),
+  token: S.String.pipe(S.check(S.isNonEmpty())),
+});
+
+/** Follows an account invitation: verifies the invited address and logs its account in. */
+export const claimInvitation = createServerFn({ method: "POST" })
+  .validator((data) => {
+    if (!(data instanceof FormData)) throw new Error("FormData expected");
+    return validateFormData(ClaimInvitationSchema, data);
+  })
+  .handler(async ({ data }) => {
+    await callApi((api) =>
+      api.invitationsPublic.claimInvitation({
+        params: { id: data.id },
+        payload: { token: data.token },
+      }),
+    ).catch((error) => {
+      throw redirect({
+        to: "/invite",
+        search: {
+          id: data.id,
+          token: data.token,
+          error: getErrorMessage(error, "Could not use this invitation"),
+        },
+      });
+    });
+    throw redirect({ to: "/dashboard" });
+  });

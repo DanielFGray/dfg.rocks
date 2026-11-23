@@ -297,6 +297,99 @@ describe("DFG Portal API", () => {
   );
 
   it.effect(
+    "auth: a magic-link login verifies no other address of the account",
+    Effect.fnUntraced(function* () {
+      const query = (sql: string, params: unknown[]) =>
+        Effect.tryPromise(() => testDb.query(sql, params));
+      const created = yield* query(
+        `select id from app_private.really_create_user('magic1', 'Magic One', null, true, 'magic1@test.com', 'magic123')`,
+        [],
+      );
+      const userId = created.rows[0].id;
+      yield* query(
+        `insert into app_public.user_emails (user_id, email) values ($1, 'not-theirs@test.com')`,
+        [userId],
+      );
+
+      const sent = yield* reqEffect("POST", "/api/magic-link", {
+        body: { email: "magic1@test.com" },
+      });
+      expect(sent.status).toBe(200);
+      const secrets = yield* query(
+        `select magic_link_token from app_private.user_secrets where user_id = $1`,
+        [userId],
+      );
+      const verified = yield* reqEffect("POST", "/api/magic-link/verify", {
+        body: { token: secrets.rows[0].magic_link_token },
+      });
+      expect(verified.status).toBe(200);
+      expect(getCookie(verified)).toBeTruthy();
+
+      const addresses = yield* query(
+        `select email, is_verified from app_public.user_emails where user_id = $1 order by email`,
+        [userId],
+      );
+      expect(addresses.rows).toEqual([
+        { email: "magic1@test.com", is_verified: true },
+        { email: "not-theirs@test.com", is_verified: false },
+      ]);
+    }),
+  );
+
+  it.effect(
+    "onboarding: a refused answer saves nothing, and a finished account cannot finish again",
+    Effect.fnUntraced(function* () {
+      const query = (sql: string, params: unknown[]) =>
+        Effect.tryPromise(() => testDb.query(sql, params));
+      const created = yield* query(
+        `select id from app_private.really_create_user('onb1', 'Onb One', null, true, 'onb1@test.com', 'onb12345')`,
+        [],
+      );
+      const userId = created.rows[0].id;
+      const login = yield* reqEffect("POST", "/api/login", {
+        body: { id: "onb1", password: "onb12345" },
+      });
+      const cookie = getCookie(login)!;
+      const me = yield* resJson(yield* reqEffect("GET", "/api/me", { cookie }));
+      expect(me.needsOnboarding).toBe(true);
+
+      const finish = (body: unknown) =>
+        reqEffect("POST", "/api/onboarding/finish", { body, cookie });
+      const profile = { background: "Saved?", instruments: [] };
+
+      const taken = yield* finish({ name: "Renamed", username: "admin", profile });
+      expect(taken.status).toBe(409);
+      const hasPassword = yield* finish({
+        name: "Renamed",
+        username: "onb1_new",
+        password: "another-pass",
+        profile,
+      });
+      expect(hasPassword.status).toBe(409);
+      const after = yield* query(
+        `select u.name, u.username, u.onboarded_at, p.user_id as profile
+           from app_public.users u left join app_public.student_profiles p on p.user_id = u.id
+          where u.id = $1`,
+        [userId],
+      );
+      expect(after.rows).toEqual([
+        { name: "Onb One", username: "onb1", onboarded_at: null, profile: null },
+      ]);
+      const oldPassword = yield* reqEffect("POST", "/api/login", {
+        body: { id: "onb1", password: "onb12345" },
+      });
+      expect(oldPassword.status).toBe(200);
+
+      const done = yield* finish({ name: "Renamed", username: "onb1_new", profile });
+      expect(done.status).toBe(200);
+      const again = yield* finish({ name: "Again", username: "onb1_again" });
+      expect(again.status).toBe(409);
+      const meAfter = yield* resJson(yield* reqEffect("GET", "/api/me", { cookie }));
+      expect(meAfter).toMatchObject({ needsOnboarding: false, user: { username: "onb1_new" } });
+    }),
+  );
+
+  it.effect(
     "auth: admin authorization follows live DB session and role state",
     Effect.fnUntraced(function* () {
       const loginRes = yield* reqEffect("POST", "/api/login", {

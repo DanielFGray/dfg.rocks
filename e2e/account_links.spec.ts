@@ -16,7 +16,8 @@ test.describe("account link flows", () => {
     await page.getByTestId("accept-invite-password").fill("testpassword123");
 
     await page.getByTestId("accept-invite-submit").click();
-    await expect(page.getByTestId("dashboard")).toBeVisible();
+    // A new account starts at onboarding.
+    await expect(page.getByTestId("onboarding")).toBeVisible();
   });
 
   test("confirm delete account page deletes the signed-in account", async ({ page, testing }) => {

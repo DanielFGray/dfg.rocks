@@ -26,7 +26,7 @@ import { setSessionCookie } from "./raw.js";
 
 const publicErrorStatuses = [400, 403, 404, 409, 429, 500, 502, 503] as const;
 
-function adaptPublicHttpApiErrors<A, E, R>(effect: Effect.Effect<A, E, R>) {
+export function adaptPublicHttpApiErrors<A, E, R>(effect: Effect.Effect<A, E, R>) {
   return adaptHttpApiErrors(effect, publicErrorStatuses);
 }
 
