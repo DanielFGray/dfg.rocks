@@ -1,3 +1,7 @@
+--! Previous: sha1:0e15570b228cdf1a3f06d50a70c84ac37017b5ba
+--! Hash: sha1:7ab3da7293754b9ee4b0435b555a34339c4d065a
+
+--! split: 1-account-invitations.sql
 /*
  * Account invitations: staff create an account for an existing student or parent, and the
  * invitation email logs them in.
@@ -313,3 +317,213 @@ begin
   return v_user;
 end;
 $$ language plpgsql volatile strict security definer set search_path to pg_catalog, public, pg_temp;
+
+--! split: 2-student-profiles.sql
+/*
+ * Student profiles: what a student told us at onboarding. student_profiles holds one row per
+ * account with the free-text background; student_instruments holds one row per instrument the
+ * student wants to learn, with how long they have played it.
+ *
+ * Instruments are the contact form's values (shared/contactOptions.ts), so an inquiry and a
+ * profile use the same words; other_instrument names the instrument when it is 'other'.
+ * Experience is a range, not a number of years: people answer a range honestly and a number
+ * badly. shared/studentProfile.ts lists the same values for the forms.
+ *
+ * The student and staff read and write the profile. Family members read it, as they read a
+ * student's practice.
+ */
+
+create table if not exists app_public.student_profiles (
+  user_id uuid primary key references app_public.users(id) on delete cascade,
+  background text not null default '' check (length(background) <= 4000),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+comment on table app_public.student_profiles is
+  'What a student told us about themself at onboarding: background is free text about how they came to music and what they want from lessons.';
+
+create table if not exists app_public.student_instruments (
+  user_id uuid not null references app_public.users(id) on delete cascade,
+  instrument text not null check (instrument in ('drums', 'guitar', 'piano', 'other')),
+  experience text not null,
+  primary key (user_id, instrument)
+);
+
+alter table app_public.student_instruments
+  add column if not exists other_instrument text;
+
+alter table app_public.student_instruments
+  drop constraint if exists student_instruments_experience_check,
+  add constraint student_instruments_experience_check check (experience in (
+    'none', 'under_1_year', '1_to_3_years', '3_to_5_years', '5_to_10_years', 'over_10_years'
+  )),
+  drop constraint if exists student_instruments_other_instrument_check,
+  add constraint student_instruments_other_instrument_check check (
+    other_instrument is null
+    or (instrument = 'other' and length(trim(other_instrument)) between 1 and 100)
+  );
+
+comment on table app_public.student_instruments is
+  'An instrument a student wants to learn, and how long they have played it. instrument takes the contact form''s values (shared/contactOptions.ts).';
+
+drop trigger if exists _100_timestamps on app_public.student_profiles;
+create trigger _100_timestamps before insert or update on app_public.student_profiles
+  for each row execute function app_private.tg__timestamps();
+
+alter table app_public.student_profiles enable row level security;
+alter table app_public.student_instruments enable row level security;
+
+grant select, delete on app_public.student_profiles to :DATABASE_VISITOR;
+grant insert (user_id, background), update (background) on app_public.student_profiles to :DATABASE_VISITOR;
+grant select, delete on app_public.student_instruments to :DATABASE_VISITOR;
+grant insert (user_id, instrument, experience, other_instrument), update (experience, other_instrument)
+  on app_public.student_instruments to :DATABASE_VISITOR;
+
+drop policy if exists select_own on app_public.student_profiles;
+create policy select_own on app_public.student_profiles for select
+  using (
+    app_public.current_user_role() in ('admin', 'teacher')
+    or user_id = app_public.current_user_id()
+    or user_id in (select app_public.current_user_family_member_ids())
+  );
+
+drop policy if exists manage_own on app_public.student_profiles;
+create policy manage_own on app_public.student_profiles for all
+  using (app_public.current_user_role() in ('admin', 'teacher') or user_id = app_public.current_user_id())
+  with check (app_public.current_user_role() in ('admin', 'teacher') or user_id = app_public.current_user_id());
+
+drop policy if exists select_own on app_public.student_instruments;
+create policy select_own on app_public.student_instruments for select
+  using (
+    app_public.current_user_role() in ('admin', 'teacher')
+    or user_id = app_public.current_user_id()
+    or user_id in (select app_public.current_user_family_member_ids())
+  );
+
+drop policy if exists manage_own on app_public.student_instruments;
+create policy manage_own on app_public.student_instruments for all
+  using (app_public.current_user_role() in ('admin', 'teacher') or user_id = app_public.current_user_id())
+  with check (app_public.current_user_role() in ('admin', 'teacher') or user_id = app_public.current_user_id());
+
+--! split: 3-onboarding.sql
+/*
+ * Onboarding: a new student or parent account sees the onboarding steps once, at first login.
+ * users.onboarded_at is null until the person finishes them; staff accounts never see them.
+ * Accounts that existed before onboarding was added count as onboarded from when they were
+ * made.
+ *
+ * Reruns safely: the backfill runs only in the run that adds the column.
+ */
+
+do $$
+begin
+  if not exists (
+    select 1 from information_schema.columns
+     where table_schema = 'app_public' and table_name = 'users' and column_name = 'onboarded_at'
+  ) then
+    alter table app_public.users add column onboarded_at timestamptz;
+    -- The backfill is not an edit by the person, so it leaves updated_at as it was.
+    alter table app_public.users disable trigger _100_timestamps;
+    update app_public.users set onboarded_at = created_at;
+    alter table app_public.users enable trigger _100_timestamps;
+  end if;
+end
+$$;
+
+comment on column app_public.users.onboarded_at is
+  'When the person finished onboarding; null until then. A student or parent with null sees onboarding at login.';
+
+/* Marks the current user's onboarding finished. A second call changes nothing. */
+create or replace function app_public.finish_onboarding() returns void as $$
+  update app_public.users
+     set onboarded_at = now()
+   where id = app_public.current_user_id()
+     and onboarded_at is null;
+$$ language sql volatile security definer set search_path to pg_catalog, public, pg_temp;
+
+revoke all on function app_public.finish_onboarding() from public;
+grant execute on function app_public.finish_onboarding() to :DATABASE_VISITOR;
+
+/*
+ * Gives the current user a password when the account has none, such as an invited account or
+ * a Google sign-up. Returns false when it already has one: changing a password needs the old
+ * one (app_public.change_password). It runs in the visitor transaction that finishes
+ * onboarding, so a refused username leaves no password behind.
+ */
+create or replace function app_public.set_initial_password(p_password text)
+returns boolean as $$
+begin
+  update app_private.user_secrets
+     set password_hash = crypt(p_password, gen_salt('bf'))
+   where user_id = app_public.current_user_id()
+     and password_hash is null;
+  return found;
+end;
+$$ language plpgsql strict volatile security definer set search_path to pg_catalog, public, pg_temp;
+
+revoke all on function app_public.set_initial_password(text) from public;
+grant execute on function app_public.set_initial_password(text) to :DATABASE_VISITOR;
+
+/*
+ * Adds a child account to the current user's family, with the instruments the parent gave
+ * for the child. A parent in no family gets one, named after them, with the parent as owner
+ * and billing contact. A parent in several families is refused: staff choose the family.
+ * p_instruments is a JSON array of {instrument, experience, other_instrument}.
+ */
+create or replace function app_public.add_my_child(p_child_name text, p_instruments jsonb default '[]')
+returns app_public.users as $$
+declare
+  v_me app_public.users;
+  v_family_ids uuid[];
+  v_family_id uuid;
+  v_slug citext;
+  v_counter int := 0;
+  v_child app_public.users;
+begin
+  select * into v_me from app_public.users where id = app_public.current_user_id();
+  if v_me is null then
+    raise exception 'You must log in to add a student' using errcode = 'LOGIN';
+  end if;
+
+  select array_agg(family_id) into v_family_ids
+    from app_public.family_memberships
+   where user_id = v_me.id;
+
+  if coalesce(array_length(v_family_ids, 1), 0) > 1 then
+    raise exception 'You belong to several families. Ask your teacher which family this student joins.'
+      using errcode = 'DNIED';
+  elsif coalesce(array_length(v_family_ids, 1), 0) = 1 then
+    v_family_id := v_family_ids[1];
+  elsif v_me.role = 'parent' then
+    v_slug := regexp_replace(lower(v_me.username::text), '[^a-z0-9]+', '-', 'g');
+    while exists (
+      select 1 from app_public.families
+       where slug = case when v_counter = 0 then v_slug else v_slug || '-' || v_counter end
+    ) loop
+      v_counter := v_counter + 1;
+    end loop;
+    if v_counter > 0 then
+      v_slug := v_slug || '-' || v_counter;
+    end if;
+    insert into app_public.families (slug, name)
+      values (v_slug, coalesce(nullif(trim(v_me.name), ''), v_me.username::text) || ' family')
+      returning id into v_family_id;
+    insert into app_public.family_memberships (family_id, user_id, is_owner, is_billing_contact)
+      values (v_family_id, v_me.id, true, true);
+  else
+    raise exception 'You must belong to a family to add a student' using errcode = 'DNIED';
+  end if;
+
+  v_child := app_public.create_child(v_family_id, p_child_name);
+
+  insert into app_public.student_instruments (user_id, instrument, experience, other_instrument)
+    select v_child.id, item->>'instrument', item->>'experience', nullif(trim(item->>'other_instrument'), '')
+      from jsonb_array_elements(p_instruments) as item;
+
+  return v_child;
+end;
+$$ language plpgsql volatile security definer set search_path to pg_catalog, public, pg_temp;
+
+revoke all on function app_public.add_my_child(text, jsonb) from public;
+grant execute on function app_public.add_my_child(text, jsonb) to :DATABASE_VISITOR;
