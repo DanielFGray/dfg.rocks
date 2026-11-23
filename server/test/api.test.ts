@@ -735,6 +735,105 @@ describe("DFG Portal API", () => {
   );
 
   it.effect(
+    "assignments: tracking shows the active child's time and self-reviews, and a review records its own student's time",
+    Effect.fnUntraced(function* () {
+      const sql = (text: string, values: unknown[] = []) =>
+        Effect.tryPromise(() => testDb.query(text, values));
+      const createUser = (username: string, role: string) =>
+        Effect.gen(function* () {
+          const created = yield* sql(
+            `select id from app_private.really_create_user($1::citext, $2, null, true, $3::citext, $4)`,
+            [username, username, `${username}@test.com`, `${username}123`],
+          );
+          const id = created.rows[0].id as string;
+          yield* sql(`update app_public.users set role = $1 where id = $2`, [role, id]);
+          return id;
+        });
+      const loginAs = (username: string) =>
+        Effect.gen(function* () {
+          const login = yield* reqEffect("POST", "/api/login", {
+            body: { id: username, password: `${username}123` },
+          });
+          expect(login.status).toBe(200);
+          return getCookie(login)!;
+        });
+
+      const parent = yield* createUser("trackparent", "parent");
+      const childA = yield* createUser("trackchilda", "student");
+      const childB = yield* createUser("trackchildb", "student");
+      const family = yield* sql(
+        `insert into app_public.families (slug, name) values ($1::citext, $2) returning id`,
+        ["track-family", "Track Family"],
+      );
+      yield* sql(
+        `insert into app_public.family_memberships (family_id, user_id, is_owner, is_billing_contact)
+         values ($1, $2, true, true), ($1, $3, false, false), ($1, $4, false, false)`,
+        [family.rows[0].id, parent, childA, childB],
+      );
+      const material = yield* sql(
+        `insert into app_public.materials (title, original_filename, storage_key, mime_type, file_size, visibility) values ($1, $2, $3, $4, $5, $6) returning id`,
+        ["Tracked Etude", "tracked.pdf", "/data/tracked.pdf", "application/pdf", 1024, "course"],
+      );
+      const materialId = material.rows[0].id as string;
+      yield* sql(
+        `insert into app_public.student_materials (student_id, material_id) values ($1, $3), ($2, $3)`,
+        [childA, childB, materialId],
+      );
+      yield* sql(
+        `insert into app_public.assignment_progress (student_id, material_id, listened_seconds)
+         values ($2, $3, 7), ($1, $3, 100)`,
+        [childA, childB, materialId],
+      );
+      yield* sql(
+        `insert into app_public.assignment_reviews (student_id, material_id, stars, listened_seconds)
+         values ($1, $3, 4, 90), ($2, $3, 2, 5)`,
+        [childA, childB, materialId],
+      );
+
+      const parentCookie = yield* loginAs("trackparent");
+      const trackingFor = (child: string) =>
+        Effect.gen(function* () {
+          const sw = yield* reqEffect("POST", "/api/switch-active-student", {
+            body: { student_id: child },
+            cookie: parentCookie,
+          });
+          expect(sw.status).toBe(200);
+          const res = yield* reqEffect("GET", `/api/assignments/${materialId}/tracking`, {
+            cookie: parentCookie,
+          });
+          expect(res.status).toBe(200);
+          return (yield* resJson(res)) as {
+            listened_seconds: number;
+            reviews: Array<{ stars: number }>;
+          };
+        });
+      const a = yield* trackingFor(childA);
+      expect(a.listened_seconds).toBe(100);
+      expect(a.reviews.map((review) => review.stars)).toEqual([4]);
+      const b = yield* trackingFor(childB);
+      expect(b.listened_seconds).toBe(7);
+      expect(b.reviews.map((review) => review.stars)).toEqual([2]);
+
+      // Child B's progress row is also visible to the family, so the review must take child A's.
+      const childCookie = yield* loginAs("trackchilda");
+      const review = yield* reqEffect("POST", `/api/assignments/${materialId}/reviews`, {
+        body: { stars: 5 },
+        cookie: childCookie,
+      });
+      expect(review.status).toBe(200);
+      expect(((yield* resJson(review)) as { listened_seconds: number }).listened_seconds).toBe(100);
+      const own = yield* reqEffect("GET", `/api/assignments/${materialId}/tracking`, {
+        cookie: childCookie,
+      });
+      expect(
+        ((yield* resJson(own)) as { reviews: Array<{ stars: number }> }).reviews.map(
+          (entry) => entry.stars,
+        ),
+      ).toEqual([5, 4]);
+    }),
+  );
+
+  it.effect(
     "messages: student can send a message to staff",
     Effect.fnUntraced(function* () {
       const create = yield* reqEffect("POST", "/api/messages", {

@@ -110,6 +110,19 @@ export const MaterialsApiGroupLive = HttpApiBuilder.group(Contract, "materials",
       }, adaptSignedInErrors),
     )
     .handle(
+      "assignmentTracking",
+      Effect.fnUntraced(function* ({ params }) {
+        const auth = yield* CurrentSession;
+        yield* assertCanTrackOwnAssignments(auth);
+        const effective = resolveEffectiveStudent(auth);
+        return yield* Materials.use((materialService) =>
+          materialService
+            .assignmentTracking({ studentId: effective.studentId, materialId: params.materialId })
+            .pipe(withAuthContext(auth.session.id)),
+        );
+      }, adaptSignedInErrors),
+    )
+    .handle(
       "createAssignmentReview",
       Effect.fnUntraced(function* ({ params, payload }) {
         const auth = yield* CurrentSession;

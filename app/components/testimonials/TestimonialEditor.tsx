@@ -1,5 +1,5 @@
 import { Effect } from "effect";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { api } from "../../lib/api.js";
 import { getErrorMessage } from "../../lib/errors.js";
@@ -12,6 +12,7 @@ function errorMessageFor(error: unknown): string | null {
   return getErrorMessage(error, "");
 }
 
+/** Render it with `key={testimonial?.id}`, so another testimonial starts from its own text. */
 export function TestimonialEditor({
   testimonial,
   onRefresh,
@@ -22,10 +23,6 @@ export function TestimonialEditor({
   mode: "dashboard" | "settings";
 }) {
   const [body, setBody] = useState(testimonial?.body ?? "");
-
-  useEffect(() => {
-    setBody(testimonial?.body ?? "");
-  }, [testimonial?.id, testimonial?.body]);
 
   const saveMutation = useMutation({
     mutationFn: (nextBody: string) =>

@@ -1,6 +1,6 @@
 import { Effect } from "effect";
 import { withAuthContext } from "../../../server/requestDatabase.js";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { createFileRoute, redirect, useRouter } from "@tanstack/react-router";
 import { useMutation } from "@tanstack/react-query";
 import { createServerFn } from "@tanstack/react-start";
@@ -59,6 +59,8 @@ function LibraryPage() {
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Material | null>(null);
+  // Uploads and deletes shown before the loader runs again. The list below prefers the
+  // loader's rows, so an entry the loader has caught up with has no effect.
   const [pendingCreated, setPendingCreated] = useState<Material[]>([]);
   const [pendingDeletedIds, setPendingDeletedIds] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
@@ -79,15 +81,6 @@ function LibraryPage() {
           m.original_filename.toLowerCase().includes(searchQuery.toLowerCase()),
       )
     : rawMaterials;
-
-  useEffect(() => {
-    setPendingCreated((current) =>
-      current.filter((item) => !loaderMaterials.some((existing) => existing.id === item.id)),
-    );
-    setPendingDeletedIds((current) =>
-      current.filter((id) => loaderMaterials.some((item) => item.id === id)),
-    );
-  }, [loaderMaterials]);
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) =>
