@@ -89,10 +89,12 @@ test.describe("onboarding", () => {
     await expect(page.getByTestId("onboarding-password")).toHaveCount(0);
     await next(page);
 
-    await page.getByTestId("onboarding-child-name").fill("Kit Parent");
+    await page.getByTestId("child-name-input").fill("Kit Parent");
     await page.getByTestId("child-instrument-guitar").click();
     await chooseExperience(page, "child-experience-guitar", "Less than a year");
-    await page.getByTestId("onboarding-add-child").click();
+    // A typed student must be added before the parent can finish.
+    await expect(page.getByTestId("onboarding-next")).toBeDisabled();
+    await page.getByTestId("add-student-submit").click();
     await expect(page.getByTestId("onboarding-children")).toContainText("Kit Parent");
 
     await next(page);

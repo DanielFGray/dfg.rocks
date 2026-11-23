@@ -34,6 +34,11 @@ create unique index if not exists uniq_family_invitations_account
 create index if not exists idx_family_invitations_invited_by
   on app_public.family_invitations (invited_by);
 
+-- The invited person reads their own account invitation: onboarding shows its message.
+drop policy if exists select_own_account_invitation on app_public.family_invitations;
+create policy select_own_account_invitation on app_public.family_invitations for select
+  using (family_id is null and user_id = app_public.current_user_id());
+
 -- Joining a family needs a family: an account invitation is never accepted this way.
 create or replace function app_public.family_for_invitation(invitation_id uuid, code text = null)
   returns app_public.families as $$

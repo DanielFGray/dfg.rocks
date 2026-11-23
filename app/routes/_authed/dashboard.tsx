@@ -212,7 +212,7 @@ function DashboardPage() {
           pendingTestimonials={data.pendingTestimonials}
         />
       ) : showParentOnboarding ? (
-        <ParentOnboarding isFirstStudent={true} onSuccess={() => router.invalidate()} />
+        <ParentOnboarding onSuccess={() => router.invalidate()} />
       ) : isParent && familyStudents.length > 0 && !activeStudentId ? (
         <ParentDashboard />
       ) : (

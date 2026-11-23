@@ -121,6 +121,39 @@ describe("onboarding", () => {
     expect(families.rows[0].n).toBe(1);
   });
 
+  it("add_my_child refuses a parent in several families", async () => {
+    const parent = await newAccount("parent");
+    for (const label of ["one", "two"]) {
+      const slug = `several-${label}-${parent.userId.slice(0, 8)}`;
+      const family = await db.owner.query(
+        `insert into app_public.families (slug, name) values ($1, $2) returning id`,
+        [slug, slug],
+      );
+      await db.owner.query(
+        `insert into app_public.family_memberships (family_id, user_id, is_owner, is_billing_contact)
+         values ($1, $2, true, true)`,
+        [family.rows[0].id, parent.userId],
+      );
+    }
+    await expect(
+      db.asVisitor(parent.session, `select app_public.add_my_child('Kid')`),
+    ).rejects.toMatchObject({ code: "DNIED" });
+  });
+
+  it("an invited person reads only their own account invitation", async () => {
+    const me = await newAccount("student");
+    const other = await newAccount("student");
+    await db.owner.query(
+      `insert into app_public.family_invitations (user_id, message) values ($1, 'mine'), ($2, 'theirs')`,
+      [me.userId, other.userId],
+    );
+    const rows = await db.asVisitor<{ message: string }>(
+      me.session,
+      `select message from app_public.family_invitations`,
+    );
+    expect(rows).toEqual([{ message: "mine" }]);
+  });
+
   it("add_my_child refuses a student with no family, and saves nothing for a bad instrument", async () => {
     const student = await newAccount("student");
     await expect(

@@ -1,6 +1,5 @@
-import { Effect, Context, Layer, Option } from "effect";
+import { Effect, Context, Layer } from "effect";
 import { sql } from "kysely";
-import { PgRootDB } from "../db.js";
 import { RequestDatabase } from "../requestDatabase.js";
 import { HttpError, catchPgErrors } from "../pgErrors.js";
 import { StudentProfiles } from "./studentProfiles.js";
@@ -16,21 +15,21 @@ export const needsOnboarding = (user: { role: string; onboarded_at: Date | null 
 /** First-login onboarding for the signed-in user. Its methods run as the visitor. */
 export class Onboarding extends Context.Service<Onboarding>()("dfg-rocks/onboarding", {
   make: Effect.gen(function* () {
-    const rootDb = yield* PgRootDB;
     const profiles = yield* StudentProfiles;
 
-    /** The staff invitation that made the account. Visitors cannot read invitation rows. */
-    const invitationFor = (userId: string) =>
-      rootDb
-        .execute(
-          rootDb
-            .selectFrom("app_public.family_invitations as invitation")
-            .leftJoin("app_public.users as inviter", "inviter.id", "invitation.invited_by")
-            .select(["inviter.name as inviterName", "invitation.message"])
-            .where("invitation.user_id", "=", userId)
-            .where("invitation.family_id", "is", null),
-        )
-        .pipe(Effect.head, Effect.option, Effect.map(Option.getOrNull));
+    /** The staff invitation that made the account, when one did. */
+    const invitationFor = Effect.fn("Onboarding.invitationFor")(function* (userId: string) {
+      const db = yield* RequestDatabase;
+      const [invitation] = yield* db.execute(
+        db
+          .selectFrom("app_public.family_invitations as invitation")
+          .leftJoin("app_public.users as inviter", "inviter.id", "invitation.invited_by")
+          .select(["inviter.name as inviterName", "invitation.message"])
+          .where("invitation.user_id", "=", userId)
+          .where("invitation.family_id", "is", null),
+      );
+      return invitation ?? null;
+    });
 
     return {
       state: Effect.fn("Onboarding.state")(function* (userId: string) {
@@ -65,6 +64,16 @@ export class Onboarding extends Context.Service<Onboarding>()("dfg-rocks/onboard
         answers: FinishOnboardingPayload,
       ) {
         const db = yield* RequestDatabase;
+        const [user] = yield* db.execute(
+          db
+            .selectFrom("app_public.users")
+            .select(["role", "onboarded_at"])
+            .where("id", "=", userId),
+        );
+        // Settings is where a finished account edits itself.
+        if (!user || !needsOnboarding(user)) {
+          return yield* new HttpError({ status: 409, message: "Onboarding is already finished" });
+        }
         yield* db
           .execute(
             db
@@ -102,7 +111,5 @@ export class Onboarding extends Context.Service<Onboarding>()("dfg-rocks/onboard
     };
   }),
 }) {
-  static readonly layer = Layer.effect(this, this.make).pipe(
-    Layer.provide([PgRootDB.layer, StudentProfiles.layer]),
-  );
+  static readonly layer = Layer.effect(this, this.make).pipe(Layer.provide(StudentProfiles.layer));
 }

@@ -6,6 +6,7 @@ import { api } from "../../lib/api.js";
 import { getErrorMessage } from "../../lib/errors.js";
 import { useAuth } from "../../lib/hooks/useAuth.js";
 import { authUserQuery } from "../../lib/queries.js";
+import { AddStudentForm } from "../../components/AddStudentForm.js";
 import { InstrumentPicker } from "../../components/onboarding/InstrumentPicker.js";
 import { Button } from "../../components/ui/Button.js";
 import { Card } from "../../components/ui/Card.js";
@@ -46,6 +47,7 @@ function OnboardingPage() {
     ...state.profile.instruments,
   ]);
   const [background, setBackground] = useState(state.profile.background);
+  const [childName, setChildName] = useState("");
 
   const finish = useMutation({
     mutationFn: () =>
@@ -81,7 +83,10 @@ function OnboardingPage() {
     (item) => item.instrument === "other" && !item.other_instrument?.trim(),
   );
   const blocked =
-    (step === "account" && accountError !== null) || (step === "instruments" && otherUnnamed);
+    (step === "account" && accountError !== null) ||
+    (step === "instruments" && otherUnnamed) ||
+    // A typed student that was never added would be lost: onboarding does not come back.
+    (step === "children" && childName.trim() !== "");
 
   const next = () => {
     if (isLast) finish.mutate();
@@ -131,7 +136,9 @@ function OnboardingPage() {
               />
             </section>
           ) : null}
-          {step === "children" ? <ChildrenStep /> : null}
+          {step === "children" ? (
+            <ChildrenStep childName={childName} onChildName={setChildName} />
+          ) : null}
 
           {finish.isError ? (
             <p
@@ -253,27 +260,15 @@ function AccountStep(props: {
   );
 }
 
-/** A parent adds each child with the child's instruments; each one is saved at once. */
-function ChildrenStep() {
+/** A parent adds each child with the child's instruments; each one is saved as it is added. */
+function ChildrenStep({
+  childName,
+  onChildName,
+}: {
+  childName: string;
+  onChildName: (name: string) => void;
+}) {
   const { familyStudents } = useAuth();
-  const queryClient = useQueryClient();
-  const [childName, setChildName] = useState("");
-  const [instruments, setInstruments] = useState<StudentInstrument[]>([]);
-  const add = useMutation({
-    mutationFn: () =>
-      Effect.runPromise(
-        api.families.createChild({ payload: { name: childName.trim(), instruments } }),
-      ),
-    onSuccess: async () => {
-      setChildName("");
-      setInstruments([]);
-      await queryClient.fetchQuery({ ...authUserQuery, staleTime: 0 });
-    },
-  });
-  const otherUnnamed = instruments.some(
-    (item) => item.instrument === "other" && !item.other_instrument?.trim(),
-  );
-
   return (
     <section className="space-y-4">
       <h1 className="text-2xl font-bold tracking-tight">Your students</h1>
@@ -287,30 +282,17 @@ function ChildrenStep() {
           ))}
         </ul>
       ) : null}
-      <div className="space-y-4 rounded-xl border border-overlay/8 p-4 dark:border-overlay-dark/8">
-        <Input
-          id="child-name"
-          name="child-name"
-          label="Student name"
-          value={childName}
-          onChange={setChildName}
-          data-testid="onboarding-child-name"
-        />
-        <InstrumentPicker idPrefix="child" value={instruments} onChange={setInstruments} />
-        {add.isError ? (
-          <p role="alert" className="text-sm text-red-600 dark:text-red-400">
-            {getErrorMessage(add.error, "Could not add the student")}
-          </p>
-        ) : null}
-        <Button
-          variant="outline"
-          onClick={() => add.mutate()}
-          disabled={childName.trim() === "" || otherUnnamed || add.isPending}
-          data-testid="onboarding-add-child"
-        >
-          {add.isPending ? "Adding..." : "Add student"}
-        </Button>
+      <div className="rounded-xl border border-overlay/8 p-4 dark:border-overlay-dark/8">
+        <AddStudentForm name={childName} onNameChange={onChildName} />
       </div>
+      {childName.trim() !== "" ? (
+        <p
+          className="text-sm text-muted dark:text-muted-dark"
+          data-testid="onboarding-child-pending"
+        >
+          Add this student, or clear the name, before you finish.
+        </p>
+      ) : null}
     </section>
   );
 }

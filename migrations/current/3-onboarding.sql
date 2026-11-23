@@ -14,7 +14,10 @@ begin
      where table_schema = 'app_public' and table_name = 'users' and column_name = 'onboarded_at'
   ) then
     alter table app_public.users add column onboarded_at timestamptz;
+    -- The backfill is not an edit by the person, so it leaves updated_at as it was.
+    alter table app_public.users disable trigger _100_timestamps;
     update app_public.users set onboarded_at = created_at;
+    alter table app_public.users enable trigger _100_timestamps;
   end if;
 end
 $$;
@@ -39,7 +42,6 @@ grant execute on function app_public.finish_onboarding() to :DATABASE_VISITOR;
  * one (app_public.change_password). It runs in the visitor transaction that finishes
  * onboarding, so a refused username leaves no password behind.
  */
-drop function if exists app_private.set_initial_password(uuid, text);
 create or replace function app_public.set_initial_password(p_password text)
 returns boolean as $$
 begin

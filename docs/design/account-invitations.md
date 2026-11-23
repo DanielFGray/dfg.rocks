@@ -38,7 +38,7 @@ The `_authed` layout sends a person who needs onboarding to `/onboarding` from e
 
 The account step edits name and username and offers a first password when the account has none. A password needs at least 8 characters.
 
-`POST /api/onboarding/finish` saves the answers in one visitor transaction: the name and username, the first password (`app_public.set_initial_password`, which never replaces a password), the student profile, then `app_public.finish_onboarding()`. A taken username saves nothing.
+`POST /api/onboarding/finish` saves the answers in one visitor transaction: the name and username, the first password (`app_public.set_initial_password`, which never replaces a password), the student profile, then `app_public.finish_onboarding()`. A refused answer, such as a taken username, saves nothing. The endpoint refuses an account that has finished onboarding; such an account edits itself in Settings. The welcome step reads the account invitation as the visitor: the invited person may read their own.
 
 `app_public.add_my_child(name, instruments)` adds a student to the parent's family together with the student's instruments. A parent with no family gets one named after them, with the parent as owner and billing contact. A parent in more than one family is refused, because the family the child joins is not clear. A child account starts with `onboarded_at` null, so a child who later logs in sees the student steps.
 
