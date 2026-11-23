@@ -1,4 +1,4 @@
-import { Effect } from "effect";
+import { Effect, Schema as S } from "effect";
 import { withAuthContext } from "../../../server/requestDatabase.js";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
@@ -7,6 +7,8 @@ import { runServerEffect } from "../../lib/serverEffect.js";
 import { Materials } from "../../../server/services/materials.js";
 import { serializeMaterial } from "../../../shared/responseMappers.js";
 import { Sessions } from "../../../server/services/sessions.js";
+import { Files } from "../../../server/services/files.js";
+import { StaticScores } from "../../../server/services/staticScores.js";
 import {
   StudentAssignmentDetail,
   getAssignedTrackLabel,
@@ -15,23 +17,47 @@ import { categorize, categoryColor, categoryLabel } from "../../components/libra
 import { EmptyState } from "../../components/ui/EmptyState.js";
 import { Main } from "../../components/ui/Container.js";
 
-const getAssignmentPageData = createServerFn({ method: "GET" }).handler(() =>
-  runServerEffect(
-    Effect.gen(function* () {
-      const session = yield* Sessions.use((sessions) =>
-        sessions.requireSession(getCookie("session")),
-      );
-      const materialService = yield* Materials;
-      const assignments = yield* materialService
-        .assignments()
-        .pipe(withAuthContext(session.session.id));
-      return assignments.map(serializeMaterial);
-    }),
-  ),
-);
+const getAssignmentPageData = createServerFn({ method: "GET" })
+  .validator(S.toStandardSchemaV1(S.Struct({ materialId: S.String })))
+  .handler(({ data }) =>
+    runServerEffect(
+      Effect.gen(function* () {
+        const session = yield* Sessions.use((sessions) =>
+          sessions.requireSession(getCookie("session")),
+        );
+        const sessionId = session.session.id;
+        const assignments = yield* Materials.use((materials) =>
+          materials.assignments().pipe(withAuthContext(sessionId)),
+        );
+        const materials = assignments.map(serializeMaterial);
+        const material = materials.find((entry) => entry.id === data.materialId);
+        const staticScore =
+          material && categorize(material.mime_type, material.original_filename) === "notation"
+            ? yield* drawStaticScore(material.id, material.assigned_track_index ?? 0, sessionId)
+            : null;
+        return { assignments: materials, staticScore };
+      }),
+    ),
+  );
+
+/**
+ * The assigned track drawn on the server. The page works without it, because the player
+ * draws the music itself, so a failure is logged and gives null. The access check runs as
+ * the visitor; the file is read after that transaction.
+ */
+const drawStaticScore = (materialId: string, trackIndex: number, sessionId: string) =>
+  Effect.gen(function* () {
+    const location = yield* Files.use((files) =>
+      files.locate(materialId).pipe(withAuthContext(sessionId)),
+    );
+    return yield* StaticScores.use((scores) => scores.draw(location, trackIndex));
+  }).pipe(
+    Effect.tapError((error) => Effect.logWarning("static score failed", error)),
+    Effect.orElseSucceed(() => null),
+  );
 
 export const Route = createFileRoute("/_authed/assignments/$materialId")({
-  loader: () => getAssignmentPageData(),
+  loader: ({ params }) => getAssignmentPageData({ data: { materialId: params.materialId } }),
   head: () => ({ meta: [{ title: "Assignment | DFG Portal" }] }),
   component: AssignmentDetailPage,
   pendingComponent: () => (
@@ -43,9 +69,9 @@ export const Route = createFileRoute("/_authed/assignments/$materialId")({
 
 function AssignmentDetailPage() {
   const { materialId } = Route.useParams();
-  const data = Route.useLoaderData();
+  const { assignments, staticScore } = Route.useLoaderData();
 
-  const material = data.find((entry) => entry.id === materialId) ?? null;
+  const material = assignments.find((entry) => entry.id === materialId) ?? null;
 
   if (!material) {
     return (
@@ -84,7 +110,12 @@ function AssignmentDetailPage() {
         </div>
       </div>
 
-      <StudentAssignmentDetail material={material} initialProgress={null} initialReviews={[]} />
+      <StudentAssignmentDetail
+        material={material}
+        staticScore={staticScore}
+        initialProgress={null}
+        initialReviews={[]}
+      />
     </Main>
   );
 }

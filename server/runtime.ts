@@ -59,6 +59,7 @@ import { Courses } from "./services/courses.js";
 import { Families } from "./services/families.js";
 import { Invitations } from "./services/invitations.js";
 import { Onboarding } from "./services/onboarding.js";
+import { StaticScores } from "./services/staticScores.js";
 import { Account } from "./services/account.js";
 import { Testimonials } from "./services/testimonials.js";
 import { Sessions } from "./services/sessions.js";
@@ -136,6 +137,7 @@ const servicesLayer = Layer.mergeAll(
   Practice.layer,
   Messages.layer,
   Storage.layer,
+  StaticScores.layer,
   TestimonialReminder.layer,
   Users.layer,
   Students.layer,

@@ -202,7 +202,7 @@ export function PortalNav() {
       <nav
         ref={navRef}
         data-testid="portal-nav"
-        className={`fixed top-0 z-100 flex w-full items-center justify-between border-b border-overlay/5 bg-surface/90 px-6 py-3 backdrop-blur-md transition-transform duration-300 will-change-transform md:px-8 dark:border-overlay-dark/5 dark:bg-surface-dark/90 ${menuOpen || navVisible ? "translate-y-0" : "-translate-y-full"}`}
+        className={`fixed top-0 z-100 flex w-full items-center justify-between border-b border-overlay/5 bg-surface/90 px-6 py-3 backdrop-blur-md transition-transform duration-300 will-change-transform md:px-8 dark:border-overlay-dark/5 dark:bg-surface-dark/90 print:hidden ${menuOpen || navVisible ? "translate-y-0" : "-translate-y-full"}`}
       >
         <div className="text-lg font-bold tracking-tight">
           dfg<span className="text-accent">.</span>rocks

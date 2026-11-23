@@ -21,6 +21,8 @@ import {
   toMaterialNotationTrack,
 } from "../../../shared/notationTracks.js";
 import { Modal } from "../ui/Modal.js";
+import { StaticScoreFrame } from "gigbag.js/react";
+import type { StaticScore } from "gigbag.js/static";
 
 export interface AlphaTabPlayerProps {
   /** A score file by URL, or alphaTex source. */
@@ -31,6 +33,8 @@ export interface AlphaTabPlayerProps {
   onDurationSeconds?: (seconds: number) => void;
   /** Called when playback stops after it has run. */
   onSessionEnd?: () => void;
+  /** The score drawn on the server: shown until the player has drawn, and in print. */
+  staticScore?: StaticScore | null;
 }
 
 // On phones the controls and the score break out of the page padding to span the viewport.
@@ -54,6 +58,7 @@ export function AlphaTabPlayer({
   onPlaybackSeconds,
   onDurationSeconds,
   onSessionEnd,
+  staticScore,
 }: AlphaTabPlayerProps) {
   const [trainerOpen, setTrainerOpen] = useState(false);
   const { host, keyRoot, state, actions } = useScorePlayer({
@@ -77,11 +82,19 @@ export function AlphaTabPlayer({
   const loading = state.status === "loading" || state.sound === "loading";
   const selectionText = state.selection ? barsLabel(barsOfBeatSpan(state.selection)) : null;
   const trackVolume = state.track === null ? 1 : (state.mixer.tracks[state.track]?.volume ?? 1);
+  const surface = (
+    <div
+      ref={host}
+      data-testid="alphatab-surface"
+      className="alphatab-player-surface min-h-50 w-full overscroll-x-contain rounded-sm focus-visible:ring-2 focus-visible:ring-[rgba(55,55,255,0.35)] focus-visible:ring-offset-2 focus-visible:ring-offset-transparent focus-visible:outline-none [&_.at-cursor-bar]:bg-[rgba(55,55,255,0.15)] [&_.at-cursor-beat]:w-0.75 [&_.at-cursor-beat]:bg-[rgba(180,180,180,0.75)] [&_.at-cursor-beat]:[backdrop-filter:invert(80%)]"
+      aria-label="Interactive notation player"
+    />
+  );
 
   return (
     <div ref={keyRoot} className="mb-8">
       <div
-        className={`sticky top-[calc(env(safe-area-inset-top,0)+var(--portal-nav-visible-height))] z-30 bg-inherit backdrop-blur-md ${viewportClass}`}
+        className={`sticky top-[calc(env(safe-area-inset-top,0)+var(--portal-nav-visible-height))] z-30 bg-inherit backdrop-blur-md print:hidden ${viewportClass}`}
       >
         <div className="flex min-w-0 flex-col gap-2 p-2 pb-1 md:flex-row md:items-center md:gap-3 md:pb-0">
           <div className="flex min-w-0 flex-1 items-center gap-2 md:gap-3">
@@ -235,12 +248,16 @@ export function AlphaTabPlayer({
         </div>
       </Modal>
 
-      <div className={`relative z-0 overflow-hidden bg-inherit ${viewportClass}`}>
-        <div
-          ref={host}
-          className="alphatab-player-surface min-h-50 w-full overscroll-x-contain rounded-sm focus-visible:ring-2 focus-visible:ring-[rgba(55,55,255,0.35)] focus-visible:ring-offset-2 focus-visible:ring-offset-transparent focus-visible:outline-none [&_.at-cursor-bar]:bg-[rgba(55,55,255,0.15)] [&_.at-cursor-beat]:w-0.75 [&_.at-cursor-beat]:bg-[rgba(180,180,180,0.75)] [&_.at-cursor-beat]:[backdrop-filter:invert(80%)]"
-          aria-label="Interactive notation player"
-        />
+      <div
+        className={`relative z-0 overflow-hidden bg-inherit print:overflow-visible ${viewportClass}`}
+      >
+        {staticScore ? (
+          <StaticScoreFrame score={staticScore} playerReady={state.drawn}>
+            {surface}
+          </StaticScoreFrame>
+        ) : (
+          surface
+        )}
       </div>
     </div>
   );

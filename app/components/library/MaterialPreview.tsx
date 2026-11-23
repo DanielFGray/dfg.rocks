@@ -2,6 +2,8 @@ import { lazy, Suspense } from "react";
 import type { Material } from "../../../shared/schemas.js";
 import { categorize, downloadUrl } from "./helpers.js";
 import type { AlphaTabPlayerProps } from "../alphatab/AlphaTabPlayer.js";
+import { StaticScoreFrame } from "gigbag.js/react";
+import type { StaticScore } from "gigbag.js/static";
 
 const AlphaTabPlayer = lazy(() =>
   import("../alphatab/AlphaTabPlayer.js").then((m) => ({
@@ -15,11 +17,14 @@ const card =
 export const MaterialPreview = ({
   material,
   embedded,
+  staticScore,
   notationPlayerProps,
 }: {
   material: Material;
   embedded?: boolean;
-  notationPlayerProps?: Omit<AlphaTabPlayerProps, "source">;
+  /** A notation file drawn on the server: shown until the player has drawn, and in print. */
+  staticScore?: StaticScore | null;
+  notationPlayerProps?: Omit<AlphaTabPlayerProps, "source" | "staticScore">;
 }) => {
   const cat = categorize(material.mime_type, material.original_filename);
   const src = downloadUrl(material.id);
@@ -67,12 +72,22 @@ export const MaterialPreview = ({
       return (
         <Suspense
           fallback={
-            <div className="p-6 text-center text-sm text-muted dark:text-muted-dark">
-              Loading...
-            </div>
+            staticScore ? (
+              <StaticScoreFrame score={staticScore} playerReady={false}>
+                {null}
+              </StaticScoreFrame>
+            ) : (
+              <div className="p-6 text-center text-sm text-muted dark:text-muted-dark">
+                Loading...
+              </div>
+            )
           }
         >
-          <AlphaTabPlayer source={{ url: src }} {...notationPlayerProps} />
+          <AlphaTabPlayer
+            source={{ url: src }}
+            staticScore={staticScore}
+            {...notationPlayerProps}
+          />
         </Suspense>
       );
     default:

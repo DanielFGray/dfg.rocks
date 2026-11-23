@@ -236,4 +236,71 @@ test.describe("assignments management", () => {
     // "Save Review") stays hidden until the student has listened through the piece.
     await expect(page.getByRole("button", { name: "Rate 4 out of 5" })).toHaveCount(1);
   });
+
+  test("notation assignment shows the server-drawn score until the player draws, and in print", async ({
+    page,
+    testing,
+  }) => {
+    await testing.login();
+    await testing.login({
+      username: "test_assignment_student_static",
+      role: "student",
+      name: "Static Score Student",
+    });
+    await testing.seedMaterial({
+      title: "Test: Static Score Material",
+      original_filename: "static-score.musicxml",
+      mime_type: "application/octet-stream",
+      source_file_path: notationFixturePath,
+      visibility: "course",
+    });
+    await testing.assignMaterial(
+      "test_assignment_student_static",
+      "Test: Static Score Material",
+      0,
+    );
+
+    await loginViaUi(page, "test_assignment_student_static", "testpassword123");
+    await page.getByTestId("nav-assignments").click();
+    await page
+      .getByTestId("assignment-open-link")
+      .filter({ hasText: "Test: Static Score Material" })
+      .click();
+    await expect(page.getByTestId("assignment-detail")).toBeVisible();
+
+    // The swap must not show an empty player: record what the player holds at
+    // the moment it is marked ready.
+    await page.addInitScript(() => {
+      new MutationObserver((records) => {
+        const ready = records.find((r) => (r.target as Element).hasAttribute("data-player-ready"));
+        if (ready) {
+          const drawn = (ready.target as Element).querySelectorAll(".at-frame-player svg").length;
+          document.documentElement.dataset.playerSvgsAtSwap = String(drawn);
+        }
+      }).observe(document, { subtree: true, attributeFilter: ["data-player-ready"] });
+    });
+    // While the score file downloads, the player cannot draw, so the static
+    // score shows.
+    let releaseScoreFile = () => {};
+    const scoreFileReleased = new Promise<void>((resolve) => {
+      releaseScoreFile = resolve;
+    });
+    await page.route("**/api/materials/*/download", async (route) => {
+      await scoreFileReleased;
+      await route.continue();
+    });
+    await page.reload();
+    await expect(page.locator(".at-frame-static svg.at-static-part").first()).toBeVisible();
+    await expect(page.locator(".at-frame[data-player-ready]")).toHaveCount(0);
+
+    releaseScoreFile();
+    await expect(page.locator(".at-frame[data-player-ready]")).toBeVisible({ timeout: 15_000 });
+    await expect(page.locator(".at-frame-static")).toBeHidden();
+    await expect(page.locator("html")).not.toHaveAttribute("data-player-svgs-at-swap", "0");
+    await expect(page.locator("html")).toHaveAttribute("data-player-svgs-at-swap", /^\d+$/);
+
+    await page.emulateMedia({ media: "print" });
+    await expect(page.locator(".at-frame-static svg.at-static-part").first()).toBeVisible();
+    await expect(page.locator(".at-frame-player")).toBeHidden();
+  });
 });
