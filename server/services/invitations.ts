@@ -18,7 +18,10 @@ export class Invitations extends Context.Service<Invitations>()("dfg-rocks/invit
     const rootDb = yield* PgRootDB;
     const rootUrl = Config.NonEmptyString("VITE_ROOT_URL");
 
-    /** An account invitation's link and text, or None once the account is claimed. */
+    /**
+     * An account invitation's link and text, or None when claim_account_invitation would refuse
+     * it: the account is claimed or the invitation has expired.
+     */
     const accountInvitationMail = (id: string) =>
       rootDb
         .execute(
@@ -41,6 +44,7 @@ export class Invitations extends Context.Service<Invitations>()("dfg-rocks/invit
             ])
             .where("invitation.id", "=", id)
             .where("invitation.family_id", "is", null)
+            .where("invitation.expires_at", ">", sql<Date>`now()`)
             .where("invitee.is_verified", "=", false)
             .where("address.is_verified", "=", false)
             .where("secret.verification_token", "is not", null),
@@ -97,7 +101,8 @@ export class Invitations extends Context.Service<Invitations>()("dfg-rocks/invit
           .pipe(Effect.map((rows) => rows.length > 0));
         if (!isAccount) return yield* sendFamilyInvitation(id);
         const mail = yield* accountInvitationMail(id);
-        if (Option.isNone(mail)) return yield* Effect.logInfo("Invited account already claimed");
+        if (Option.isNone(mail))
+          return yield* Effect.logInfo("Invitation already claimed or expired");
         const { email, token, invitee_name, inviter_name, message } = mail.value;
         const link = new URL("/invite", yield* rootUrl);
         link.search = new URLSearchParams({ id, token: token ?? "" }).toString();

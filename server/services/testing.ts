@@ -565,6 +565,22 @@ export class Testing extends Context.Service<Testing>()("dfg-rocks/testing", {
           );
       }),
 
+      /** Moves the account invitation to this address one minute past its expiry. */
+      expireInvitation: Effect.fnUntraced(function* (email: string) {
+        yield* db.execute(
+          db
+            .updateTable("app_public.family_invitations")
+            .set({ expires_at: sql<Date>`now() - interval '1 minute'` })
+            .where("family_id", "is", null)
+            .where("user_id", "in", (eb) =>
+              eb
+                .selectFrom("app_public.user_emails")
+                .select("user_id")
+                .where("email", "=", sql<string>`${email}::citext`),
+            ),
+        );
+      }),
+
       seedLesson: Effect.fnUntraced(function* (values: {
         username: string;
         scheduledAt?: string | null;

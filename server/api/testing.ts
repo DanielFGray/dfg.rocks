@@ -215,6 +215,12 @@ export const testingGroup = HttpApiGroup.make("testing")
     }),
   )
   .add(
+    HttpApiEndpoint.get("expireInvitation", "/testing/expire-invitation", {
+      error: testingErrors,
+      query: TestingInvitationLinkQuery,
+    }),
+  )
+  .add(
     HttpApiEndpoint.get("seedLesson", "/testing/seed-lesson", {
       error: testingErrors,
       query: TestingSeedLessonQuery,
@@ -400,6 +406,12 @@ export const TestingApiGroupLive = HttpApiBuilder.group(testingApi, "testing", (
         return HttpServerResponse.redirect(
           `/invite?${new URLSearchParams({ id: link.id, token: link.token })}`,
         );
+      }, adaptTestingHandler),
+    )
+    .handle(
+      "expireInvitation",
+      Effect.fnUntraced(function* ({ query }) {
+        yield* Testing.use((testingService) => testingService.expireInvitation(query.email));
       }, adaptTestingHandler),
     )
     .handle(

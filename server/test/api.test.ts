@@ -297,6 +297,46 @@ describe("DFG Portal API", () => {
   );
 
   it.effect(
+    "auth: a magic-link login verifies no other address of the account",
+    Effect.fnUntraced(function* () {
+      const query = (sql: string, params: unknown[]) =>
+        Effect.tryPromise(() => testDb.query(sql, params));
+      const created = yield* query(
+        `select id from app_private.really_create_user('magic1', 'Magic One', null, true, 'magic1@test.com', 'magic123')`,
+        [],
+      );
+      const userId = created.rows[0].id;
+      yield* query(
+        `insert into app_public.user_emails (user_id, email) values ($1, 'not-theirs@test.com')`,
+        [userId],
+      );
+
+      const sent = yield* reqEffect("POST", "/api/magic-link", {
+        body: { email: "magic1@test.com" },
+      });
+      expect(sent.status).toBe(200);
+      const secrets = yield* query(
+        `select magic_link_token from app_private.user_secrets where user_id = $1`,
+        [userId],
+      );
+      const verified = yield* reqEffect("POST", "/api/magic-link/verify", {
+        body: { token: secrets.rows[0].magic_link_token },
+      });
+      expect(verified.status).toBe(200);
+      expect(getCookie(verified)).toBeTruthy();
+
+      const addresses = yield* query(
+        `select email, is_verified from app_public.user_emails where user_id = $1 order by email`,
+        [userId],
+      );
+      expect(addresses.rows).toEqual([
+        { email: "magic1@test.com", is_verified: true },
+        { email: "not-theirs@test.com", is_verified: false },
+      ]);
+    }),
+  );
+
+  it.effect(
     "auth: admin authorization follows live DB session and role state",
     Effect.fnUntraced(function* () {
       const loginRes = yield* reqEffect("POST", "/api/login", {

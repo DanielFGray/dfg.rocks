@@ -100,4 +100,19 @@ test.describe("account invitations", () => {
     const me = await (await page.request.get("/api/me")).json();
     expect(me.user).toMatchObject({ username: "Test_Parent_Pat", role: "parent" });
   });
+
+  test("an expired link shows the not-valid page", async ({ page, testing }) => {
+    await testing.login();
+    await loginViaUi(page, "test_admin", "testpassword123");
+    await page.getByTestId("nav-people").click();
+
+    await invite(page, { name: "Test Late Lee", email: "test-lee@test.local" });
+    await expect(page.getByTestId("pending-invitation-Test_Late_Lee")).toBeVisible();
+    const link = await testing.invitationLink("test-lee@test.local");
+    await testing.expireInvitation("test-lee@test.local");
+
+    await signOut(page);
+    await page.goto(link);
+    await expect(page.getByTestId("invite-invalid")).toBeVisible();
+  });
 });

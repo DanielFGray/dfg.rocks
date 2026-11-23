@@ -61,6 +61,8 @@ type TestingApi = {
   seedDeleteAccountLink(data: { username: string }): Promise<string>;
   /** The login link in the account invitation emailed to this address. */
   invitationLink(email: string): Promise<string>;
+  /** Moves the account invitation to this address past its expiry. */
+  expireInvitation(email: string): Promise<void>;
   seedLesson(data: {
     username: string;
     scheduled_at?: string;
@@ -272,6 +274,10 @@ export const test = base.extend<{
       async invitationLink(email) {
         const res = await get("invitation-link", { email });
         return redirectUrl(res);
+      },
+
+      async expireInvitation(email) {
+        await get("expire-invitation", { email });
       },
 
       async seedLesson(data) {
