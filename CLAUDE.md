@@ -166,6 +166,7 @@ Benign warning, no functionality impact.
 - TanStack Query for server state, useState for local UI state
 - TanStack Router file-based routing with typed routes
 - TailwindCSS for styling, `data-testid` attributes for E2E selectors
+- Write one colour class per property, such as `text-muted`. The colours in `app/styles.css` change in dark mode, so add `dark:` only for a colour that is not one of those tokens, such as `dark:text-red-400`.
 - React Aria Components for form inputs (TextField, Input, etc.)
 
 ## Key Files
