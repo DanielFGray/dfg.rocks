@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Effect } from "effect";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import type {
@@ -362,11 +362,8 @@ export function StudentRecurringBilling({ studentId }: { studentId: string }) {
 }
 
 function RateModal({
-  studentId,
-  rate,
   open,
-  onClose,
-  onSaved,
+  ...form
 }: {
   studentId: string;
   rate: StudentRate | null;
@@ -374,20 +371,32 @@ function RateModal({
   onClose: () => void;
   onSaved: () => void;
 }) {
-  const [amount, setAmount] = useState("");
-  const [duration, setDuration] = useState("60");
-  const [location, setLocation] = useState<LocationType>("studio");
-  const [billingModel, setBillingModel] = useState<BillingModel>("single_booking");
-  const [notes, setNotes] = useState("");
+  return (
+    <Modal open={open} onClose={form.onClose} title={form.rate ? "Edit rate" : "Add rate"}>
+      <RateForm {...form} />
+    </Modal>
+  );
+}
 
-  useEffect(() => {
-    if (!open) return;
-    setAmount(rate ? (rate.rate_cents / 100).toFixed(2) : "");
-    setDuration(String(rate?.lesson_duration_minutes ?? 60));
-    setLocation(rate?.location_type ?? "studio");
-    setBillingModel(rate?.billing_model ?? "single_booking");
-    setNotes(rate?.notes ?? "");
-  }, [open, rate]);
+/** The modal mounts it on each open, so every open starts from the saved rate. */
+function RateForm({
+  studentId,
+  rate,
+  onClose,
+  onSaved,
+}: {
+  studentId: string;
+  rate: StudentRate | null;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [amount, setAmount] = useState(rate ? (rate.rate_cents / 100).toFixed(2) : "");
+  const [duration, setDuration] = useState(String(rate?.lesson_duration_minutes ?? 60));
+  const [location, setLocation] = useState<LocationType>(rate?.location_type ?? "studio");
+  const [billingModel, setBillingModel] = useState<BillingModel>(
+    rate?.billing_model ?? "single_booking",
+  );
+  const [notes, setNotes] = useState(rate?.notes ?? "");
 
   const save = useMutation({
     mutationFn: () =>
@@ -410,77 +419,71 @@ function RateModal({
   });
 
   return (
-    <Modal open={open} onClose={onClose} title={rate ? "Edit rate" : "Add rate"}>
-      <form
-        data-testid="student-rate-form"
-        className="flex flex-col gap-4"
-        onSubmit={(event) => {
-          event.preventDefault();
-          save.mutate();
-        }}
-      >
-        <Input
-          id="rate-amount"
-          name="amount"
-          label="Rate amount (USD)"
-          type="number"
-          required
-          value={amount}
-          onChange={setAmount}
-        />
-        <Input
-          id="rate-duration"
-          name="duration"
-          label="Lesson duration (minutes)"
-          type="number"
-          required
-          value={duration}
-          onChange={setDuration}
-        />
-        <Select
-          id="rate-location"
-          name="location_type"
-          label="Location"
-          options={locationOptions}
-          required
-          value={location}
-          onChange={(value) => setLocation(value as LocationType)}
-        />
-        <Select
-          id="rate-billing-model"
-          name="billing_model"
-          label="Billing model"
-          options={billingOptions}
-          required
-          value={billingModel}
-          onChange={(value) => setBillingModel(value as BillingModel)}
-          data-testid="rate-billing-model"
-        />
-        <Textarea id="rate-notes" name="notes" label="Notes" value={notes} onChange={setNotes} />
-        <ErrorMessage error={save.error} />
-        <div className="mt-2 flex justify-end gap-3">
-          <Button variant="ghost" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button
-            type="submit"
-            disabled={save.isPending || !amount || Number(amount) <= 0 || Number(duration) <= 0}
-          >
-            {save.isPending ? "Saving..." : "Save rate"}
-          </Button>
-        </div>
-      </form>
-    </Modal>
+    <form
+      data-testid="student-rate-form"
+      className="flex flex-col gap-4"
+      onSubmit={(event) => {
+        event.preventDefault();
+        save.mutate();
+      }}
+    >
+      <Input
+        id="rate-amount"
+        name="amount"
+        label="Rate amount (USD)"
+        type="number"
+        required
+        value={amount}
+        onChange={setAmount}
+      />
+      <Input
+        id="rate-duration"
+        name="duration"
+        label="Lesson duration (minutes)"
+        type="number"
+        required
+        value={duration}
+        onChange={setDuration}
+      />
+      <Select
+        id="rate-location"
+        name="location_type"
+        label="Location"
+        options={locationOptions}
+        required
+        value={location}
+        onChange={(value) => setLocation(value as LocationType)}
+      />
+      <Select
+        id="rate-billing-model"
+        name="billing_model"
+        label="Billing model"
+        options={billingOptions}
+        required
+        value={billingModel}
+        onChange={(value) => setBillingModel(value as BillingModel)}
+        data-testid="rate-billing-model"
+      />
+      <Textarea id="rate-notes" name="notes" label="Notes" value={notes} onChange={setNotes} />
+      <ErrorMessage error={save.error} />
+      <div className="mt-2 flex justify-end gap-3">
+        <Button variant="ghost" onClick={onClose}>
+          Cancel
+        </Button>
+        <Button
+          type="submit"
+          disabled={save.isPending || !amount || Number(amount) <= 0 || Number(duration) <= 0}
+        >
+          {save.isPending ? "Saving..." : "Save rate"}
+        </Button>
+      </div>
+    </form>
   );
 }
 
 function ScheduleModal({
-  studentId,
-  rates,
-  schedule,
   open,
-  onClose,
-  onSaved,
+  ...form
 }: {
   studentId: string;
   rates: StudentRate[];
@@ -489,22 +492,42 @@ function ScheduleModal({
   onClose: () => void;
   onSaved: () => void;
 }) {
-  const [rateId, setRateId] = useState("");
-  const [weekday, setWeekday] = useState("1");
-  const [localTime, setLocalTime] = useState("16:00");
-  const [startDate, setStartDate] = useState("");
-  const [endDate, setEndDate] = useState("");
-  const [active, setActive] = useState(true);
+  return (
+    <Modal
+      open={open}
+      onClose={form.onClose}
+      title={form.schedule ? "Edit recurring schedule" : "Add recurring schedule"}
+    >
+      <ScheduleForm {...form} />
+    </Modal>
+  );
+}
 
-  useEffect(() => {
-    if (!open) return;
-    setRateId(schedule?.student_rate_id ?? rates[0]?.id ?? "");
-    setWeekday(String(schedule?.day_of_week ?? 1));
-    setLocalTime(schedule?.local_start_time.slice(0, 5) ?? "16:00");
-    setStartDate(schedule?.starts_on.slice(0, 10) ?? new Date().toISOString().slice(0, 10));
-    setEndDate(schedule?.ends_on?.slice(0, 10) ?? "");
-    setActive(schedule?.active ?? true);
-  }, [open, rates, schedule]);
+/**
+ * The modal mounts it on each open, so every open starts from the saved schedule, and a
+ * refetch of the rates while it is open leaves the typed values alone.
+ */
+function ScheduleForm({
+  studentId,
+  rates,
+  schedule,
+  onClose,
+  onSaved,
+}: {
+  studentId: string;
+  rates: StudentRate[];
+  schedule: RecurringSchedule | null;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [rateId, setRateId] = useState(schedule?.student_rate_id ?? rates[0]?.id ?? "");
+  const [weekday, setWeekday] = useState(String(schedule?.day_of_week ?? 1));
+  const [localTime, setLocalTime] = useState(schedule?.local_start_time.slice(0, 5) ?? "16:00");
+  const [startDate, setStartDate] = useState(
+    () => schedule?.starts_on.slice(0, 10) ?? new Date().toISOString().slice(0, 10),
+  );
+  const [endDate, setEndDate] = useState(schedule?.ends_on?.slice(0, 10) ?? "");
+  const [active, setActive] = useState(schedule?.active ?? true);
 
   const save = useMutation({
     mutationFn: () =>
@@ -530,94 +553,88 @@ function ScheduleModal({
   });
 
   return (
-    <Modal
-      open={open}
-      onClose={onClose}
-      title={schedule ? "Edit recurring schedule" : "Add recurring schedule"}
+    <form
+      data-testid="recurring-schedule-form"
+      className="flex flex-col gap-4"
+      onSubmit={(event) => {
+        event.preventDefault();
+        save.mutate();
+      }}
     >
-      <form
-        data-testid="recurring-schedule-form"
-        className="flex flex-col gap-4"
-        onSubmit={(event) => {
-          event.preventDefault();
-          save.mutate();
-        }}
-      >
-        {rates.length > 1 ? (
-          <Select
-            id="schedule-rate"
-            name="student_rate_id"
-            label="Monthly prepaid rate"
-            options={rates.map((rate) => ({
-              value: rate.id,
-              label: `${formatMoney(rate.rate_cents)} / ${rate.lesson_duration_minutes} min · ${locationOptions.find((option) => option.value === rate.location_type)?.label}`,
-            }))}
-            required
-            value={rateId}
-            onChange={setRateId}
-          />
-        ) : null}
+      {rates.length > 1 ? (
         <Select
-          id="schedule-weekday"
-          name="day_of_week"
-          label="Weekday"
-          options={weekdayOptions}
+          id="schedule-rate"
+          name="student_rate_id"
+          label="Monthly prepaid rate"
+          options={rates.map((rate) => ({
+            value: rate.id,
+            label: `${formatMoney(rate.rate_cents)} / ${rate.lesson_duration_minutes} min · ${locationOptions.find((option) => option.value === rate.location_type)?.label}`,
+          }))}
           required
-          value={weekday}
-          onChange={setWeekday}
-          data-testid="schedule-weekday"
+          value={rateId}
+          onChange={setRateId}
+        />
+      ) : null}
+      <Select
+        id="schedule-weekday"
+        name="day_of_week"
+        label="Weekday"
+        options={weekdayOptions}
+        required
+        value={weekday}
+        onChange={setWeekday}
+        data-testid="schedule-weekday"
+      />
+      <Input
+        id="schedule-time"
+        name="local_start_time"
+        label="Local time"
+        type="time"
+        required
+        value={localTime}
+        onChange={setLocalTime}
+        data-testid="schedule-local-time"
+      />
+      <Input
+        id="schedule-timezone"
+        name="timezone"
+        label="Time zone"
+        value="America/Chicago"
+        readOnly
+      />
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Input
+          id="schedule-start"
+          name="starts_on"
+          label="Start date"
+          type="date"
+          required
+          value={startDate}
+          onChange={setStartDate}
+          data-testid="schedule-start-date"
         />
         <Input
-          id="schedule-time"
-          name="local_start_time"
-          label="Local time"
-          type="time"
-          required
-          value={localTime}
-          onChange={setLocalTime}
-          data-testid="schedule-local-time"
+          id="schedule-end"
+          name="ends_on"
+          label="End date (optional)"
+          type="date"
+          value={endDate}
+          onChange={setEndDate}
+          data-testid="schedule-end-date"
         />
-        <Input
-          id="schedule-timezone"
-          name="timezone"
-          label="Time zone"
-          value="America/Chicago"
-          readOnly
-        />
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Input
-            id="schedule-start"
-            name="starts_on"
-            label="Start date"
-            type="date"
-            required
-            value={startDate}
-            onChange={setStartDate}
-            data-testid="schedule-start-date"
-          />
-          <Input
-            id="schedule-end"
-            name="ends_on"
-            label="End date (optional)"
-            type="date"
-            value={endDate}
-            onChange={setEndDate}
-            data-testid="schedule-end-date"
-          />
-        </div>
-        <Switch isSelected={active} onChange={setActive} data-testid="schedule-active">
-          Active
-        </Switch>
-        <ErrorMessage error={save.error} />
-        <div className="mt-2 flex justify-end gap-3">
-          <Button variant="ghost" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button type="submit" disabled={save.isPending || !rateId || !startDate || !localTime}>
-            {save.isPending ? "Saving..." : "Save schedule"}
-          </Button>
-        </div>
-      </form>
-    </Modal>
+      </div>
+      <Switch isSelected={active} onChange={setActive} data-testid="schedule-active">
+        Active
+      </Switch>
+      <ErrorMessage error={save.error} />
+      <div className="mt-2 flex justify-end gap-3">
+        <Button variant="ghost" onClick={onClose}>
+          Cancel
+        </Button>
+        <Button type="submit" disabled={save.isPending || !rateId || !startDate || !localTime}>
+          {save.isPending ? "Saving..." : "Save schedule"}
+        </Button>
+      </div>
+    </form>
   );
 }

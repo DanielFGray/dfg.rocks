@@ -1,6 +1,6 @@
 import { Effect } from "effect";
 import { useEffect, useRef, useState } from "react";
-import { Link, useLocation, useNavigate, useRouter } from "@tanstack/react-router";
+import { Link, useNavigate, useRouter } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../lib/hooks/useAuth.js";
 import { useSwitchActiveStudent } from "../lib/queries.js";
@@ -54,12 +54,13 @@ const navItems: Array<{
 
 export function PortalNav() {
   const [menuOpen, setMenuOpen] = useState(false);
-  const [navVisible, setNavVisible] = useState(true);
+  // Scrolling down hides the nav; scrolling up or moving to another page shows it.
+  const [scrolledAway, setScrolledAway] = useState(false);
   const { isAdmin, isStaff, user, isParent, familyStudents, activeStudentId } = useAuth();
   const switchStudent = useSwitchActiveStudent();
   const navigate = useNavigate();
   const router = useRouter();
-  const location = useLocation();
+  const navShown = menuOpen || !scrolledAway;
   const queryClient = useQueryClient();
   const navRef = useRef<HTMLElement | null>(null);
 
@@ -98,15 +99,13 @@ export function PortalNav() {
     });
   };
 
-  useEffect(() => {
-    setNavVisible(true);
-  }, [location.pathname]);
-
-  useEffect(() => {
-    if (menuOpen) {
-      setNavVisible(true);
-    }
-  }, [menuOpen]);
+  useEffect(
+    () =>
+      router.subscribe("onResolved", (event) => {
+        if (event.pathChanged) setScrolledAway(false);
+      }),
+    [router],
+  );
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -121,7 +120,6 @@ export function PortalNav() {
 
       if (menuOpen) {
         lastY = window.scrollY;
-        setNavVisible(true);
         return;
       }
 
@@ -129,9 +127,9 @@ export function PortalNav() {
       const delta = currentY - lastY;
 
       if (currentY <= 24 || delta < -6) {
-        setNavVisible(true);
+        setScrolledAway(false);
       } else if (delta > 6) {
-        setNavVisible(false);
+        setScrolledAway(true);
       }
 
       lastY = currentY;
@@ -169,10 +167,7 @@ export function PortalNav() {
     const updateNavHeight = () => {
       const height = nav.offsetHeight;
       root.style.setProperty("--portal-nav-height", `${height}px`);
-      root.style.setProperty(
-        "--portal-nav-visible-height",
-        menuOpen || navVisible ? `${height}px` : "0px",
-      );
+      root.style.setProperty("--portal-nav-visible-height", navShown ? `${height}px` : "0px");
     };
 
     updateNavHeight();
@@ -191,7 +186,7 @@ export function PortalNav() {
       resizeObserver?.disconnect();
       window.removeEventListener("resize", updateNavHeight);
     };
-  }, [menuOpen, navVisible]);
+  }, [navShown]);
 
   if (!user) {
     return null;
@@ -202,7 +197,7 @@ export function PortalNav() {
       <nav
         ref={navRef}
         data-testid="portal-nav"
-        className={`fixed top-0 z-100 flex w-full items-center justify-between border-b border-overlay/5 bg-surface/90 px-6 py-3 backdrop-blur-md transition-transform duration-300 will-change-transform md:px-8 print:hidden ${menuOpen || navVisible ? "translate-y-0" : "-translate-y-full"}`}
+        className={`fixed top-0 z-100 flex w-full items-center justify-between border-b border-overlay/5 bg-surface/90 px-6 py-3 backdrop-blur-md transition-transform duration-300 will-change-transform md:px-8 print:hidden ${navShown ? "translate-y-0" : "-translate-y-full"}`}
       >
         <div className="text-lg font-bold tracking-tight">
           dfg<span className="text-accent">.</span>rocks
