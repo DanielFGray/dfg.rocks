@@ -41,6 +41,14 @@ export const accountActivity = mailKind(
 
 export const familyInvitation = mailKind("invitation.mjml", { inviteLink: Schema.String });
 
+/** An account staff created: the link logs its owner in. Empty strings mean "not given". */
+export const accountInvitation = mailKind("account_invitation.mjml", {
+  inviteeName: Schema.String,
+  inviterName: Schema.String,
+  message: Schema.String,
+  loginLink: Schema.String,
+});
+
 export const testimonialReminder = mailKind("testimonial_reminder.mjml", {
   displayName: Schema.String,
   testimonialLink: Schema.String,
@@ -63,6 +71,7 @@ const kinds = [
   deleteAccount,
   accountActivity,
   familyInvitation,
+  accountInvitation,
   testimonialReminder,
   contactSubmission,
 ];

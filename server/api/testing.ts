@@ -115,6 +115,10 @@ const TestingSeedDeleteAccountQuery = S.Struct({
   username: S.String,
 });
 
+const TestingInvitationLinkQuery = S.Struct({
+  email: S.String,
+});
+
 const TestingSeedLessonQuery = S.Struct({
   username: S.String,
   scheduled_at: S.optional(S.String),
@@ -202,6 +206,12 @@ export const testingGroup = HttpApiGroup.make("testing")
     HttpApiEndpoint.get("seedDeleteAccount", "/testing/seed-delete-account", {
       error: testingErrors,
       query: TestingSeedDeleteAccountQuery,
+    }),
+  )
+  .add(
+    HttpApiEndpoint.get("invitationLink", "/testing/invitation-link", {
+      error: testingErrors,
+      query: TestingInvitationLinkQuery,
     }),
   )
   .add(
@@ -379,6 +389,17 @@ export const TestingApiGroupLive = HttpApiBuilder.group(testingApi, "testing", (
           testingService.seedDeleteAccount(query.username),
         );
         return HttpServerResponse.redirect(`/confirm-delete-account?token=${token}`);
+      }, adaptTestingHandler),
+    )
+    .handle(
+      "invitationLink",
+      Effect.fnUntraced(function* ({ query }) {
+        const link = yield* Testing.use((testingService) =>
+          testingService.invitationLink(query.email),
+        );
+        return HttpServerResponse.redirect(
+          `/invite?${new URLSearchParams({ id: link.id, token: link.token })}`,
+        );
       }, adaptTestingHandler),
     )
     .handle(

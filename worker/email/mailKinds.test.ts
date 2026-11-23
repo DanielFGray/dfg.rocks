@@ -5,6 +5,7 @@ import { ConfigProvider, Effect, Layer } from "effect";
 
 import {
   accountActivity,
+  accountInvitation,
   contactSubmission,
   deleteAccount,
   EmailDeliveryLive,
@@ -76,6 +77,32 @@ const jobs: ReadonlyArray<readonly [job: QueuedEmail, expected: string]> = [
       variables: { inviteLink: "https://x.invalid/invite" },
     },
     "https://x.invalid/invite",
+  ],
+  [
+    {
+      options,
+      template: accountInvitation.template,
+      variables: {
+        inviteeName: "Jane",
+        inviterName: "Dan",
+        message: "See you Tuesday!",
+        loginLink: "https://x.invalid/invite?id=1&token=t",
+      },
+    },
+    "See you Tuesday!",
+  ],
+  [
+    {
+      options,
+      template: accountInvitation.template,
+      variables: {
+        inviteeName: "",
+        inviterName: "",
+        message: "",
+        loginLink: "https://x.invalid/invite?id=2&token=t",
+      },
+    },
+    "https://x.invalid/invite?id=2&token=t",
   ],
   [
     {

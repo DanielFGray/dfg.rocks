@@ -1,5 +1,5 @@
-import { Config, Option, Effect, Context, Layer, Schema } from "effect";
-import { addJob, PgRootDB } from "../db.js";
+import { Effect, Context, Layer } from "effect";
+import { PgRootDB } from "../db.js";
 import { RequestDatabase } from "../requestDatabase.js";
 import { HttpError, catchPgErrors } from "../pgErrors.js";
 import { sql } from "kysely";
@@ -18,43 +18,6 @@ export class Families extends Context.Service<Families>()("dfg-rocks/families", 
         .select(["id", "family_id", "code", "email", "invited_role", "expires_at"])
         .where("id", "=", invitationId);
     return {
-      sendInvitation: Effect.fn("Families.sendInvitation")(function* ({
-        id,
-      }: typeof SendInvitation.Type) {
-        const invitation = yield* rootDb
-          .execute(
-            rootDb
-              .selectFrom("app_public.family_invitations as invitation")
-              .leftJoinLateral(
-                (eb) =>
-                  eb
-                    .selectFrom("app_public.user_emails")
-                    .select("email")
-                    .whereRef("user_id", "=", "invitation.user_id")
-                    .orderBy("is_primary", "desc")
-                    .orderBy("is_verified", "desc")
-                    .limit(1)
-                    .as("address"),
-                (join) => join.onTrue(),
-              )
-              .select((eb) => [
-                "invitation.code",
-                eb.fn.coalesce("invitation.email", "address.email").as("email"),
-              ])
-              .where("invitation.id", "=", id),
-          )
-          .pipe(Effect.head, Effect.option);
-        if (Option.isNone(invitation) || !invitation.value.email) return;
-        const query = new URLSearchParams({ id });
-        if (invitation.value.code) query.set("code", invitation.value.code);
-        yield* addJob(rootDb, "send_email", {
-          options: { to: invitation.value.email, subject: "You've been invited to DFG Portal" },
-          template: "invitation.mjml",
-          variables: {
-            inviteLink: `${yield* Config.NonEmptyString("VITE_ROOT_URL")}/accept-invite?${query}`,
-          },
-        });
-      }),
       createChild: Effect.fnUntraced(function* (userId: string, name: string) {
         const db = yield* RequestDatabase;
         const memberships = yield* db.execute(
@@ -349,30 +312,6 @@ export class Families extends Context.Service<Families>()("dfg-rocks/families", 
             .orderBy("created_at", "desc"),
         );
       }),
-      inviteFamily: Effect.fn("inviteFamily")(function* (
-        familyId: string,
-        values: {
-          username?: string;
-          email?: string;
-          invitedRole?: string;
-        },
-      ) {
-        const trx = yield* RequestDatabase;
-        yield* trx
-          .execute(
-            trx.selectNoFrom((eb) =>
-              eb
-                .fn<unknown>("app_public.invite_to_family", [
-                  eb.val(familyId),
-                  eb.val(values.username ?? null),
-                  eb.val(values.email ?? null),
-                  eb.val(values.invitedRole ?? "parent"),
-                ])
-                .as("invite_to_family"),
-            ),
-          )
-          .pipe(catchPgErrors);
-      }),
       createQrInviteFamily: Effect.fn("createQrInviteFamily")(function* (values: {
         name: string;
         slug: string;
@@ -427,7 +366,7 @@ export class Families extends Context.Service<Families>()("dfg-rocks/families", 
             .innerJoin("app_public.families as f", "f.id", "fi.family_id")
             .select([
               "fi.id",
-              "fi.family_id",
+              "f.id as family_id",
               "f.name as family_name",
               "fi.code",
               "fi.user_id",
@@ -553,5 +492,3 @@ export class Families extends Context.Service<Families>()("dfg-rocks/families", 
     Layer.provide(Layer.mergeAll(Users.layer, PgRootDB.layer)),
   );
 }
-
-export const SendInvitation = Schema.Struct({ id: Schema.String });

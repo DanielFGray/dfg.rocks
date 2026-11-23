@@ -14,6 +14,7 @@ import { familiesGroup, familiesAdminGroup } from "./api/families.js";
 import { calendarConnectAdminGroup, calendarAdminGroup } from "./api/calendar.js";
 import { studentsAdminGroup } from "./api/students.js";
 import { peopleStaffGroup, peopleAdminGroup } from "./api/people.js";
+import { invitationsStaffGroup, invitationsPublicGroup } from "./api/invitations.js";
 import { monthlyBillingAdminGroup } from "./api/monthlyBilling.js";
 import { payersAdminGroup } from "./api/payers.js";
 import { billsAdminGroup } from "./api/bills.js";
@@ -42,6 +43,8 @@ export const Contract = HttpApi.make("dfg")
   .add(practiceAdminGroup)
   .add(peopleStaffGroup)
   .add(peopleAdminGroup)
+  .add(invitationsStaffGroup)
+  .add(invitationsPublicGroup)
   .add(studentsAdminGroup)
   .add(coursesAdminGroup)
   .add(materialsAdminGroup)

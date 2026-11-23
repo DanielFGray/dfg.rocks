@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { Effect, Schema as S } from "effect";
+import { Effect } from "effect";
 import { withAuthContext } from "../../../server/requestDatabase.js";
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { requireStaff } from "../../lib/adminRoute.js";
@@ -7,29 +7,29 @@ import { useAuth } from "../../lib/hooks/useAuth.js";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { createServerFn } from "@tanstack/react-start";
 import { getCookie } from "@tanstack/react-start/server";
-import { useForm } from "@tanstack/react-form";
 import { api } from "../../lib/api.js";
-import { requiredValidator, emailValidator } from "../../lib/validators.js";
-import { fieldError } from "../../lib/form.js";
 import { runServerEffect } from "../../lib/serverEffect.js";
 import { People } from "../../../server/services/people.js";
 import { Families } from "../../../server/services/families.js";
+import { Invitations } from "../../../server/services/invitations.js";
+import type { PendingInvitation } from "../../../shared/api/invitations.js";
 import { serializeFamily } from "../../../shared/responseMappers.js";
 import { Sessions } from "../../../server/services/sessions.js";
-import { FamilyInviteRole, type Family, type PersonSummary } from "../../../shared/schemas.js";
+import type { Family, PersonSummary } from "../../../shared/schemas.js";
 import { Button } from "../../components/ui/Button.js";
 import { Card } from "../../components/ui/Card.js";
-import { Input } from "../../components/ui/Input.js";
 import { Select } from "../../components/ui/Select.js";
-import { Modal } from "../../components/ui/Modal.js";
 import { EmptyState } from "../../components/ui/EmptyState.js";
 import { SearchField } from "../../components/ui/SearchField.js";
 import { QrInviteModal } from "../../components/students/QrInviteModal.js";
+import { InviteAccountModal } from "../../components/students/InviteAccountModal.js";
+import { PendingInvitations } from "../../components/students/PendingInvitations.js";
 import { CreateFamilyModal } from "../../components/students/CreateFamilyModal.js";
 
 type PeoplePageData = {
   people: readonly PersonSummary[];
   families: Family[];
+  pendingInvitations: readonly PendingInvitation[];
 };
 
 const getPeoplePageData = createServerFn({ method: "GET" }).handler(() =>
@@ -38,13 +38,15 @@ const getPeoplePageData = createServerFn({ method: "GET" }).handler(() =>
       const session = yield* Sessions.use((sessions) =>
         sessions.requireStaffSession(getCookie("session")),
       );
-      const [people, families] = yield* Effect.all([
+      const [people, families, pendingInvitations] = yield* Effect.all([
         People.use((people) => people.listPeople()),
         Families.use((familyService) => familyService.listFamilies()),
+        Invitations.use((invitations) => invitations.pendingInvitations()),
       ]).pipe(withAuthContext(session.session.id));
       return {
         people,
         families: families.map(serializeFamily),
+        pendingInvitations,
       } satisfies PeoplePageData;
     }),
   ),
@@ -73,10 +75,11 @@ const ROLE_FILTER_OPTIONS = [
 function PeoplePage() {
   const queryClient = useQueryClient();
   const router = useRouter();
-  const { people, families } = Route.useLoaderData();
+  const { people, families, pendingInvitations } = Route.useLoaderData();
   const { isAdmin } = useAuth();
 
   const [formOpen, setFormOpen] = useState(false);
+  const [invited, setInvited] = useState<string | null>(null);
   const [qrOpen, setQrOpen] = useState(false);
   const [createFamilyOpen, setCreateFamilyOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -95,29 +98,6 @@ function PeoplePage() {
     [people, searchQuery, roleFilter],
   );
 
-  const inviteMutation = useMutation({
-    mutationFn: async ({
-      familyId,
-      email,
-      invitedRole,
-    }: {
-      familyId: string;
-      email: string;
-      invitedRole: FamilyInviteRole;
-    }) =>
-      Effect.runPromise(
-        api.familiesAdmin.inviteFamily({
-          params: { familyId },
-          payload: { email, invited_role: invitedRole },
-        }),
-      ),
-    onSettled: () => {
-      void queryClient.invalidateQueries({ queryKey: ["admin", "people"] });
-      void queryClient.invalidateQueries({ queryKey: ["admin", "families"] });
-      void router.invalidate();
-    },
-  });
-
   const createFamilyMutation = useMutation({
     mutationFn: (payload: { slug: string; name: string }) =>
       Effect.runPromise(api.familiesAdmin.createFamily({ payload })),
@@ -129,30 +109,10 @@ function PeoplePage() {
   });
 
   const openForm = () => setFormOpen(true);
-  const closeForm = () => {
-    setFormOpen(false);
-    inviteForm.reset();
+  const refresh = () => {
+    void queryClient.invalidateQueries({ queryKey: ["admin", "people"] });
+    void router.invalidate();
   };
-
-  const inviteForm = useForm({
-    defaultValues: {
-      familyId: families[0]?.id ?? "",
-      email: "",
-      invitedRole: "parent",
-    },
-    onSubmit: async ({ value }) => {
-      inviteMutation.mutate(
-        {
-          familyId: value.familyId,
-          email: value.email,
-          invitedRole: S.decodeUnknownSync(FamilyInviteRole)(value.invitedRole),
-        },
-        {
-          onSuccess: () => closeForm(),
-        },
-      );
-    },
-  });
 
   return (
     <main data-testid="people" className="mx-auto max-w-[1100px] px-5 pt-20 pb-16 md:px-8">
@@ -176,6 +136,18 @@ function PeoplePage() {
           </div>
         ) : null}
       </div>
+
+      {invited ? (
+        <p
+          data-testid="invite-sent"
+          role="status"
+          className="mb-6 rounded-md bg-green-50 px-4 py-3 text-sm text-green-800 dark:bg-green-950 dark:text-green-200"
+        >
+          Invitation sent to {invited}. Their account is ready for lessons now.
+        </p>
+      ) : null}
+
+      <PendingInvitations invitations={pendingInvitations} onResent={refresh} />
 
       <div className="mb-6 flex flex-col gap-3 md:flex-row">
         <div className="flex-1">
@@ -245,73 +217,15 @@ function PeoplePage() {
         </div>
       )}
 
-      <Modal open={formOpen} onClose={closeForm} title="Invite Student to Family">
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            void inviteForm.handleSubmit();
-          }}
-          data-testid="invite-form"
-          className="flex flex-col gap-4"
-        >
-          <inviteForm.Field name="familyId" validators={requiredValidator}>
-            {(field) => (
-              <Select
-                id="invite-family"
-                name="family_id"
-                label="Family"
-                required
-                value={field.state.value}
-                onChange={field.handleChange}
-                options={families.map((f) => ({
-                  value: f.id,
-                  label: f.name,
-                }))}
-                error={fieldError(field.state.meta.errors)}
-              />
-            )}
-          </inviteForm.Field>
-          <inviteForm.Field name="email" validators={emailValidator}>
-            {(field) => (
-              <Input
-                id="invite-email"
-                name="email"
-                label="Email"
-                type="email"
-                required
-                value={field.state.value}
-                onChange={field.handleChange}
-                onBlur={field.handleBlur}
-                error={fieldError(field.state.meta.errors)}
-              />
-            )}
-          </inviteForm.Field>
-          <inviteForm.Field name="invitedRole">
-            {(field) => (
-              <Select
-                id="invite-role"
-                name="invited_role"
-                label="Role"
-                value={field.state.value}
-                onChange={field.handleChange}
-                options={[
-                  { value: "parent", label: "Parent" },
-                  { value: "student", label: "Student" },
-                ]}
-                error={fieldError(field.state.meta.errors)}
-              />
-            )}
-          </inviteForm.Field>
-          <div className="mt-2 flex justify-end gap-3">
-            <Button variant="ghost" onClick={closeForm}>
-              Cancel
-            </Button>
-            <Button type="submit" disabled={inviteMutation.isPending}>
-              {inviteMutation.isPending ? "Sending..." : "Send Invite"}
-            </Button>
-          </div>
-        </form>
-      </Modal>
+      <InviteAccountModal
+        open={formOpen}
+        onClose={() => setFormOpen(false)}
+        families={families}
+        onInvited={(person) => {
+          setInvited(person.name ?? person.username);
+          refresh();
+        }}
+      />
 
       <QrInviteModal
         open={qrOpen}

@@ -420,11 +420,14 @@ export interface AppPublicFamilies {
 
 export interface AppPublicFamilyInvitations {
   code: string | null;
+  created_at: Generated<Timestamp>;
   email: string | null;
   expires_at: Timestamp | null;
-  family_id: string;
+  family_id: string | null;
   id: Generated<string>;
+  invited_by: string | null;
   invited_role: string | null;
+  message: string | null;
   user_id: string | null;
 }
 

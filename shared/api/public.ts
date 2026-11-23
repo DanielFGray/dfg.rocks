@@ -70,7 +70,7 @@ const AppleCallbackPayload = S.Struct({
   user: S.optional(S.fromJsonString(AppleUserPayload)),
 }).pipe(HttpApiSchema.asMultipart());
 
-const publicErrors = [
+export const publicErrors = [
   BadRequestErrorSchema,
   ForbiddenErrorSchema,
   NotFoundErrorSchema,

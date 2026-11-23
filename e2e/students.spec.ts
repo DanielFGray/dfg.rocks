@@ -50,27 +50,6 @@ test.describe("students management", () => {
     await expect(page.getByText("Enrolled Courses")).toHaveCount(0);
   });
 
-  test("admin can invite a student to a family", async ({ page, testing }) => {
-    await testing.login();
-    // Seed a family via the invitation helper (creates family + invitation)
-    await testing.seedInvitation({ email: "bob@test.local" });
-
-    await loginViaUi(page, "test_admin", "testpassword123");
-    await page.getByTestId("nav-people").click();
-    await expect(page.getByTestId("people")).toBeVisible();
-
-    await page.getByTestId("invite-student").click();
-    const form = page.getByTestId("invite-form");
-    // Select the family and fill email
-    await form.getByRole("button", { name: /Family/ }).click();
-    await page.locator('[data-testid^="select-option-"]').first().click();
-    await form.getByLabel("Email").fill("carol@test.local");
-    await form.getByRole("button", { name: "Send Invite" }).click();
-
-    // Modal closes, back to students page
-    await expect(page.getByTestId("people")).toBeVisible();
-  });
-
   test("student name links to detail page", async ({ page, testing }) => {
     await testing.login();
     await testing.login({

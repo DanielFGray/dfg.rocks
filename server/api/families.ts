@@ -148,22 +148,6 @@ export const FamiliesAdminApiGroupLive = HttpApiBuilder.group(
         }, adaptAdminErrors),
       )
       .handle(
-        "inviteFamily",
-        Effect.fnUntraced(function* ({ params, payload }) {
-          const auth = yield* CurrentSession;
-          yield* Families.use((familyService) =>
-            familyService
-              .inviteFamily(params.familyId, {
-                username: payload.username,
-                email: payload.email,
-                invitedRole: payload.invited_role,
-              })
-              .pipe(withAuthContext(auth.session.id)),
-          );
-          return { success: true as const };
-        }, adaptAdminErrors),
-      )
-      .handle(
         "qrInvite",
         Effect.fnUntraced(function* ({ params, payload }) {
           const auth = yield* CurrentSession;

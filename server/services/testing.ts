@@ -538,6 +538,33 @@ export class Testing extends Context.Service<Testing>()("dfg-rocks/testing", {
         return token;
       }),
 
+      /** The link the invitation email to this address carries, as the worker would build it. */
+      invitationLink: Effect.fnUntraced(function* (email: string) {
+        return yield* db
+          .execute(
+            db
+              .selectFrom("app_public.family_invitations as invitation")
+              .innerJoin(
+                "app_public.user_emails as address",
+                "address.user_id",
+                "invitation.user_id",
+              )
+              .innerJoin(
+                "app_private.user_email_secrets as secret",
+                "secret.user_email_id",
+                "address.id",
+              )
+              .select(["invitation.id", "secret.verification_token as token"])
+              .where("invitation.family_id", "is", null)
+              .where("address.email", "=", sql<string>`${email}::citext`)
+              .where("secret.verification_token", "is not", null),
+          )
+          .pipe(
+            Effect.head,
+            Effect.map((row) => ({ id: row.id, token: row.token ?? "" })),
+          );
+      }),
+
       seedLesson: Effect.fnUntraced(function* (values: {
         username: string;
         scheduledAt?: string | null;

@@ -14,6 +14,7 @@ import { Route as AuthedRouteImport } from './routes/_authed'
 import { Route as AcceptInviteRouteImport } from './routes/accept-invite'
 import { Route as ConfirmDeleteAccountRouteImport } from './routes/confirm-delete-account'
 import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
+import { Route as InviteRouteImport } from './routes/invite'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as MagicLoginRouteImport } from './routes/magic-login'
 import { Route as PricingRouteImport } from './routes/pricing'
@@ -71,6 +72,11 @@ const ConfirmDeleteAccountRoute = ConfirmDeleteAccountRouteImport.update({
 const ForgotPasswordRoute = ForgotPasswordRouteImport.update({
   id: '/forgot-password',
   path: '/forgot-password',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const InviteRoute = InviteRouteImport.update({
+  id: '/invite',
+  path: '/invite',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LoginRoute = LoginRouteImport.update({
@@ -257,6 +263,7 @@ export interface FileRoutesByFullPath {
   '/accept-invite': typeof AcceptInviteRoute
   '/confirm-delete-account': typeof ConfirmDeleteAccountRoute
   '/forgot-password': typeof ForgotPasswordRoute
+  '/invite': typeof InviteRoute
   '/login': typeof LoginRoute
   '/magic-login': typeof MagicLoginRoute
   '/pricing': typeof PricingRoute
@@ -297,6 +304,7 @@ export interface FileRoutesByTo {
   '/accept-invite': typeof AcceptInviteRoute
   '/confirm-delete-account': typeof ConfirmDeleteAccountRoute
   '/forgot-password': typeof ForgotPasswordRoute
+  '/invite': typeof InviteRoute
   '/login': typeof LoginRoute
   '/magic-login': typeof MagicLoginRoute
   '/pricing': typeof PricingRoute
@@ -336,6 +344,7 @@ export interface FileRoutesById {
   '/accept-invite': typeof AcceptInviteRoute
   '/confirm-delete-account': typeof ConfirmDeleteAccountRoute
   '/forgot-password': typeof ForgotPasswordRoute
+  '/invite': typeof InviteRoute
   '/login': typeof LoginRoute
   '/magic-login': typeof MagicLoginRoute
   '/pricing': typeof PricingRoute
@@ -378,6 +387,7 @@ export interface FileRouteTypes {
     | '/accept-invite'
     | '/confirm-delete-account'
     | '/forgot-password'
+    | '/invite'
     | '/login'
     | '/magic-login'
     | '/pricing'
@@ -418,6 +428,7 @@ export interface FileRouteTypes {
     | '/accept-invite'
     | '/confirm-delete-account'
     | '/forgot-password'
+    | '/invite'
     | '/login'
     | '/magic-login'
     | '/pricing'
@@ -456,6 +467,7 @@ export interface FileRouteTypes {
     | '/accept-invite'
     | '/confirm-delete-account'
     | '/forgot-password'
+    | '/invite'
     | '/login'
     | '/magic-login'
     | '/pricing'
@@ -498,6 +510,7 @@ export interface RootRouteChildren {
   AcceptInviteRoute: typeof AcceptInviteRoute
   ConfirmDeleteAccountRoute: typeof ConfirmDeleteAccountRoute
   ForgotPasswordRoute: typeof ForgotPasswordRoute
+  InviteRoute: typeof InviteRoute
   LoginRoute: typeof LoginRoute
   MagicLoginRoute: typeof MagicLoginRoute
   PricingRoute: typeof PricingRoute
@@ -541,6 +554,13 @@ declare module '@tanstack/react-router' {
       path: '/forgot-password'
       fullPath: '/forgot-password'
       preLoaderRoute: typeof ForgotPasswordRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/invite': {
+      id: '/invite'
+      path: '/invite'
+      fullPath: '/invite'
+      preLoaderRoute: typeof InviteRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/login': {
@@ -907,6 +927,7 @@ const rootRouteChildren: RootRouteChildren = {
   AcceptInviteRoute: AcceptInviteRoute,
   ConfirmDeleteAccountRoute: ConfirmDeleteAccountRoute,
   ForgotPasswordRoute: ForgotPasswordRoute,
+  InviteRoute: InviteRoute,
   LoginRoute: LoginRoute,
   MagicLoginRoute: MagicLoginRoute,
   PricingRoute: PricingRoute,

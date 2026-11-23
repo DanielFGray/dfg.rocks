@@ -59,6 +59,8 @@ type TestingApi = {
     expires_at?: string;
   }): Promise<string>;
   seedDeleteAccountLink(data: { username: string }): Promise<string>;
+  /** The login link in the account invitation emailed to this address. */
+  invitationLink(email: string): Promise<string>;
   seedLesson(data: {
     username: string;
     scheduled_at?: string;
@@ -264,6 +266,11 @@ export const test = base.extend<{
 
       async seedDeleteAccountLink(data) {
         const res = await get("seed-delete-account", { username: data.username });
+        return redirectUrl(res);
+      },
+
+      async invitationLink(email) {
+        const res = await get("invitation-link", { email });
         return redirectUrl(res);
       },
 
