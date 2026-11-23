@@ -285,24 +285,9 @@ export class Auth extends Context.Service<Auth>()("dfg-rocks/auth", {
                     new HttpError({ status: 400, message: "Invalid or expired magic link" }),
                 }),
               );
-            yield* db.execute(
-              db
-                .updateTable("app_public.user_emails")
-                .set({ is_verified: true })
-                .where("user_id", "=", user.id)
-                .where("is_verified", "=", false),
-            );
-            yield* db.execute(
-              db
-                .updateTable("app_public.users")
-                .set({ is_verified: true })
-                .where("id", "=", user.id)
-                .where("is_verified", "=", false),
-            );
-            return yield* users.sessionFromUser({
-              ...user,
-              is_verified: true,
-            });
+            // generate_magic_link only mails a verified address, so the account is already
+            // verified. The user's other addresses stay as they are: this link proves none of them.
+            return yield* users.sessionFromUser(user);
           }),
         );
       }),
