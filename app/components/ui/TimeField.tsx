@@ -1,3 +1,4 @@
+import { cn } from "tailwind-variants";
 import { TimeField as AriaTimeField, DateInput, DateSegment, Label } from "react-aria-components";
 import type { TimeValue } from "react-aria-components";
 
@@ -30,7 +31,7 @@ export function TimeField({
       onChange={onChange}
       isDisabled={isDisabled}
       isRequired={isRequired}
-      className={["flex flex-col gap-1", className].filter(Boolean).join(" ")}
+      className={cn("flex flex-col gap-1", className)}
       {...rest}
     >
       <Label className="text-sm font-medium text-muted">{label}</Label>

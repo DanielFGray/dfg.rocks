@@ -7,6 +7,7 @@ import { Main } from "../../components/ui/Container.js";
 import { Card } from "../../components/ui/Card.js";
 import { EmptyState } from "../../components/ui/EmptyState.js";
 import { formatCents } from "../../components/billing/helpers.js";
+import { Table, TableHead, Tr, Th, Td } from "../../components/ui/Table.js";
 
 export const Route = createFileRoute("/_authed/billing/")({
   head: () => ({ meta: [{ title: "Billing | DFG Portal" }] }),
@@ -43,12 +44,8 @@ function BillingPage() {
       <div className="mb-6 grid gap-4 sm:grid-cols-3">
         <Card>
           <div className="p-4">
-            <p className="text-xs font-medium tracking-wide text-muted uppercase">
-              Outstanding
-            </p>
-            <p className="mt-1 text-2xl font-bold text-primary">
-              {formatCents(totalOutstanding)}
-            </p>
+            <p className="text-xs font-medium tracking-wide text-muted uppercase">Outstanding</p>
+            <p className="mt-1 text-2xl font-bold text-primary">{formatCents(totalOutstanding)}</p>
           </div>
         </Card>
         <Card>
@@ -63,9 +60,7 @@ function BillingPage() {
         </Card>
         <Card>
           <div className="p-4">
-            <p className="text-xs font-medium tracking-wide text-muted uppercase">
-              Payer Credit
-            </p>
+            <p className="text-xs font-medium tracking-wide text-muted uppercase">Payer Credit</p>
             <p className="mt-1 text-2xl font-bold text-green-600 dark:text-green-400">
               {formatCents(totalCredit)}
             </p>
@@ -82,53 +77,44 @@ function BillingPage() {
       ) : summaries.length === 0 ? (
         <EmptyState message="No payers found." />
       ) : (
-        <div className="overflow-x-auto rounded-lg border border-overlay/10">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-overlay/4 text-xs text-muted">
-              <tr>
-                <th className="px-4 py-3 font-medium">Payer</th>
-                <th className="px-4 py-3 font-medium">Pays for</th>
-                <th className="px-4 py-3 font-medium">Bills</th>
-                <th className="px-4 py-3 font-medium">Total Billed</th>
-                <th className="px-4 py-3 font-medium">Total Paid</th>
-                <th className="px-4 py-3 font-medium">Outstanding</th>
-                <th className="px-4 py-3 font-medium">Overdue</th>
-                <th className="px-4 py-3 font-medium">Credit</th>
-              </tr>
-            </thead>
-            <tbody>
-              {summaries.map((p) => (
-                <tr
-                  key={p.payer_id}
-                  className="border-t border-overlay/8 hover:bg-overlay/4"
-                >
-                  <td className="px-4 py-3">
-                    <Link
-                      to="/billing/payers/$payerId"
-                      params={{ payerId: p.payer_id }}
-                      className="font-medium text-accent hover:underline"
-                    >
-                      {p.payer_name}
-                    </Link>
-                  </td>
-                  <td className="px-4 py-3 text-muted">
-                    {p.students.map((s) => s.name).join(", ") || "—"}
-                  </td>
-                  <td className="px-4 py-3 text-muted">{p.bill_count}</td>
-                  <td className="px-4 py-3">{formatCents(p.total_billed_cents)}</td>
-                  <td className="px-4 py-3">{formatCents(p.total_paid_cents)}</td>
-                  <td className="px-4 py-3 font-medium">{formatCents(p.outstanding_cents)}</td>
-                  <td className="px-4 py-3 text-red-600 dark:text-red-400">
-                    {p.overdue_cents > 0 ? formatCents(p.overdue_cents) : "—"}
-                  </td>
-                  <td className="px-4 py-3 text-green-600 dark:text-green-400">
-                    {p.credit_balance_cents > 0 ? formatCents(p.credit_balance_cents) : "—"}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <Table>
+          <TableHead>
+            <Th>Payer</Th>
+            <Th>Pays for</Th>
+            <Th>Bills</Th>
+            <Th>Total Billed</Th>
+            <Th>Total Paid</Th>
+            <Th>Outstanding</Th>
+            <Th>Overdue</Th>
+            <Th>Credit</Th>
+          </TableHead>
+          <tbody>
+            {summaries.map((p) => (
+              <Tr key={p.payer_id} hover>
+                <Td>
+                  <Link
+                    to="/billing/payers/$payerId"
+                    params={{ payerId: p.payer_id }}
+                    className="font-medium text-accent hover:underline"
+                  >
+                    {p.payer_name}
+                  </Link>
+                </Td>
+                <Td className="text-muted">{p.students.map((s) => s.name).join(", ") || "—"}</Td>
+                <Td className="text-muted">{p.bill_count}</Td>
+                <Td>{formatCents(p.total_billed_cents)}</Td>
+                <Td>{formatCents(p.total_paid_cents)}</Td>
+                <Td className="font-medium">{formatCents(p.outstanding_cents)}</Td>
+                <Td className="text-red-600 dark:text-red-400">
+                  {p.overdue_cents > 0 ? formatCents(p.overdue_cents) : "—"}
+                </Td>
+                <Td className="text-green-600 dark:text-green-400">
+                  {p.credit_balance_cents > 0 ? formatCents(p.credit_balance_cents) : "—"}
+                </Td>
+              </Tr>
+            ))}
+          </tbody>
+        </Table>
       )}
     </Main>
   );

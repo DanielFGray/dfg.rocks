@@ -11,6 +11,7 @@ import {
   billStatusBadge,
   statusLabel,
 } from "../../../../components/billing/helpers.js";
+import { Table, TableHead, Tr, Th, Td } from "../../../../components/ui/Table.js";
 
 export const Route = createFileRoute("/_authed/family/billing/bills")({
   head: () => ({ meta: [{ title: "Bills | DFG Portal" }] }),
@@ -65,59 +66,50 @@ function BillsPage() {
       {bills.length === 0 ? (
         <EmptyState message="No bills found." />
       ) : (
-        <div className="overflow-x-auto rounded-lg border border-overlay/10">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-overlay/4 text-xs text-muted">
-              <tr>
-                <th className="px-4 py-3 font-medium">Bill #</th>
-                <th className="px-4 py-3 font-medium">Status</th>
-                <th className="px-4 py-3 font-medium">Period</th>
-                <th className="px-4 py-3 font-medium">Due</th>
-                <th className="px-4 py-3 font-medium">Total</th>
-                <th className="px-4 py-3 font-medium">PDF</th>
-              </tr>
-            </thead>
-            <tbody>
-              {bills.map((bill: any) => (
-                <tr
-                  key={bill.id}
-                  className="border-t border-overlay/8 hover:bg-overlay/4"
-                >
-                  <td className="px-4 py-3 font-medium">
-                    <Link
-                      to="/family/billing/bills/$billId"
-                      params={{ billId: bill.id }}
-                      className="text-accent hover:underline"
-                    >
-                      #{bill.bill_number}
-                    </Link>
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className={billStatusBadge(bill.status)}>{statusLabel(bill.status)}</span>
-                  </td>
-                  <td className="px-4 py-3 text-muted">
-                    {dateLabel(bill.billing_period_start)} &ndash;{" "}
-                    {dateLabel(bill.billing_period_end)}
-                  </td>
-                  <td className="px-4 py-3">
-                    {bill.due_date ? dateLabel(bill.due_date) : "\u2014"}
-                  </td>
-                  <td className="px-4 py-3 font-medium">{formatCents(bill.total_cents)}</td>
-                  <td className="px-4 py-3">
-                    <a
-                      href={`/api/family/billing/bills/${bill.id}/pdf`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-sm text-accent hover:underline"
-                    >
-                      PDF
-                    </a>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <Table>
+          <TableHead>
+            <Th>Bill #</Th>
+            <Th>Status</Th>
+            <Th>Period</Th>
+            <Th>Due</Th>
+            <Th>Total</Th>
+            <Th>PDF</Th>
+          </TableHead>
+          <tbody>
+            {bills.map((bill: any) => (
+              <Tr key={bill.id} hover>
+                <Td className="font-medium">
+                  <Link
+                    to="/family/billing/bills/$billId"
+                    params={{ billId: bill.id }}
+                    className="text-accent hover:underline"
+                  >
+                    #{bill.bill_number}
+                  </Link>
+                </Td>
+                <Td>
+                  <span className={billStatusBadge(bill.status)}>{statusLabel(bill.status)}</span>
+                </Td>
+                <Td className="text-muted">
+                  {dateLabel(bill.billing_period_start)} &ndash;{" "}
+                  {dateLabel(bill.billing_period_end)}
+                </Td>
+                <Td>{bill.due_date ? dateLabel(bill.due_date) : "\u2014"}</Td>
+                <Td className="font-medium">{formatCents(bill.total_cents)}</Td>
+                <Td>
+                  <a
+                    href={`/api/family/billing/bills/${bill.id}/pdf`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-sm text-accent hover:underline"
+                  >
+                    PDF
+                  </a>
+                </Td>
+              </Tr>
+            ))}
+          </tbody>
+        </Table>
       )}
     </Main>
   );

@@ -25,15 +25,11 @@ export function ModuleCard({
               params={{ courseId, moduleId: mod.id }}
               className="no-underline"
             >
-              <Button variant="ghost" className="px-2 py-1 text-xs">
+              <Button variant="ghost" size="xs">
                 Edit
               </Button>
             </Link>
-            <Button
-              variant="ghost"
-              onClick={() => onDelete(mod)}
-              className="px-2 py-1 text-xs text-red-600 hover:text-red-500 dark:text-red-400 dark:hover:text-red-300"
-            >
+            <Button variant="ghost" onClick={() => onDelete(mod)} size="xs" tone="danger">
               Delete
             </Button>
           </div>

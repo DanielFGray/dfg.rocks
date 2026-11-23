@@ -53,9 +53,7 @@ export const Route = createFileRoute("/_authed/my-lessons")({
   loader: () => getMyLessonsPageData(),
   component: MyLessonsPage,
   pendingComponent: () => (
-    <main className="mx-auto max-w-[1100px] px-5 pt-20 pb-16 text-muted md:px-8">
-      Loading...
-    </main>
+    <main className="mx-auto max-w-[1100px] px-5 pt-20 pb-16 text-muted md:px-8">Loading...</main>
   ),
 });
 
@@ -165,27 +163,19 @@ function NoteSection({ note }: { note: LessonNote }) {
       ) : null}
       {note.homework ? (
         <div>
-          <p className="mb-1 text-xs font-semibold tracking-wider text-muted uppercase">
-            Homework
-          </p>
+          <p className="mb-1 text-xs font-semibold tracking-wider text-muted uppercase">Homework</p>
           <p className="text-sm text-primary">{note.homework}</p>
         </div>
       ) : null}
       {note.progress_observations ? (
         <div>
-          <p className="mb-1 text-xs font-semibold tracking-wider text-muted uppercase">
-            Progress
-          </p>
-          <p className="text-sm text-primary">
-            {note.progress_observations}
-          </p>
+          <p className="mb-1 text-xs font-semibold tracking-wider text-muted uppercase">Progress</p>
+          <p className="text-sm text-primary">{note.progress_observations}</p>
         </div>
       ) : null}
       {note.notes ? (
         <div>
-          <p className="mb-1 text-xs font-semibold tracking-wider text-muted uppercase">
-            Notes
-          </p>
+          <p className="mb-1 text-xs font-semibold tracking-wider text-muted uppercase">Notes</p>
           <p className="text-sm text-primary">{note.notes}</p>
         </div>
       ) : null}
@@ -294,9 +284,7 @@ function MyLessonsPage() {
       ) : (
         <div className="flex flex-col gap-3">
           {lessons.map((lesson) => {
-            const badge =
-              statusBadgeClass[lesson.status] ??
-              "bg-overlay/10 text-muted";
+            const badge = statusBadgeClass[lesson.status] ?? "bg-overlay/10 text-muted";
             const label = statusLabel[lesson.status] ?? lesson.status;
             const location = locationLabel[lesson.location_type] ?? lesson.location_type;
             const note = noteMap.get(lesson.id);
@@ -328,7 +316,7 @@ function MyLessonsPage() {
                       <div className="flex shrink-0 flex-wrap justify-end gap-2">
                         <Button
                           variant="outline"
-                          className="px-3 py-1.5 text-xs"
+                          size="sm"
                           data-testid="reschedule-my-lesson"
                           onClick={() => openReschedule(lesson)}
                         >
@@ -336,7 +324,7 @@ function MyLessonsPage() {
                         </Button>
                         <Button
                           variant="danger"
-                          className="px-3 py-1.5 text-xs"
+                          size="sm"
                           data-testid="cancel-my-lesson"
                           onClick={() => openCancel(lesson)}
                         >
@@ -359,9 +347,7 @@ function MyLessonsPage() {
                             <NoteSection note={note} />
                           ) : (
                             <div className="mt-4 border-t border-overlay/5 pt-4">
-                              <p className="text-sm text-muted">
-                                No notes for this lesson.
-                              </p>
+                              <p className="text-sm text-muted">No notes for this lesson.</p>
                             </div>
                           )}
                         </DisclosurePanel>
@@ -396,10 +382,7 @@ function MyLessonsPage() {
           ) : null}
 
           {policyMutation.isPending ? (
-            <p
-              data-testid="cancellation-policy-loading"
-              className="text-sm text-muted"
-            >
+            <p data-testid="cancellation-policy-loading" className="text-sm text-muted">
               Loading the cancellation policy...
             </p>
           ) : null}
@@ -489,9 +472,7 @@ function MyLessonsPage() {
             </p>
           ) : null}
           {policyMutation.isPending ? (
-            <p className="text-sm text-muted">
-              Loading the cancellation policy...
-            </p>
+            <p className="text-sm text-muted">Loading the cancellation policy...</p>
           ) : null}
           {policyMutation.data ? <PolicySummary policy={policyMutation.data} /> : null}
           {policyMutation.isError ? (

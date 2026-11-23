@@ -90,13 +90,11 @@ export function AssignmentNotesPanel({ materialId }: { materialId: string }) {
       <div className="flex flex-col gap-2 rounded-xl border border-overlay/6 bg-card p-4">
         <div className="flex items-center justify-between">
           <span className="text-sm font-medium text-muted">Notes</span>
-          <Button variant="ghost" onClick={startEditing} className="px-3 py-1 text-xs">
+          <Button variant="ghost" onClick={startEditing} size="sm">
             Edit
           </Button>
         </div>
-        <p className="text-sm whitespace-pre-wrap text-primary/90">
-          {note.body}
-        </p>
+        <p className="text-sm whitespace-pre-wrap text-primary/90">{note.body}</p>
       </div>
     );
   }
@@ -104,7 +102,7 @@ export function AssignmentNotesPanel({ materialId }: { materialId: string }) {
   return (
     <div className="flex items-center justify-between rounded-xl border border-dashed border-overlay/6 bg-card/50 px-4 py-3">
       <span className="text-sm text-muted/60">No notes yet</span>
-      <Button variant="ghost" onClick={startEditing} className="px-3 py-1 text-xs">
+      <Button variant="ghost" onClick={startEditing} size="sm">
         Add Note
       </Button>
     </div>

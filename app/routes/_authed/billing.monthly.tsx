@@ -11,6 +11,7 @@ import { EmptyState } from "../../components/ui/EmptyState.js";
 import { MonthlyPaymentModal } from "../../components/billing/MonthlyPaymentModal.js";
 import { LessonBillsSection } from "../../components/billing/LessonBillsSection.js";
 import { dateLabel, formatCents } from "../../components/billing/helpers.js";
+import { Table, TableHead, Tr, Th, Td } from "../../components/ui/Table.js";
 
 export const Route = createFileRoute("/_authed/billing/monthly")({
   head: () => ({ meta: [{ title: "Payments | DFG Portal" }] }),
@@ -53,9 +54,7 @@ function MonthlyPaymentsPage() {
         />
       </div>
 
-      <h2 className="mb-4 text-lg font-semibold text-primary">
-        Monthly prepaid
-      </h2>
+      <h2 className="mb-4 text-lg font-semibold text-primary">Monthly prepaid</h2>
       {status.isLoading ? (
         <p className="text-sm text-muted">Loading payments...</p>
       ) : status.error ? (
@@ -69,60 +68,48 @@ function MonthlyPaymentsPage() {
           <p className="mb-3 text-sm text-muted" data-testid="unpaid-count">
             {unpaid === 0 ? "Everyone has paid." : `${unpaid} of ${rows.length} not paid.`}
           </p>
-          <div className="overflow-x-auto rounded-lg border border-overlay/10">
-            <table className="w-full text-left text-sm">
-              <thead className="bg-overlay/4 text-xs text-muted">
-                <tr>
-                  <th className="px-4 py-3 font-medium">Student</th>
-                  <th className="px-4 py-3 font-medium">Status</th>
-                  <th className="px-4 py-3 font-medium">Amount</th>
-                  <th className="px-4 py-3 font-medium">Paid on</th>
-                  <th className="px-4 py-3 font-medium">Notes</th>
-                  <th className="px-4 py-3" />
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((row) => (
-                  <tr
-                    key={row.student_id}
-                    data-testid="monthly-payment-row"
-                    className="border-t border-overlay/8"
-                  >
-                    <td className="px-4 py-3">
-                      <Link
-                        to="/people/$id"
-                        params={{ id: row.student_id }}
-                        className="font-medium text-accent hover:underline"
-                      >
-                        {row.student_name}
-                      </Link>
-                    </td>
-                    <td className="px-4 py-3">
-                      {row.payment ? (
-                        <span className="font-medium text-green-600 dark:text-green-400">Paid</span>
-                      ) : (
-                        <span className="font-medium text-red-600 dark:text-red-400">Not paid</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3">
-                      {row.payment ? formatCents(row.payment.amount_cents) : "—"}
-                    </td>
-                    <td className="px-4 py-3 text-muted">
-                      {row.payment ? dateLabel(row.payment.paid_at) : "—"}
-                    </td>
-                    <td className="px-4 py-3 text-muted">
-                      {row.payment?.notes ?? ""}
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      {row.payment ? null : (
-                        <Button onClick={() => setRecording(row)}>Record payment</Button>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <Table>
+            <TableHead>
+              <Th>Student</Th>
+              <Th>Status</Th>
+              <Th>Amount</Th>
+              <Th>Paid on</Th>
+              <Th>Notes</Th>
+              <Th />
+            </TableHead>
+            <tbody>
+              {rows.map((row) => (
+                <Tr key={row.student_id} data-testid="monthly-payment-row">
+                  <Td>
+                    <Link
+                      to="/people/$id"
+                      params={{ id: row.student_id }}
+                      className="font-medium text-accent hover:underline"
+                    >
+                      {row.student_name}
+                    </Link>
+                  </Td>
+                  <Td>
+                    {row.payment ? (
+                      <span className="font-medium text-green-600 dark:text-green-400">Paid</span>
+                    ) : (
+                      <span className="font-medium text-red-600 dark:text-red-400">Not paid</span>
+                    )}
+                  </Td>
+                  <Td>{row.payment ? formatCents(row.payment.amount_cents) : "—"}</Td>
+                  <Td className="text-muted">
+                    {row.payment ? dateLabel(row.payment.paid_at) : "—"}
+                  </Td>
+                  <Td className="text-muted">{row.payment?.notes ?? ""}</Td>
+                  <Td className="text-right">
+                    {row.payment ? null : (
+                      <Button onClick={() => setRecording(row)}>Record payment</Button>
+                    )}
+                  </Td>
+                </Tr>
+              ))}
+            </tbody>
+          </Table>
         </>
       )}
 

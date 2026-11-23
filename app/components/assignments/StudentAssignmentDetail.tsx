@@ -4,7 +4,12 @@ import { queryOptions, useMutation, useQuery, useQueryClient } from "@tanstack/r
 import { api } from "../../lib/api.js";
 import { getErrorMessage } from "../../lib/errors.js";
 import { useAuth } from "../../lib/hooks/useAuth.js";
-import type { AssignedMaterial, AssignmentTracking, Material, PracticeLog } from "../../../shared/schemas.js";
+import type {
+  AssignedMaterial,
+  AssignmentTracking,
+  Material,
+  PracticeLog,
+} from "../../../shared/schemas.js";
 import { findNotationTrack, formatNotationTrackLabel } from "../../../shared/notationTracks.js";
 import { MaterialPreview } from "../library/MaterialPreview.js";
 import type { StaticScore } from "gigbag.js/static";
@@ -282,7 +287,7 @@ export function StudentAssignmentDetail({
               />
               <Button
                 variant="outline"
-                className="px-3 py-1.5 text-xs"
+                size="sm"
                 disabled={reviewMutation.isPending || selectedStars === null}
                 onClick={() => {
                   if (selectedStars === null) return;
@@ -306,15 +311,10 @@ export function StudentAssignmentDetail({
         {reviews.length === 0 ? null : (
           <div className="mt-4 flex flex-col gap-2">
             {reviews.map((review) => (
-              <div
-                key={review.id}
-                className="rounded-lg border border-overlay/6 px-3 py-3"
-              >
+              <div key={review.id} className="rounded-lg border border-overlay/6 px-3 py-3">
                 <div className="flex items-center justify-between gap-3">
                   <StarsDisplay stars={review.stars} />
-                  <span className="text-xs text-muted/60">
-                    {formatDate(review.created_at)}
-                  </span>
+                  <span className="text-xs text-muted/60">{formatDate(review.created_at)}</span>
                 </div>
               </div>
             ))}
@@ -345,32 +345,21 @@ export function StudentAssignmentDetail({
 
             {practiceLogs.length > 0 ? (
               <div className="mt-4 flex flex-col gap-2">
-                <h4 className="text-xs font-medium text-muted">
-                  Practice History
-                </h4>
+                <h4 className="text-xs font-medium text-muted">Practice History</h4>
                 {practiceLogs.map((log: PracticeLog) => (
-                  <div
-                    key={log.id}
-                    className="rounded-lg border border-overlay/6 px-3 py-2"
-                  >
+                  <div key={log.id} className="rounded-lg border border-overlay/6 px-3 py-2">
                     <div className="flex items-center justify-between gap-3">
                       <div className="flex items-center gap-2">
                         {log.rating != null ? (
                           <StarsDisplay stars={log.rating} />
                         ) : (
-                          <span className="text-xs text-muted/60">
-                            &mdash;
-                          </span>
+                          <span className="text-xs text-muted/60">&mdash;</span>
                         )}
                         {log.duration_minutes != null ? (
-                          <span className="text-xs text-muted">
-                            {log.duration_minutes}m
-                          </span>
+                          <span className="text-xs text-muted">{log.duration_minutes}m</span>
                         ) : null}
                       </div>
-                      <span className="text-xs text-muted/60">
-                        {formatDate(log.logged_at)}
-                      </span>
+                      <span className="text-xs text-muted/60">{formatDate(log.logged_at)}</span>
                     </div>
                   </div>
                 ))}

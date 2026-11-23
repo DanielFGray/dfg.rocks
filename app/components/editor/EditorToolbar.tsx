@@ -68,10 +68,10 @@ export function EditorToolbar({
         />
       </Tooltip>
       <div className="mx-1 h-5 w-px bg-overlay/8" />
-      <Button variant="ghost" onClick={onEmbedMaterial} className="px-2.5 py-1 text-xs text-accent">
+      <Button variant="ghost" onClick={onEmbedMaterial} size="xs" tone="accent">
         + Material
       </Button>
-      <Button variant="ghost" onClick={onInsertScore} className="px-2.5 py-1 text-xs text-accent">
+      <Button variant="ghost" onClick={onInsertScore} size="xs" tone="accent">
         + Score
       </Button>
     </div>
@@ -94,9 +94,7 @@ function ToolbarButton({
       type="button"
       onClick={onClick}
       className={`cursor-pointer rounded px-2 py-1 text-xs transition-colors ${className} ${
-        active
-          ? "bg-accent/20 text-accent"
-          : "text-muted hover:bg-overlay/5 hover:text-primary"
+        active ? "bg-accent/20 text-accent" : "text-muted hover:bg-overlay/5 hover:text-primary"
       }`}
     >
       {label}

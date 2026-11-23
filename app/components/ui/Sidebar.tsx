@@ -22,18 +22,10 @@ export const Sidebar = ({ open, onClose, title, children, footer }: SidebarProps
     <Modal className="absolute top-0 right-0 h-full w-72 outline-hidden">
       <Dialog className="flex h-full flex-col border-l border-overlay/6 bg-card shadow-2xl outline-hidden">
         <div className="flex items-center justify-between border-b border-overlay/6 px-6 py-4">
-          <Heading
-            slot="title"
-            className="text-lg font-semibold text-primary"
-          >
+          <Heading slot="title" className="text-lg font-semibold text-primary">
             {title}
           </Heading>
-          <Button
-            variant="ghost"
-            onClick={onClose}
-            aria-label="Close"
-            className="rounded-lg p-1.5 px-1.5 py-1.5 text-muted transition-colors hover:bg-overlay/5 hover:text-primary"
-          >
+          <Button variant="ghost" onClick={onClose} aria-label="Close" size="icon">
             <svg
               xmlns="http://www.w3.org/2000/svg"
               width="18"
@@ -51,9 +43,7 @@ export const Sidebar = ({ open, onClose, title, children, footer }: SidebarProps
           </Button>
         </div>
         <div className="flex flex-1 flex-col overflow-y-auto">{children}</div>
-        {footer ? (
-          <div className="border-t border-overlay/6">{footer}</div>
-        ) : null}
+        {footer ? <div className="border-t border-overlay/6">{footer}</div> : null}
       </Dialog>
     </Modal>
   </ModalOverlay>

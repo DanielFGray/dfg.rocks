@@ -19,6 +19,7 @@ import { Select } from "../ui/Select.js";
 import { Switch } from "../ui/Switch.js";
 import { Textarea } from "../ui/Textarea.js";
 import { MonthlyPaymentModal } from "../billing/MonthlyPaymentModal.js";
+import { Table, TableHead, Tr, Th, Td } from "../ui/Table.js";
 
 const locationOptions = [
   { value: "studio", label: "Studio" },
@@ -114,10 +115,7 @@ export function StudentRecurringBilling({ studentId }: { studentId: string }) {
       <section aria-labelledby="student-rates-heading">
         <div className="mb-4 flex items-center justify-between gap-4">
           <div>
-            <h2
-              id="student-rates-heading"
-              className="text-xl font-semibold text-primary"
-            >
+            <h2 id="student-rates-heading" className="text-xl font-semibold text-primary">
               Rates
             </h2>
             <p className="mt-1 text-sm text-muted">
@@ -126,7 +124,8 @@ export function StudentRecurringBilling({ studentId }: { studentId: string }) {
           </div>
           <Button
             variant="outline"
-            className="shrink-0 px-3 py-1.5 text-xs"
+            size="sm"
+            className="shrink-0"
             data-testid="add-student-rate"
             onClick={() => {
               setEditingRate(null);
@@ -161,13 +160,11 @@ export function StudentRecurringBilling({ studentId }: { studentId: string }) {
                         ? "Monthly prepaid"
                         : "Single booking"}
                     </span>
-                    {rate.notes ? (
-                      <p className="mt-2 text-xs text-muted">{rate.notes}</p>
-                    ) : null}
+                    {rate.notes ? <p className="mt-2 text-xs text-muted">{rate.notes}</p> : null}
                   </div>
                   <Button
                     variant="ghost"
-                    className="px-2 py-1 text-xs"
+                    size="xs"
                     data-testid={`edit-student-rate-${rate.id}`}
                     onClick={() => {
                       setEditingRate(rate);
@@ -191,10 +188,7 @@ export function StudentRecurringBilling({ studentId }: { studentId: string }) {
       <section aria-labelledby="recurring-schedules-heading">
         <div className="mb-4 flex items-center justify-between gap-4">
           <div>
-            <h2
-              id="recurring-schedules-heading"
-              className="text-xl font-semibold text-primary"
-            >
+            <h2 id="recurring-schedules-heading" className="text-xl font-semibold text-primary">
               Recurring scheduling
             </h2>
             <p className="mt-1 text-sm text-muted">
@@ -203,7 +197,8 @@ export function StudentRecurringBilling({ studentId }: { studentId: string }) {
           </div>
           <Button
             variant="outline"
-            className="shrink-0 px-3 py-1.5 text-xs"
+            size="sm"
+            className="shrink-0"
             data-testid="add-recurring-schedule"
             disabled={monthlyRates.length === 0}
             onClick={() => {
@@ -251,7 +246,7 @@ export function StudentRecurringBilling({ studentId }: { studentId: string }) {
                   </div>
                   <Button
                     variant="ghost"
-                    className="px-2 py-1 text-xs"
+                    size="xs"
                     data-testid={`edit-recurring-schedule-${schedule.id}`}
                     onClick={() => {
                       setEditingSchedule(schedule);
@@ -272,10 +267,7 @@ export function StudentRecurringBilling({ studentId }: { studentId: string }) {
       <section aria-labelledby="monthly-payments-heading">
         <div className="mb-4 flex items-center justify-between gap-4">
           <div>
-            <h2
-              id="monthly-payments-heading"
-              className="text-xl font-semibold text-primary"
-            >
+            <h2 id="monthly-payments-heading" className="text-xl font-semibold text-primary">
               Monthly payments
             </h2>
             <p className="mt-1 text-sm text-muted">
@@ -284,7 +276,8 @@ export function StudentRecurringBilling({ studentId }: { studentId: string }) {
           </div>
           <Button
             variant="outline"
-            className="shrink-0 px-3 py-1.5 text-xs"
+            size="sm"
+            className="shrink-0"
             data-testid="record-monthly-payment"
             disabled={monthlyRates.length === 0}
             onClick={() => setPaymentOpen(true)}
@@ -297,37 +290,27 @@ export function StudentRecurringBilling({ studentId }: { studentId: string }) {
         ) : payments.error ? (
           <ErrorMessage error={payments.error} />
         ) : payments.data?.length ? (
-          <div className="overflow-x-auto rounded-lg border border-overlay/10">
-            <table className="w-full text-left text-sm">
-              <thead className="bg-overlay/4 text-xs text-muted">
-                <tr>
-                  <th className="px-4 py-3 font-medium">Billing month</th>
-                  <th className="px-4 py-3 font-medium">Amount</th>
-                  <th className="px-4 py-3 font-medium">Paid</th>
-                  <th className="px-4 py-3 font-medium">Generation</th>
-                </tr>
-              </thead>
-              <tbody>
-                {payments.data.map((payment) => (
-                  <tr
-                    key={payment.id}
-                    data-testid="monthly-payment-row"
-                    className="border-t border-overlay/8"
-                  >
-                    <td className="px-4 py-3 font-medium text-primary">
-                      {dateLabel(payment.billing_month)}
-                    </td>
-                    <td className="px-4 py-3">{formatMoney(payment.amount_cents)}</td>
-                    <td className="px-4 py-3">{dateLabel(payment.paid_at)}</td>
-                    <td className="px-4 py-3" data-testid="payment-generation-status">
-                      {statusLabel(payment.generation_status)}
-                      {payment.generation_error ? ` · ${payment.generation_error}` : ""}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <Table>
+            <TableHead>
+              <Th>Billing month</Th>
+              <Th>Amount</Th>
+              <Th>Paid</Th>
+              <Th>Generation</Th>
+            </TableHead>
+            <tbody>
+              {payments.data.map((payment) => (
+                <Tr key={payment.id} data-testid="monthly-payment-row">
+                  <Td className="font-medium text-primary">{dateLabel(payment.billing_month)}</Td>
+                  <Td>{formatMoney(payment.amount_cents)}</Td>
+                  <Td>{dateLabel(payment.paid_at)}</Td>
+                  <Td data-testid="payment-generation-status">
+                    {statusLabel(payment.generation_status)}
+                    {payment.generation_error ? ` · ${payment.generation_error}` : ""}
+                  </Td>
+                </Tr>
+              ))}
+            </tbody>
+          </Table>
         ) : (
           <EmptyState message="No monthly payments recorded." />
         )}

@@ -9,6 +9,7 @@ import { ConfirmDialog } from "../ui/ConfirmDialog.js";
 import { EmptyState } from "../ui/EmptyState.js";
 import { getErrorMessage } from "../../lib/errors.js";
 import { dateTimeLabel, formatCents } from "./helpers.js";
+import { Table, TableHead, Tr, Th, Td } from "../ui/Table.js";
 
 /**
  * The month's single-booking lesson bills and whether each is paid. "Record cash"
@@ -58,10 +59,7 @@ export function LessonBillsSection({ month }: { month: string }) {
         <EmptyState message="No single lessons were billed in this month." />
       ) : (
         <>
-          <p
-            className="mb-3 text-sm text-muted"
-            data-testid="lesson-unpaid-count"
-          >
+          <p className="mb-3 text-sm text-muted" data-testid="lesson-unpaid-count">
             {unpaid === 0 ? "Every lesson is paid." : `${unpaid} of ${rows.length} not paid.`}
           </p>
           {recordCash.error ? (
@@ -69,70 +67,60 @@ export function LessonBillsSection({ month }: { month: string }) {
               {getErrorMessage(recordCash.error)}
             </p>
           ) : null}
-          <div className="overflow-x-auto rounded-lg border border-overlay/10">
-            <table className="w-full text-left text-sm">
-              <thead className="bg-overlay/4 text-xs text-muted">
-                <tr>
-                  <th className="px-4 py-3 font-medium">Lesson</th>
-                  <th className="px-4 py-3 font-medium">Student</th>
-                  <th className="px-4 py-3 font-medium">Paid by</th>
-                  <th className="px-4 py-3 font-medium">Amount</th>
-                  <th className="px-4 py-3 font-medium">Status</th>
-                  <th className="px-4 py-3" />
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((row) => (
-                  <tr
-                    key={row.bill_id}
-                    data-testid="lesson-bill-row"
-                    className="border-t border-overlay/8"
-                  >
-                    <td className="px-4 py-3 text-muted">
-                      {dateTimeLabel(row.scheduled_at)}
-                    </td>
-                    <td className="px-4 py-3">
-                      <Link
-                        to="/people/$id"
-                        params={{ id: row.student_id }}
-                        className="font-medium text-accent hover:underline"
-                      >
-                        {row.student_name}
-                      </Link>
-                    </td>
-                    <td className="px-4 py-3">
-                      <Link
-                        to="/billing/payers/$payerId"
-                        params={{ payerId: row.payer_id }}
-                        className="text-accent hover:underline"
-                      >
-                        {row.payer_name}
-                      </Link>
-                    </td>
-                    <td className="px-4 py-3">{formatCents(row.total_cents)}</td>
-                    <td className="px-4 py-3">
-                      {row.outstanding_cents === 0 ? (
-                        <span className="font-medium text-green-600 dark:text-green-400">Paid</span>
-                      ) : (
-                        <span className="font-medium text-red-600 dark:text-red-400">
-                          {row.outstanding_cents === row.total_cents
-                            ? "Not paid"
-                            : `${formatCents(row.outstanding_cents)} owed`}
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      {row.outstanding_cents === 0 ? null : (
-                        <Button onClick={() => setRecording(row)} disabled={recordCash.isPending}>
-                          Record cash
-                        </Button>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <Table>
+            <TableHead>
+              <Th>Lesson</Th>
+              <Th>Student</Th>
+              <Th>Paid by</Th>
+              <Th>Amount</Th>
+              <Th>Status</Th>
+              <Th />
+            </TableHead>
+            <tbody>
+              {rows.map((row) => (
+                <Tr key={row.bill_id} data-testid="lesson-bill-row">
+                  <Td className="text-muted">{dateTimeLabel(row.scheduled_at)}</Td>
+                  <Td>
+                    <Link
+                      to="/people/$id"
+                      params={{ id: row.student_id }}
+                      className="font-medium text-accent hover:underline"
+                    >
+                      {row.student_name}
+                    </Link>
+                  </Td>
+                  <Td>
+                    <Link
+                      to="/billing/payers/$payerId"
+                      params={{ payerId: row.payer_id }}
+                      className="text-accent hover:underline"
+                    >
+                      {row.payer_name}
+                    </Link>
+                  </Td>
+                  <Td>{formatCents(row.total_cents)}</Td>
+                  <Td>
+                    {row.outstanding_cents === 0 ? (
+                      <span className="font-medium text-green-600 dark:text-green-400">Paid</span>
+                    ) : (
+                      <span className="font-medium text-red-600 dark:text-red-400">
+                        {row.outstanding_cents === row.total_cents
+                          ? "Not paid"
+                          : `${formatCents(row.outstanding_cents)} owed`}
+                      </span>
+                    )}
+                  </Td>
+                  <Td className="text-right">
+                    {row.outstanding_cents === 0 ? null : (
+                      <Button onClick={() => setRecording(row)} disabled={recordCash.isPending}>
+                        Record cash
+                      </Button>
+                    )}
+                  </Td>
+                </Tr>
+              ))}
+            </tbody>
+          </Table>
         </>
       )}
 

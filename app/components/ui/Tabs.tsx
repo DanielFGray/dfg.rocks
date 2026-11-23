@@ -1,3 +1,4 @@
+import { cn } from "tailwind-variants";
 import type { ReactNode } from "react";
 import type { Key } from "@react-types/shared";
 import {
@@ -54,11 +55,7 @@ export function Tabs({
 
 export function TabList({ children, className }: TabListProps) {
   return (
-    <AriaTabList
-      className={["flex gap-1 rounded-xl bg-overlay/4 p-1", className]
-        .filter(Boolean)
-        .join(" ")}
-    >
+    <AriaTabList className={cn("flex gap-1 rounded-xl bg-overlay/4 p-1", className)}>
       {children}
     </AriaTabList>
   );
@@ -69,15 +66,13 @@ export function Tab({ id, children, className, "data-testid": pwid }: TabProps) 
     <AriaTab
       id={id}
       data-testid={pwid}
-      className={[
+      className={cn(
         "flex-1 cursor-pointer rounded-lg py-2.5 text-sm font-medium transition-colors text-center",
         "data-selected:bg-overlay/8 data-selected:text-primary",
         "text-muted hover:text-primary",
         "data-focus-visible:outline-hidden data-focus-visible:ring-2 data-focus-visible:ring-accent/60 data-focus-visible:ring-offset-2",
         className,
-      ]
-        .filter(Boolean)
-        .join(" ")}
+      )}
     >
       {children}
     </AriaTab>

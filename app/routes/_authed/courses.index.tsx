@@ -109,14 +109,10 @@ export function AdminCourses({ courses }: { courses: readonly Course[] }) {
                 </div>
               </Link>
               <div className="mt-4 flex gap-2 border-t border-overlay/6 pt-3">
-                <Button variant="ghost" onClick={openEditCourse(c)} className="px-3 py-1.5 text-xs">
+                <Button variant="ghost" onClick={openEditCourse(c)} size="sm">
                   Edit
                 </Button>
-                <Button
-                  variant="ghost"
-                  onClick={() => setDeleteTarget(c)}
-                  className="px-3 py-1.5 text-xs text-red-600 hover:text-red-300 dark:text-red-400"
-                >
+                <Button variant="ghost" onClick={() => setDeleteTarget(c)} size="sm" tone="danger">
                   Delete
                 </Button>
               </div>

@@ -108,7 +108,8 @@ function SubmissionsPage() {
               setShowSpam(!showSpam);
               setPage(0);
             }}
-            className="px-3 py-1.5 text-xs whitespace-nowrap"
+            size="sm"
+            className="whitespace-nowrap"
           >
             {showSpam ? "Show inbox" : `Show spam (${spam.length})`}
           </Button>
@@ -132,9 +133,7 @@ function SubmissionsPage() {
                 <div className="flex items-start justify-between gap-4">
                   <div className="min-w-0 flex-1">
                     <div className="mb-1 flex flex-wrap items-center gap-x-3 gap-y-1">
-                      <span className="font-semibold text-primary">
-                        {s.name}
-                      </span>
+                      <span className="font-semibold text-primary">{s.name}</span>
                       {!s.is_read ? (
                         <span className="shrink-0 rounded-full bg-accent/15 px-2 py-0.5 text-[0.7rem] font-semibold tracking-wide text-accent uppercase">
                           New
@@ -202,7 +201,8 @@ function SubmissionsPage() {
                       variant="ghost"
                       onClick={() => toggleRead.mutate(s)}
                       disabled={toggleRead.isPending}
-                      className="px-3 py-1.5 text-xs whitespace-nowrap"
+                      size="sm"
+                      className="whitespace-nowrap"
                     >
                       {s.is_read ? "Mark unread" : "Mark read"}
                     </Button>

@@ -20,9 +20,7 @@ export function LessonCard({
   onEdit: () => void;
   onDelete: () => void;
 }) {
-  const badge =
-    statusBadgeClass[lesson.status] ??
-    "bg-overlay/10 text-muted";
+  const badge = statusBadgeClass[lesson.status] ?? "bg-overlay/10 text-muted";
   const label = statusLabel[lesson.status] ?? lesson.status;
   const location = locationLabel[lesson.location_type] ?? lesson.location_type;
 
@@ -57,7 +55,8 @@ export function LessonCard({
           <Button
             variant="ghost"
             onClick={onNotes}
-            className="px-3 py-1.5 text-xs text-violet-400 hover:text-violet-300"
+            size="sm"
+            tone="note"
             data-testid="lesson-notes"
           >
             Notes
@@ -67,7 +66,8 @@ export function LessonCard({
               <Button
                 variant="ghost"
                 onClick={onEdit}
-                className="px-3 py-1.5 text-xs text-blue-400 hover:text-blue-300"
+                size="sm"
+                tone="info"
                 data-testid="edit-lesson"
               >
                 Edit
@@ -75,7 +75,8 @@ export function LessonCard({
               <Button
                 variant="ghost"
                 onClick={onComplete}
-                className="px-3 py-1.5 text-xs text-green-400 hover:text-green-300"
+                size="sm"
+                tone="success"
                 data-testid="complete-lesson"
               >
                 Complete
@@ -83,7 +84,8 @@ export function LessonCard({
               <Button
                 variant="ghost"
                 onClick={onCancel}
-                className="px-3 py-1.5 text-xs text-red-600 hover:text-red-500 dark:text-red-400 dark:hover:text-red-300"
+                size="sm"
+                tone="danger"
                 data-testid="cancel-lesson"
               >
                 Cancel
@@ -91,7 +93,8 @@ export function LessonCard({
               <Button
                 variant="ghost"
                 onClick={onDelete}
-                className="px-3 py-1.5 text-xs text-red-600 hover:text-red-500 dark:text-red-400 dark:hover:text-red-300"
+                size="sm"
+                tone="danger"
                 data-testid="delete-lesson"
               >
                 Delete
