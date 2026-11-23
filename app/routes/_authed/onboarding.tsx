@@ -95,7 +95,7 @@ function OnboardingPage() {
 
   return (
     <main data-testid="onboarding" className="mx-auto max-w-2xl px-5 pt-16 pb-16 md:px-8">
-      <p className="mb-3 text-sm text-muted dark:text-muted-dark">
+      <p className="mb-3 text-sm text-muted">
         Step {stepIndex + 1} of {steps.length}
       </p>
       <Card>
@@ -116,7 +116,7 @@ function OnboardingPage() {
           {step === "instruments" ? (
             <section className="space-y-4">
               <h1 className="text-2xl font-bold tracking-tight">What do you want to learn?</h1>
-              <p className="text-sm text-muted dark:text-muted-dark">
+              <p className="text-sm text-muted">
                 Pick every instrument you are interested in. You can change this later in Settings.
               </p>
               <InstrumentPicker idPrefix="me" value={instruments} onChange={setInstruments} />
@@ -178,7 +178,7 @@ function Welcome({ state }: { state: OnboardingState }) {
       <h1 className="text-3xl font-bold tracking-tight">
         Welcome{state.name ? `, ${state.name}` : ""}!
       </h1>
-      <p className="text-muted dark:text-muted-dark">
+      <p className="text-muted">
         {state.role === "parent"
           ? "Let's set up your account and add your students. It takes a minute."
           : "Let's set up your account and hear what you want to learn. It takes a minute."}
@@ -190,7 +190,7 @@ function Welcome({ state }: { state: OnboardingState }) {
         >
           {state.invitation.message}
           {state.invitation.inviterName ? (
-            <span className="mt-2 block text-muted dark:text-muted-dark">
+            <span className="mt-2 block text-muted">
               — {state.invitation.inviterName}
             </span>
           ) : null}
@@ -243,14 +243,14 @@ function AccountStep(props: {
             autoComplete="new-password"
             data-testid="onboarding-password"
           />
-          <p className="text-xs text-muted dark:text-muted-dark">
+          <p className="text-xs text-muted">
             Without one, you log in with a link sent to your email.
           </p>
         </div>
       )}
       {props.error ? (
         <p
-          className="text-sm text-muted dark:text-muted-dark"
+          className="text-sm text-muted"
           data-testid="onboarding-account-hint"
         >
           {props.error}
@@ -272,7 +272,7 @@ function ChildrenStep({
   return (
     <section className="space-y-4">
       <h1 className="text-2xl font-bold tracking-tight">Your students</h1>
-      <p className="text-sm text-muted dark:text-muted-dark">
+      <p className="text-sm text-muted">
         Add each child who takes lessons. They don't need their own login. You can add more later.
       </p>
       {familyStudents.length > 0 ? (
@@ -282,12 +282,12 @@ function ChildrenStep({
           ))}
         </ul>
       ) : null}
-      <div className="rounded-xl border border-overlay/8 p-4 dark:border-overlay-dark/8">
+      <div className="rounded-xl border border-overlay/8 p-4">
         <AddStudentForm name={childName} onNameChange={onChildName} />
       </div>
       {childName.trim() !== "" ? (
         <p
-          className="text-sm text-muted dark:text-muted-dark"
+          className="text-sm text-muted"
           data-testid="onboarding-child-pending"
         >
           Add this student, or clear the name, before you finish.

@@ -46,7 +46,7 @@ export const Route = createFileRoute("/accept-invite")({
   pendingComponent: () => (
     <main className="flex min-h-screen items-center justify-center px-4">
       <div className="text-center">
-        <p className="text-sm text-muted dark:text-muted-dark">Loading invitation...</p>
+        <p className="text-sm text-muted">Loading invitation...</p>
       </div>
     </main>
   ),
@@ -76,7 +76,7 @@ function AcceptInvitePage() {
         <div className="w-full max-w-md">
           <Card className="text-center">
             <h1 className="text-3xl font-bold tracking-tight">Invalid Invitation</h1>
-            <p className="mt-3 text-sm text-muted dark:text-muted-dark">
+            <p className="mt-3 text-sm text-muted">
               This invitation link is incomplete.
             </p>
             <div className="mt-6 flex justify-center">
@@ -96,7 +96,7 @@ function AcceptInvitePage() {
         <div className="w-full max-w-md">
           <Card className="text-center">
             <h1 className="text-3xl font-bold tracking-tight">Invalid Invitation</h1>
-            <p className="mt-3 text-sm text-muted dark:text-muted-dark">
+            <p className="mt-3 text-sm text-muted">
               {invitationError ?? "This invitation link is invalid or expired."}
             </p>
             <div className="mt-6 flex justify-center">
@@ -126,20 +126,20 @@ function AcceptInvitePage() {
         <Card>
           <div className="mb-8 text-center">
             <h1 className="text-3xl font-bold tracking-tight">Accept Invitation</h1>
-            <p className="mt-2 text-sm text-muted dark:text-muted-dark">
+            <p className="mt-2 text-sm text-muted">
               Create your DFG Portal account and join{" "}
-              <span className="font-semibold text-primary dark:text-primary-dark">
+              <span className="font-semibold text-primary">
                 {invitation.name}
               </span>
               .
             </p>
             {invitation.description ? (
-              <p className="mt-3 text-sm text-muted dark:text-muted-dark">
+              <p className="mt-3 text-sm text-muted">
                 {invitation.description}
               </p>
             ) : null}
             {invitedRole ? (
-              <p className="mt-2 text-sm text-muted dark:text-muted-dark">
+              <p className="mt-2 text-sm text-muted">
                 You&apos;re joining as: <span className="font-semibold">{invitedRole}</span>
               </p>
             ) : null}
@@ -226,7 +226,7 @@ function AcceptInvitePage() {
             </form.Field>
 
             {emailLocked ? (
-              <p className="text-xs text-muted dark:text-muted-dark">
+              <p className="text-xs text-muted">
                 This invitation was sent to {invitedEmail}.
               </p>
             ) : null}

@@ -12,7 +12,7 @@ export const Route = createFileRoute("/_authed/family")({
   head: () => ({ meta: [{ title: "Family | DFG Portal" }] }),
   component: FamilyPage,
   pendingComponent: () => (
-    <main className="mx-auto max-w-[1100px] px-5 pt-20 pb-16 text-muted md:px-8 dark:text-muted-dark">
+    <main className="mx-auto max-w-[1100px] px-5 pt-20 pb-16 text-muted md:px-8">
       Loading...
     </main>
   ),
@@ -107,7 +107,7 @@ function FamilyPage() {
     return (
       <main data-testid="family-page" className="mx-auto max-w-[1100px] px-5 pt-20 pb-16 md:px-8">
         <h1 className="mb-3 text-3xl font-bold tracking-tight">Family</h1>
-        <p className="text-muted dark:text-muted-dark">Only parents can manage family settings.</p>
+        <p className="text-muted">Only parents can manage family settings.</p>
       </main>
     );
   }
@@ -116,7 +116,7 @@ function FamilyPage() {
     return (
       <main
         data-testid="family-page"
-        className="mx-auto max-w-[1100px] px-5 pt-20 pb-16 text-muted md:px-8 dark:text-muted-dark"
+        className="mx-auto max-w-[1100px] px-5 pt-20 pb-16 text-muted md:px-8"
       >
         Loading...
       </main>
@@ -129,7 +129,7 @@ function FamilyPage() {
   return (
     <main data-testid="family-page" className="mx-auto max-w-[1100px] px-5 pt-20 pb-16 md:px-8">
       <h1 className="mb-1 text-3xl font-bold tracking-tight">Family</h1>
-      <p className="mb-8 text-muted dark:text-muted-dark">
+      <p className="mb-8 text-muted">
         Manage your family members and invite co-parents.
       </p>
 
@@ -138,9 +138,9 @@ function FamilyPage() {
           <h2 data-testid="family-name" className="mb-1 text-xl font-semibold tracking-tight">
             {data.name}
           </h2>
-          <p className="text-sm text-muted dark:text-muted-dark">{data.slug}</p>
+          <p className="text-sm text-muted">{data.slug}</p>
           {data.description ? (
-            <p className="mt-2 text-sm text-muted dark:text-muted-dark">{data.description}</p>
+            <p className="mt-2 text-sm text-muted">{data.description}</p>
           ) : null}
         </Card>
       ) : null}
@@ -148,7 +148,7 @@ function FamilyPage() {
       <section className="mb-8">
         <h2 className="mb-4 text-xl font-semibold tracking-tight">Members</h2>
         {data?.members.length === 0 ? (
-          <p className="text-muted dark:text-muted-dark">No members found.</p>
+          <p className="text-muted">No members found.</p>
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {data?.members.map((member) => (
@@ -156,7 +156,7 @@ function FamilyPage() {
                 <div className="flex items-start justify-between">
                   <div className="min-w-0">
                     <p className="truncate font-medium">{member.name}</p>
-                    <p className="truncate text-sm text-muted dark:text-muted-dark">
+                    <p className="truncate text-sm text-muted">
                       @{member.username}
                     </p>
                   </div>
@@ -182,8 +182,8 @@ function FamilyPage() {
                   </div>
                 </div>
                 {member.role === "student" && isOwner ? (
-                  <div className="mt-4 border-t border-overlay/5 pt-4 dark:border-overlay-dark/5">
-                    <p className="mb-2 text-sm font-medium text-muted dark:text-muted-dark">
+                  <div className="mt-4 border-t border-overlay/5 pt-4">
+                    <p className="mb-2 text-sm font-medium text-muted">
                       Credentials
                     </p>
 
@@ -240,9 +240,9 @@ function FamilyPage() {
 
                     {passwordTokenFor === member.id && passwordToken ? (
                       <div className="mt-3 space-y-2">
-                        <p className="text-xs text-muted dark:text-muted-dark">
+                        <p className="text-xs text-muted">
                           Token:{" "}
-                          <code className="rounded bg-overlay/5 px-1 py-0.5 text-xs dark:bg-overlay-dark/5">
+                          <code className="rounded bg-overlay/5 px-1 py-0.5 text-xs">
                             {passwordToken}
                           </code>
                         </p>
@@ -357,7 +357,7 @@ function FamilyPage() {
       <section>
         <h2 className="mb-4 text-xl font-semibold tracking-tight">Pending Invitations</h2>
         {!data?.pendingInvitations || data.pendingInvitations.length === 0 ? (
-          <p className="text-muted dark:text-muted-dark">No pending invitations.</p>
+          <p className="text-muted">No pending invitations.</p>
         ) : (
           <div className="grid gap-3">
             {data.pendingInvitations.map((inv) => (
@@ -365,7 +365,7 @@ function FamilyPage() {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="font-medium">{inv.email ?? "Unknown"}</p>
-                    <p className="text-sm text-muted dark:text-muted-dark">
+                    <p className="text-sm text-muted">
                       Role: {inv.invited_role} &middot;
                       {inv.expires_at ? (
                         <> Expires: {inv.expires_at.toLocaleDateString()}</>

@@ -61,7 +61,7 @@ export function InstrumentPicker({
         return (
           <div
             key={item.instrument}
-            className="grid gap-3 rounded-xl border border-overlay/8 p-4 sm:grid-cols-2 dark:border-overlay-dark/8"
+            className="grid gap-3 rounded-xl border border-overlay/8 p-4 sm:grid-cols-2"
           >
             {item.instrument === "other" ? (
               <Input

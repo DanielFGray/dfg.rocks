@@ -35,7 +35,7 @@ export const Switch = ({
       <div className="h-4 w-4 translate-x-0.5 rounded-full bg-white transition-transform group-data-selected:translate-x-4" />
     </div>
     {children ? (
-      <span className="text-sm text-primary dark:text-primary-dark">{children}</span>
+      <span className="text-sm text-primary">{children}</span>
     ) : null}
   </AriaSwitch>
 );

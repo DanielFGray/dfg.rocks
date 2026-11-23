@@ -8,8 +8,8 @@ export const EmptyState = ({
   message: string;
   action?: { label: string; onClick: () => void } | { label: string; href: string };
 }) => (
-  <div className="flex flex-col items-center justify-center gap-4 rounded-xl border border-overlay/6 bg-card px-6 py-12 text-center dark:border-overlay-dark/6 dark:bg-card-dark">
-    <p className="text-muted dark:text-muted-dark">{message}</p>
+  <div className="flex flex-col items-center justify-center gap-4 rounded-xl border border-overlay/6 bg-card px-6 py-12 text-center">
+    <p className="text-muted">{message}</p>
     {!action ? null : "onClick" in action ? (
       <Button variant="outline" onClick={action.onClick}>
         {action.label}

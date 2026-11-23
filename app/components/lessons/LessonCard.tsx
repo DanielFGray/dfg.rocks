@@ -22,7 +22,7 @@ export function LessonCard({
 }) {
   const badge =
     statusBadgeClass[lesson.status] ??
-    "bg-overlay/10 dark:bg-overlay-dark/10 text-muted dark:text-muted-dark";
+    "bg-overlay/10 text-muted";
   const label = statusLabel[lesson.status] ?? lesson.status;
   const location = locationLabel[lesson.location_type] ?? lesson.location_type;
 
@@ -31,7 +31,7 @@ export function LessonCard({
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
           <div className="mb-1 flex items-center gap-3">
-            <span className="font-semibold text-primary dark:text-primary-dark">{studentName}</span>
+            <span className="font-semibold text-primary">{studentName}</span>
             <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${badge}`}>
               {label}
             </span>
@@ -44,7 +44,7 @@ export function LessonCard({
               </span>
             ) : null}
           </div>
-          <p className="text-sm text-muted dark:text-muted-dark">
+          <p className="text-sm text-muted">
             {formatDateTime(lesson.scheduled_at)} · {lesson.duration_minutes} min · {location}
           </p>
           {lesson.cancellation_reason ? (

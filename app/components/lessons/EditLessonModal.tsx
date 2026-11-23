@@ -87,8 +87,8 @@ export function EditLessonModal({
       >
         {/* Student is read-only in edit mode */}
         <div className="flex flex-col gap-1">
-          <label className="text-sm font-medium text-muted dark:text-muted-dark">Student</label>
-          <p className="text-sm text-primary dark:text-primary-dark">
+          <label className="text-sm font-medium text-muted">Student</label>
+          <p className="text-sm text-primary">
             {studentOptions.find((s) => s.value === lesson.student_id)?.label ?? "Unknown"}
           </p>
         </div>

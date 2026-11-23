@@ -63,7 +63,7 @@ export const Route = createFileRoute("/_authed/book-lesson")({
   loader: ({ deps }) => getBookLessonPageData({ data: deps }),
   head: () => ({ meta: [{ title: "Book a Lesson | DFG Portal" }] }),
   component: BookLessonPage,
-  pendingComponent: () => <Main className="text-muted dark:text-muted-dark">Loading...</Main>,
+  pendingComponent: () => <Main className="text-muted">Loading...</Main>,
 });
 
 /* ---------------------------------------------------------------------------
@@ -239,7 +239,7 @@ function BookLessonPage() {
               Previous Week
             </Button>
             <div className="flex items-center gap-2">
-              <span className="text-sm font-medium text-muted md:text-base dark:text-muted-dark">
+              <span className="text-sm font-medium text-muted md:text-base">
                 Week of {formatWeekLabel(search.date)}
               </span>
               <DialogTrigger>
@@ -259,7 +259,7 @@ function BookLessonPage() {
                     <line x1="3" y1="10" x2="21" y2="10" />
                   </svg>
                 </Button>
-                <Popover className="rounded-xl border border-overlay/10 bg-card p-4 shadow-2xl dark:border-overlay-dark/10 dark:bg-card-dark">
+                <Popover className="rounded-xl border border-overlay/10 bg-card p-4 shadow-2xl">
                   <Calendar
                     value={null}
                     onChange={(date) => {
@@ -287,7 +287,7 @@ function BookLessonPage() {
             <div className="flex flex-col gap-6">
               {Array.from(slotsByDay.entries()).map(([dayLabel, daySlots]) => (
                 <div key={dayLabel}>
-                  <h3 className="mb-2 text-sm font-semibold tracking-wider text-muted uppercase dark:text-muted-dark">
+                  <h3 className="mb-2 text-sm font-semibold tracking-wider text-muted uppercase">
                     {dayLabel}
                   </h3>
                   <div className="flex flex-wrap gap-2">
@@ -296,7 +296,7 @@ function BookLessonPage() {
                         key={slot.start.toISOString()}
                         type="button"
                         onClick={() => setBookingSlot(slot)}
-                        className="cursor-pointer rounded-lg border border-overlay/10 bg-overlay/5 px-4 py-2 text-sm font-medium text-primary transition-colors hover:border-accent/50 hover:bg-accent/20 dark:border-overlay-dark/10 dark:bg-overlay-dark/5 dark:text-primary-dark"
+                        className="cursor-pointer rounded-lg border border-overlay/10 bg-overlay/5 px-4 py-2 text-sm font-medium text-primary transition-colors hover:border-accent/50 hover:bg-accent/20"
                         data-testid="slot"
                       >
                         {formatTime(slot.start)}

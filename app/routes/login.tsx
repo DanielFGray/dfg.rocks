@@ -90,10 +90,10 @@ function MagicLinkForm({
   if (magicSent) {
     return (
       <div className="py-8 text-center">
-        <p className="mb-2 text-lg font-semibold text-primary dark:text-primary-dark">
+        <p className="mb-2 text-lg font-semibold text-primary">
           Check your email
         </p>
-        <p className="text-sm text-muted dark:text-muted-dark">
+        <p className="text-sm text-muted">
           We sent a magic link to your email address. Click the link to log in.
         </p>
       </div>
@@ -152,7 +152,7 @@ function LoginPage() {
       <div className="w-full max-w-sm">
         <div className="mb-8 text-center">
           <h1 className="text-3xl font-bold tracking-tight">Log In</h1>
-          <p className="mt-2 text-sm text-muted dark:text-muted-dark">Student Portal</p>
+          <p className="mt-2 text-sm text-muted">Student Portal</p>
         </div>
 
         <Tabs selectedKey={selectedTab} onSelectionChange={setSelectedTab} className="mb-6">
@@ -180,10 +180,10 @@ function LoginPage() {
 
         <div className="relative my-8">
           <div className="absolute inset-0 flex items-center">
-            <div className="w-full border-t border-overlay/8 dark:border-overlay-dark/8" />
+            <div className="w-full border-t border-overlay/8" />
           </div>
           <div className="relative flex justify-center text-xs">
-            <span className="bg-(--bg) px-3 text-muted dark:text-muted-dark">or continue with</span>
+            <span className="bg-(--bg) px-3 text-muted">or continue with</span>
           </div>
         </div>
 
@@ -191,7 +191,7 @@ function LoginPage() {
           <a
             href={googleOauthHref}
             data-testid="google-oauth"
-            className="flex w-full items-center justify-center gap-3 rounded-lg border border-overlay/10 bg-overlay/4 px-4 py-3 text-sm font-medium text-primary transition-colors hover:bg-overlay/8 dark:border-overlay-dark/10 dark:bg-overlay-dark/4 dark:text-primary-dark dark:hover:bg-overlay-dark/8"
+            className="flex w-full items-center justify-center gap-3 rounded-lg border border-overlay/10 bg-overlay/4 px-4 py-3 text-sm font-medium text-primary transition-colors hover:bg-overlay/8"
           >
             <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
               <path

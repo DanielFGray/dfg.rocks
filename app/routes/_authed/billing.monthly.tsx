@@ -37,8 +37,8 @@ function MonthlyPaymentsPage() {
     <Main>
       <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-primary dark:text-primary-dark">Payments</h1>
-          <p className="mt-1 text-sm text-muted dark:text-muted-dark">
+          <h1 className="text-2xl font-bold text-primary">Payments</h1>
+          <p className="mt-1 text-sm text-muted">
             Who has paid this month, for monthly schedules and for single lessons.
           </p>
         </div>
@@ -53,11 +53,11 @@ function MonthlyPaymentsPage() {
         />
       </div>
 
-      <h2 className="mb-4 text-lg font-semibold text-primary dark:text-primary-dark">
+      <h2 className="mb-4 text-lg font-semibold text-primary">
         Monthly prepaid
       </h2>
       {status.isLoading ? (
-        <p className="text-sm text-muted dark:text-muted-dark">Loading payments...</p>
+        <p className="text-sm text-muted">Loading payments...</p>
       ) : status.error ? (
         <p role="alert" className="text-sm text-red-600 dark:text-red-400">
           Failed to load payments.
@@ -66,12 +66,12 @@ function MonthlyPaymentsPage() {
         <EmptyState message="No students have a monthly prepaid schedule in this month." />
       ) : (
         <>
-          <p className="mb-3 text-sm text-muted dark:text-muted-dark" data-testid="unpaid-count">
+          <p className="mb-3 text-sm text-muted" data-testid="unpaid-count">
             {unpaid === 0 ? "Everyone has paid." : `${unpaid} of ${rows.length} not paid.`}
           </p>
-          <div className="overflow-x-auto rounded-lg border border-overlay/10 dark:border-overlay-dark/10">
+          <div className="overflow-x-auto rounded-lg border border-overlay/10">
             <table className="w-full text-left text-sm">
-              <thead className="bg-overlay/4 text-xs text-muted dark:bg-overlay-dark/4 dark:text-muted-dark">
+              <thead className="bg-overlay/4 text-xs text-muted">
                 <tr>
                   <th className="px-4 py-3 font-medium">Student</th>
                   <th className="px-4 py-3 font-medium">Status</th>
@@ -86,7 +86,7 @@ function MonthlyPaymentsPage() {
                   <tr
                     key={row.student_id}
                     data-testid="monthly-payment-row"
-                    className="border-t border-overlay/8 dark:border-overlay-dark/8"
+                    className="border-t border-overlay/8"
                   >
                     <td className="px-4 py-3">
                       <Link
@@ -107,10 +107,10 @@ function MonthlyPaymentsPage() {
                     <td className="px-4 py-3">
                       {row.payment ? formatCents(row.payment.amount_cents) : "—"}
                     </td>
-                    <td className="px-4 py-3 text-muted dark:text-muted-dark">
+                    <td className="px-4 py-3 text-muted">
                       {row.payment ? dateLabel(row.payment.paid_at) : "—"}
                     </td>
-                    <td className="px-4 py-3 text-muted dark:text-muted-dark">
+                    <td className="px-4 py-3 text-muted">
                       {row.payment?.notes ?? ""}
                     </td>
                     <td className="px-4 py-3 text-right">

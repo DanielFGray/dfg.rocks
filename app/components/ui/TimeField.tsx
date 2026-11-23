@@ -33,15 +33,15 @@ export function TimeField({
       className={["flex flex-col gap-1", className].filter(Boolean).join(" ")}
       {...rest}
     >
-      <Label className="text-sm font-medium text-muted dark:text-muted-dark">{label}</Label>
+      <Label className="text-sm font-medium text-muted">{label}</Label>
       <DateInput
         data-testid={pwid}
-        className="border-border flex rounded-sm border bg-surface px-2 py-1 text-sm text-primary outline-hidden transition-colors data-focused:border-accent data-focused:ring-1 data-focused:ring-accent/50 data-invalid:border-red-500 data-invalid:ring-red-500/50 dark:bg-surface-dark dark:text-primary-dark"
+        className="border-border flex rounded-sm border bg-surface px-2 py-1 text-sm text-primary outline-hidden transition-colors data-focused:border-accent data-focused:ring-1 data-focused:ring-accent/50 data-invalid:border-red-500 data-invalid:ring-red-500/50"
       >
         {(segment) => (
           <DateSegment
             segment={segment}
-            className="rounded-sm px-0.5 tabular-nums outline-hidden data-focused:bg-accent/20 data-focused:text-accent data-placeholder:text-muted/50 dark:data-placeholder:text-muted-dark/50"
+            className="rounded-sm px-0.5 tabular-nums outline-hidden data-focused:bg-accent/20 data-focused:text-accent data-placeholder:text-muted/50"
           />
         )}
       </DateInput>

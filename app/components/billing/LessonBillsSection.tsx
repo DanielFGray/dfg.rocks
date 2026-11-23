@@ -44,12 +44,12 @@ export function LessonBillsSection({ month }: { month: string }) {
 
   return (
     <section className="mt-12">
-      <h2 className="text-lg font-semibold text-primary dark:text-primary-dark">Single lessons</h2>
-      <p className="mt-1 mb-4 text-sm text-muted dark:text-muted-dark">
+      <h2 className="text-lg font-semibold text-primary">Single lessons</h2>
+      <p className="mt-1 mb-4 text-sm text-muted">
         Lessons billed one at a time, and whether each has been paid.
       </p>
       {bills.isLoading ? (
-        <p className="text-sm text-muted dark:text-muted-dark">Loading lesson bills...</p>
+        <p className="text-sm text-muted">Loading lesson bills...</p>
       ) : bills.error ? (
         <p role="alert" className="text-sm text-red-600 dark:text-red-400">
           Failed to load lesson bills.
@@ -59,7 +59,7 @@ export function LessonBillsSection({ month }: { month: string }) {
       ) : (
         <>
           <p
-            className="mb-3 text-sm text-muted dark:text-muted-dark"
+            className="mb-3 text-sm text-muted"
             data-testid="lesson-unpaid-count"
           >
             {unpaid === 0 ? "Every lesson is paid." : `${unpaid} of ${rows.length} not paid.`}
@@ -69,9 +69,9 @@ export function LessonBillsSection({ month }: { month: string }) {
               {getErrorMessage(recordCash.error)}
             </p>
           ) : null}
-          <div className="overflow-x-auto rounded-lg border border-overlay/10 dark:border-overlay-dark/10">
+          <div className="overflow-x-auto rounded-lg border border-overlay/10">
             <table className="w-full text-left text-sm">
-              <thead className="bg-overlay/4 text-xs text-muted dark:bg-overlay-dark/4 dark:text-muted-dark">
+              <thead className="bg-overlay/4 text-xs text-muted">
                 <tr>
                   <th className="px-4 py-3 font-medium">Lesson</th>
                   <th className="px-4 py-3 font-medium">Student</th>
@@ -86,9 +86,9 @@ export function LessonBillsSection({ month }: { month: string }) {
                   <tr
                     key={row.bill_id}
                     data-testid="lesson-bill-row"
-                    className="border-t border-overlay/8 dark:border-overlay-dark/8"
+                    className="border-t border-overlay/8"
                   >
-                    <td className="px-4 py-3 text-muted dark:text-muted-dark">
+                    <td className="px-4 py-3 text-muted">
                       {dateTimeLabel(row.scheduled_at)}
                     </td>
                     <td className="px-4 py-3">

@@ -45,7 +45,7 @@ function InvitePage() {
             <h1 data-testid="invite-invalid" className="text-3xl font-bold tracking-tight">
               Link not valid
             </h1>
-            <p className="mt-3 text-sm text-muted dark:text-muted-dark">
+            <p className="mt-3 text-sm text-muted">
               This invitation link is wrong, expired, or already used. If you already set up your
               account, log in. Otherwise ask for a new invitation.
             </p>
@@ -67,7 +67,7 @@ function InvitePage() {
           <h1 className="text-center text-3xl font-bold tracking-tight">
             Welcome{preview.name ? `, ${preview.name}` : ""}!
           </h1>
-          <p className="mt-2 text-center text-sm text-muted dark:text-muted-dark">
+          <p className="mt-2 text-center text-sm text-muted">
             {preview.inviterName ?? "Your teacher"} made you a DFG Portal account.
           </p>
           {preview.message ? (

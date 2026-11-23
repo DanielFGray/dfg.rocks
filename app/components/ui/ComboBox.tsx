@@ -58,18 +58,18 @@ export const ComboBox = ({
     menuTrigger="focus"
     className="flex flex-col gap-1.5"
   >
-    <Label className="text-sm font-medium text-muted dark:text-muted-dark">{label}</Label>
+    <Label className="text-sm font-medium text-muted">{label}</Label>
     <div className="relative">
       <Input
         id={id}
         placeholder={placeholder}
         data-testid={pwid}
-        className={`w-full rounded-lg border bg-card px-4 py-3 text-primary outline-hidden transition-colors placeholder:text-muted/50 data-focused:border-accent data-focused:ring-1 data-focused:ring-accent/50 dark:bg-card-dark dark:text-primary-dark dark:placeholder:text-muted-dark/50 ${
-          error ? "border-red-500/50" : "border-overlay/10 dark:border-overlay-dark/10"
+        className={`w-full rounded-lg border bg-card px-4 py-3 text-primary outline-hidden transition-colors placeholder:text-muted/50 data-focused:border-accent data-focused:ring-1 data-focused:ring-accent/50 ${
+          error ? "border-red-500/50" : "border-overlay/10"
         }`}
       />
       <Button
-        className="absolute top-1/2 right-2 -translate-y-1/2 cursor-pointer text-muted hover:text-primary dark:text-muted-dark dark:hover:text-primary-dark"
+        className="absolute top-1/2 right-2 -translate-y-1/2 cursor-pointer text-muted hover:text-primary"
         aria-label="Show options"
       >
         <svg
@@ -85,13 +85,13 @@ export const ComboBox = ({
         </svg>
       </Button>
     </div>
-    <Popover className="max-h-60 w-(--trigger-width) overflow-auto rounded-lg border border-overlay/10 bg-card shadow-2xl dark:border-overlay-dark/10 dark:bg-card-dark">
+    <Popover className="max-h-60 w-(--trigger-width) overflow-auto rounded-lg border border-overlay/10 bg-card shadow-2xl">
       <ListBox className="p-1 outline-hidden">
         {(item: ComboBoxOption) => (
           <ListBoxItem
             id={item.value}
             textValue={item.label}
-            className="cursor-pointer rounded-md px-3 py-2 text-sm text-primary outline-hidden transition-colors data-focused:bg-overlay/8 data-selected:text-accent dark:text-primary-dark dark:data-focused:bg-overlay-dark/8"
+            className="cursor-pointer rounded-md px-3 py-2 text-sm text-primary outline-hidden transition-colors data-focused:bg-overlay/8 data-selected:text-accent"
           >
             {item.label}
           </ListBoxItem>

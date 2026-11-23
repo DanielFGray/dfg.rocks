@@ -11,7 +11,7 @@ import { formatCents } from "../../components/billing/helpers.js";
 export const Route = createFileRoute("/_authed/billing/")({
   head: () => ({ meta: [{ title: "Billing | DFG Portal" }] }),
   component: BillingPage,
-  pendingComponent: () => <Main className="text-muted dark:text-muted-dark">Loading...</Main>,
+  pendingComponent: () => <Main className="text-muted">Loading...</Main>,
 });
 
 function BillingPage() {
@@ -36,17 +36,17 @@ function BillingPage() {
   return (
     <Main>
       <div className="mb-8">
-        <h1 className="text-2xl font-bold text-primary dark:text-primary-dark">Billing</h1>
-        <p className="mt-1 text-sm text-muted dark:text-muted-dark">Payer accounts receivable</p>
+        <h1 className="text-2xl font-bold text-primary">Billing</h1>
+        <p className="mt-1 text-sm text-muted">Payer accounts receivable</p>
       </div>
 
       <div className="mb-6 grid gap-4 sm:grid-cols-3">
         <Card>
           <div className="p-4">
-            <p className="text-xs font-medium tracking-wide text-muted uppercase dark:text-muted-dark">
+            <p className="text-xs font-medium tracking-wide text-muted uppercase">
               Outstanding
             </p>
-            <p className="mt-1 text-2xl font-bold text-primary dark:text-primary-dark">
+            <p className="mt-1 text-2xl font-bold text-primary">
               {formatCents(totalOutstanding)}
             </p>
           </div>
@@ -63,7 +63,7 @@ function BillingPage() {
         </Card>
         <Card>
           <div className="p-4">
-            <p className="text-xs font-medium tracking-wide text-muted uppercase dark:text-muted-dark">
+            <p className="text-xs font-medium tracking-wide text-muted uppercase">
               Payer Credit
             </p>
             <p className="mt-1 text-2xl font-bold text-green-600 dark:text-green-400">
@@ -74,7 +74,7 @@ function BillingPage() {
       </div>
 
       {isLoading ? (
-        <p className="text-sm text-muted dark:text-muted-dark">Loading payers...</p>
+        <p className="text-sm text-muted">Loading payers...</p>
       ) : error ? (
         <p role="alert" className="text-sm text-red-600 dark:text-red-400">
           Failed to load billing data.
@@ -82,9 +82,9 @@ function BillingPage() {
       ) : summaries.length === 0 ? (
         <EmptyState message="No payers found." />
       ) : (
-        <div className="overflow-x-auto rounded-lg border border-overlay/10 dark:border-overlay-dark/10">
+        <div className="overflow-x-auto rounded-lg border border-overlay/10">
           <table className="w-full text-left text-sm">
-            <thead className="bg-overlay/4 text-xs text-muted dark:bg-overlay-dark/4 dark:text-muted-dark">
+            <thead className="bg-overlay/4 text-xs text-muted">
               <tr>
                 <th className="px-4 py-3 font-medium">Payer</th>
                 <th className="px-4 py-3 font-medium">Pays for</th>
@@ -100,7 +100,7 @@ function BillingPage() {
               {summaries.map((p) => (
                 <tr
                   key={p.payer_id}
-                  className="border-t border-overlay/8 hover:bg-overlay/4 dark:border-overlay-dark/8 dark:hover:bg-overlay-dark/4"
+                  className="border-t border-overlay/8 hover:bg-overlay/4"
                 >
                   <td className="px-4 py-3">
                     <Link
@@ -111,10 +111,10 @@ function BillingPage() {
                       {p.payer_name}
                     </Link>
                   </td>
-                  <td className="px-4 py-3 text-muted dark:text-muted-dark">
+                  <td className="px-4 py-3 text-muted">
                     {p.students.map((s) => s.name).join(", ") || "—"}
                   </td>
-                  <td className="px-4 py-3 text-muted dark:text-muted-dark">{p.bill_count}</td>
+                  <td className="px-4 py-3 text-muted">{p.bill_count}</td>
                   <td className="px-4 py-3">{formatCents(p.total_billed_cents)}</td>
                   <td className="px-4 py-3">{formatCents(p.total_paid_cents)}</td>
                   <td className="px-4 py-3 font-medium">{formatCents(p.outstanding_cents)}</td>

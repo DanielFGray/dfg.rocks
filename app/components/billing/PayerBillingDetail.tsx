@@ -43,17 +43,17 @@ export function PayerBillingDetailView({
   return (
     <div data-testid="payer-billing-detail">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-primary dark:text-primary-dark">{payer_name}</h1>
-        <p className="mt-1 text-sm text-muted dark:text-muted-dark">Payer billing detail</p>
+        <h1 className="text-2xl font-bold text-primary">{payer_name}</h1>
+        <p className="mt-1 text-sm text-muted">Payer billing detail</p>
       </div>
 
       <div className="mb-6 grid gap-4 sm:grid-cols-3">
         <Card>
           <div className="p-4">
-            <p className="text-xs font-medium tracking-wide text-muted uppercase dark:text-muted-dark">
+            <p className="text-xs font-medium tracking-wide text-muted uppercase">
               Outstanding
             </p>
-            <p className="mt-1 text-2xl font-bold text-primary dark:text-primary-dark">
+            <p className="mt-1 text-2xl font-bold text-primary">
               {formatCents(balance.outstanding_cents)}
             </p>
           </div>
@@ -136,7 +136,7 @@ function BillsSection({
   return (
     <section>
       <div className="mb-4 flex items-center justify-between gap-4">
-        <h2 className="text-lg font-semibold text-primary dark:text-primary-dark">Bills</h2>
+        <h2 className="text-lg font-semibold text-primary">Bills</h2>
         <Button
           variant="outline"
           className="shrink-0 px-3 py-1.5 text-xs"
@@ -153,9 +153,9 @@ function BillsSection({
           action={{ label: "Create bill", onClick: () => setCreateOpen(true) }}
         />
       ) : (
-        <div className="overflow-x-auto rounded-lg border border-overlay/10 dark:border-overlay-dark/10">
+        <div className="overflow-x-auto rounded-lg border border-overlay/10">
           <table className="w-full text-left text-sm">
-            <thead className="bg-overlay/4 text-xs text-muted dark:bg-overlay-dark/4 dark:text-muted-dark">
+            <thead className="bg-overlay/4 text-xs text-muted">
               <tr>
                 <th className="px-4 py-3 font-medium">Bill #</th>
                 <th className="px-4 py-3 font-medium">Status</th>
@@ -169,9 +169,9 @@ function BillsSection({
               {bills.map((bill) => (
                 <tr
                   key={bill.id}
-                  className="border-t border-overlay/8 hover:bg-overlay/4 dark:border-overlay-dark/8 dark:hover:bg-overlay-dark/4"
+                  className="border-t border-overlay/8 hover:bg-overlay/4"
                 >
-                  <td className="px-4 py-3 font-medium text-primary dark:text-primary-dark">
+                  <td className="px-4 py-3 font-medium text-primary">
                     <button
                       type="button"
                       className="text-accent hover:underline"
@@ -183,7 +183,7 @@ function BillsSection({
                   <td className="px-4 py-3">
                     <span className={billStatusBadge(bill.status)}>{statusLabel(bill.status)}</span>
                   </td>
-                  <td className="px-4 py-3 text-muted dark:text-muted-dark">
+                  <td className="px-4 py-3 text-muted">
                     {dateLabel(bill.billing_period_start)} – {dateLabel(bill.billing_period_end)}
                   </td>
                   <td className="px-4 py-3">{bill.due_date ? dateLabel(bill.due_date) : "—"}</td>
@@ -395,7 +395,7 @@ function CreateBillModal({
           save.mutate();
         }}
       >
-        <p className="text-sm text-muted dark:text-muted-dark">
+        <p className="text-sm text-muted">
           This is a simplified bill creation form. Full line item management coming soon.
         </p>
         <div className="grid gap-4 sm:grid-cols-3">
@@ -461,7 +461,7 @@ function PaymentsSection({
   return (
     <section>
       <div className="mb-4 flex items-center justify-between gap-4">
-        <h2 className="text-lg font-semibold text-primary dark:text-primary-dark">Payments</h2>
+        <h2 className="text-lg font-semibold text-primary">Payments</h2>
         <Button
           variant="outline"
           className="shrink-0 px-3 py-1.5 text-xs"
@@ -478,9 +478,9 @@ function PaymentsSection({
           action={{ label: "Record payment", onClick: () => setRecordOpen(true) }}
         />
       ) : (
-        <div className="overflow-x-auto rounded-lg border border-overlay/10 dark:border-overlay-dark/10">
+        <div className="overflow-x-auto rounded-lg border border-overlay/10">
           <table className="w-full text-left text-sm">
-            <thead className="bg-overlay/4 text-xs text-muted dark:bg-overlay-dark/4 dark:text-muted-dark">
+            <thead className="bg-overlay/4 text-xs text-muted">
               <tr>
                 <th className="px-4 py-3 font-medium">Payment #</th>
                 <th className="px-4 py-3 font-medium">Amount</th>
@@ -494,20 +494,20 @@ function PaymentsSection({
               {payments.map((p) => (
                 <tr
                   key={p.id}
-                  className="border-t border-overlay/8 hover:bg-overlay/4 dark:border-overlay-dark/8 dark:hover:bg-overlay-dark/4"
+                  className="border-t border-overlay/8 hover:bg-overlay/4"
                 >
-                  <td className="px-4 py-3 font-medium text-primary dark:text-primary-dark">
+                  <td className="px-4 py-3 font-medium text-primary">
                     #{p.payment_number}
                   </td>
                   <td className="px-4 py-3">{formatCents(p.amount_cents)}</td>
                   <td className="px-4 py-3 capitalize">{p.method.replaceAll("_", " ")}</td>
-                  <td className="px-4 py-3 text-muted dark:text-muted-dark">
+                  <td className="px-4 py-3 text-muted">
                     {dateLabel(p.received_at)}
                   </td>
-                  <td className="px-4 py-3 text-muted dark:text-muted-dark">
+                  <td className="px-4 py-3 text-muted">
                     {p.reference || "—"}
                   </td>
-                  <td className="px-4 py-3 text-muted dark:text-muted-dark">
+                  <td className="px-4 py-3 text-muted">
                     {p.reference || "—"}
                   </td>
                 </tr>
@@ -578,7 +578,7 @@ function RecordPaymentModal({
           save.mutate();
         }}
       >
-        <p className="text-sm text-muted dark:text-muted-dark">
+        <p className="text-sm text-muted">
           Payment without allocations will be recorded as unapplied credit.
         </p>
         <Input
@@ -654,7 +654,7 @@ function CreditsSection({
   return (
     <section>
       <div className="mb-4 flex items-center justify-between gap-4">
-        <h2 className="text-lg font-semibold text-primary dark:text-primary-dark">Credits</h2>
+        <h2 className="text-lg font-semibold text-primary">Credits</h2>
         <div className="flex gap-2">
           <Button
             variant="outline"
@@ -683,9 +683,9 @@ function CreditsSection({
           action={{ label: "Issue credit", onClick: () => setIssueOpen(true) }}
         />
       ) : (
-        <div className="overflow-x-auto rounded-lg border border-overlay/10 dark:border-overlay-dark/10">
+        <div className="overflow-x-auto rounded-lg border border-overlay/10">
           <table className="w-full text-left text-sm">
-            <thead className="bg-overlay/4 text-xs text-muted dark:bg-overlay-dark/4 dark:text-muted-dark">
+            <thead className="bg-overlay/4 text-xs text-muted">
               <tr>
                 <th className="px-4 py-3 font-medium">Amount</th>
                 <th className="px-4 py-3 font-medium">Reason</th>
@@ -698,14 +698,14 @@ function CreditsSection({
               {credits.map((c) => (
                 <tr
                   key={c.id}
-                  className="border-t border-overlay/8 hover:bg-overlay/4 dark:border-overlay-dark/8 dark:hover:bg-overlay-dark/4"
+                  className="border-t border-overlay/8 hover:bg-overlay/4"
                 >
                   <td className="px-4 py-3 font-medium">{formatCents(c.amount_cents)}</td>
-                  <td className="px-4 py-3 text-muted dark:text-muted-dark">{c.reason}</td>
-                  <td className="px-4 py-3 text-muted dark:text-muted-dark">
+                  <td className="px-4 py-3 text-muted">{c.reason}</td>
+                  <td className="px-4 py-3 text-muted">
                     {dateLabel(c.created_at)}
                   </td>
-                  <td className="px-4 py-3 text-muted dark:text-muted-dark">
+                  <td className="px-4 py-3 text-muted">
                     {c.expires_at ? dateLabel(c.expires_at) : "—"}
                   </td>
                   <td className="px-4 py-3">
@@ -957,8 +957,8 @@ function DiscountsSection({ payerId }: { payerId: string }) {
     <section>
       <div className="mb-4 flex items-center justify-between gap-4">
         <div>
-          <h2 className="text-lg font-semibold text-primary dark:text-primary-dark">Discounts</h2>
-          <p className="mt-1 text-sm text-muted dark:text-muted-dark">
+          <h2 className="text-lg font-semibold text-primary">Discounts</h2>
+          <p className="mt-1 text-sm text-muted">
             Payer-specific discount configurations.
           </p>
         </div>
@@ -973,7 +973,7 @@ function DiscountsSection({ payerId }: { payerId: string }) {
       </div>
 
       {isLoading ? (
-        <p className="text-sm text-muted dark:text-muted-dark">Loading discounts...</p>
+        <p className="text-sm text-muted">Loading discounts...</p>
       ) : error ? (
         <p role="alert" className="text-sm text-red-600 dark:text-red-400">
           Failed to load discounts.
@@ -1028,24 +1028,24 @@ function DiscountCard({
       <div className="flex items-start justify-between gap-4 p-4">
         <div>
           <div className="flex flex-wrap items-center gap-2">
-            <p className="font-semibold text-primary dark:text-primary-dark">{discount.label}</p>
+            <p className="font-semibold text-primary">{discount.label}</p>
             <span
               className={`rounded-full px-2 py-0.5 text-xs font-medium ${
                 discount.is_active
                   ? "bg-green-500/15 text-green-700 dark:text-green-300"
-                  : "bg-overlay/10 text-muted dark:bg-overlay-dark/10 dark:text-muted-dark"
+                  : "bg-overlay/10 text-muted"
               }`}
             >
               {discount.is_active ? "Active" : "Inactive"}
             </span>
           </div>
-          <p className="mt-1 text-sm text-muted dark:text-muted-dark">
+          <p className="mt-1 text-sm text-muted">
             {discount.discount_type === "percentage"
               ? `${discount.discount_value}%`
               : formatCents(discount.discount_value)}{" "}
             &middot; Applies to {discount.applies_to.replaceAll("_", " ")}
           </p>
-          <p className="mt-0.5 text-xs text-muted dark:text-muted-dark">
+          <p className="mt-0.5 text-xs text-muted">
             {dateLabel(discount.effective_from)}
             {discount.effective_until ? ` — ${dateLabel(discount.effective_until)}` : " onward"}
           </p>
@@ -1251,10 +1251,10 @@ function TaxSection({ payerId }: { payerId: string }) {
     <section>
       <div className="mb-4 flex items-center justify-between gap-4">
         <div>
-          <h2 className="text-lg font-semibold text-primary dark:text-primary-dark">
+          <h2 className="text-lg font-semibold text-primary">
             Tax Exemptions
           </h2>
-          <p className="mt-1 text-sm text-muted dark:text-muted-dark">
+          <p className="mt-1 text-sm text-muted">
             Tax rate exemptions for this payer.
           </p>
         </div>
@@ -1271,7 +1271,7 @@ function TaxSection({ payerId }: { payerId: string }) {
       </div>
 
       {exLoading ? (
-        <p className="text-sm text-muted dark:text-muted-dark">Loading tax exemptions...</p>
+        <p className="text-sm text-muted">Loading tax exemptions...</p>
       ) : exError ? (
         <p role="alert" className="text-sm text-red-600 dark:text-red-400">
           Failed to load tax exemptions.
@@ -1290,9 +1290,9 @@ function TaxSection({ payerId }: { payerId: string }) {
           }
         />
       ) : (
-        <div className="overflow-x-auto rounded-lg border border-overlay/10 dark:border-overlay-dark/10">
+        <div className="overflow-x-auto rounded-lg border border-overlay/10">
           <table className="w-full text-left text-sm">
-            <thead className="bg-overlay/4 text-xs text-muted dark:bg-overlay-dark/4 dark:text-muted-dark">
+            <thead className="bg-overlay/4 text-xs text-muted">
               <tr>
                 <th className="px-4 py-3 font-medium">Tax Rate</th>
                 <th className="px-4 py-3 font-medium">Reason</th>
@@ -1306,18 +1306,18 @@ function TaxSection({ payerId }: { payerId: string }) {
                 return (
                   <tr
                     key={ex.id}
-                    className="border-t border-overlay/8 hover:bg-overlay/4 dark:border-overlay-dark/8 dark:hover:bg-overlay-dark/4"
+                    className="border-t border-overlay/8 hover:bg-overlay/4"
                   >
-                    <td className="px-4 py-3 font-medium text-primary dark:text-primary-dark">
+                    <td className="px-4 py-3 font-medium text-primary">
                       {rate?.label ?? ex.tax_rate_id} ({rate ? `${rate.rate_percent}%` : "?"})
                     </td>
-                    <td className="px-4 py-3 text-muted dark:text-muted-dark">
+                    <td className="px-4 py-3 text-muted">
                       {ex.exemption_reason}
                     </td>
-                    <td className="px-4 py-3 text-muted dark:text-muted-dark">
+                    <td className="px-4 py-3 text-muted">
                       {dateLabel(ex.effective_from)}
                     </td>
-                    <td className="px-4 py-3 text-muted dark:text-muted-dark">
+                    <td className="px-4 py-3 text-muted">
                       {ex.effective_until ? dateLabel(ex.effective_until) : "—"}
                     </td>
                   </tr>
@@ -1477,7 +1477,7 @@ function BillDetailModal({
       className="w-full max-w-3xl outline-hidden"
     >
       {isLoading ? (
-        <p className="text-sm text-muted dark:text-muted-dark">Loading bill...</p>
+        <p className="text-sm text-muted">Loading bill...</p>
       ) : error ? (
         <p role="alert" className="text-sm text-red-600 dark:text-red-400">
           Failed to load bill.
@@ -1515,10 +1515,10 @@ function BillDetailBody({
     <div data-testid="bill-detail">
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <span className={billStatusBadge(bill.status)}>{statusLabel(bill.status)}</span>
-        <span className="text-sm text-muted dark:text-muted-dark">
+        <span className="text-sm text-muted">
           Total: {formatCents(bill.total_cents)}
         </span>
-        <span className="text-sm text-muted dark:text-muted-dark">
+        <span className="text-sm text-muted">
           Due: {bill.due_date ? dateLabel(bill.due_date) : "—"}
         </span>
       </div>
@@ -1533,11 +1533,11 @@ function BillDetailBody({
 
         <TabPanel id="details" className="mt-4">
           {bill.line_items.length === 0 ? (
-            <p className="text-sm text-muted dark:text-muted-dark">No line items.</p>
+            <p className="text-sm text-muted">No line items.</p>
           ) : (
-            <div className="overflow-x-auto rounded-lg border border-overlay/10 dark:border-overlay-dark/10">
+            <div className="overflow-x-auto rounded-lg border border-overlay/10">
               <table className="w-full text-left text-sm">
-                <thead className="bg-overlay/4 text-xs text-muted dark:bg-overlay-dark/4 dark:text-muted-dark">
+                <thead className="bg-overlay/4 text-xs text-muted">
                   <tr>
                     <th className="px-4 py-3 font-medium">Description</th>
                     <th className="px-4 py-3 font-medium">Type</th>
@@ -1550,12 +1550,12 @@ function BillDetailBody({
                   {bill.line_items.map((li) => (
                     <tr
                       key={li.id}
-                      className="border-t border-overlay/8 dark:border-overlay-dark/8"
+                      className="border-t border-overlay/8"
                     >
-                      <td className="px-4 py-3 font-medium text-primary dark:text-primary-dark">
+                      <td className="px-4 py-3 font-medium text-primary">
                         {li.description}
                       </td>
-                      <td className="px-4 py-3 text-muted dark:text-muted-dark">
+                      <td className="px-4 py-3 text-muted">
                         {statusLabel(li.line_type)}
                       </td>
                       <td className="px-4 py-3">{li.quantity}</td>
@@ -1564,7 +1564,7 @@ function BillDetailBody({
                     </tr>
                   ))}
                 </tbody>
-                <tfoot className="bg-overlay/4 text-xs dark:bg-overlay-dark/4">
+                <tfoot className="bg-overlay/4 text-xs">
                   <tr>
                     <td colSpan={4} className="px-4 py-2 text-right font-medium">
                       Subtotal
@@ -1575,7 +1575,7 @@ function BillDetailBody({
                     <tr>
                       <td
                         colSpan={4}
-                        className="px-4 py-2 text-right text-muted dark:text-muted-dark"
+                        className="px-4 py-2 text-right text-muted"
                       >
                         Discount
                       </td>
@@ -1588,7 +1588,7 @@ function BillDetailBody({
                     <tr>
                       <td
                         colSpan={4}
-                        className="px-4 py-2 text-right text-muted dark:text-muted-dark"
+                        className="px-4 py-2 text-right text-muted"
                       >
                         Tax
                       </td>
@@ -1598,11 +1598,11 @@ function BillDetailBody({
                   <tr>
                     <td
                       colSpan={4}
-                      className="px-4 py-2 text-right font-semibold text-primary dark:text-primary-dark"
+                      className="px-4 py-2 text-right font-semibold text-primary"
                     >
                       Total
                     </td>
-                    <td className="px-4 py-2 font-bold text-primary dark:text-primary-dark">
+                    <td className="px-4 py-2 font-bold text-primary">
                       {formatCents(bill.total_cents)}
                     </td>
                   </tr>
@@ -1617,11 +1617,11 @@ function BillDetailBody({
             <AdjustBillSection billId={billId} onSaved={onRefresh} />
           </div>
           {bill.adjustments.length === 0 ? (
-            <p className="text-sm text-muted dark:text-muted-dark">No adjustments.</p>
+            <p className="text-sm text-muted">No adjustments.</p>
           ) : (
-            <div className="overflow-x-auto rounded-lg border border-overlay/10 dark:border-overlay-dark/10">
+            <div className="overflow-x-auto rounded-lg border border-overlay/10">
               <table className="w-full text-left text-sm">
-                <thead className="bg-overlay/4 text-xs text-muted dark:bg-overlay-dark/4 dark:text-muted-dark">
+                <thead className="bg-overlay/4 text-xs text-muted">
                   <tr>
                     <th className="px-4 py-3 font-medium">Amount</th>
                     <th className="px-4 py-3 font-medium">Reason</th>
@@ -1632,7 +1632,7 @@ function BillDetailBody({
                   {bill.adjustments.map((adj) => (
                     <tr
                       key={adj.id}
-                      className="border-t border-overlay/8 dark:border-overlay-dark/8"
+                      className="border-t border-overlay/8"
                     >
                       <td className="px-4 py-3 font-medium">
                         <span
@@ -1646,8 +1646,8 @@ function BillDetailBody({
                           {formatCents(Math.abs(adj.amount_cents))}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-muted dark:text-muted-dark">{adj.reason}</td>
-                      <td className="px-4 py-3 text-muted dark:text-muted-dark">
+                      <td className="px-4 py-3 text-muted">{adj.reason}</td>
+                      <td className="px-4 py-3 text-muted">
                         {dateTimeLabel(adj.created_at)}
                       </td>
                     </tr>
@@ -1660,11 +1660,11 @@ function BillDetailBody({
 
         <TabPanel id="credits" className="mt-4">
           {bill.credit_applications.length === 0 ? (
-            <p className="text-sm text-muted dark:text-muted-dark">No credit applications.</p>
+            <p className="text-sm text-muted">No credit applications.</p>
           ) : (
-            <div className="overflow-x-auto rounded-lg border border-overlay/10 dark:border-overlay-dark/10">
+            <div className="overflow-x-auto rounded-lg border border-overlay/10">
               <table className="w-full text-left text-sm">
-                <thead className="bg-overlay/4 text-xs text-muted dark:bg-overlay-dark/4 dark:text-muted-dark">
+                <thead className="bg-overlay/4 text-xs text-muted">
                   <tr>
                     <th className="px-4 py-3 font-medium">Amount</th>
                     <th className="px-4 py-3 font-medium">Date</th>
@@ -1674,12 +1674,12 @@ function BillDetailBody({
                   {bill.credit_applications.map((ca) => (
                     <tr
                       key={ca.id}
-                      className="border-t border-overlay/8 dark:border-overlay-dark/8"
+                      className="border-t border-overlay/8"
                     >
                       <td className="px-4 py-3 font-medium text-green-600 dark:text-green-400">
                         -{formatCents(ca.amount_cents)}
                       </td>
-                      <td className="px-4 py-3 text-muted dark:text-muted-dark">
+                      <td className="px-4 py-3 text-muted">
                         {dateTimeLabel(ca.created_at)}
                       </td>
                     </tr>
@@ -1723,7 +1723,7 @@ function AdjustBillSection({ billId, onSaved }: { billId: string; onSaved: () =>
   return (
     <form
       data-testid="adjust-bill-form"
-      className="mb-4 flex flex-wrap items-end gap-3 rounded-lg border border-overlay/10 p-4 dark:border-overlay-dark/10"
+      className="mb-4 flex flex-wrap items-end gap-3 rounded-lg border border-overlay/10 p-4"
       onSubmit={(e) => {
         e.preventDefault();
         save.mutate();

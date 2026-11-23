@@ -9,7 +9,7 @@ type CardProps = {
 
 export const Card = ({ children, href, className, ...rest }: CardProps) => {
   const classes = [
-    "block rounded-xl border border-overlay/6 dark:border-overlay-dark/6 bg-card dark:bg-card-dark p-6 transition-all duration-200",
+    "block rounded-xl border border-overlay/6 bg-card p-6 transition-all duration-200",
     href ? "hover:-translate-y-0.5 hover:border-accent/30 no-underline" : "",
     className,
   ]

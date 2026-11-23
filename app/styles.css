@@ -1,6 +1,40 @@
 @import "tailwindcss" source("../app");
+@plugin "@tailwindcss/typography";
 
-@config "../tailwind.config.mjs";
+/*
+  Plain @theme, not @theme inline: utilities must read the variable at run time, so the
+  dark-mode values below change every utility that uses the colour, opacity forms included.
+*/
+@theme {
+  --font-sans: "DM Sans", sans-serif;
+  --color-surface: #fafafa;
+  --color-card: #ffffff;
+  --color-primary: #111827;
+  --color-muted: #6b7280;
+  --color-accent: #e08a3c;
+  --color-accent-hover: #c97530;
+  --color-overlay: #000000;
+}
+
+/* The same query as Tailwind's dark: variant, so one class such as text-muted serves both modes. */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-surface: #0e0e0e;
+    --color-card: #1a1a1a;
+    --color-primary: #f0f0f0;
+    --color-muted: #a0a0a0;
+    --color-overlay: #ffffff;
+  }
+}
+
+.prose {
+  --tw-prose-links: var(--color-accent);
+  --tw-prose-invert-links: var(--color-accent);
+}
+
+.prose a:hover {
+  color: var(--color-accent-hover);
+}
 
 /*
   The default border color has changed to `currentcolor` in Tailwind CSS v4,

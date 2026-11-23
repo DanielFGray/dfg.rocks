@@ -16,7 +16,7 @@ import {
 export const Route = createFileRoute("/_authed/family/billing/")({
   head: () => ({ meta: [{ title: "Billing | DFG Portal" }] }),
   component: FamilyBillingOverviewPage,
-  pendingComponent: () => <Main className="text-muted dark:text-muted-dark">Loading...</Main>,
+  pendingComponent: () => <Main className="text-muted">Loading...</Main>,
 });
 
 function FamilyBillingOverviewPage() {
@@ -33,7 +33,7 @@ function FamilyBillingOverviewPage() {
   if (isLoading) {
     return (
       <Main>
-        <p className="text-sm text-muted dark:text-muted-dark">Loading billing data...</p>
+        <p className="text-sm text-muted">Loading billing data...</p>
       </Main>
     );
   }
@@ -55,23 +55,23 @@ function FamilyBillingOverviewPage() {
   return (
     <Main>
       <div className="mb-8">
-        <h1 className="text-2xl font-bold text-primary dark:text-primary-dark">Billing</h1>
+        <h1 className="text-2xl font-bold text-primary">Billing</h1>
       </div>
 
       <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <Card>
           <div className="p-4">
-            <p className="text-xs font-medium tracking-wide text-muted uppercase dark:text-muted-dark">
+            <p className="text-xs font-medium tracking-wide text-muted uppercase">
               Gross Outstanding
             </p>
-            <p className="mt-1 text-2xl font-bold text-primary dark:text-primary-dark">
+            <p className="mt-1 text-2xl font-bold text-primary">
               {formatCents(balance.gross_outstanding_cents)}
             </p>
           </div>
         </Card>
         <Card>
           <div className="p-4">
-            <p className="text-xs font-medium tracking-wide text-muted uppercase dark:text-muted-dark">
+            <p className="text-xs font-medium tracking-wide text-muted uppercase">
               Available Credit
             </p>
             <p className="mt-1 text-2xl font-bold text-green-600 dark:text-green-400">
@@ -81,7 +81,7 @@ function FamilyBillingOverviewPage() {
         </Card>
         <Card>
           <div className="p-4">
-            <p className="text-xs font-medium tracking-wide text-muted uppercase dark:text-muted-dark">
+            <p className="text-xs font-medium tracking-wide text-muted uppercase">
               Net Due
             </p>
             <p
@@ -96,10 +96,10 @@ function FamilyBillingOverviewPage() {
       <div className="mb-8 grid gap-4 sm:grid-cols-2">
         <Card>
           <div className="p-4">
-            <p className="text-xs font-medium tracking-wide text-muted uppercase dark:text-muted-dark">
+            <p className="text-xs font-medium tracking-wide text-muted uppercase">
               Outstanding
             </p>
-            <p className="mt-1 text-lg font-semibold text-primary dark:text-primary-dark">
+            <p className="mt-1 text-lg font-semibold text-primary">
               {formatCents(balance.outstanding_cents)}
             </p>
           </div>
@@ -118,7 +118,7 @@ function FamilyBillingOverviewPage() {
 
       {/* Open Bills section */}
       <section className="mb-8">
-        <h2 className="mb-4 text-lg font-semibold text-primary dark:text-primary-dark">
+        <h2 className="mb-4 text-lg font-semibold text-primary">
           Open Bills
         </h2>
         {open_bills.length === 0 ? (
@@ -140,15 +140,15 @@ function FamilyBillingOverviewPage() {
 
       {/* Recent Payments section */}
       <section className="mb-8">
-        <h2 className="mb-4 text-lg font-semibold text-primary dark:text-primary-dark">
+        <h2 className="mb-4 text-lg font-semibold text-primary">
           Recent Payments
         </h2>
         {recent_payments.length === 0 ? (
           <EmptyState message="No payments recorded." />
         ) : (
-          <div className="overflow-x-auto rounded-lg border border-overlay/10 dark:border-overlay-dark/10">
+          <div className="overflow-x-auto rounded-lg border border-overlay/10">
             <table className="w-full text-left text-sm">
-              <thead className="bg-overlay/4 text-xs text-muted dark:bg-overlay-dark/4 dark:text-muted-dark">
+              <thead className="bg-overlay/4 text-xs text-muted">
                 <tr>
                   <th className="px-4 py-3 font-medium">Payment #</th>
                   <th className="px-4 py-3 font-medium">Amount</th>
@@ -161,14 +161,14 @@ function FamilyBillingOverviewPage() {
                 {recent_payments.map((p) => (
                   <tr
                     key={p.id}
-                    className="border-t border-overlay/8 hover:bg-overlay/4 dark:border-overlay-dark/8 dark:hover:bg-overlay-dark/4"
+                    className="border-t border-overlay/8 hover:bg-overlay/4"
                   >
-                    <td className="px-4 py-3 font-medium text-primary dark:text-primary-dark">
+                    <td className="px-4 py-3 font-medium text-primary">
                       #{p.payment_number}
                     </td>
                     <td className="px-4 py-3">{formatCents(p.amount_cents)}</td>
                     <td className="px-4 py-3 capitalize">{p.method.replaceAll("_", " ")}</td>
-                    <td className="px-4 py-3 text-muted dark:text-muted-dark">
+                    <td className="px-4 py-3 text-muted">
                       {dateLabel(p.received_at)}
                     </td>
                     <td className="px-4 py-3">
@@ -196,12 +196,12 @@ function FamilyBillingOverviewPage() {
       {/* Credits section */}
       {credits.length > 0 && (
         <section className="mb-8">
-          <h2 className="mb-4 text-lg font-semibold text-primary dark:text-primary-dark">
+          <h2 className="mb-4 text-lg font-semibold text-primary">
             Active Credits
           </h2>
-          <div className="overflow-x-auto rounded-lg border border-overlay/10 dark:border-overlay-dark/10">
+          <div className="overflow-x-auto rounded-lg border border-overlay/10">
             <table className="w-full text-left text-sm">
-              <thead className="bg-overlay/4 text-xs text-muted dark:bg-overlay-dark/4 dark:text-muted-dark">
+              <thead className="bg-overlay/4 text-xs text-muted">
                 <tr>
                   <th className="px-4 py-3 font-medium">Amount</th>
                   <th className="px-4 py-3 font-medium">Reason</th>
@@ -215,14 +215,14 @@ function FamilyBillingOverviewPage() {
                   .map((c) => (
                     <tr
                       key={c.id}
-                      className="border-t border-overlay/8 hover:bg-overlay/4 dark:border-overlay-dark/8 dark:hover:bg-overlay-dark/4"
+                      className="border-t border-overlay/8 hover:bg-overlay/4"
                     >
                       <td className="px-4 py-3 font-medium">{formatCents(c.amount_cents)}</td>
-                      <td className="px-4 py-3 text-muted dark:text-muted-dark">{c.reason}</td>
-                      <td className="px-4 py-3 text-muted dark:text-muted-dark">
+                      <td className="px-4 py-3 text-muted">{c.reason}</td>
+                      <td className="px-4 py-3 text-muted">
                         {dateLabel(c.created_at)}
                       </td>
-                      <td className="px-4 py-3 text-muted dark:text-muted-dark">
+                      <td className="px-4 py-3 text-muted">
                         {c.expires_at ? dateLabel(c.expires_at) : "\u2014"}
                       </td>
                     </tr>
@@ -238,9 +238,9 @@ function FamilyBillingOverviewPage() {
 
 function BillTable({ bills }: { bills: readonly any[] }) {
   return (
-    <div className="overflow-x-auto rounded-lg border border-overlay/10 dark:border-overlay-dark/10">
+    <div className="overflow-x-auto rounded-lg border border-overlay/10">
       <table className="w-full text-left text-sm">
-        <thead className="bg-overlay/4 text-xs text-muted dark:bg-overlay-dark/4 dark:text-muted-dark">
+        <thead className="bg-overlay/4 text-xs text-muted">
           <tr>
             <th className="px-4 py-3 font-medium">Bill #</th>
             <th className="px-4 py-3 font-medium">Status</th>
@@ -254,7 +254,7 @@ function BillTable({ bills }: { bills: readonly any[] }) {
           {bills.map((bill) => (
             <tr
               key={bill.id}
-              className="border-t border-overlay/8 hover:bg-overlay/4 dark:border-overlay-dark/8 dark:hover:bg-overlay-dark/4"
+              className="border-t border-overlay/8 hover:bg-overlay/4"
             >
               <td className="px-4 py-3 font-medium">
                 <Link
@@ -268,7 +268,7 @@ function BillTable({ bills }: { bills: readonly any[] }) {
               <td className="px-4 py-3">
                 <span className={billStatusBadge(bill.status)}>{statusLabel(bill.status)}</span>
               </td>
-              <td className="px-4 py-3 text-muted dark:text-muted-dark">
+              <td className="px-4 py-3 text-muted">
                 {dateLabel(bill.billing_period_start)} \u2013 {dateLabel(bill.billing_period_end)}
               </td>
               <td className="px-4 py-3">{bill.due_date ? dateLabel(bill.due_date) : "\u2014"}</td>

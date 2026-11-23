@@ -12,7 +12,7 @@ const AlphaTabPlayer = lazy(() =>
 );
 
 const card =
-  "rounded-lg overflow-hidden bg-overlay/5 dark:bg-overlay-dark/5 border border-overlay/6 dark:border-overlay-dark/6";
+  "rounded-lg overflow-hidden bg-overlay/5 border border-overlay/6";
 
 export const MaterialPreview = ({
   material,
@@ -77,7 +77,7 @@ export const MaterialPreview = ({
                 {null}
               </StaticScoreFrame>
             ) : (
-              <div className="p-6 text-center text-sm text-muted dark:text-muted-dark">
+              <div className="p-6 text-center text-sm text-muted">
                 Loading...
               </div>
             )
@@ -93,7 +93,7 @@ export const MaterialPreview = ({
     default:
       return (
         <div className={embedded ? "text-center" : `${card} p-6 text-center`}>
-          <p className="text-sm text-muted dark:text-muted-dark">
+          <p className="text-sm text-muted">
             Preview not available for this file type.
           </p>
           <a

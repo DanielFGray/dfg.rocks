@@ -77,7 +77,7 @@ export const Route = createFileRoute("/_authed/settings")({
   head: () => ({ meta: [{ title: "Settings | DFG Portal" }] }),
   component: SettingsPage,
   pendingComponent: () => (
-    <main className="mx-auto max-w-[1100px] px-5 pt-20 pb-16 text-muted md:px-8 dark:text-muted-dark">
+    <main className="mx-auto max-w-[1100px] px-5 pt-20 pb-16 text-muted md:px-8">
       Loading...
     </main>
   ),

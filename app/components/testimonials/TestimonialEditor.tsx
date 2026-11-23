@@ -78,8 +78,8 @@ export function TestimonialEditor({
         <div className="flex flex-col gap-4">
           <div className="flex flex-col gap-1">
             <h2 className="text-xl font-semibold">{title}</h2>
-            <p className="text-sm text-muted dark:text-muted-dark">{description}</p>
-            <p className="text-xs text-muted dark:text-muted-dark">
+            <p className="text-sm text-muted">{description}</p>
+            <p className="text-xs text-muted">
               20-2000 characters. Your name and account role will be shown with it publicly.
             </p>
           </div>
@@ -96,7 +96,7 @@ export function TestimonialEditor({
           />
 
           <div className="flex items-center justify-between gap-3">
-            <div className="text-xs text-muted dark:text-muted-dark">
+            <div className="text-xs text-muted">
               {testimonial ? (
                 <span>
                   {approvalMessage} Last updated{" "}

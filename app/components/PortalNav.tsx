@@ -11,9 +11,9 @@ import { Select } from "./ui/Select.js";
 import { Sidebar } from "./ui/Sidebar.js";
 
 const navLinkClass =
-  "text-muted dark:text-muted-dark no-underline text-sm transition-colors hover:text-primary dark:hover:text-primary-dark";
+  "text-muted no-underline text-sm transition-colors hover:text-primary";
 const mobileLinkClass =
-  "text-muted dark:text-muted-dark no-underline text-base transition-colors hover:text-primary dark:hover:text-primary-dark";
+  "text-muted no-underline text-base transition-colors hover:text-primary";
 
 const navItems: Array<{
   to: string;
@@ -202,11 +202,11 @@ export function PortalNav() {
       <nav
         ref={navRef}
         data-testid="portal-nav"
-        className={`fixed top-0 z-100 flex w-full items-center justify-between border-b border-overlay/5 bg-surface/90 px-6 py-3 backdrop-blur-md transition-transform duration-300 will-change-transform md:px-8 dark:border-overlay-dark/5 dark:bg-surface-dark/90 print:hidden ${menuOpen || navVisible ? "translate-y-0" : "-translate-y-full"}`}
+        className={`fixed top-0 z-100 flex w-full items-center justify-between border-b border-overlay/5 bg-surface/90 px-6 py-3 backdrop-blur-md transition-transform duration-300 will-change-transform md:px-8 print:hidden ${menuOpen || navVisible ? "translate-y-0" : "-translate-y-full"}`}
       >
         <div className="text-lg font-bold tracking-tight">
           dfg<span className="text-accent">.</span>rocks
-          <span className="ml-2 text-sm font-normal text-muted dark:text-muted-dark">portal</span>
+          <span className="ml-2 text-sm font-normal text-muted">portal</span>
         </div>
 
         {/* Desktop nav */}
@@ -284,13 +284,13 @@ export function PortalNav() {
               className={mobileLinkClass}
               data-testid={it.id}
             >
-              <div className="border-b border-overlay/5 py-3 dark:border-overlay-dark/5">
+              <div className="border-b border-overlay/5 py-3">
                 {it.mobileLabel ?? it.label}
               </div>
             </Link>
           ))}
           {isParent && familyStudents.length > 0 && (
-            <div className="border-b border-overlay/5 py-3 dark:border-overlay-dark/5">
+            <div className="border-b border-overlay/5 py-3">
               <Select
                 id="student-switcher-mobile"
                 name="student-switcher"

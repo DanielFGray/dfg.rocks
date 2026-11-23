@@ -15,7 +15,7 @@ import {
 export const Route = createFileRoute("/_authed/family/billing/bills")({
   head: () => ({ meta: [{ title: "Bills | DFG Portal" }] }),
   component: BillsPage,
-  pendingComponent: () => <Main className="text-muted dark:text-muted-dark">Loading...</Main>,
+  pendingComponent: () => <Main className="text-muted">Loading...</Main>,
 });
 
 function BillsPage() {
@@ -32,7 +32,7 @@ function BillsPage() {
   if (isLoading) {
     return (
       <Main>
-        <p className="text-sm text-muted dark:text-muted-dark">Loading bills...</p>
+        <p className="text-sm text-muted">Loading bills...</p>
       </Main>
     );
   }
@@ -54,20 +54,20 @@ function BillsPage() {
       <div className="mb-6">
         <Link
           to="/family/billing"
-          className="text-sm text-muted hover:text-accent dark:text-muted-dark dark:hover:text-accent"
+          className="text-sm text-muted hover:text-accent dark:hover:text-accent"
         >
           &larr; Back to billing
         </Link>
       </div>
 
-      <h1 className="mb-6 text-2xl font-bold text-primary dark:text-primary-dark">All Bills</h1>
+      <h1 className="mb-6 text-2xl font-bold text-primary">All Bills</h1>
 
       {bills.length === 0 ? (
         <EmptyState message="No bills found." />
       ) : (
-        <div className="overflow-x-auto rounded-lg border border-overlay/10 dark:border-overlay-dark/10">
+        <div className="overflow-x-auto rounded-lg border border-overlay/10">
           <table className="w-full text-left text-sm">
-            <thead className="bg-overlay/4 text-xs text-muted dark:bg-overlay-dark/4 dark:text-muted-dark">
+            <thead className="bg-overlay/4 text-xs text-muted">
               <tr>
                 <th className="px-4 py-3 font-medium">Bill #</th>
                 <th className="px-4 py-3 font-medium">Status</th>
@@ -81,7 +81,7 @@ function BillsPage() {
               {bills.map((bill: any) => (
                 <tr
                   key={bill.id}
-                  className="border-t border-overlay/8 hover:bg-overlay/4 dark:border-overlay-dark/8 dark:hover:bg-overlay-dark/4"
+                  className="border-t border-overlay/8 hover:bg-overlay/4"
                 >
                   <td className="px-4 py-3 font-medium">
                     <Link
@@ -95,7 +95,7 @@ function BillsPage() {
                   <td className="px-4 py-3">
                     <span className={billStatusBadge(bill.status)}>{statusLabel(bill.status)}</span>
                   </td>
-                  <td className="px-4 py-3 text-muted dark:text-muted-dark">
+                  <td className="px-4 py-3 text-muted">
                     {dateLabel(bill.billing_period_start)} &ndash;{" "}
                     {dateLabel(bill.billing_period_end)}
                   </td>

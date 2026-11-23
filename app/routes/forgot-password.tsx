@@ -25,7 +25,7 @@ function ForgotPasswordPage() {
       >
         <div className="w-full max-w-sm text-center">
           <h1 className="mb-4 text-3xl font-bold tracking-tight">Check Your Email</h1>
-          <p className="text-sm text-muted dark:text-muted-dark">
+          <p className="text-sm text-muted">
             If an account exists with that email, we've sent a password reset link. Check your
             inbox.
           </p>
@@ -50,7 +50,7 @@ function ForgotPasswordPage() {
       <div className="w-full max-w-sm">
         <div className="mb-8 text-center">
           <h1 className="text-3xl font-bold tracking-tight">Forgot Password</h1>
-          <p className="mt-2 text-sm text-muted dark:text-muted-dark">
+          <p className="mt-2 text-sm text-muted">
             Enter your email and we'll send a reset link
           </p>
         </div>

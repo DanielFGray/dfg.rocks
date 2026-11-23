@@ -42,7 +42,7 @@ export const Route = createFileRoute("/_authed/courses/")({
   head: () => ({ meta: [{ title: "Courses | DFG Portal" }] }),
   loader: () => getCoursesPageData(),
   component: CoursesPage,
-  pendingComponent: () => <Main className="text-muted dark:text-muted-dark">Loading...</Main>,
+  pendingComponent: () => <Main className="text-muted">Loading...</Main>,
 });
 
 function CoursesPage() {
@@ -102,13 +102,13 @@ export function AdminCourses({ courses }: { courses: readonly Course[] }) {
             <Card key={c.id}>
               <Link to="/courses/$id" params={{ id: c.id }} className="block no-underline">
                 <div className="flex items-start justify-between">
-                  <p className="font-medium text-primary dark:text-primary-dark">{c.title}</p>
+                  <p className="font-medium text-primary">{c.title}</p>
                   <span className="ml-2 shrink-0 rounded-full bg-accent/12 px-2 py-0.5 text-xs font-semibold text-accent">
                     {c.instrument}
                   </span>
                 </div>
               </Link>
-              <div className="mt-4 flex gap-2 border-t border-overlay/6 pt-3 dark:border-overlay-dark/6">
+              <div className="mt-4 flex gap-2 border-t border-overlay/6 pt-3">
                 <Button variant="ghost" onClick={openEditCourse(c)} className="px-3 py-1.5 text-xs">
                   Edit
                 </Button>
@@ -169,7 +169,7 @@ export function StudentCourses({ courses }: { courses: readonly Course[] }) {
             <Link key={c.id} to="/courses/$id" params={{ id: c.id }} className="no-underline">
               <Card>
                 <div className="flex items-center justify-between">
-                  <span className="font-medium text-primary dark:text-primary-dark">{c.title}</span>
+                  <span className="font-medium text-primary">{c.title}</span>
                   <span className="rounded-full bg-accent/12 px-2.5 py-0.5 text-sm font-semibold text-accent">
                     {c.instrument}
                   </span>

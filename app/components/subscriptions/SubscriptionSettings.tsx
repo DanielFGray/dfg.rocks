@@ -24,9 +24,9 @@ export function SubscriptionSettings() {
     <Card data-testid="subscription-settings" className="mb-8">
       <h2 className="mb-4 text-xl font-semibold tracking-tight">Subscription</h2>
       {isPending ? (
-        <p className="text-muted dark:text-muted-dark">Loading...</p>
+        <p className="text-muted">Loading...</p>
       ) : isError ? (
-        <p className="text-muted dark:text-muted-dark">Your subscription could not be loaded.</p>
+        <p className="text-muted">Your subscription could not be loaded.</p>
       ) : (
         <SubscriptionBody
           status={data}
@@ -58,7 +58,7 @@ function SubscriptionBody({
   if (own !== null && (own.live || covering === null)) {
     return (
       <div className="flex flex-col gap-4">
-        <p data-testid="subscription-status" className="text-primary dark:text-primary-dark">
+        <p data-testid="subscription-status" className="text-primary">
           {statusLine(own)}
         </p>
         <div>
@@ -77,10 +77,10 @@ function SubscriptionBody({
   if (covering !== null) {
     return (
       <div className="flex flex-col gap-4">
-        <p data-testid="subscription-status" className="text-primary dark:text-primary-dark">
+        <p data-testid="subscription-status" className="text-primary">
           {statusLine(covering)}
         </p>
-        <p data-testid="subscription-billing-contact" className="text-muted dark:text-muted-dark">
+        <p data-testid="subscription-billing-contact" className="text-muted">
           Your family's billing contact manages the subscription.
         </p>
       </div>
@@ -88,20 +88,20 @@ function SubscriptionBody({
   }
   if (status.checkout === "no_billing_contact") {
     return (
-      <p data-testid="subscription-billing-contact" className="text-muted dark:text-muted-dark">
+      <p data-testid="subscription-billing-contact" className="text-muted">
         Your family has no billing contact yet.
       </p>
     );
   }
   if (status.checkout === "not_billing_contact") {
     return (
-      <p data-testid="subscription-billing-contact" className="text-muted dark:text-muted-dark">
+      <p data-testid="subscription-billing-contact" className="text-muted">
         Your family's billing contact can subscribe for the family.
       </p>
     );
   }
   return (
-    <p data-testid="subscription-none" className="text-muted dark:text-muted-dark">
+    <p data-testid="subscription-none" className="text-muted">
       You have no subscription.{" "}
       <Link to="/pricing" className="text-accent">
         See the plans

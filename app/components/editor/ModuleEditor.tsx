@@ -59,7 +59,7 @@ export function ModuleEditor({
 
   return (
     <MaterialsContext.Provider value={materialMap}>
-      <div className="rounded-lg border border-overlay/6 bg-card dark:border-overlay-dark/6 dark:bg-card-dark">
+      <div className="rounded-lg border border-overlay/6 bg-card">
         <EditorToolbar
           editor={editor}
           onEmbedMaterial={() => setPickerOpen(true)}
@@ -73,7 +73,7 @@ export function ModuleEditor({
         />
         <EditorContent
           editor={editor}
-          className="prose max-w-none px-5 py-4 dark:prose-invert [&_.ProseMirror]:min-h-[300px] [&_.ProseMirror]:outline-hidden [&_.ProseMirror_p.is-editor-empty:first-child]:before:pointer-events-none [&_.ProseMirror_p.is-editor-empty:first-child]:before:float-left [&_.ProseMirror_p.is-editor-empty:first-child]:before:h-0 [&_.ProseMirror_p.is-editor-empty:first-child]:before:text-muted [&_.ProseMirror_p.is-editor-empty:first-child]:before:content-['Start_writing...'] dark:[&_.ProseMirror_p.is-editor-empty:first-child]:before:text-muted-dark"
+          className="prose max-w-none px-5 py-4 dark:prose-invert [&_.ProseMirror]:min-h-[300px] [&_.ProseMirror]:outline-hidden [&_.ProseMirror_p.is-editor-empty:first-child]:before:pointer-events-none [&_.ProseMirror_p.is-editor-empty:first-child]:before:float-left [&_.ProseMirror_p.is-editor-empty:first-child]:before:h-0 [&_.ProseMirror_p.is-editor-empty:first-child]:before:text-muted [&_.ProseMirror_p.is-editor-empty:first-child]:before:content-['Start_writing...']"
         />
       </div>
       <AttachMaterialModal

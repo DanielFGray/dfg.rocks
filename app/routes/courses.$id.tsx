@@ -312,7 +312,7 @@ function CourseDetailView({
           <div className="mb-2 flex items-center gap-3">
             <Link
               to="/courses"
-              className="text-sm text-muted no-underline transition-colors hover:text-primary dark:text-muted-dark dark:hover:text-primary-dark"
+              className="text-sm text-muted no-underline transition-colors hover:text-primary"
             >
               &larr; Courses
             </Link>
@@ -331,7 +331,7 @@ function CourseDetailView({
             </Button>
           ) : null}
         </div>
-        <p className="mt-2 text-muted dark:text-muted-dark">
+        <p className="mt-2 text-muted">
           <span className="font-medium text-accent">{course.instrument}</span> &mdash;{" "}
           {course.description}
         </p>
@@ -354,7 +354,7 @@ function CourseDetailView({
             action={{ label: "Add Module", onClick: openAddModule }}
           />
         ) : (
-          <p className="py-8 text-center text-muted dark:text-muted-dark">No modules yet.</p>
+          <p className="py-8 text-center text-muted">No modules yet.</p>
         )
       ) : (
         <div className="-mx-5 flex flex-col gap-5 md:mx-0">

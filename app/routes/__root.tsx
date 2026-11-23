@@ -76,7 +76,7 @@ function RootDocument({ children }: { children: ReactNode }) {
       <head>
         <HeadContent />
       </head>
-      <body className="bg-surface font-sans text-lg leading-relaxed text-primary dark:bg-surface-dark dark:text-primary-dark">
+      <body className="bg-surface font-sans text-lg leading-relaxed text-primary">
         <div id="root">{children}</div>
         <Scripts />
       </body>

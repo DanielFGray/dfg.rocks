@@ -65,8 +65,8 @@ export function MessageThread({
   return (
     <div className="flex h-full flex-col">
       {/* Header */}
-      <div className="shrink-0 border-b border-overlay/6 px-5 py-3 dark:border-overlay-dark/6">
-        <h2 className="text-lg font-semibold text-primary dark:text-primary-dark">
+      <div className="shrink-0 border-b border-overlay/6 px-5 py-3">
+        <h2 className="text-lg font-semibold text-primary">
           <Link to="/people/$id" params={{ id: partnerId }}>
             {partnerName}
           </Link>
@@ -83,13 +83,13 @@ export function MessageThread({
                 className={[
                   "max-w-[75%] rounded-xl px-4 py-2.5 text-sm leading-relaxed",
                   isMine
-                    ? "bg-accent/20 text-primary dark:text-primary-dark"
-                    : "bg-overlay/6 dark:bg-overlay-dark/6 text-primary dark:text-primary-dark",
+                    ? "bg-accent/20 text-primary"
+                    : "bg-overlay/6 text-primary",
                 ].join(" ")}
               >
                 <p className="wrap-break-word whitespace-pre-wrap">{msg.body}</p>
                 <p
-                  className={`mt-1 text-xs ${isMine ? "text-accent/50" : "text-muted/40 dark:text-muted-dark/40"}`}
+                  className={`mt-1 text-xs ${isMine ? "text-accent/50" : "text-muted/40"}`}
                 >
                   {formatTime(msg.created_at)}
                 </p>
@@ -101,7 +101,7 @@ export function MessageThread({
       </div>
 
       {/* Compose */}
-      <div className="shrink-0 border-t border-overlay/6 px-5 py-3 dark:border-overlay-dark/6">
+      <div className="shrink-0 border-t border-overlay/6 px-5 py-3">
         <div className="flex items-end gap-3">
           <textarea
             data-testid="compose-input"
@@ -110,7 +110,7 @@ export function MessageThread({
             onKeyDown={onKeyDown}
             placeholder="Type a message..."
             rows={2}
-            className="min-w-0 flex-1 resize-none rounded-lg border border-overlay/10 bg-card px-4 py-3 text-sm text-primary outline-hidden transition-colors placeholder:text-muted/50 focus:border-accent focus:ring-1 focus:ring-accent/50 dark:border-overlay-dark/10 dark:bg-card-dark dark:text-primary-dark dark:placeholder:text-muted-dark/50"
+            className="min-w-0 flex-1 resize-none rounded-lg border border-overlay/10 bg-card px-4 py-3 text-sm text-primary outline-hidden transition-colors placeholder:text-muted/50 focus:border-accent focus:ring-1 focus:ring-accent/50"
           />
           <Button
             data-testid="send-btn"

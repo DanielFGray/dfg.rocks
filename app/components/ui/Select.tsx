@@ -52,15 +52,15 @@ export const Select = ({
     onBlur={onBlur}
     className="flex flex-col gap-1.5"
   >
-    <Label className="text-sm font-medium text-muted dark:text-muted-dark">{label}</Label>
+    <Label className="text-sm font-medium text-muted">{label}</Label>
     <Button
       id={id}
       data-testid={pwid}
-      className={`flex cursor-pointer items-center justify-between rounded-lg border bg-card px-4 py-3 text-primary outline-hidden transition-colors data-focused:border-accent data-focused:ring-1 data-focused:ring-accent/50 dark:bg-card-dark dark:text-primary-dark ${error ? "border-red-500/50" : "border-overlay/10 dark:border-overlay-dark/10"}`}
+      className={`flex cursor-pointer items-center justify-between rounded-lg border bg-card px-4 py-3 text-primary outline-hidden transition-colors data-focused:border-accent data-focused:ring-1 data-focused:ring-accent/50 ${error ? "border-red-500/50" : "border-overlay/10"}`}
     >
-      <SelectValue className="truncate data-placeholder:text-muted/50 dark:data-placeholder:text-muted-dark/50" />
+      <SelectValue className="truncate data-placeholder:text-muted/50" />
       <svg
-        className="ml-2 h-4 w-4 shrink-0 text-muted dark:text-muted-dark"
+        className="ml-2 h-4 w-4 shrink-0 text-muted"
         xmlns="http://www.w3.org/2000/svg"
         viewBox="0 0 24 24"
         fill="none"
@@ -72,7 +72,7 @@ export const Select = ({
         <polyline points="6 9 12 15 18 9" />
       </svg>
     </Button>
-    <Popover className="max-h-60 w-(--trigger-width) overflow-auto rounded-lg border border-overlay/10 bg-card shadow-2xl dark:border-overlay-dark/10 dark:bg-card-dark">
+    <Popover className="max-h-60 w-(--trigger-width) overflow-auto rounded-lg border border-overlay/10 bg-card shadow-2xl">
       <ListBox className="p-1 outline-hidden">
         {options.map((opt) => (
           <ListBoxItem
@@ -80,7 +80,7 @@ export const Select = ({
             id={opt.value}
             textValue={opt.label}
             data-testid={`select-option-${opt.value}`}
-            className="cursor-pointer rounded-md px-3 py-2 text-sm text-primary outline-hidden transition-colors data-focused:bg-overlay/8 data-selected:text-accent dark:text-primary-dark dark:data-focused:bg-overlay-dark/8"
+            className="cursor-pointer rounded-md px-3 py-2 text-sm text-primary outline-hidden transition-colors data-focused:bg-overlay/8 data-selected:text-accent"
           >
             {opt.label}
           </ListBoxItem>

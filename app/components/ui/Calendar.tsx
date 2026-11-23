@@ -29,7 +29,7 @@ export function Calendar({ value, onChange, minValue, maxValue }: CalendarProps)
       <header className="flex items-center justify-between px-1 pb-2">
         <Button
           slot="previous"
-          className="cursor-pointer rounded-md p-1 text-muted hover:bg-overlay/5 hover:text-primary dark:text-muted-dark dark:hover:bg-overlay-dark/5 dark:hover:text-primary-dark"
+          className="cursor-pointer rounded-md p-1 text-muted hover:bg-overlay/5 hover:text-primary"
         >
           <svg
             className="h-4 w-4"
@@ -41,10 +41,10 @@ export function Calendar({ value, onChange, minValue, maxValue }: CalendarProps)
             <polyline points="15 18 9 12 15 6" />
           </svg>
         </Button>
-        <Heading className="text-sm font-semibold text-primary dark:text-primary-dark" />
+        <Heading className="text-sm font-semibold text-primary" />
         <Button
           slot="next"
-          className="cursor-pointer rounded-md p-1 text-muted hover:bg-overlay/5 hover:text-primary dark:text-muted-dark dark:hover:bg-overlay-dark/5 dark:hover:text-primary-dark"
+          className="cursor-pointer rounded-md p-1 text-muted hover:bg-overlay/5 hover:text-primary"
         >
           <svg
             className="h-4 w-4"
@@ -60,7 +60,7 @@ export function Calendar({ value, onChange, minValue, maxValue }: CalendarProps)
       <CalendarGrid className="w-full">
         <CalendarGridHeader>
           {(day) => (
-            <CalendarHeaderCell className="pb-1 text-xs font-semibold text-muted dark:text-muted-dark">
+            <CalendarHeaderCell className="pb-1 text-xs font-semibold text-muted">
               {day}
             </CalendarHeaderCell>
           )}
@@ -69,7 +69,7 @@ export function Calendar({ value, onChange, minValue, maxValue }: CalendarProps)
           {(date) => (
             <CalendarCell
               date={date}
-              className="rounded-lg px-3 py-2 text-sm text-primary hover:bg-overlay/8 data-disabled:text-muted/30 data-outside-month:text-muted/40 data-selected:bg-accent data-selected:text-white data-selected:hover:bg-accent-hover dark:text-primary-dark dark:hover:bg-overlay-dark/8"
+              className="rounded-lg px-3 py-2 text-sm text-primary hover:bg-overlay/8 data-disabled:text-muted/30 data-outside-month:text-muted/40 data-selected:bg-accent data-selected:text-white data-selected:hover:bg-accent-hover"
             />
           )}
         </CalendarGridBody>

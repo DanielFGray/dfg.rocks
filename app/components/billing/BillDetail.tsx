@@ -39,10 +39,10 @@ export function BillDetailView({
       <div className="mb-6">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-primary dark:text-primary-dark">
+            <h1 className="text-2xl font-bold text-primary">
               Bill #{bill.bill_number}
             </h1>
-            <p className="mt-1 text-sm text-muted dark:text-muted-dark">
+            <p className="mt-1 text-sm text-muted">
               <Link
                 to="/billing/payers/$payerId"
                 params={{ payerId: bill.payer_id }}
@@ -59,17 +59,17 @@ export function BillDetailView({
       <div className="mb-6 grid gap-4 sm:grid-cols-4">
         <Card>
           <div className="p-4">
-            <p className="text-xs font-medium tracking-wide text-muted uppercase dark:text-muted-dark">
+            <p className="text-xs font-medium tracking-wide text-muted uppercase">
               Subtotal
             </p>
-            <p className="mt-1 text-lg font-bold text-primary dark:text-primary-dark">
+            <p className="mt-1 text-lg font-bold text-primary">
               {formatCents(bill.subtotal_cents)}
             </p>
           </div>
         </Card>
         <Card>
           <div className="p-4">
-            <p className="text-xs font-medium tracking-wide text-muted uppercase dark:text-muted-dark">
+            <p className="text-xs font-medium tracking-wide text-muted uppercase">
               Discount
             </p>
             <p className="mt-1 text-lg font-bold text-green-600 dark:text-green-400">
@@ -79,20 +79,20 @@ export function BillDetailView({
         </Card>
         <Card>
           <div className="p-4">
-            <p className="text-xs font-medium tracking-wide text-muted uppercase dark:text-muted-dark">
+            <p className="text-xs font-medium tracking-wide text-muted uppercase">
               Tax
             </p>
-            <p className="mt-1 text-lg font-bold text-primary dark:text-primary-dark">
+            <p className="mt-1 text-lg font-bold text-primary">
               {bill.tax_cents > 0 ? formatCents(bill.tax_cents) : "—"}
             </p>
           </div>
         </Card>
         <Card>
           <div className="p-4">
-            <p className="text-xs font-medium tracking-wide text-primary uppercase dark:text-primary-dark">
+            <p className="text-xs font-medium tracking-wide text-primary uppercase">
               Total
             </p>
-            <p className="mt-1 text-lg font-bold text-primary dark:text-primary-dark">
+            <p className="mt-1 text-lg font-bold text-primary">
               {formatCents(bill.total_cents)}
             </p>
           </div>
@@ -101,15 +101,15 @@ export function BillDetailView({
 
       <div className="mb-6 flex flex-wrap gap-2">
         {bill.notes ? (
-          <p className="w-full text-sm text-muted dark:text-muted-dark">Notes: {bill.notes}</p>
+          <p className="w-full text-sm text-muted">Notes: {bill.notes}</p>
         ) : null}
         {bill.issued_at && (
-          <span className="text-xs text-muted dark:text-muted-dark">
+          <span className="text-xs text-muted">
             Issued: {dateTimeLabel(bill.issued_at)}
           </span>
         )}
         {bill.due_date && (
-          <span className="text-xs text-muted dark:text-muted-dark">
+          <span className="text-xs text-muted">
             Due: {dateLabel(bill.due_date)}
           </span>
         )}
@@ -130,11 +130,11 @@ export function BillDetailView({
 
         <TabPanel id="lineItems" className="mt-6">
           {bill.line_items.length === 0 ? (
-            <p className="text-sm text-muted dark:text-muted-dark">No line items.</p>
+            <p className="text-sm text-muted">No line items.</p>
           ) : (
-            <div className="overflow-x-auto rounded-lg border border-overlay/10 dark:border-overlay-dark/10">
+            <div className="overflow-x-auto rounded-lg border border-overlay/10">
               <table className="w-full text-left text-sm">
-                <thead className="bg-overlay/4 text-xs text-muted dark:bg-overlay-dark/4 dark:text-muted-dark">
+                <thead className="bg-overlay/4 text-xs text-muted">
                   <tr>
                     <th className="px-4 py-3 font-medium">Description</th>
                     <th className="px-4 py-3 font-medium">Type</th>
@@ -147,12 +147,12 @@ export function BillDetailView({
                   {bill.line_items.map((li) => (
                     <tr
                       key={li.id}
-                      className="border-t border-overlay/8 dark:border-overlay-dark/8"
+                      className="border-t border-overlay/8"
                     >
-                      <td className="px-4 py-3 font-medium text-primary dark:text-primary-dark">
+                      <td className="px-4 py-3 font-medium text-primary">
                         {li.description}
                       </td>
-                      <td className="px-4 py-3 text-muted dark:text-muted-dark">
+                      <td className="px-4 py-3 text-muted">
                         {statusLabel(li.line_type)}
                       </td>
                       <td className="px-4 py-3">{li.quantity}</td>
@@ -161,7 +161,7 @@ export function BillDetailView({
                     </tr>
                   ))}
                 </tbody>
-                <tfoot className="bg-overlay/4 text-xs dark:bg-overlay-dark/4">
+                <tfoot className="bg-overlay/4 text-xs">
                   <tr>
                     <td colSpan={4} className="px-4 py-2 text-right font-medium">
                       Subtotal
@@ -172,7 +172,7 @@ export function BillDetailView({
                     <tr>
                       <td
                         colSpan={4}
-                        className="px-4 py-2 text-right text-muted dark:text-muted-dark"
+                        className="px-4 py-2 text-right text-muted"
                       >
                         Discount
                       </td>
@@ -185,7 +185,7 @@ export function BillDetailView({
                     <tr>
                       <td
                         colSpan={4}
-                        className="px-4 py-2 text-right text-muted dark:text-muted-dark"
+                        className="px-4 py-2 text-right text-muted"
                       >
                         Tax
                       </td>
@@ -195,11 +195,11 @@ export function BillDetailView({
                   <tr>
                     <td
                       colSpan={4}
-                      className="px-4 py-2 text-right font-semibold text-primary dark:text-primary-dark"
+                      className="px-4 py-2 text-right font-semibold text-primary"
                     >
                       Total
                     </td>
-                    <td className="px-4 py-2 font-bold text-primary dark:text-primary-dark">
+                    <td className="px-4 py-2 font-bold text-primary">
                       {formatCents(bill.total_cents)}
                     </td>
                   </tr>
@@ -214,11 +214,11 @@ export function BillDetailView({
             <AdjustmentForm billId={bill.id} onSaved={onRefresh} />
           </div>
           {bill.adjustments.length === 0 ? (
-            <p className="text-sm text-muted dark:text-muted-dark">No adjustments.</p>
+            <p className="text-sm text-muted">No adjustments.</p>
           ) : (
-            <div className="overflow-x-auto rounded-lg border border-overlay/10 dark:border-overlay-dark/10">
+            <div className="overflow-x-auto rounded-lg border border-overlay/10">
               <table className="w-full text-left text-sm">
-                <thead className="bg-overlay/4 text-xs text-muted dark:bg-overlay-dark/4 dark:text-muted-dark">
+                <thead className="bg-overlay/4 text-xs text-muted">
                   <tr>
                     <th className="px-4 py-3 font-medium">Amount</th>
                     <th className="px-4 py-3 font-medium">Reason</th>
@@ -229,7 +229,7 @@ export function BillDetailView({
                   {bill.adjustments.map((adj) => (
                     <tr
                       key={adj.id}
-                      className="border-t border-overlay/8 dark:border-overlay-dark/8"
+                      className="border-t border-overlay/8"
                     >
                       <td className="px-4 py-3 font-medium">
                         <span
@@ -243,8 +243,8 @@ export function BillDetailView({
                           {formatCents(Math.abs(adj.amount_cents))}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-muted dark:text-muted-dark">{adj.reason}</td>
-                      <td className="px-4 py-3 text-muted dark:text-muted-dark">
+                      <td className="px-4 py-3 text-muted">{adj.reason}</td>
+                      <td className="px-4 py-3 text-muted">
                         {dateTimeLabel(adj.created_at)}
                       </td>
                     </tr>
@@ -257,11 +257,11 @@ export function BillDetailView({
 
         <TabPanel id="creditApps" className="mt-6">
           {bill.credit_applications.length === 0 ? (
-            <p className="text-sm text-muted dark:text-muted-dark">No credit applications.</p>
+            <p className="text-sm text-muted">No credit applications.</p>
           ) : (
-            <div className="overflow-x-auto rounded-lg border border-overlay/10 dark:border-overlay-dark/10">
+            <div className="overflow-x-auto rounded-lg border border-overlay/10">
               <table className="w-full text-left text-sm">
-                <thead className="bg-overlay/4 text-xs text-muted dark:bg-overlay-dark/4 dark:text-muted-dark">
+                <thead className="bg-overlay/4 text-xs text-muted">
                   <tr>
                     <th className="px-4 py-3 font-medium">Amount</th>
                     <th className="px-4 py-3 font-medium">Date</th>
@@ -271,12 +271,12 @@ export function BillDetailView({
                   {bill.credit_applications.map((ca) => (
                     <tr
                       key={ca.id}
-                      className="border-t border-overlay/8 dark:border-overlay-dark/8"
+                      className="border-t border-overlay/8"
                     >
                       <td className="px-4 py-3 font-medium text-green-600 dark:text-green-400">
                         -{formatCents(ca.amount_cents)}
                       </td>
-                      <td className="px-4 py-3 text-muted dark:text-muted-dark">
+                      <td className="px-4 py-3 text-muted">
                         {dateTimeLabel(ca.created_at)}
                       </td>
                     </tr>
@@ -363,7 +363,7 @@ function AdjustmentForm({ billId, onSaved }: { billId: string; onSaved: () => vo
   return (
     <form
       data-testid="adjust-bill-form"
-      className="flex flex-wrap items-end gap-3 rounded-lg border border-overlay/10 p-4 dark:border-overlay-dark/10"
+      className="flex flex-wrap items-end gap-3 rounded-lg border border-overlay/10 p-4"
       onSubmit={(e) => {
         e.preventDefault();
         save.mutate();

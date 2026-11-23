@@ -11,7 +11,7 @@ import { formatCents, dateLabel, dateTimeLabel } from "../../../../components/bi
 export const Route = createFileRoute("/_authed/family/billing/payments/$paymentId")({
   head: () => ({ meta: [{ title: "Payment Receipt | DFG Portal" }] }),
   component: PaymentDetailPage,
-  pendingComponent: () => <Main className="text-muted dark:text-muted-dark">Loading...</Main>,
+  pendingComponent: () => <Main className="text-muted">Loading...</Main>,
 });
 
 function PaymentDetailPage() {
@@ -30,7 +30,7 @@ function PaymentDetailPage() {
   if (isLoading) {
     return (
       <Main>
-        <p className="text-sm text-muted dark:text-muted-dark">Loading payment details...</p>
+        <p className="text-sm text-muted">Loading payment details...</p>
       </Main>
     );
   }
@@ -54,7 +54,7 @@ function PaymentDetailPage() {
       <div className="mb-6">
         <Link
           to="/family/billing"
-          className="text-sm text-muted hover:text-accent dark:text-muted-dark dark:hover:text-accent"
+          className="text-sm text-muted hover:text-accent dark:hover:text-accent"
         >
           &larr; Back to billing
         </Link>
@@ -63,10 +63,10 @@ function PaymentDetailPage() {
       <div className="mb-6">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-primary dark:text-primary-dark">
+            <h1 className="text-2xl font-bold text-primary">
               Payment Receipt
             </h1>
-            <p className="mt-1 text-sm text-muted dark:text-muted-dark">
+            <p className="mt-1 text-sm text-muted">
               Receipt #{payment.payment_number}
             </p>
           </div>
@@ -85,40 +85,40 @@ function PaymentDetailPage() {
       <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Card>
           <div className="p-4">
-            <p className="text-xs font-medium tracking-wide text-muted uppercase dark:text-muted-dark">
+            <p className="text-xs font-medium tracking-wide text-muted uppercase">
               Amount
             </p>
-            <p className="mt-1 text-xl font-bold text-primary dark:text-primary-dark">
+            <p className="mt-1 text-xl font-bold text-primary">
               {formatCents(payment.amount_cents)}
             </p>
           </div>
         </Card>
         <Card>
           <div className="p-4">
-            <p className="text-xs font-medium tracking-wide text-muted uppercase dark:text-muted-dark">
+            <p className="text-xs font-medium tracking-wide text-muted uppercase">
               Method
             </p>
-            <p className="mt-1 text-lg font-semibold text-primary capitalize dark:text-primary-dark">
+            <p className="mt-1 text-lg font-semibold text-primary capitalize">
               {payment.method.replaceAll("_", " ")}
             </p>
           </div>
         </Card>
         <Card>
           <div className="p-4">
-            <p className="text-xs font-medium tracking-wide text-muted uppercase dark:text-muted-dark">
+            <p className="text-xs font-medium tracking-wide text-muted uppercase">
               Received
             </p>
-            <p className="mt-1 text-lg font-semibold text-primary dark:text-primary-dark">
+            <p className="mt-1 text-lg font-semibold text-primary">
               {dateLabel(payment.received_at)}
             </p>
           </div>
         </Card>
         <Card>
           <div className="p-4">
-            <p className="text-xs font-medium tracking-wide text-muted uppercase dark:text-muted-dark">
+            <p className="text-xs font-medium tracking-wide text-muted uppercase">
               Reference
             </p>
-            <p className="mt-1 text-lg font-semibold text-primary dark:text-primary-dark">
+            <p className="mt-1 text-lg font-semibold text-primary">
               {payment.reference || "\u2014"}
             </p>
           </div>
@@ -127,12 +127,12 @@ function PaymentDetailPage() {
 
       {payment.allocations.length > 0 && (
         <section>
-          <h2 className="mb-4 text-lg font-semibold text-primary dark:text-primary-dark">
+          <h2 className="mb-4 text-lg font-semibold text-primary">
             Applied to Bills
           </h2>
-          <div className="overflow-x-auto rounded-lg border border-overlay/10 dark:border-overlay-dark/10">
+          <div className="overflow-x-auto rounded-lg border border-overlay/10">
             <table className="w-full text-left text-sm">
-              <thead className="bg-overlay/4 text-xs text-muted dark:bg-overlay-dark/4 dark:text-muted-dark">
+              <thead className="bg-overlay/4 text-xs text-muted">
                 <tr>
                   <th className="px-4 py-3 font-medium">Bill #</th>
                   <th className="px-4 py-3 font-medium">Amount</th>
@@ -143,7 +143,7 @@ function PaymentDetailPage() {
                 {payment.allocations.map((a: any) => (
                   <tr
                     key={a.id}
-                    className="border-t border-overlay/8 hover:bg-overlay/4 dark:border-overlay-dark/8 dark:hover:bg-overlay-dark/4"
+                    className="border-t border-overlay/8 hover:bg-overlay/4"
                   >
                     <td className="px-4 py-3">
                       <Link
@@ -155,7 +155,7 @@ function PaymentDetailPage() {
                       </Link>
                     </td>
                     <td className="px-4 py-3 font-medium">{formatCents(a.amount_cents)}</td>
-                    <td className="px-4 py-3 text-muted dark:text-muted-dark">
+                    <td className="px-4 py-3 text-muted">
                       {dateTimeLabel(a.created_at)}
                     </td>
                   </tr>

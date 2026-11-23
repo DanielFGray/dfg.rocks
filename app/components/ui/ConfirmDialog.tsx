@@ -31,15 +31,15 @@ export const ConfirmDialog = ({
     <Modal className="w-full max-w-lg outline-hidden">
       <Dialog
         role="alertdialog"
-        className="relative rounded-xl border border-overlay/6 bg-card p-6 shadow-2xl outline-hidden dark:border-overlay-dark/6 dark:bg-card-dark"
+        className="relative rounded-xl border border-overlay/6 bg-card p-6 shadow-2xl outline-hidden"
       >
         <Heading
           slot="title"
-          className="mb-4 text-lg font-semibold text-primary dark:text-primary-dark"
+          className="mb-4 text-lg font-semibold text-primary"
         >
           {title}
         </Heading>
-        <p className="mb-6 text-muted dark:text-muted-dark">{message}</p>
+        <p className="mb-6 text-muted">{message}</p>
         <div className="flex justify-end gap-3">
           <Button variant="ghost" onClick={onCancel}>
             Cancel

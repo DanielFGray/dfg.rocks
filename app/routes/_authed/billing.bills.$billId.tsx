@@ -9,7 +9,7 @@ import { BillDetailView } from "../../components/billing/BillDetail.js";
 export const Route = createFileRoute("/_authed/billing/bills/$billId")({
   head: () => ({ meta: [{ title: "Bill Detail | DFG Portal" }] }),
   component: BillDetailPage,
-  pendingComponent: () => <Main className="text-muted dark:text-muted-dark">Loading...</Main>,
+  pendingComponent: () => <Main className="text-muted">Loading...</Main>,
 });
 
 function BillDetailPage() {
@@ -29,14 +29,14 @@ function BillDetailPage() {
       <div className="mb-6">
         <Link
           to="/billing"
-          className="text-sm text-muted hover:text-accent dark:text-muted-dark dark:hover:text-accent"
+          className="text-sm text-muted hover:text-accent dark:hover:text-accent"
         >
           &larr; Back to billing
         </Link>
       </div>
 
       {isLoading ? (
-        <p className="text-sm text-muted dark:text-muted-dark">Loading bill...</p>
+        <p className="text-sm text-muted">Loading bill...</p>
       ) : error ? (
         <p role="alert" className="text-sm text-red-600 dark:text-red-400">
           Failed to load bill.

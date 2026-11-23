@@ -35,7 +35,7 @@ function ResetPasswordPage() {
       <main className="flex min-h-screen items-center justify-center px-4">
         <div className="w-full max-w-sm text-center">
           <h1 className="mb-4 text-3xl font-bold tracking-tight">Invalid Link</h1>
-          <p className="text-sm text-muted dark:text-muted-dark">
+          <p className="text-sm text-muted">
             This link is missing a token. Please use the link from your reset email.
           </p>
           <Link to="/login" className="mt-6 inline-block text-sm text-accent hover:underline">
@@ -54,7 +54,7 @@ function ResetPasswordPage() {
       <div className="w-full max-w-sm">
         <div className="mb-8 text-center">
           <h1 className="text-3xl font-bold tracking-tight">Reset Password</h1>
-          <p className="mt-2 text-sm text-muted dark:text-muted-dark">Enter your new password</p>
+          <p className="mt-2 text-sm text-muted">Enter your new password</p>
         </div>
         <form
           method="post"

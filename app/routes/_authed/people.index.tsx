@@ -190,24 +190,24 @@ function PeoplePage() {
                   <Link
                     to="/people/$id"
                     params={{ id: p.id }}
-                    className="font-semibold text-primary no-underline transition-colors hover:text-accent dark:text-primary-dark"
+                    className="font-semibold text-primary no-underline transition-colors hover:text-accent"
                   >
                     {p.name ?? p.username}
                   </Link>
-                  <span className="ml-3 text-sm text-muted dark:text-muted-dark">
+                  <span className="ml-3 text-sm text-muted">
                     @{p.username}
                   </span>
-                  <span className="ml-3 text-sm text-muted/60 dark:text-muted-dark/60">
+                  <span className="ml-3 text-sm text-muted/60">
                     {p.email}
                   </span>
-                  <span className="ml-3 text-xs tracking-wide text-muted uppercase dark:text-muted-dark">
+                  <span className="ml-3 text-xs tracking-wide text-muted uppercase">
                     {p.role}
                   </span>
                 </div>
                 <Link
                   to="/people/$id"
                   params={{ id: p.id }}
-                  className="text-xs text-muted no-underline transition-colors hover:text-accent dark:text-muted-dark"
+                  className="text-xs text-muted no-underline transition-colors hover:text-accent"
                 >
                   View &rarr;
                 </Link>

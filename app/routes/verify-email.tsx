@@ -40,10 +40,10 @@ function VerifyEmailPage() {
     return (
       <main className="flex min-h-screen items-center justify-center px-4">
         <div className="text-center">
-          <h1 className="mb-4 text-2xl font-bold text-primary dark:text-primary-dark">
+          <h1 className="mb-4 text-2xl font-bold text-primary">
             Invalid Link
           </h1>
-          <p className="mb-6 text-sm text-muted dark:text-muted-dark">
+          <p className="mb-6 text-sm text-muted">
             This verification link is missing a token.
           </p>
           <Link
@@ -62,10 +62,10 @@ function VerifyEmailPage() {
     return (
       <main className="flex min-h-screen items-center justify-center px-4">
         <div className="text-center">
-          <h1 className="mb-4 text-2xl font-bold text-primary dark:text-primary-dark">
+          <h1 className="mb-4 text-2xl font-bold text-primary">
             Verification Failed
           </h1>
-          <p className="mb-6 text-sm text-muted dark:text-muted-dark">{error}</p>
+          <p className="mb-6 text-sm text-muted">{error}</p>
           <Link
             to="/login"
             search={{ redirect: undefined }}
@@ -81,10 +81,10 @@ function VerifyEmailPage() {
   return (
     <main className="flex min-h-screen items-center justify-center px-4">
       <div className="text-center">
-        <h1 className="mb-4 text-2xl font-bold text-primary dark:text-primary-dark">
+        <h1 className="mb-4 text-2xl font-bold text-primary">
           Email Verified
         </h1>
-        <p className="mb-6 text-sm text-muted dark:text-muted-dark">
+        <p className="mb-6 text-sm text-muted">
           Your email has been verified successfully.
         </p>
         <Link to="/dashboard" className="text-sm text-accent hover:underline">

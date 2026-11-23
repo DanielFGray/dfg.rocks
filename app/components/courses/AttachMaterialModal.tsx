@@ -79,11 +79,11 @@ export function AttachMaterialModal({
       ) : (
         <>
           {availableMaterials.length === 0 && allMaterialsCount === 0 ? (
-            <p className="py-4 text-center text-sm text-muted dark:text-muted-dark">
+            <p className="py-4 text-center text-sm text-muted">
               No materials in the library yet.
             </p>
           ) : availableMaterials.length === 0 ? (
-            <p className="py-4 text-center text-sm text-muted dark:text-muted-dark">
+            <p className="py-4 text-center text-sm text-muted">
               All materials are already embedded.
             </p>
           ) : (
@@ -93,12 +93,12 @@ export function AttachMaterialModal({
                   key={mat.id}
                   variant="ghost"
                   onClick={() => handleAttachMaterial(mat.id)}
-                  className="flex items-center gap-3 rounded-lg border border-overlay/6 bg-surface px-4 py-3 text-left text-sm hover:border-accent/40 hover:bg-accent/5 dark:border-overlay-dark/6 dark:bg-surface-dark"
+                  className="flex items-center gap-3 rounded-lg border border-overlay/6 bg-surface px-4 py-3 text-left text-sm hover:border-accent/40 hover:bg-accent/5"
                 >
-                  <span className="flex-1 font-medium text-primary dark:text-primary-dark">
+                  <span className="flex-1 font-medium text-primary">
                     {mat.title}
                   </span>
-                  <span className="text-xs text-muted/60 dark:text-muted-dark/60">
+                  <span className="text-xs text-muted/60">
                     {mat.original_filename}
                   </span>
                 </Button>

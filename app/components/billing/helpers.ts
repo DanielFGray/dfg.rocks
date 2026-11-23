@@ -27,7 +27,7 @@ export function dateTimeLabel(value: Date): string {
 }
 
 const statusStyles: Record<BillStatus, string> = {
-  draft: "bg-overlay/10 text-muted dark:bg-overlay-dark/10 dark:text-muted-dark",
+  draft: "bg-overlay/10 text-muted",
   issued: "bg-blue-500/15 text-blue-700 dark:text-blue-300",
   paid: "bg-green-500/15 text-green-700 dark:text-green-300",
   cancelled: "bg-amber-500/15 text-amber-700 dark:text-amber-300",

@@ -14,20 +14,20 @@ export function ParentOnboarding({ onSuccess }: { onSuccess?: () => void }) {
             <p className="text-sm font-semibold tracking-[0.2em] text-accent uppercase">
               Parent Setup
             </p>
-            <h2 className="text-3xl font-bold tracking-tight text-primary dark:text-primary-dark">
+            <h2 className="text-3xl font-bold tracking-tight text-primary">
               Add your first student
             </h2>
-            <p className="max-w-xl text-sm text-muted dark:text-muted-dark">
+            <p className="max-w-xl text-sm text-muted">
               Start by creating your child{"’"}s student profile. They{"’"}ll appear across lessons,
               assignments, messages, and booking right away.
             </p>
           </div>
 
-          <div className="rounded-2xl border border-overlay/8 bg-overlay/3 p-4 dark:border-overlay-dark/8 dark:bg-overlay-dark/3">
-            <p className="text-sm font-medium text-primary dark:text-primary-dark">
+          <div className="rounded-2xl border border-overlay/8 bg-overlay/3 p-4">
+            <p className="text-sm font-medium text-primary">
               What happens next
             </p>
-            <ul className="mt-3 list-disc space-y-2 pl-5 text-sm text-muted dark:text-muted-dark">
+            <ul className="mt-3 list-disc space-y-2 pl-5 text-sm text-muted">
               <li>Your child gets a student profile in this family.</li>
               <li>They won{"’"}t have a password or direct login by default.</li>
               <li>You can switch into their view when booking lessons or sending messages.</li>

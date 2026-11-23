@@ -63,7 +63,7 @@ export function AssignmentNotesPanel({ materialId }: { materialId: string }) {
 
   if (editing) {
     return (
-      <div className="flex flex-col gap-3 rounded-xl border border-overlay/6 bg-card p-4 dark:border-overlay-dark/6 dark:bg-card-dark">
+      <div className="flex flex-col gap-3 rounded-xl border border-overlay/6 bg-card p-4">
         <Textarea
           id="assignment-notes"
           name="assignment-notes"
@@ -87,14 +87,14 @@ export function AssignmentNotesPanel({ materialId }: { materialId: string }) {
 
   if (note) {
     return (
-      <div className="flex flex-col gap-2 rounded-xl border border-overlay/6 bg-card p-4 dark:border-overlay-dark/6 dark:bg-card-dark">
+      <div className="flex flex-col gap-2 rounded-xl border border-overlay/6 bg-card p-4">
         <div className="flex items-center justify-between">
-          <span className="text-sm font-medium text-muted dark:text-muted-dark">Notes</span>
+          <span className="text-sm font-medium text-muted">Notes</span>
           <Button variant="ghost" onClick={startEditing} className="px-3 py-1 text-xs">
             Edit
           </Button>
         </div>
-        <p className="text-sm whitespace-pre-wrap text-primary/90 dark:text-primary-dark/90">
+        <p className="text-sm whitespace-pre-wrap text-primary/90">
           {note.body}
         </p>
       </div>
@@ -102,8 +102,8 @@ export function AssignmentNotesPanel({ materialId }: { materialId: string }) {
   }
 
   return (
-    <div className="flex items-center justify-between rounded-xl border border-dashed border-overlay/6 bg-card/50 px-4 py-3 dark:border-overlay-dark/6 dark:bg-card-dark/50">
-      <span className="text-sm text-muted/60 dark:text-muted-dark/60">No notes yet</span>
+    <div className="flex items-center justify-between rounded-xl border border-dashed border-overlay/6 bg-card/50 px-4 py-3">
+      <span className="text-sm text-muted/60">No notes yet</span>
       <Button variant="ghost" onClick={startEditing} className="px-3 py-1 text-xs">
         Add Note
       </Button>
@@ -122,7 +122,7 @@ function AssignmentNotesPage() {
       className="mx-auto max-w-[1100px] px-5 pt-20 pb-16 md:px-8"
     >
       <h1 className="mb-8 text-3xl font-bold tracking-tight">Assignment Notes</h1>
-      <p className="text-muted dark:text-muted-dark">Select an assignment to view or edit notes.</p>
+      <p className="text-muted">Select an assignment to view or edit notes.</p>
     </main>
   );
 }

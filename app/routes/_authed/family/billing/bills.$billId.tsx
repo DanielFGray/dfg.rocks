@@ -19,7 +19,7 @@ import {
 export const Route = createFileRoute("/_authed/family/billing/bills/$billId")({
   head: () => ({ meta: [{ title: "Bill Detail | DFG Portal" }] }),
   component: BillDetailPage,
-  pendingComponent: () => <Main className="text-muted dark:text-muted-dark">Loading...</Main>,
+  pendingComponent: () => <Main className="text-muted">Loading...</Main>,
 });
 
 function BillDetailPage() {
@@ -38,7 +38,7 @@ function BillDetailPage() {
   if (isLoading) {
     return (
       <Main>
-        <p className="text-sm text-muted dark:text-muted-dark">Loading bill...</p>
+        <p className="text-sm text-muted">Loading bill...</p>
       </Main>
     );
   }
@@ -62,7 +62,7 @@ function BillDetailPage() {
       <div className="mb-6">
         <Link
           to="/family/billing"
-          className="text-sm text-muted hover:text-accent dark:text-muted-dark dark:hover:text-accent"
+          className="text-sm text-muted hover:text-accent dark:hover:text-accent"
         >
           &larr; Back to billing
         </Link>
@@ -71,7 +71,7 @@ function BillDetailPage() {
       <div className="mb-6">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-primary dark:text-primary-dark">
+            <h1 className="text-2xl font-bold text-primary">
               Bill #{bill.bill_number}
             </h1>
           </div>
@@ -93,17 +93,17 @@ function BillDetailPage() {
       <div className="mb-6 grid gap-4 sm:grid-cols-4">
         <Card>
           <div className="p-4">
-            <p className="text-xs font-medium tracking-wide text-muted uppercase dark:text-muted-dark">
+            <p className="text-xs font-medium tracking-wide text-muted uppercase">
               Subtotal
             </p>
-            <p className="mt-1 text-lg font-bold text-primary dark:text-primary-dark">
+            <p className="mt-1 text-lg font-bold text-primary">
               {formatCents(bill.subtotal_cents)}
             </p>
           </div>
         </Card>
         <Card>
           <div className="p-4">
-            <p className="text-xs font-medium tracking-wide text-muted uppercase dark:text-muted-dark">
+            <p className="text-xs font-medium tracking-wide text-muted uppercase">
               Discount
             </p>
             <p className="mt-1 text-lg font-bold text-green-600 dark:text-green-400">
@@ -113,27 +113,27 @@ function BillDetailPage() {
         </Card>
         <Card>
           <div className="p-4">
-            <p className="text-xs font-medium tracking-wide text-muted uppercase dark:text-muted-dark">
+            <p className="text-xs font-medium tracking-wide text-muted uppercase">
               Tax
             </p>
-            <p className="mt-1 text-lg font-bold text-primary dark:text-primary-dark">
+            <p className="mt-1 text-lg font-bold text-primary">
               {bill.tax_cents > 0 ? formatCents(bill.tax_cents) : "\u2014"}
             </p>
           </div>
         </Card>
         <Card>
           <div className="p-4">
-            <p className="text-xs font-medium tracking-wide text-primary uppercase dark:text-primary-dark">
+            <p className="text-xs font-medium tracking-wide text-primary uppercase">
               Total
             </p>
-            <p className="mt-1 text-lg font-bold text-primary dark:text-primary-dark">
+            <p className="mt-1 text-lg font-bold text-primary">
               {formatCents(bill.total_cents)}
             </p>
           </div>
         </Card>
       </div>
 
-      <div className="mb-6 flex flex-wrap gap-x-6 gap-y-1 text-sm text-muted dark:text-muted-dark">
+      <div className="mb-6 flex flex-wrap gap-x-6 gap-y-1 text-sm text-muted">
         <span>
           Period: {dateLabel(bill.billing_period_start)} \u2013 {dateLabel(bill.billing_period_end)}
         </span>
@@ -155,11 +155,11 @@ function BillDetailPage() {
 
         <TabPanel id="lineItems" className="mt-6">
           {bill.line_items.length === 0 ? (
-            <p className="text-sm text-muted dark:text-muted-dark">No line items.</p>
+            <p className="text-sm text-muted">No line items.</p>
           ) : (
-            <div className="overflow-x-auto rounded-lg border border-overlay/10 dark:border-overlay-dark/10">
+            <div className="overflow-x-auto rounded-lg border border-overlay/10">
               <table className="w-full text-left text-sm">
-                <thead className="bg-overlay/4 text-xs text-muted dark:bg-overlay-dark/4 dark:text-muted-dark">
+                <thead className="bg-overlay/4 text-xs text-muted">
                   <tr>
                     <th className="px-4 py-3 font-medium">Description</th>
                     <th className="px-4 py-3 font-medium">Type</th>
@@ -172,12 +172,12 @@ function BillDetailPage() {
                   {bill.line_items.map((li: any) => (
                     <tr
                       key={li.id}
-                      className="border-t border-overlay/8 dark:border-overlay-dark/8"
+                      className="border-t border-overlay/8"
                     >
-                      <td className="px-4 py-3 font-medium text-primary dark:text-primary-dark">
+                      <td className="px-4 py-3 font-medium text-primary">
                         {li.description}
                       </td>
-                      <td className="px-4 py-3 text-muted dark:text-muted-dark">
+                      <td className="px-4 py-3 text-muted">
                         {statusLabel(li.line_type)}
                       </td>
                       <td className="px-4 py-3">{li.quantity}</td>
@@ -186,7 +186,7 @@ function BillDetailPage() {
                     </tr>
                   ))}
                 </tbody>
-                <tfoot className="bg-overlay/4 text-xs dark:bg-overlay-dark/4">
+                <tfoot className="bg-overlay/4 text-xs">
                   <tr>
                     <td colSpan={4} className="px-4 py-2 text-right font-medium">
                       Subtotal
@@ -197,7 +197,7 @@ function BillDetailPage() {
                     <tr>
                       <td
                         colSpan={4}
-                        className="px-4 py-2 text-right text-muted dark:text-muted-dark"
+                        className="px-4 py-2 text-right text-muted"
                       >
                         Discount
                       </td>
@@ -210,7 +210,7 @@ function BillDetailPage() {
                     <tr>
                       <td
                         colSpan={4}
-                        className="px-4 py-2 text-right text-muted dark:text-muted-dark"
+                        className="px-4 py-2 text-right text-muted"
                       >
                         Tax
                       </td>
@@ -220,11 +220,11 @@ function BillDetailPage() {
                   <tr>
                     <td
                       colSpan={4}
-                      className="px-4 py-2 text-right font-semibold text-primary dark:text-primary-dark"
+                      className="px-4 py-2 text-right font-semibold text-primary"
                     >
                       Total
                     </td>
-                    <td className="px-4 py-2 font-bold text-primary dark:text-primary-dark">
+                    <td className="px-4 py-2 font-bold text-primary">
                       {formatCents(bill.total_cents)}
                     </td>
                   </tr>
@@ -236,9 +236,9 @@ function BillDetailPage() {
 
         {bill.adjustments.length > 0 && (
           <TabPanel id="adjustments" className="mt-6">
-            <div className="overflow-x-auto rounded-lg border border-overlay/10 dark:border-overlay-dark/10">
+            <div className="overflow-x-auto rounded-lg border border-overlay/10">
               <table className="w-full text-left text-sm">
-                <thead className="bg-overlay/4 text-xs text-muted dark:bg-overlay-dark/4 dark:text-muted-dark">
+                <thead className="bg-overlay/4 text-xs text-muted">
                   <tr>
                     <th className="px-4 py-3 font-medium">Amount</th>
                     <th className="px-4 py-3 font-medium">Date</th>
@@ -248,7 +248,7 @@ function BillDetailPage() {
                   {bill.adjustments.map((adj: any) => (
                     <tr
                       key={adj.id}
-                      className="border-t border-overlay/8 dark:border-overlay-dark/8"
+                      className="border-t border-overlay/8"
                     >
                       <td className="px-4 py-3 font-medium">
                         <span
@@ -262,7 +262,7 @@ function BillDetailPage() {
                           {formatCents(Math.abs(adj.amount_cents))}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-muted dark:text-muted-dark">
+                      <td className="px-4 py-3 text-muted">
                         {dateTimeLabel(adj.created_at)}
                       </td>
                     </tr>
@@ -275,9 +275,9 @@ function BillDetailPage() {
 
         {bill.credit_applications.length > 0 && (
           <TabPanel id="credits" className="mt-6">
-            <div className="overflow-x-auto rounded-lg border border-overlay/10 dark:border-overlay-dark/10">
+            <div className="overflow-x-auto rounded-lg border border-overlay/10">
               <table className="w-full text-left text-sm">
-                <thead className="bg-overlay/4 text-xs text-muted dark:bg-overlay-dark/4 dark:text-muted-dark">
+                <thead className="bg-overlay/4 text-xs text-muted">
                   <tr>
                     <th className="px-4 py-3 font-medium">Amount</th>
                     <th className="px-4 py-3 font-medium">Date</th>
@@ -287,12 +287,12 @@ function BillDetailPage() {
                   {bill.credit_applications.map((ca: any) => (
                     <tr
                       key={ca.id}
-                      className="border-t border-overlay/8 dark:border-overlay-dark/8"
+                      className="border-t border-overlay/8"
                     >
                       <td className="px-4 py-3 font-medium text-green-600 dark:text-green-400">
                         -{formatCents(ca.amount_cents)}
                       </td>
-                      <td className="px-4 py-3 text-muted dark:text-muted-dark">
+                      <td className="px-4 py-3 text-muted">
                         {dateTimeLabel(ca.created_at)}
                       </td>
                     </tr>

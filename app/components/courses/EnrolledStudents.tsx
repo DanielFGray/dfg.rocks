@@ -15,9 +15,9 @@ export function EnrolledStudents({
   onUnenroll: (student: User) => void;
 }) {
   return (
-    <section className="mt-10 border-t border-overlay/6 pt-8 dark:border-overlay-dark/6">
+    <section className="mt-10 border-t border-overlay/6 pt-8">
       <div className="mb-4 flex items-center justify-between">
-        <h2 className="text-xl font-semibold text-primary dark:text-primary-dark">
+        <h2 className="text-xl font-semibold text-primary">
           Enrolled Students
         </h2>
         {availableStudents.length > 0 ? (
@@ -45,17 +45,17 @@ export function EnrolledStudents({
           {enrolledStudents.map((s) => (
             <div
               key={s.id}
-              className="flex items-center justify-between rounded-lg border border-overlay/6 bg-card px-4 py-3 text-sm dark:border-overlay-dark/6 dark:bg-card-dark"
+              className="flex items-center justify-between rounded-lg border border-overlay/6 bg-card px-4 py-3 text-sm"
             >
               <div>
                 <Link
                   to="/people/$id"
                   params={{ id: s.id }}
-                  className="font-semibold text-primary no-underline transition-colors hover:text-accent dark:text-primary-dark"
+                  className="font-semibold text-primary no-underline transition-colors hover:text-accent"
                 >
                   {s.name}
                 </Link>
-                <span className="ml-3 text-xs text-muted dark:text-muted-dark">@{s.username}</span>
+                <span className="ml-3 text-xs text-muted">@{s.username}</span>
               </div>
               <Button
                 variant="ghost"

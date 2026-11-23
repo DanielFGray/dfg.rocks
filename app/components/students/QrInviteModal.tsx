@@ -74,11 +74,11 @@ export function QrInviteModal({ open, onClose, families, onSuccess }: QrInviteMo
           <div className="rounded-xl bg-white p-4">
             <QRCodeSVG value={qrUrl} size={220} />
           </div>
-          <p className="max-w-xs text-center text-sm text-muted dark:text-muted-dark">
+          <p className="max-w-xs text-center text-sm text-muted">
             Have the student or parent scan this code with their phone camera to create their
             account and join the family.
           </p>
-          <p className="text-center text-xs text-muted/60 dark:text-muted-dark/60">
+          <p className="text-center text-xs text-muted/60">
             This code expires in 24 hours.
           </p>
           <Button variant="ghost" onClick={handleClose} data-testid="qr-invite-done">

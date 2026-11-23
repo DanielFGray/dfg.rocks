@@ -13,9 +13,9 @@ export function SubscribeCallout({ message }: { message: string }) {
   return (
     <div
       data-testid="subscribe-callout"
-      className="flex flex-col items-center justify-center gap-4 rounded-xl border border-overlay/6 bg-card px-6 py-12 text-center dark:border-overlay-dark/6 dark:bg-card-dark"
+      className="flex flex-col items-center justify-center gap-4 rounded-xl border border-overlay/6 bg-card px-6 py-12 text-center"
     >
-      <p className="text-muted dark:text-muted-dark">{message}</p>
+      <p className="text-muted">{message}</p>
       {data === undefined ? null : <SubscribeAction status={data} />}
     </div>
   );
@@ -23,7 +23,7 @@ export function SubscribeCallout({ message }: { message: string }) {
 
 function SubscribeAction({ status }: { status: MySubscriptionResponse }) {
   const message = (text: string) => (
-    <p data-testid="billing-contact-message" className="text-sm text-muted dark:text-muted-dark">
+    <p data-testid="billing-contact-message" className="text-sm text-muted">
       {text}
     </p>
   );

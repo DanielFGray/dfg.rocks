@@ -37,7 +37,7 @@ function SubscribeSuccessPage() {
           <h1 data-testid="subscribed" className="mb-4 text-3xl font-bold tracking-tight">
             You are subscribed
           </h1>
-          <p className="mb-6 text-muted dark:text-muted-dark">
+          <p className="mb-6 text-muted">
             Your lessons are open. Lessons and courses now show your subscription.
           </p>
           <Link to="/courses">
@@ -49,7 +49,7 @@ function SubscribeSuccessPage() {
           <h1 data-testid="subscription-pending" className="mb-4 text-3xl font-bold tracking-tight">
             Confirming your subscription
           </h1>
-          <p className="text-muted dark:text-muted-dark">
+          <p className="text-muted">
             This page updates as soon as the payment has been recorded.
           </p>
         </>
@@ -61,7 +61,7 @@ function SubscribeSuccessPage() {
           >
             Your subscription is still being confirmed
           </h1>
-          <p className="mb-6 text-muted dark:text-muted-dark">
+          <p className="mb-6 text-muted">
             Payment can take a few minutes to reach the portal. Your subscription status is on the
             settings page.
           </p>

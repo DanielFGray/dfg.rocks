@@ -10,13 +10,13 @@ export function MaterialEmbedView({ node }: NodeViewProps) {
     <NodeViewWrapper className="my-4">
       {material ? (
         <div>
-          <div className="mb-2 text-sm font-medium text-primary dark:text-primary-dark">
+          <div className="mb-2 text-sm font-medium text-primary">
             {material.title}
           </div>
           <MaterialPreview material={material} embedded />
         </div>
       ) : (
-        <div className="rounded-lg border border-overlay/6 bg-overlay/5 p-4 text-center text-sm text-muted dark:border-overlay-dark/6 dark:bg-overlay-dark/5 dark:text-muted-dark">
+        <div className="rounded-lg border border-overlay/6 bg-overlay/5 p-4 text-center text-sm text-muted">
           Material not found
         </div>
       )}

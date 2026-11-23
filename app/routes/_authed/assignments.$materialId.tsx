@@ -61,7 +61,7 @@ export const Route = createFileRoute("/_authed/assignments/$materialId")({
   head: () => ({ meta: [{ title: "Assignment | DFG Portal" }] }),
   component: AssignmentDetailPage,
   pendingComponent: () => (
-    <main className="mx-auto max-w-[1100px] px-5 pt-20 pb-16 text-muted md:px-8 dark:text-muted-dark">
+    <main className="mx-auto max-w-[1100px] px-5 pt-20 pb-16 text-muted md:px-8">
       Loading...
     </main>
   ),
@@ -103,7 +103,7 @@ function AssignmentDetailPage() {
             {categoryLabel[category]}
           </span>
           <h1 className="mt-3 text-3xl font-bold tracking-tight">{material.title}</h1>
-          <p className="mt-2 text-sm text-muted dark:text-muted-dark">
+          <p className="mt-2 text-sm text-muted">
             {material.original_filename}
             {assignedTrackLabel ? ` · ${assignedTrackLabel}` : ""}
           </p>

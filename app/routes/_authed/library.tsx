@@ -49,7 +49,7 @@ export const Route = createFileRoute("/_authed/library")({
   },
   head: () => ({ meta: [{ title: "Library | DFG Portal" }] }),
   component: LibraryPage,
-  pendingComponent: () => <Main className="text-muted dark:text-muted-dark">Loading...</Main>,
+  pendingComponent: () => <Main className="text-muted">Loading...</Main>,
 });
 
 function LibraryPage() {

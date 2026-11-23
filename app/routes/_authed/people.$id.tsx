@@ -226,13 +226,13 @@ function PersonPage() {
         <div className="mb-2 flex items-center gap-3">
           <Link
             to="/people"
-            className="text-sm text-muted no-underline transition-colors hover:text-primary dark:text-muted-dark dark:hover:text-primary-dark"
+            className="text-sm text-muted no-underline transition-colors hover:text-primary"
           >
             &larr; People
           </Link>
         </div>
         <h1 className="text-3xl font-bold tracking-tight">{displayName}</h1>
-        <p className="mt-1 text-muted dark:text-muted-dark">
+        <p className="mt-1 text-muted">
           @{person.username}
           {person.email ? <> &middot; {person.email}</> : null}
         </p>
@@ -253,14 +253,14 @@ function PersonPage() {
             />
           </div>
         ) : (
-          <p className="mt-4 text-sm text-muted dark:text-muted-dark">
+          <p className="mt-4 text-sm text-muted">
             Role: <span className="font-medium capitalize">{person.role}</span>
           </p>
         )}
       </div>
 
       <section className="mb-10" data-testid="person-families">
-        <h2 className="mb-4 text-xl font-semibold text-primary dark:text-primary-dark">Families</h2>
+        <h2 className="mb-4 text-xl font-semibold text-primary">Families</h2>
         {person.families.length === 0 ? (
           <EmptyState message="Not in a family." />
         ) : (
@@ -268,10 +268,10 @@ function PersonPage() {
             {person.families.map((family) => (
               <Card key={family.id}>
                 <div className="flex items-center justify-between">
-                  <span className="font-semibold text-primary dark:text-primary-dark">
+                  <span className="font-semibold text-primary">
                     {family.name}
                   </span>
-                  <span className="text-sm text-muted dark:text-muted-dark">
+                  <span className="text-sm text-muted">
                     {familyRoleLabel(family)}
                   </span>
                 </div>
@@ -283,19 +283,19 @@ function PersonPage() {
 
       {person.lessons.length > 0 ? (
         <section className="mb-10" data-testid="person-lessons">
-          <h2 className="mb-4 text-xl font-semibold text-primary dark:text-primary-dark">
+          <h2 className="mb-4 text-xl font-semibold text-primary">
             Lessons
           </h2>
           <div className="flex flex-col gap-2">
             {person.lessons.map((lesson) => (
               <div
                 key={lesson.id}
-                className="flex items-center gap-3 rounded-lg border border-overlay/6 bg-card px-4 py-3 text-sm dark:border-overlay-dark/6 dark:bg-card-dark"
+                className="flex items-center gap-3 rounded-lg border border-overlay/6 bg-card px-4 py-3 text-sm"
               >
-                <span className="flex-1 font-medium text-primary dark:text-primary-dark">
+                <span className="flex-1 font-medium text-primary">
                   {lesson.scheduled_at.toLocaleString()}
                 </span>
-                <span className="text-xs text-muted/60 dark:text-muted-dark/60">
+                <span className="text-xs text-muted/60">
                   {lesson.duration_minutes} min · {lesson.location_type} · {lesson.status}
                 </span>
               </div>
@@ -307,7 +307,7 @@ function PersonPage() {
       {isLearner ? (
         <section className="mb-10">
           <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-xl font-semibold text-primary dark:text-primary-dark">
+            <h2 className="text-xl font-semibold text-primary">
               Enrolled Courses
             </h2>
             {isAdmin && availableCourses.length > 0 ? (
@@ -339,11 +339,11 @@ function PersonPage() {
                       <Link
                         to="/courses/$id"
                         params={{ id: c.id }}
-                        className="font-semibold text-primary no-underline transition-colors hover:text-accent dark:text-primary-dark"
+                        className="font-semibold text-primary no-underline transition-colors hover:text-accent"
                       >
                         {c.title}
                       </Link>
-                      <span className="ml-3 text-sm text-muted dark:text-muted-dark">
+                      <span className="ml-3 text-sm text-muted">
                         {c.instrument}
                       </span>
                     </div>
@@ -367,7 +367,7 @@ function PersonPage() {
       {isLearner ? (
         <section>
           <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-xl font-semibold text-primary dark:text-primary-dark">
+            <h2 className="text-xl font-semibold text-primary">
               Assigned Materials
             </h2>
             {isAdmin && availableMaterials.length > 0 ? (
@@ -395,12 +395,12 @@ function PersonPage() {
               {person.assigned_materials.map((m) => (
                 <div
                   key={m.id}
-                  className="flex items-center gap-3 rounded-lg border border-overlay/6 bg-card px-4 py-3 text-sm dark:border-overlay-dark/6 dark:bg-card-dark"
+                  className="flex items-center gap-3 rounded-lg border border-overlay/6 bg-card px-4 py-3 text-sm"
                 >
-                  <span className="flex-1 font-medium text-primary dark:text-primary-dark">
+                  <span className="flex-1 font-medium text-primary">
                     {m.title}
                   </span>
-                  <span className="text-xs text-muted/60 dark:text-muted-dark/60">
+                  <span className="text-xs text-muted/60">
                     {m.original_filename}
                     {(() => {
                       const track = findNotationTrack(m.notation_tracks, m.assigned_track_index);
@@ -532,9 +532,9 @@ function PersonPage() {
             />
           ) : selectedAssignMaterial?.notation_tracks &&
             selectedAssignMaterial.notation_tracks.length === 1 ? (
-            <div className="rounded-lg border border-overlay/6 bg-card px-4 py-3 text-sm text-muted dark:border-overlay-dark/6 dark:bg-card-dark dark:text-muted-dark">
+            <div className="rounded-lg border border-overlay/6 bg-card px-4 py-3 text-sm text-muted">
               Assigned track:{" "}
-              <span className="font-medium text-primary dark:text-primary-dark">
+              <span className="font-medium text-primary">
                 {formatNotationTrackLabel(selectedAssignMaterial.notation_tracks[0]!)}
               </span>
             </div>

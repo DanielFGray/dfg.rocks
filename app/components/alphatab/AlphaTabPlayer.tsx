@@ -42,13 +42,13 @@ const viewportClass =
   "box-border mx-[calc(50%-(var(--viewport-client-width)/2))] w-(--viewport-client-width) max-w-(--viewport-client-width) md:mx-0 md:w-auto md:max-w-none";
 
 const controlClass =
-  "rounded-full bg-overlay/10 p-1.5 text-primary transition-colors hover:bg-overlay/20 data-[pressed=true]:bg-accent data-[pressed=true]:text-white disabled:cursor-not-allowed disabled:opacity-50 dark:bg-overlay-dark/10 dark:text-primary-dark dark:hover:bg-overlay-dark/20";
+  "rounded-full bg-overlay/10 p-1.5 text-primary transition-colors hover:bg-overlay/20 data-[pressed=true]:bg-accent data-[pressed=true]:text-white disabled:cursor-not-allowed disabled:opacity-50";
 
 const selectClass =
-  "rounded-sm border border-overlay/10 bg-card px-1.5 py-0.5 text-xs text-primary disabled:opacity-50 dark:border-overlay-dark/10 dark:bg-card-dark dark:text-primary-dark";
+  "rounded-sm border border-overlay/10 bg-card px-1.5 py-0.5 text-xs text-primary disabled:opacity-50";
 
 const partClass = {
-  root: "flex min-w-0 shrink-0 items-center gap-1.5 whitespace-nowrap text-[11px] text-muted dark:text-muted-dark",
+  root: "flex min-w-0 shrink-0 items-center gap-1.5 whitespace-nowrap text-[11px] text-muted",
   input: `${selectClass} w-20`,
 };
 
@@ -195,7 +195,7 @@ export function AlphaTabPlayer({
               className={`rounded-sm px-1.5 py-0.5 text-[11px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
                 state.trainer.loop
                   ? "border border-accent bg-accent text-white hover:bg-accent-hover"
-                  : "border border-overlay/10 bg-card text-primary hover:bg-overlay/4 dark:border-overlay-dark/10 dark:bg-card-dark dark:text-primary-dark dark:hover:bg-overlay-dark/4"
+                  : "border border-overlay/10 bg-card text-primary hover:bg-overlay/4"
               }`}
             >
               Speed Trainer

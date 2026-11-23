@@ -73,7 +73,7 @@ export function MonthlyPaymentModal({
       title={studentName ? `Record payment: ${studentName}` : "Record monthly payment"}
     >
       <form data-testid="monthly-payment-form" className="flex flex-col gap-4" onSubmit={submit}>
-        <p className="text-sm text-muted dark:text-muted-dark">
+        <p className="text-sm text-muted">
           Recording a payment also creates this month's lessons from the student's weekly schedule.
         </p>
         <Input

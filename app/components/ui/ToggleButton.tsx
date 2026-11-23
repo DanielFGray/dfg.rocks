@@ -32,7 +32,7 @@ export const ToggleButton = ({
       "data-focus-visible:outline-hidden data-focus-visible:ring-2 data-focus-visible:ring-accent/60 data-focus-visible:ring-offset-2",
       isSelected
         ? "bg-accent text-white hover:bg-accent-hover"
-        : "border border-overlay/10 bg-transparent text-primary hover:bg-overlay/5 dark:border-overlay-dark/10 dark:text-primary-dark dark:hover:bg-overlay-dark/5",
+        : "border border-overlay/10 bg-transparent text-primary hover:bg-overlay/5",
       className,
     ]
       .filter(Boolean)

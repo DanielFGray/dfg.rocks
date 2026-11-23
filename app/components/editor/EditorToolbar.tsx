@@ -12,7 +12,7 @@ export function EditorToolbar({
   onInsertScore: () => void;
 }) {
   return (
-    <div className="flex flex-wrap items-center gap-1 rounded-t-lg border-b border-overlay/6 bg-overlay/2 px-3 py-2 dark:border-overlay-dark/6 dark:bg-overlay-dark/2">
+    <div className="flex flex-wrap items-center gap-1 rounded-t-lg border-b border-overlay/6 bg-overlay/2 px-3 py-2">
       <Tooltip content="Bold">
         <ToolbarButton
           active={editor.isActive("bold")}
@@ -29,7 +29,7 @@ export function EditorToolbar({
           className="italic"
         />
       </Tooltip>
-      <div className="mx-1 h-5 w-px bg-overlay/8 dark:bg-overlay-dark/8" />
+      <div className="mx-1 h-5 w-px bg-overlay/8" />
       <Tooltip content="Heading 2">
         <ToolbarButton
           active={editor.isActive("heading", { level: 2 })}
@@ -44,7 +44,7 @@ export function EditorToolbar({
           label="H3"
         />
       </Tooltip>
-      <div className="mx-1 h-5 w-px bg-overlay/8 dark:bg-overlay-dark/8" />
+      <div className="mx-1 h-5 w-px bg-overlay/8" />
       <Tooltip content="Bullet List">
         <ToolbarButton
           active={editor.isActive("bulletList")}
@@ -59,7 +59,7 @@ export function EditorToolbar({
           label="1."
         />
       </Tooltip>
-      <div className="mx-1 h-5 w-px bg-overlay/8 dark:bg-overlay-dark/8" />
+      <div className="mx-1 h-5 w-px bg-overlay/8" />
       <Tooltip content="Blockquote">
         <ToolbarButton
           active={editor.isActive("blockquote")}
@@ -67,7 +67,7 @@ export function EditorToolbar({
           label="Quote"
         />
       </Tooltip>
-      <div className="mx-1 h-5 w-px bg-overlay/8 dark:bg-overlay-dark/8" />
+      <div className="mx-1 h-5 w-px bg-overlay/8" />
       <Button variant="ghost" onClick={onEmbedMaterial} className="px-2.5 py-1 text-xs text-accent">
         + Material
       </Button>
@@ -96,7 +96,7 @@ function ToolbarButton({
       className={`cursor-pointer rounded px-2 py-1 text-xs transition-colors ${className} ${
         active
           ? "bg-accent/20 text-accent"
-          : "text-muted hover:bg-overlay/5 hover:text-primary dark:text-muted-dark dark:hover:bg-overlay-dark/5 dark:hover:text-primary-dark"
+          : "text-muted hover:bg-overlay/5 hover:text-primary"
       }`}
     >
       {label}

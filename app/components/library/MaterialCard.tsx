@@ -26,13 +26,13 @@ export const MaterialCard = ({
       }}
     >
       <div
-        className={`rounded-xl border border-overlay/6 bg-card transition-colors hover:border-overlay/10 dark:border-overlay-dark/6 dark:bg-card-dark dark:hover:border-overlay-dark/10 ${
+        className={`rounded-xl border border-overlay/6 bg-card transition-colors hover:border-overlay/10 ${
           cat === "notation" && expanded ? "overflow-visible md:overflow-hidden" : "overflow-hidden"
         }`}
       >
         <DisclosureTrigger
           data-testid="material-row"
-          className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-overlay/2 dark:hover:bg-overlay-dark/2"
+          className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-overlay/2"
         >
           <span
             className={`shrink-0 rounded-md px-2 py-0.5 text-[11px] font-semibold tracking-wider uppercase ${categoryColor[cat]}`}
@@ -40,14 +40,14 @@ export const MaterialCard = ({
             {categoryLabel[cat]}
           </span>
           <div className="min-w-0 flex-1">
-            <span className="block truncate text-sm font-medium text-primary dark:text-primary-dark">
+            <span className="block truncate text-sm font-medium text-primary">
               {material.title}
             </span>
-            <span className="block truncate text-xs text-muted/50 dark:text-muted-dark/50">
+            <span className="block truncate text-xs text-muted/50">
               {material.original_filename}
             </span>
           </div>
-          <span className="shrink-0 text-xs text-muted/40 dark:text-muted-dark/40">
+          <span className="shrink-0 text-xs text-muted/40">
             {formatSize(material.file_size)}
           </span>
           <svg
@@ -58,7 +58,7 @@ export const MaterialCard = ({
             stroke="currentColor"
             strokeWidth="2"
             strokeLinecap="round"
-            className={`shrink-0 text-muted/40 transition-transform data-[expanded]:rotate-180 dark:text-muted-dark/40`}
+            className={`shrink-0 text-muted/40 transition-transform data-[expanded]:rotate-180`}
           >
             <polyline points="6 9 12 15 18 9" />
           </svg>

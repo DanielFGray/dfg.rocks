@@ -44,7 +44,7 @@ export const Route = createFileRoute("/_authed/submissions")({
   }),
   loader: () => getSubmissionsPageData(),
   component: SubmissionsPage,
-  pendingComponent: () => <Main className="text-muted dark:text-muted-dark">Loading...</Main>,
+  pendingComponent: () => <Main className="text-muted">Loading...</Main>,
 });
 
 function SubmissionsPage() {
@@ -123,16 +123,16 @@ function SubmissionsPage() {
             {paged.map((s) => (
               <div
                 key={s.id}
-                className={`rounded-xl border bg-card p-5 transition-colors dark:bg-card-dark ${
+                className={`rounded-xl border bg-card p-5 transition-colors ${
                   s.is_read
-                    ? "border-overlay/6 dark:border-overlay-dark/6"
+                    ? "border-overlay/6"
                     : "dark:border-accent-dark/40 dark:bg-accent-dark/3 border-accent/40 bg-accent/3"
                 }`}
               >
                 <div className="flex items-start justify-between gap-4">
                   <div className="min-w-0 flex-1">
                     <div className="mb-1 flex flex-wrap items-center gap-x-3 gap-y-1">
-                      <span className="font-semibold text-primary dark:text-primary-dark">
+                      <span className="font-semibold text-primary">
                         {s.name}
                       </span>
                       {!s.is_read ? (
@@ -141,27 +141,27 @@ function SubmissionsPage() {
                         </span>
                       ) : null}
                     </div>
-                    <div className="mb-2 flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted dark:text-muted-dark">
+                    <div className="mb-2 flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted">
                       <a href={`mailto:${s.email}`} className="text-accent hover:underline">
                         {s.email}
                       </a>
                       {s.phone ? <span>{formatPhone(s.phone)}</span> : null}
-                      <span className="rounded-full border border-overlay/10 px-2 py-0.5 text-xs dark:border-overlay-dark/10">
+                      <span className="rounded-full border border-overlay/10 px-2 py-0.5 text-xs">
                         {s.instrument}
                       </span>
-                      <span className="rounded-full border border-overlay/10 px-2 py-0.5 text-xs dark:border-overlay-dark/10">
+                      <span className="rounded-full border border-overlay/10 px-2 py-0.5 text-xs">
                         {s.format}
                       </span>
                     </div>
                     {s.location_city ? (
-                      <div className="mb-1 text-xs text-muted/60 dark:text-muted-dark/60">
+                      <div className="mb-1 text-xs text-muted/60">
                         {[s.location_city, s.location_region, s.location_country]
                           .filter(Boolean)
                           .join(", ")}
                       </div>
                     ) : null}
                     {s.message ? (
-                      <div className="text-sm text-muted dark:text-muted-dark">
+                      <div className="text-sm text-muted">
                         {s.message.length > 200 ? (
                           <Disclosure
                             isExpanded={expandedId === s.id}
@@ -187,7 +187,7 @@ function SubmissionsPage() {
                   <div className="flex shrink-0 flex-col items-end gap-2">
                     <time
                       dateTime={s.created_at.toISOString()}
-                      className="text-xs whitespace-nowrap text-muted dark:text-muted-dark"
+                      className="text-xs whitespace-nowrap text-muted"
                     >
                       {s.created_at.toLocaleDateString("en-US", {
                         month: "short",
@@ -222,7 +222,7 @@ function SubmissionsPage() {
               >
                 Previous
               </Button>
-              <span className="text-sm text-muted dark:text-muted-dark">
+              <span className="text-sm text-muted">
                 Page {page + 1} of {totalPages}
               </span>
               <Button

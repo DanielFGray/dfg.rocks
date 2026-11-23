@@ -26,7 +26,7 @@ export function PracticeTakes({
 
   return (
     <div data-testid="practice-takes" className="flex flex-col gap-2">
-      <h4 className="text-xs font-medium text-muted dark:text-muted-dark">Click Takes</h4>
+      <h4 className="text-xs font-medium text-muted">Click Takes</h4>
       {takes.length > 1 ? (
         <div className="flex gap-6" data-testid="practice-takes-trend">
           <Sparkline
@@ -46,13 +46,13 @@ export function PracticeTakes({
         <div
           key={take.id}
           data-testid="practice-take"
-          className="flex items-center justify-between gap-3 rounded-lg border border-overlay/6 px-3 py-2 text-xs dark:border-overlay-dark/6"
+          className="flex items-center justify-between gap-3 rounded-lg border border-overlay/6 px-3 py-2 text-xs"
         >
           <span>
             {Math.round(take.on_time_pct)}% on time · {formatOffset(take.mean_offset_ms)} ·{" "}
             {Math.round(take.bpm)} bpm
           </span>
-          <span className="text-muted/60 dark:text-muted-dark/60">{formatDate(take.taken_at)}</span>
+          <span className="text-muted/60">{formatDate(take.taken_at)}</span>
         </div>
       ))}
     </div>
@@ -84,7 +84,7 @@ function Sparkline({
     .join(" ");
 
   return (
-    <div className="flex flex-col gap-1 text-xs text-muted dark:text-muted-dark">
+    <div className="flex flex-col gap-1 text-xs text-muted">
       <span>
         {label}: {latest}
       </span>

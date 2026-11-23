@@ -61,7 +61,7 @@ export const Route = createFileRoute("/_authed/messages")({
   loader: () => getMessagesPageData(),
   component: MessagesPage,
   pendingComponent: () => (
-    <main className="mx-auto max-w-[1100px] px-5 pt-20 pb-16 text-muted md:px-8 dark:text-muted-dark">
+    <main className="mx-auto max-w-[1100px] px-5 pt-20 pb-16 text-muted md:px-8">
       Loading...
     </main>
   ),
@@ -114,7 +114,7 @@ function ResizableSidebar({
           rounded-sm bg-overlay/4
           outline-hidden transition-colors
           hover:bg-accent/20 focus-visible:ring-1 focus-visible:ring-accent
-          focus-visible:ring-inset active:bg-accent/40 dark:bg-overlay-dark/4"
+          focus-visible:ring-inset active:bg-accent/40"
       />
     </div>
   );
@@ -218,8 +218,8 @@ function MessagesPage() {
     return (
       <main data-testid="messages" className="mx-auto max-w-[1100px] px-5 pt-20 pb-16 md:px-8">
         <h1 className="mb-8 text-3xl font-bold tracking-tight">Messages</h1>
-        <div className="rounded-xl border border-overlay/6 bg-card p-5 dark:border-overlay-dark/6 dark:bg-card-dark">
-          <p className="mb-4 text-sm text-muted dark:text-muted-dark">
+        <div className="rounded-xl border border-overlay/6 bg-card p-5">
+          <p className="mb-4 text-sm text-muted">
             Send a message to your teacher.
           </p>
           <div className="flex flex-col gap-3">
@@ -230,7 +230,7 @@ function MessagesPage() {
               onKeyDown={onKeyDown}
               placeholder="Type a message..."
               rows={3}
-              className="resize-none rounded-lg border border-overlay/10 bg-card px-4 py-3 text-sm text-primary outline-hidden transition-colors placeholder:text-muted/50 focus:border-accent focus:ring-1 focus:ring-accent/50 dark:border-overlay-dark/10 dark:bg-card-dark dark:text-primary-dark dark:placeholder:text-muted-dark/50"
+              className="resize-none rounded-lg border border-overlay/10 bg-card px-4 py-3 text-sm text-primary outline-hidden transition-colors placeholder:text-muted/50 focus:border-accent focus:ring-1 focus:ring-accent/50"
             />
             <div className="flex justify-end">
               <Button data-testid="send-btn" onClick={onSend} disabled={!composeText.trim()}>
@@ -264,7 +264,7 @@ function MessagesPage() {
         )}
 
         {/* Thread panel */}
-        <div className="flex-1 overflow-hidden rounded-xl border border-overlay/6 bg-card dark:border-overlay-dark/6 dark:bg-card-dark">
+        <div className="flex-1 overflow-hidden rounded-xl border border-overlay/6 bg-card">
           {activePartner ? (
             <MessageThread
               thread={activeThread}
@@ -277,7 +277,7 @@ function MessagesPage() {
               markReadMutation={markReadMutation}
             />
           ) : (
-            <div className="flex h-full items-center justify-center text-muted dark:text-muted-dark">
+            <div className="flex h-full items-center justify-center text-muted">
               Select a conversation
             </div>
           )}

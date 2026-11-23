@@ -60,7 +60,7 @@ function StarIcon({ filled }: { filled: boolean }) {
       height="18"
       viewBox="0 0 20 20"
       fill={filled ? "currentColor" : "none"}
-      className={filled ? "text-amber-400" : "text-muted/40 dark:text-muted-dark/40"}
+      className={filled ? "text-amber-400" : "text-muted/40"}
     >
       <path
         d="M10 2.5L12.318 7.196L17.5 7.949L13.75 11.603L14.635 16.761L10 14.324L5.365 16.761L6.25 11.603L2.5 7.949L7.682 7.196L10 2.5Z"
@@ -93,7 +93,7 @@ function RatingSelector({
             type="button"
             onClick={() => onChange(stars)}
             disabled={disabled}
-            className="cursor-pointer rounded-md p-1 transition-colors hover:bg-overlay/6 disabled:cursor-not-allowed disabled:opacity-50 dark:hover:bg-overlay-dark/6"
+            className="cursor-pointer rounded-md p-1 transition-colors hover:bg-overlay/6 disabled:cursor-not-allowed disabled:opacity-50"
             aria-label={`Rate ${stars} out of 5`}
           >
             <StarIcon filled={active} />
@@ -278,7 +278,7 @@ export function StudentAssignmentDetail({
           <p className="mt-4 text-sm text-red-600 dark:text-red-400">{playbackError}</p>
         ) : null}
 
-        <div className="flex flex-col gap-2 text-sm text-muted md:flex-row md:items-center md:justify-between md:text-right dark:text-muted-dark">
+        <div className="flex flex-col gap-2 text-sm text-muted md:flex-row md:items-center md:justify-between md:text-right">
           {latestReview
             ? `Latest ${latestReview.stars}/5 ${formatDate(latestReview.created_at)}`
             : category === "notation" && !reviewUnlocked
@@ -312,7 +312,7 @@ export function StudentAssignmentDetail({
             </>
           )
         ) : (
-          <p className="mt-4 text-sm text-muted dark:text-muted-dark">
+          <p className="mt-4 text-sm text-muted">
             Self-reviews can only be recorded from the student account.
           </p>
         )}
@@ -322,11 +322,11 @@ export function StudentAssignmentDetail({
             {reviews.map((review) => (
               <div
                 key={review.id}
-                className="rounded-lg border border-overlay/6 px-3 py-3 dark:border-overlay-dark/6"
+                className="rounded-lg border border-overlay/6 px-3 py-3"
               >
                 <div className="flex items-center justify-between gap-3">
                   <StarsDisplay stars={review.stars} />
-                  <span className="text-xs text-muted/60 dark:text-muted-dark/60">
+                  <span className="text-xs text-muted/60">
                     {formatDate(review.created_at)}
                   </span>
                 </div>
@@ -336,13 +336,13 @@ export function StudentAssignmentDetail({
         )}
 
         {category === "notation" && takesStudentId ? (
-          <div className="mt-6 border-t border-overlay/6 pt-4 dark:border-overlay-dark/6">
+          <div className="mt-6 border-t border-overlay/6 pt-4">
             <PracticeTakes materialId={material.id} studentId={takesStudentId} />
           </div>
         ) : null}
 
         {canTrackAssignments ? (
-          <div className="mt-6 border-t border-overlay/6 pt-4 dark:border-overlay-dark/6">
+          <div className="mt-6 border-t border-overlay/6 pt-4">
             <h4 className="mb-3 text-sm font-medium">Self-Assessment</h4>
             {ratingSaved ? (
               <p className="text-sm text-green-600 dark:text-green-400">Saved!</p>
@@ -359,30 +359,30 @@ export function StudentAssignmentDetail({
 
             {practiceLogs.length > 0 ? (
               <div className="mt-4 flex flex-col gap-2">
-                <h4 className="text-xs font-medium text-muted dark:text-muted-dark">
+                <h4 className="text-xs font-medium text-muted">
                   Practice History
                 </h4>
                 {practiceLogs.map((log: PracticeLog) => (
                   <div
                     key={log.id}
-                    className="rounded-lg border border-overlay/6 px-3 py-2 dark:border-overlay-dark/6"
+                    className="rounded-lg border border-overlay/6 px-3 py-2"
                   >
                     <div className="flex items-center justify-between gap-3">
                       <div className="flex items-center gap-2">
                         {log.rating != null ? (
                           <StarsDisplay stars={log.rating} />
                         ) : (
-                          <span className="text-xs text-muted/60 dark:text-muted-dark/60">
+                          <span className="text-xs text-muted/60">
                             &mdash;
                           </span>
                         )}
                         {log.duration_minutes != null ? (
-                          <span className="text-xs text-muted dark:text-muted-dark">
+                          <span className="text-xs text-muted">
                             {log.duration_minutes}m
                           </span>
                         ) : null}
                       </div>
-                      <span className="text-xs text-muted/60 dark:text-muted-dark/60">
+                      <span className="text-xs text-muted/60">
                         {formatDate(log.logged_at)}
                       </span>
                     </div>

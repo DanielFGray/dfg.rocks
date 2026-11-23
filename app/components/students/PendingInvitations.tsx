@@ -46,14 +46,14 @@ export function PendingInvitations({
                   <Link
                     to="/people/$id"
                     params={{ id: invitation.user_id }}
-                    className="font-semibold text-primary no-underline hover:text-accent dark:text-primary-dark"
+                    className="font-semibold text-primary no-underline hover:text-accent"
                   >
                     {invitation.name ?? invitation.username}
                   </Link>
-                  <span className="ml-3 text-sm text-muted dark:text-muted-dark">
+                  <span className="ml-3 text-sm text-muted">
                     {invitation.email}
                   </span>
-                  <p className="mt-1 text-xs text-muted dark:text-muted-dark">
+                  <p className="mt-1 text-xs text-muted">
                     Sent {dateFormat.format(invitation.created_at)}
                     {invitation.invited_by_name ? ` by ${invitation.invited_by_name}` : ""}
                     {invitation.expires_at

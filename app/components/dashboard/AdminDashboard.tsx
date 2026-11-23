@@ -60,7 +60,7 @@ export function AdminDashboard({
         <h1 className="text-3xl font-bold tracking-tight">
           {firstName ? `Welcome back, ${firstName}` : "Dashboard"}
         </h1>
-        <p className="mt-1 text-muted dark:text-muted-dark">
+        <p className="mt-1 text-muted">
           {today.toLocaleDateString("en-US", {
             weekday: "long",
             month: "long",
@@ -81,10 +81,10 @@ export function AdminDashboard({
                   <p className="text-2xl font-bold text-accent">
                     {String(unreadSubmissions.length)}
                   </p>
-                  <p className="text-sm font-medium text-primary dark:text-primary-dark">
+                  <p className="text-sm font-medium text-primary">
                     Unread {unreadSubmissions.length === 1 ? "submission" : "submissions"}
                   </p>
-                  <p className="line-clamp-1 text-sm text-muted dark:text-muted-dark">
+                  <p className="line-clamp-1 text-sm text-muted">
                     Latest: {latestBy(unreadSubmissions, (s) => s.created_at).name}
                   </p>
                 </Card>
@@ -96,11 +96,11 @@ export function AdminDashboard({
                   <p className="text-2xl font-bold text-accent">
                     {String(pendingTestimonials.length)}
                   </p>
-                  <p className="text-sm font-medium text-primary dark:text-primary-dark">
+                  <p className="text-sm font-medium text-primary">
                     {pendingTestimonials.length === 1 ? "Testimonial" : "Testimonials"} awaiting
                     approval
                   </p>
-                  <p className="line-clamp-1 text-sm text-muted dark:text-muted-dark">
+                  <p className="line-clamp-1 text-sm text-muted">
                     Latest: {latestBy(pendingTestimonials, (t) => t.updated_at).display_name}
                   </p>
                 </Card>
@@ -120,7 +120,7 @@ export function AdminDashboard({
         </div>
         {todayScheduled.length === 0 ? (
           <Card>
-            <p className="text-muted dark:text-muted-dark">No lessons today</p>
+            <p className="text-muted">No lessons today</p>
           </Card>
         ) : (
           <div className="flex flex-col gap-3">
@@ -128,7 +128,7 @@ export function AdminDashboard({
               const student = studentMap.get(lesson.student_id);
               const badge =
                 statusBadgeClass[lesson.status] ??
-                "bg-overlay/10 dark:bg-overlay-dark/10 text-muted dark:text-muted-dark";
+                "bg-overlay/10 text-muted";
               const label = statusLabels[lesson.status] ?? lesson.status;
               const location = locationLabels[lesson.location_type] ?? lesson.location_type;
 
@@ -136,10 +136,10 @@ export function AdminDashboard({
                 <Card key={lesson.id}>
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="font-medium text-primary dark:text-primary-dark">
+                      <p className="font-medium text-primary">
                         {student?.name ?? "Unknown"}
                       </p>
-                      <p className="text-sm text-muted dark:text-muted-dark">
+                      <p className="text-sm text-muted">
                         {formatTime(lesson.scheduled_at)} &middot; {String(lesson.duration_minutes)}{" "}
                         min &middot; {location}
                       </p>
@@ -160,24 +160,24 @@ export function AdminDashboard({
         <h2 className="mb-4 text-lg font-semibold">This Week</h2>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <Card>
-            <p className="text-2xl font-bold text-primary dark:text-primary-dark">
+            <p className="text-2xl font-bold text-primary">
               {String(weekScheduledCount)}
             </p>
-            <p className="text-xs text-muted dark:text-muted-dark">Scheduled</p>
+            <p className="text-xs text-muted">Scheduled</p>
           </Card>
           <Card>
             <p className="text-2xl font-bold text-green-400">{String(weekCompletedCount)}</p>
-            <p className="text-xs text-muted dark:text-muted-dark">Completed</p>
+            <p className="text-xs text-muted">Completed</p>
           </Card>
           <Card>
             <p className="text-2xl font-bold text-red-600 dark:text-red-400">
               {String(weekCancelledCount)}
             </p>
-            <p className="text-xs text-muted dark:text-muted-dark">Cancelled</p>
+            <p className="text-xs text-muted">Cancelled</p>
           </Card>
           <Card>
             <p className="text-2xl font-bold text-accent">{String(students.length)}</p>
-            <p className="text-xs text-muted dark:text-muted-dark">Students</p>
+            <p className="text-xs text-muted">Students</p>
           </Card>
         </div>
       </section>
@@ -193,7 +193,7 @@ export function AdminDashboard({
           </div>
           {courses.length === 0 ? (
             <Card>
-              <p className="text-muted dark:text-muted-dark">No courses yet</p>
+              <p className="text-muted">No courses yet</p>
             </Card>
           ) : (
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -207,10 +207,10 @@ export function AdminDashboard({
                   <Card>
                     <div className="flex items-start justify-between gap-3">
                       <div>
-                        <p className="font-medium text-primary dark:text-primary-dark">
+                        <p className="font-medium text-primary">
                           {course.title}
                         </p>
-                        <p className="mt-1 text-sm text-muted dark:text-muted-dark">
+                        <p className="mt-1 text-sm text-muted">
                           {course.description}
                         </p>
                       </div>
@@ -265,7 +265,7 @@ export function AdminDashboard({
                     <Card>
                       <div className="flex items-start justify-between">
                         <div className="min-w-0 flex-1">
-                          <p className="text-sm font-medium text-primary dark:text-primary-dark">
+                          <p className="text-sm font-medium text-primary">
                             {sender?.name ?? "Student"}
                             {g.count > 1 ? (
                               <span className="ml-2 rounded-full bg-accent/20 px-2 py-0.5 text-xs font-semibold text-accent">
@@ -273,11 +273,11 @@ export function AdminDashboard({
                               </span>
                             ) : null}
                           </p>
-                          <p className="line-clamp-1 text-sm text-muted dark:text-muted-dark">
+                          <p className="line-clamp-1 text-sm text-muted">
                             {g.latest.body}
                           </p>
                         </div>
-                        <span className="ml-3 shrink-0 text-xs text-muted dark:text-muted-dark">
+                        <span className="ml-3 shrink-0 text-xs text-muted">
                           {g.latest.created_at.toLocaleDateString("en-US", {
                             month: "short",
                             day: "numeric",

@@ -83,10 +83,10 @@ function MagicLoginPage() {
     return (
       <main className="flex min-h-screen items-center justify-center px-4">
         <div className="text-center">
-          <h1 className="mb-4 text-2xl font-bold text-primary dark:text-primary-dark">
+          <h1 className="mb-4 text-2xl font-bold text-primary">
             Invalid Link
           </h1>
-          <p className="mb-6 text-sm text-muted dark:text-muted-dark">
+          <p className="mb-6 text-sm text-muted">
             This magic link is missing a token.
           </p>
           <Link
@@ -105,10 +105,10 @@ function MagicLoginPage() {
     return (
       <main className="flex min-h-screen items-center justify-center px-4">
         <div className="text-center">
-          <h1 className="mb-4 text-2xl font-bold text-primary dark:text-primary-dark">
+          <h1 className="mb-4 text-2xl font-bold text-primary">
             Link Expired
           </h1>
-          <p className="mb-6 text-sm text-muted dark:text-muted-dark">{data.error}</p>
+          <p className="mb-6 text-sm text-muted">{data.error}</p>
           <Link
             to="/login"
             search={{ redirect: data.redirect }}
@@ -126,10 +126,10 @@ function MagicLoginPage() {
   return (
     <main className="flex min-h-screen items-center justify-center px-4">
       <div className="text-center">
-        <h1 className="mb-4 text-2xl font-bold text-primary dark:text-primary-dark">
+        <h1 className="mb-4 text-2xl font-bold text-primary">
           Magic Link Verified
         </h1>
-        <p className="mb-6 text-sm text-muted dark:text-muted-dark">
+        <p className="mb-6 text-sm text-muted">
           You&apos;re signed in. Redirecting now...
         </p>
         <Link to={fallbackRedirect} className="text-sm text-accent hover:underline">

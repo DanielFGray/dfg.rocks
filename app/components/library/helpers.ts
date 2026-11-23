@@ -53,7 +53,7 @@ export const categoryColor: Record<FileCategory, string> = {
   audio: "bg-violet-500/15 text-violet-600 dark:text-violet-400",
   video: "bg-blue-500/15 text-blue-600 dark:text-blue-400",
   notation: "bg-amber-500/15 text-amber-600 dark:text-amber-400",
-  other: "bg-overlay/10 dark:bg-overlay-dark/10 text-muted dark:text-muted-dark",
+  other: "bg-overlay/10 text-muted",
 };
 
 export const formatSize = (bytes: number) =>

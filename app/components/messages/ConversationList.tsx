@@ -18,8 +18,8 @@ export function ConversationList({
   const partnerIds = Array.from(conversations.keys());
 
   return (
-    <div className="flex flex-col overflow-hidden rounded-xl border border-overlay/6 bg-card dark:border-overlay-dark/6 dark:bg-card-dark">
-      <div className="border-b border-overlay/6 px-4 py-3 text-sm font-semibold text-muted dark:border-overlay-dark/6 dark:text-muted-dark">
+    <div className="flex flex-col overflow-hidden rounded-xl border border-overlay/6 bg-card">
+      <div className="border-b border-overlay/6 px-4 py-3 text-sm font-semibold text-muted">
         Conversations
       </div>
       <div className="flex-1 overflow-y-auto">
@@ -35,18 +35,18 @@ export function ConversationList({
               variant="ghost"
               onClick={onSelect(pid)}
               data-testid={`conv-${pid}`}
-              className={`w-full flex-col items-stretch border-b border-overlay/4 px-4 py-3 text-left transition-colors dark:border-overlay-dark/4 ${isActive ? "bg-overlay/8 dark:bg-overlay-dark/8" : "hover:bg-overlay/4 dark:hover:bg-overlay-dark/4"}`}
+              className={`w-full flex-col items-stretch border-b border-overlay/4 px-4 py-3 text-left transition-colors ${isActive ? "bg-overlay/8" : "hover:bg-overlay/4"}`}
             >
               <div className="mb-1 flex items-center justify-between">
-                <span className="text-sm font-semibold text-primary dark:text-primary-dark">
+                <span className="text-sm font-semibold text-primary">
                   {getName(pid)}
                 </span>
-                <span className="ml-2 shrink-0 text-xs text-muted/40 dark:text-muted-dark/40">
+                <span className="ml-2 shrink-0 text-xs text-muted/40">
                   {formatTime(lastMsg.created_at)}
                 </span>
               </div>
               <div className="flex items-center justify-between">
-                <p className="min-w-0 truncate text-xs text-muted dark:text-muted-dark">
+                <p className="min-w-0 truncate text-xs text-muted">
                   {lastMsg.body}
                 </p>
                 {unread > 0 ? (

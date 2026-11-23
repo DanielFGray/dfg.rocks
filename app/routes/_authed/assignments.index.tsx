@@ -99,7 +99,7 @@ export const Route = createFileRoute("/_authed/assignments/")({
   head: () => ({ meta: [{ title: "Assignments | DFG Portal" }] }),
   component: AssignmentsPage,
   pendingComponent: () => (
-    <main className="mx-auto max-w-[1100px] px-5 pt-20 pb-16 text-muted md:px-8 dark:text-muted-dark">
+    <main className="mx-auto max-w-[1100px] px-5 pt-20 pb-16 text-muted md:px-8">
       Loading...
     </main>
   ),
@@ -133,7 +133,7 @@ function StudentAssignmentsPage() {
     <Main data-testid="assignments">
       <div className="mb-8">
         <h1 className="text-3xl font-bold tracking-tight">My Assignments</h1>
-        <p className="mt-2 text-muted dark:text-muted-dark">
+        <p className="mt-2 text-muted">
           Playback time is tracked automatically for notation assignments while the player is
           running. Save 1-5 self-reviews over time as you improve.
         </p>
@@ -166,10 +166,10 @@ function StudentAssignmentsPage() {
                     <div className="min-w-0 flex-1">
                       <div className="flex items-start justify-between gap-4">
                         <div className="min-w-0">
-                          <span className="block truncate text-sm font-medium text-primary dark:text-primary-dark">
+                          <span className="block truncate text-sm font-medium text-primary">
                             {material.title}
                           </span>
-                          <span className="block truncate text-xs text-muted/50 dark:text-muted-dark/50">
+                          <span className="block truncate text-xs text-muted/50">
                             {material.original_filename}
                             {assignedTrackLabel ? ` · ${assignedTrackLabel}` : ""}
                           </span>
@@ -189,7 +189,7 @@ function StudentAssignmentsPage() {
                       stroke="currentColor"
                       strokeWidth="2"
                       strokeLinecap="round"
-                      className="mt-0.5 shrink-0 text-muted/40 dark:text-muted-dark/40"
+                      className="mt-0.5 shrink-0 text-muted/40"
                     >
                       <polyline points="9 6 15 12 9 18" />
                     </svg>
@@ -223,10 +223,10 @@ function StaffStudentCard({
       <div className="flex flex-col gap-4">
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
-            <h2 className="text-lg font-semibold text-primary dark:text-primary-dark">
+            <h2 className="text-lg font-semibold text-primary">
               {detail.name}
             </h2>
-            <p className="text-sm text-muted dark:text-muted-dark">
+            <p className="text-sm text-muted">
               @{detail.username}
               {detail.email ? ` · ${detail.email}` : ""}
             </p>
@@ -243,7 +243,7 @@ function StaffStudentCard({
         </div>
 
         {detail.assigned_materials.length === 0 ? (
-          <div className="rounded-lg border border-overlay/6 bg-card px-4 py-6 text-sm text-muted dark:border-overlay-dark/6 dark:bg-card-dark dark:text-muted-dark">
+          <div className="rounded-lg border border-overlay/6 bg-card px-4 py-6 text-sm text-muted">
             {allMaterials.length === 0
               ? "No materials available to assign yet."
               : "No materials assigned."}
@@ -257,14 +257,14 @@ function StaffStudentCard({
               return (
                 <div
                   key={material.id}
-                  className="rounded-lg border border-overlay/6 bg-card px-4 py-3 text-sm dark:border-overlay-dark/6 dark:bg-card-dark"
+                  className="rounded-lg border border-overlay/6 bg-card px-4 py-3 text-sm"
                 >
                   <div className="flex items-center gap-3">
                     <div className="min-w-0 flex-1">
-                      <span className="block truncate font-medium text-primary dark:text-primary-dark">
+                      <span className="block truncate font-medium text-primary">
                         {material.title}
                       </span>
-                      <span className="mt-0.5 block truncate text-xs text-muted/60 dark:text-muted-dark/60">
+                      <span className="mt-0.5 block truncate text-xs text-muted/60">
                         {material.original_filename}
                         {assignedTrackLabel ? ` · ${assignedTrackLabel}` : ""}
                         {category === "notation"
@@ -411,7 +411,7 @@ function StaffAssignmentsPage() {
     <Main data-testid="assignments">
       <div className="mb-8">
         <h1 className="text-3xl font-bold tracking-tight">Assignments</h1>
-        <p className="mt-2 text-muted dark:text-muted-dark">
+        <p className="mt-2 text-muted">
           Assign materials to students and manage what each student currently has.
         </p>
       </div>
@@ -513,9 +513,9 @@ function StaffAssignmentsPage() {
               data-testid="staff-assign-track"
             />
           ) : selectedMaterial?.notation_tracks && selectedMaterial.notation_tracks.length === 1 ? (
-            <div className="rounded-lg border border-overlay/6 bg-card px-4 py-3 text-sm text-muted dark:border-overlay-dark/6 dark:bg-card-dark dark:text-muted-dark">
+            <div className="rounded-lg border border-overlay/6 bg-card px-4 py-3 text-sm text-muted">
               Assigned track:{" "}
-              <span className="font-medium text-primary dark:text-primary-dark">
+              <span className="font-medium text-primary">
                 {formatNotationTrackLabel(selectedMaterial.notation_tracks[0]!)}
               </span>
             </div>

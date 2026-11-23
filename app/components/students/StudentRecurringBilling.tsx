@@ -116,11 +116,11 @@ export function StudentRecurringBilling({ studentId }: { studentId: string }) {
           <div>
             <h2
               id="student-rates-heading"
-              className="text-xl font-semibold text-primary dark:text-primary-dark"
+              className="text-xl font-semibold text-primary"
             >
               Rates
             </h2>
-            <p className="mt-1 text-sm text-muted dark:text-muted-dark">
+            <p className="mt-1 text-sm text-muted">
               Lesson pricing and billing model for this student.
             </p>
           </div>
@@ -137,7 +137,7 @@ export function StudentRecurringBilling({ studentId }: { studentId: string }) {
           </Button>
         </div>
         {rates.isLoading ? (
-          <p className="text-sm text-muted dark:text-muted-dark">Loading rates...</p>
+          <p className="text-sm text-muted">Loading rates...</p>
         ) : rates.error ? (
           <ErrorMessage error={rates.error} />
         ) : rates.data?.length ? (
@@ -149,10 +149,10 @@ export function StudentRecurringBilling({ studentId }: { studentId: string }) {
                   className="flex items-start justify-between gap-4"
                 >
                   <div>
-                    <p className="font-semibold text-primary dark:text-primary-dark">
+                    <p className="font-semibold text-primary">
                       {formatMoney(rate.rate_cents)} / {rate.lesson_duration_minutes} min
                     </p>
-                    <p className="mt-1 text-sm text-muted dark:text-muted-dark">
+                    <p className="mt-1 text-sm text-muted">
                       {locationOptions.find((option) => option.value === rate.location_type)
                         ?.label ?? rate.location_type}
                     </p>
@@ -162,7 +162,7 @@ export function StudentRecurringBilling({ studentId }: { studentId: string }) {
                         : "Single booking"}
                     </span>
                     {rate.notes ? (
-                      <p className="mt-2 text-xs text-muted dark:text-muted-dark">{rate.notes}</p>
+                      <p className="mt-2 text-xs text-muted">{rate.notes}</p>
                     ) : null}
                   </div>
                   <Button
@@ -193,11 +193,11 @@ export function StudentRecurringBilling({ studentId }: { studentId: string }) {
           <div>
             <h2
               id="recurring-schedules-heading"
-              className="text-xl font-semibold text-primary dark:text-primary-dark"
+              className="text-xl font-semibold text-primary"
             >
               Recurring scheduling
             </h2>
-            <p className="mt-1 text-sm text-muted dark:text-muted-dark">
+            <p className="mt-1 text-sm text-muted">
               Weekly lesson times use the America/Chicago time zone.
             </p>
           </div>
@@ -220,7 +220,7 @@ export function StudentRecurringBilling({ studentId }: { studentId: string }) {
           </p>
         ) : null}
         {schedules.isLoading ? (
-          <p className="text-sm text-muted dark:text-muted-dark">Loading schedules...</p>
+          <p className="text-sm text-muted">Loading schedules...</p>
         ) : schedules.error ? (
           <ErrorMessage error={schedules.error} />
         ) : schedules.data?.length ? (
@@ -233,17 +233,17 @@ export function StudentRecurringBilling({ studentId }: { studentId: string }) {
                 >
                   <div>
                     <div className="flex flex-wrap items-center gap-2">
-                      <p className="font-semibold text-primary dark:text-primary-dark">
+                      <p className="font-semibold text-primary">
                         {weekdayLabel(schedule.day_of_week)} at{" "}
                         {timeLabel(schedule.local_start_time)}
                       </p>
                       <span
-                        className={`rounded-full px-2 py-0.5 text-xs font-medium ${schedule.active ? "bg-green-500/15 text-green-700 dark:text-green-300" : "bg-overlay/10 text-muted dark:bg-overlay-dark/10 dark:text-muted-dark"}`}
+                        className={`rounded-full px-2 py-0.5 text-xs font-medium ${schedule.active ? "bg-green-500/15 text-green-700 dark:text-green-300" : "bg-overlay/10 text-muted"}`}
                       >
                         {schedule.active ? "Active" : "Inactive"}
                       </span>
                     </div>
-                    <p className="mt-1 text-sm text-muted dark:text-muted-dark">
+                    <p className="mt-1 text-sm text-muted">
                       {dateLabel(schedule.starts_on)}
                       {schedule.ends_on ? ` – ${dateLabel(schedule.ends_on)}` : " onward"} ·{" "}
                       {schedule.timezone}
@@ -274,11 +274,11 @@ export function StudentRecurringBilling({ studentId }: { studentId: string }) {
           <div>
             <h2
               id="monthly-payments-heading"
-              className="text-xl font-semibold text-primary dark:text-primary-dark"
+              className="text-xl font-semibold text-primary"
             >
               Monthly payments
             </h2>
-            <p className="mt-1 text-sm text-muted dark:text-muted-dark">
+            <p className="mt-1 text-sm text-muted">
               Record prepaid months and track lesson generation.
             </p>
           </div>
@@ -293,13 +293,13 @@ export function StudentRecurringBilling({ studentId }: { studentId: string }) {
           </Button>
         </div>
         {payments.isLoading ? (
-          <p className="text-sm text-muted dark:text-muted-dark">Loading payments...</p>
+          <p className="text-sm text-muted">Loading payments...</p>
         ) : payments.error ? (
           <ErrorMessage error={payments.error} />
         ) : payments.data?.length ? (
-          <div className="overflow-x-auto rounded-lg border border-overlay/10 dark:border-overlay-dark/10">
+          <div className="overflow-x-auto rounded-lg border border-overlay/10">
             <table className="w-full text-left text-sm">
-              <thead className="bg-overlay/4 text-xs text-muted dark:bg-overlay-dark/4 dark:text-muted-dark">
+              <thead className="bg-overlay/4 text-xs text-muted">
                 <tr>
                   <th className="px-4 py-3 font-medium">Billing month</th>
                   <th className="px-4 py-3 font-medium">Amount</th>
@@ -312,9 +312,9 @@ export function StudentRecurringBilling({ studentId }: { studentId: string }) {
                   <tr
                     key={payment.id}
                     data-testid="monthly-payment-row"
-                    className="border-t border-overlay/8 dark:border-overlay-dark/8"
+                    className="border-t border-overlay/8"
                   >
-                    <td className="px-4 py-3 font-medium text-primary dark:text-primary-dark">
+                    <td className="px-4 py-3 font-medium text-primary">
                       {dateLabel(payment.billing_month)}
                     </td>
                     <td className="px-4 py-3">{formatMoney(payment.amount_cents)}</td>

@@ -181,8 +181,8 @@ export function AdminSection({
         <Card>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <p className="font-medium text-primary dark:text-primary-dark">Connected</p>
-              <p className="text-sm text-muted dark:text-muted-dark">
+              <p className="font-medium text-primary">Connected</p>
+              <p className="text-sm text-muted">
                 Calendar:{" "}
                 {"calendar_id" in gcalStatus ? (gcalStatus.calendar_id ?? "primary") : "primary"}
               </p>
@@ -201,8 +201,8 @@ export function AdminSection({
         <Card>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <p className="text-muted dark:text-muted-dark">Not connected</p>
-              <p className="text-sm text-muted/60 dark:text-muted-dark/60">
+              <p className="text-muted">Not connected</p>
+              <p className="text-sm text-muted/60">
                 Connect your Google Calendar to enable scheduling
               </p>
             </div>
@@ -219,7 +219,7 @@ export function AdminSection({
         {days.map((day) => (
           <Card key={day.index}>
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <span className="w-24 font-medium text-primary dark:text-primary-dark">
+              <span className="w-24 font-medium text-primary">
                 {day.label}
               </span>
               {workingHours[day.index] ? (
@@ -244,7 +244,7 @@ export function AdminSection({
                     }}
                     data-testid={`hours-start-${day.index}`}
                   />
-                  <span className="text-muted dark:text-muted-dark">to</span>
+                  <span className="text-muted">to</span>
                   <TimeField
                     label="End"
                     value={
@@ -276,7 +276,7 @@ export function AdminSection({
                 </div>
               ) : (
                 <div className="flex items-center gap-2">
-                  <span className="text-sm text-muted dark:text-muted-dark">Not working</span>
+                  <span className="text-sm text-muted">Not working</span>
                   <Button
                     variant="ghost"
                     onClick={() => toggleDay(day.index)}
@@ -305,7 +305,7 @@ export function AdminSection({
       <h3 className="mt-8 mb-4 text-lg font-semibold">Cancellation Policy</h3>
       <Card>
         {policyQuery.isLoading ? (
-          <p className="text-sm text-muted dark:text-muted-dark">Loading...</p>
+          <p className="text-sm text-muted">Loading...</p>
         ) : policyQuery.error ? (
           <p className="text-sm text-red-500">Failed to load cancellation policy settings.</p>
         ) : (
@@ -353,8 +353,8 @@ export function AdminSection({
       <Card>
         <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div className="flex-1">
-            <p className="font-medium text-primary dark:text-primary-dark">Reminder interval</p>
-            <p className="text-sm text-muted dark:text-muted-dark">
+            <p className="font-medium text-primary">Reminder interval</p>
+            <p className="text-sm text-muted">
               New students and parents will see the dashboard testimonial prompt after this many
               days, and reminder emails will repeat on the same cadence until they submit one.
             </p>
@@ -393,20 +393,20 @@ export function AdminSection({
                 <div className="flex flex-col gap-4">
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                     <div>
-                      <p className="font-medium text-primary dark:text-primary-dark">
+                      <p className="font-medium text-primary">
                         {testimonial.display_name}
                       </p>
-                      <p className="text-sm text-muted dark:text-muted-dark">
+                      <p className="text-sm text-muted">
                         {testimonial.role_label}
                       </p>
                     </div>
-                    <span className="text-sm font-medium text-muted dark:text-muted-dark">
+                    <span className="text-sm font-medium text-muted">
                       {testimonial.is_approved ? "Approved" : "Pending review"}
                     </span>
                   </div>
-                  <p className="text-sm text-primary dark:text-primary-dark">{testimonial.body}</p>
+                  <p className="text-sm text-primary">{testimonial.body}</p>
                   <div className="flex items-center justify-between gap-3">
-                    <p className="text-xs text-muted dark:text-muted-dark">
+                    <p className="text-xs text-muted">
                       Updated{" "}
                       {testimonial.updated_at.toLocaleDateString("en-US", {
                         month: "short",
@@ -438,7 +438,7 @@ export function AdminSection({
           })
         ) : (
           <Card>
-            <p className="text-sm text-muted dark:text-muted-dark">
+            <p className="text-sm text-muted">
               No testimonials have been submitted yet.
             </p>
           </Card>

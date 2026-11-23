@@ -24,7 +24,7 @@ export function ParentDashboard() {
       <h1 className="text-3xl font-bold tracking-tight">
         {firstName ? `Welcome back, ${firstName}` : "Welcome back"}
       </h1>
-      <p className="text-muted dark:text-muted-dark">
+      <p className="text-muted">
         Select a student below to view their dashboard, assignments, and lessons.
       </p>
 
@@ -37,10 +37,10 @@ export function ParentDashboard() {
               <Card key={student.id} data-testid={`student-card-${student.id}`}>
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="font-medium text-primary dark:text-primary-dark">
+                    <p className="font-medium text-primary">
                       {student.name ?? student.username}
                     </p>
-                    <p className="text-sm text-muted dark:text-muted-dark">@{student.username}</p>
+                    <p className="text-sm text-muted">@{student.username}</p>
                   </div>
                   <Button
                     variant={isActive ? "outline" : "primary"}

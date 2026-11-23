@@ -65,7 +65,7 @@ function ConfirmDeleteAccountPage() {
         <div className="w-full max-w-md">
           <Card className="text-center">
             <h1 className="text-3xl font-bold tracking-tight">Invalid Link</h1>
-            <p className="mt-3 text-sm text-muted dark:text-muted-dark">
+            <p className="mt-3 text-sm text-muted">
               This delete-account link is missing its confirmation token.
             </p>
             <div className="mt-6 flex justify-center">
@@ -87,7 +87,7 @@ function ConfirmDeleteAccountPage() {
         <div className="w-full max-w-md">
           <Card className="text-center">
             <h1 className="text-3xl font-bold tracking-tight">Sign In Required</h1>
-            <p className="mt-3 text-sm text-muted dark:text-muted-dark">
+            <p className="mt-3 text-sm text-muted">
               Sign in to the account that requested deletion before confirming this action.
             </p>
             <div className="mt-6 flex justify-center">
@@ -114,19 +114,19 @@ function ConfirmDeleteAccountPage() {
         <Card>
           <div className="text-center">
             <h1 className="text-3xl font-bold tracking-tight">Delete Account</h1>
-            <p className="mt-3 text-sm text-muted dark:text-muted-dark">
+            <p className="mt-3 text-sm text-muted">
               You&apos;re about to permanently delete the account for{" "}
-              <span className="font-semibold text-primary dark:text-primary-dark">
+              <span className="font-semibold text-primary">
                 {user.email || user.username}
               </span>
               .
             </p>
-            <p className="mt-2 text-sm text-muted dark:text-muted-dark">
+            <p className="mt-2 text-sm text-muted">
               This action removes your access to the student portal and cannot be undone.
             </p>
           </div>
 
-          <div className="mt-6 rounded-lg border border-red-500/20 bg-red-500/5 px-4 py-4 text-sm text-muted dark:text-muted-dark">
+          <div className="mt-6 rounded-lg border border-red-500/20 bg-red-500/5 px-4 py-4 text-sm text-muted">
             <p className="font-medium text-red-600 dark:text-red-400">Before you continue</p>
             <ul className="mt-2 list-disc space-y-1 pl-5">
               <li>Your lessons, messages, and account access will be removed.</li>
@@ -138,7 +138,7 @@ function ConfirmDeleteAccountPage() {
           <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:justify-end">
             <Link
               to="/settings"
-              className="inline-flex items-center justify-center rounded-xl px-6 py-3 text-sm font-semibold text-muted transition-colors hover:bg-overlay/5 hover:text-primary dark:text-muted-dark dark:hover:bg-overlay-dark/5 dark:hover:text-primary-dark"
+              className="inline-flex items-center justify-center rounded-xl px-6 py-3 text-sm font-semibold text-muted transition-colors hover:bg-overlay/5 hover:text-primary"
             >
               Cancel
             </Link>

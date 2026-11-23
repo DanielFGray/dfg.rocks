@@ -64,7 +64,7 @@ export function EmailSection({
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="font-medium break-all text-primary dark:text-primary-dark">
+                    <span className="font-medium break-all text-primary">
                       {em.email}
                     </span>
                     {em.is_primary ? (

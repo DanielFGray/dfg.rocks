@@ -15,9 +15,9 @@ export function ModuleCard({
   onDelete: (mod: Module) => void;
 }) {
   return (
-    <div className="border-y border-overlay/6 bg-card px-3 py-5 md:rounded-xl md:border md:p-6 dark:border-overlay-dark/6 dark:bg-card-dark">
+    <div className="border-y border-overlay/6 bg-card px-3 py-5 md:rounded-xl md:border md:p-6">
       <div className="mb-1 flex items-start justify-between">
-        <h2 className="text-lg font-semibold text-primary dark:text-primary-dark">{mod.title}</h2>
+        <h2 className="text-lg font-semibold text-primary">{mod.title}</h2>
         {isAdmin ? (
           <div className="ml-3 flex shrink-0 items-center gap-2">
             <Link
@@ -44,7 +44,7 @@ export function ModuleCard({
           <ModuleContent content={mod.content} materials={mod.materials} />
         </div>
       ) : (
-        <p className="text-sm text-muted/60 italic dark:text-muted-dark/60">No content yet.</p>
+        <p className="text-sm text-muted/60 italic">No content yet.</p>
       )}
     </div>
   );

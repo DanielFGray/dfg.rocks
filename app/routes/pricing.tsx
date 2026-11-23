@@ -39,14 +39,14 @@ function PricingPage() {
   return (
     <Main data-testid="pricing">
       <h1 className="mb-2 text-3xl font-bold tracking-tight">Online courses</h1>
-      <p className="mb-8 text-muted dark:text-muted-dark">
+      <p className="mb-8 text-muted">
         A subscription covers the whole family: every student in it can read the courses.
       </p>
 
       {plans.isPending ? (
-        <p className="text-muted dark:text-muted-dark">Loading...</p>
+        <p className="text-muted">Loading...</p>
       ) : plans.isError ? (
-        <p data-testid="subscriptions-unavailable" className="text-muted dark:text-muted-dark">
+        <p data-testid="subscriptions-unavailable" className="text-muted">
           {S.is(ServiceUnavailableError)(plans.error)
             ? "Subscriptions are not available yet."
             : "The prices could not be loaded. Try again in a moment."}
@@ -90,13 +90,13 @@ function PlanCard({
       <h2 className="text-xl font-semibold tracking-tight">{planName[price.plan]}</h2>
       <p className="mt-2 text-3xl font-bold tracking-tight">
         <span data-testid={`price-${price.plan}`}>{formatPlanAmount(price)}</span>{" "}
-        <span className="text-base font-normal text-muted dark:text-muted-dark">
+        <span className="text-base font-normal text-muted">
           per {price.interval}
         </span>
       </p>
       <div className="mt-6">
         {blocked !== null ? (
-          <p data-testid="checkout-blocked" className="text-sm text-muted dark:text-muted-dark">
+          <p data-testid="checkout-blocked" className="text-sm text-muted">
             {blockedReason[blocked]}
           </p>
         ) : signedIn === undefined ? (

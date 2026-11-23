@@ -270,7 +270,7 @@ export function UploadMaterialForm({
       <div className="flex flex-col gap-2">
         <label
           htmlFor="material-files"
-          className="text-sm font-medium text-muted dark:text-muted-dark"
+          className="text-sm font-medium text-muted"
         >
           Files
         </label>
@@ -283,9 +283,9 @@ export function UploadMaterialForm({
             handleFilesChange(e.currentTarget.files);
             e.currentTarget.value = "";
           }}
-          className="rounded-lg border border-overlay/10 bg-card px-4 py-3 text-primary outline-hidden transition-colors file:mr-4 file:cursor-pointer file:rounded-lg file:border-0 file:bg-accent/20 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-accent hover:file:bg-accent/30 focus:border-accent focus:ring-1 focus:ring-accent/50 dark:border-overlay-dark/10 dark:bg-card-dark dark:text-primary-dark"
+          className="rounded-lg border border-overlay/10 bg-card px-4 py-3 text-primary outline-hidden transition-colors file:mr-4 file:cursor-pointer file:rounded-lg file:border-0 file:bg-accent/20 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-accent hover:file:bg-accent/30 focus:border-accent focus:ring-1 focus:ring-accent/50"
         />
-        <p className="text-sm text-muted dark:text-muted-dark">
+        <p className="text-sm text-muted">
           Select one or more files, then review the generated titles before uploading.
         </p>
       </div>
@@ -311,14 +311,14 @@ export function UploadMaterialForm({
               <div
                 key={item.id}
                 data-testid="upload-material-row"
-                className="rounded-xl border border-overlay/6 bg-card px-4 py-4 dark:border-overlay-dark/6 dark:bg-card-dark"
+                className="rounded-xl border border-overlay/6 bg-card px-4 py-4"
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="truncate font-medium text-primary dark:text-primary-dark">
+                    <p className="truncate font-medium text-primary">
                       {item.file.name}
                     </p>
-                    <p className="text-xs text-muted dark:text-muted-dark">
+                    <p className="text-xs text-muted">
                       {fileCategory} • {formatSize(item.file.size)}
                     </p>
                   </div>
@@ -359,23 +359,23 @@ export function UploadMaterialForm({
                   <p className="mt-3 text-sm text-red-600 dark:text-red-400">{item.uploadError}</p>
                 ) : null}
                 {item.isInspectingTracks ? (
-                  <p className="mt-3 text-sm text-muted dark:text-muted-dark">
+                  <p className="mt-3 text-sm text-muted">
                     Inspecting notation tracks...
                   </p>
                 ) : null}
                 {item.notationTracks && item.notationTracks.length > 0 ? (
-                  <div className="mt-3 rounded-lg border border-overlay/6 bg-surface px-4 py-3 text-sm dark:border-overlay-dark/6 dark:bg-surface-dark">
-                    <p className="font-medium text-primary dark:text-primary-dark">
+                  <div className="mt-3 rounded-lg border border-overlay/6 bg-surface px-4 py-3 text-sm">
+                    <p className="font-medium text-primary">
                       Detected {item.notationTracks.length} track
                       {item.notationTracks.length === 1 ? "" : "s"}
                     </p>
-                    <ul className="mt-2 space-y-1 text-muted dark:text-muted-dark">
+                    <ul className="mt-2 space-y-1 text-muted">
                       {item.notationTracks.map((track) => (
                         <li key={track.index}>{formatNotationTrackLabel(track)}</li>
                       ))}
                     </ul>
                     {item.notationTracks.length > 1 ? (
-                      <p className="mt-2 text-xs text-muted/70 dark:text-muted-dark/70">
+                      <p className="mt-2 text-xs text-muted/70">
                         If this material is assigned directly to a student later, you&apos;ll choose
                         the assigned track then.
                       </p>
@@ -392,13 +392,13 @@ export function UploadMaterialForm({
           })}
         </div>
       ) : (
-        <div className="rounded-xl border border-dashed border-overlay/10 px-4 py-8 text-center text-sm text-muted dark:border-overlay-dark/10 dark:text-muted-dark">
+        <div className="rounded-xl border border-dashed border-overlay/10 px-4 py-8 text-center text-sm text-muted">
           No files selected yet.
         </div>
       )}
 
       {isInspectingTracks ? (
-        <p className="text-sm text-muted dark:text-muted-dark">
+        <p className="text-sm text-muted">
           Finish inspecting notation files before uploading.
         </p>
       ) : null}

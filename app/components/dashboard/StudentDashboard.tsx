@@ -84,10 +84,10 @@ export function StudentDashboard({
             {unread.slice(0, 3).map((m) => (
               <Link key={m.id} to="/messages" className="no-underline">
                 <Card>
-                  <p className="line-clamp-2 text-sm text-primary dark:text-primary-dark">
+                  <p className="line-clamp-2 text-sm text-primary">
                     {m.body}
                   </p>
-                  <p className="mt-1 text-xs text-muted dark:text-muted-dark">
+                  <p className="mt-1 text-xs text-muted">
                     {m.created_at.toLocaleDateString("en-US", {
                       month: "short",
                       day: "numeric",
@@ -120,10 +120,10 @@ export function StudentDashboard({
                 className="no-underline"
               >
                 <Card>
-                  <p className="text-sm font-medium text-primary dark:text-primary-dark">
+                  <p className="text-sm font-medium text-primary">
                     {a.title}
                   </p>
-                  <p className="mt-1 text-xs text-muted dark:text-muted-dark">
+                  <p className="mt-1 text-xs text-muted">
                     {a.original_filename}
                   </p>
                 </Card>
@@ -140,7 +140,7 @@ export function StudentDashboard({
         </div>
         {logs.length === 0 ? (
           <Card>
-            <p className="text-sm text-muted dark:text-muted-dark">
+            <p className="text-sm text-muted">
               No practice logged yet. Check your assignments to get started!
             </p>
           </Card>
@@ -157,11 +157,11 @@ export function StudentDashboard({
                 >
                   <Card>
                     <div className="flex items-start justify-between gap-2">
-                      <p className="truncate text-sm font-medium text-primary dark:text-primary-dark">
+                      <p className="truncate text-sm font-medium text-primary">
                         {material?.title ?? "Unknown material"}
                       </p>
                     </div>
-                    <div className="mt-1 flex items-center gap-2 text-xs text-muted dark:text-muted-dark">
+                    <div className="mt-1 flex items-center gap-2 text-xs text-muted">
                       {log.rating != null ? <span>{String(log.rating)}/5 ★</span> : null}
                       {log.duration_minutes != null ? (
                         <span>{log.duration_minutes} min</span>
@@ -195,7 +195,7 @@ export function StudentDashboard({
               >
                 <Card>
                   <div className="flex items-center justify-between">
-                    <span className="font-medium text-primary dark:text-primary-dark">
+                    <span className="font-medium text-primary">
                       {course.title}
                     </span>
                     <span className="rounded-full bg-accent/12 px-2.5 py-0.5 text-sm font-semibold text-accent">
@@ -216,14 +216,14 @@ export function StudentDashboard({
           <Card>
             <div className="flex items-center justify-between">
               <div>
-                <p className="font-medium text-primary dark:text-primary-dark">
+                <p className="font-medium text-primary">
                   {upcoming[0]!.scheduled_at.toLocaleDateString("en-US", {
                     weekday: "long",
                     month: "long",
                     day: "numeric",
                   })}
                 </p>
-                <p className="text-sm text-muted dark:text-muted-dark">
+                <p className="text-sm text-muted">
                   {upcoming[0]!.scheduled_at.toLocaleTimeString("en-US", {
                     hour: "numeric",
                     minute: "2-digit",
@@ -242,7 +242,7 @@ export function StudentDashboard({
         ) : (
           <Card>
             <div className="flex items-center justify-between">
-              <p className="text-muted dark:text-muted-dark">No upcoming lessons</p>
+              <p className="text-muted">No upcoming lessons</p>
               <Link
                 to="/book-lesson"
                 search={{ date: getDefaultBookingDate() }}

@@ -57,7 +57,7 @@ export const Route = createFileRoute("/_authed/courses/$courseId/modules/$module
   loader: ({ params }) => getModuleEditPageData({ data: { courseId: params.courseId } }),
   component: ModuleEditPage,
   pendingComponent: () => (
-    <div className="pt-20 text-center text-muted dark:text-muted-dark">Loading...</div>
+    <div className="pt-20 text-center text-muted">Loading...</div>
   ),
 });
 
@@ -77,12 +77,12 @@ function ModuleEditPage() {
           <Link
             to="/courses/$id"
             params={{ id: courseId }}
-            className="text-sm text-muted no-underline transition-colors hover:text-primary dark:text-muted-dark dark:hover:text-primary-dark"
+            className="text-sm text-muted no-underline transition-colors hover:text-primary"
           >
             &larr; Back to Course
           </Link>
         </div>
-        <p className="text-center text-muted dark:text-muted-dark">Module not found.</p>
+        <p className="text-center text-muted">Module not found.</p>
       </main>
     );
   }
@@ -119,7 +119,7 @@ function ModuleEditPage() {
         <Link
           to="/courses/$id"
           params={{ id: courseId }}
-          className="text-sm text-muted no-underline transition-colors hover:text-primary dark:text-muted-dark dark:hover:text-primary-dark"
+          className="text-sm text-muted no-underline transition-colors hover:text-primary"
         >
           &larr; Back to Course
         </Link>
@@ -138,7 +138,7 @@ function ModuleEditPage() {
         />
 
         <div>
-          <label className="mb-2 block text-sm font-medium text-primary dark:text-primary-dark">
+          <label className="mb-2 block text-sm font-medium text-primary">
             Content
           </label>
           <ModuleEditor

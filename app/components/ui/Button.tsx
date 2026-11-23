@@ -15,9 +15,9 @@ type ButtonProps = {
 const variants: Record<NonNullable<ButtonProps["variant"]>, string> = {
   primary: "bg-accent text-white hover:bg-accent-hover hover:-translate-y-px",
   outline:
-    "bg-transparent border border-overlay/20 dark:border-overlay-dark/20 text-primary dark:text-primary-dark hover:border-accent hover:text-accent",
+    "bg-transparent border border-overlay/20 text-primary hover:border-accent hover:text-accent",
   ghost:
-    "bg-transparent text-muted dark:text-muted-dark hover:text-primary dark:hover:text-primary-dark hover:bg-overlay/5 dark:hover:bg-overlay-dark/5",
+    "bg-transparent text-muted hover:text-primary hover:bg-overlay/5",
   danger: "bg-red-600 text-white hover:bg-red-500 hover:-translate-y-px",
 };
 

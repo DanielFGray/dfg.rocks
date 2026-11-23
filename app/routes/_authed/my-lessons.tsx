@@ -53,7 +53,7 @@ export const Route = createFileRoute("/_authed/my-lessons")({
   loader: () => getMyLessonsPageData(),
   component: MyLessonsPage,
   pendingComponent: () => (
-    <main className="mx-auto max-w-[1100px] px-5 pt-20 pb-16 text-muted md:px-8 dark:text-muted-dark">
+    <main className="mx-auto max-w-[1100px] px-5 pt-20 pb-16 text-muted md:px-8">
       Loading...
     </main>
   ),
@@ -121,13 +121,13 @@ function PolicySummary({ policy }: { policy: LessonCancellationPolicy }) {
     <section
       data-testid="cancellation-policy"
       aria-label="Cancellation policy"
-      className="rounded-lg border border-overlay/10 bg-overlay/3 p-4 text-sm dark:border-overlay-dark/10 dark:bg-overlay-dark/3"
+      className="rounded-lg border border-overlay/10 bg-overlay/3 p-4 text-sm"
     >
-      <p className="font-semibold text-primary dark:text-primary-dark">
+      <p className="font-semibold text-primary">
         {policy.is_late ? "Late cancellation policy" : "Cancellation policy"}
       </p>
-      <p className="mt-1 text-muted dark:text-muted-dark">{outcome}</p>
-      <dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs text-muted dark:text-muted-dark">
+      <p className="mt-1 text-muted">{outcome}</p>
+      <dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs text-muted">
         <dt>Billing</dt>
         <dd>{policy.billing_model === "monthly_prepaid" ? "Monthly prepaid" : "Single booking"}</dd>
         <dt>Amount</dt>
@@ -147,46 +147,46 @@ function NoteSection({ note }: { note: LessonNote }) {
 
   if (!hasContent) {
     return (
-      <div className="mt-4 border-t border-overlay/5 pt-4 dark:border-overlay-dark/5">
-        <p className="text-sm text-muted dark:text-muted-dark">No details in this note.</p>
+      <div className="mt-4 border-t border-overlay/5 pt-4">
+        <p className="text-sm text-muted">No details in this note.</p>
       </div>
     );
   }
 
   return (
-    <div className="mt-4 flex flex-col gap-3 border-t border-overlay/5 pt-4 dark:border-overlay-dark/5">
+    <div className="mt-4 flex flex-col gap-3 border-t border-overlay/5 pt-4">
       {note.topics_covered ? (
         <div>
-          <p className="mb-1 text-xs font-semibold tracking-wider text-muted uppercase dark:text-muted-dark">
+          <p className="mb-1 text-xs font-semibold tracking-wider text-muted uppercase">
             Topics Covered
           </p>
-          <p className="text-sm text-primary dark:text-primary-dark">{note.topics_covered}</p>
+          <p className="text-sm text-primary">{note.topics_covered}</p>
         </div>
       ) : null}
       {note.homework ? (
         <div>
-          <p className="mb-1 text-xs font-semibold tracking-wider text-muted uppercase dark:text-muted-dark">
+          <p className="mb-1 text-xs font-semibold tracking-wider text-muted uppercase">
             Homework
           </p>
-          <p className="text-sm text-primary dark:text-primary-dark">{note.homework}</p>
+          <p className="text-sm text-primary">{note.homework}</p>
         </div>
       ) : null}
       {note.progress_observations ? (
         <div>
-          <p className="mb-1 text-xs font-semibold tracking-wider text-muted uppercase dark:text-muted-dark">
+          <p className="mb-1 text-xs font-semibold tracking-wider text-muted uppercase">
             Progress
           </p>
-          <p className="text-sm text-primary dark:text-primary-dark">
+          <p className="text-sm text-primary">
             {note.progress_observations}
           </p>
         </div>
       ) : null}
       {note.notes ? (
         <div>
-          <p className="mb-1 text-xs font-semibold tracking-wider text-muted uppercase dark:text-muted-dark">
+          <p className="mb-1 text-xs font-semibold tracking-wider text-muted uppercase">
             Notes
           </p>
-          <p className="text-sm text-primary dark:text-primary-dark">{note.notes}</p>
+          <p className="text-sm text-primary">{note.notes}</p>
         </div>
       ) : null}
     </div>
@@ -296,7 +296,7 @@ function MyLessonsPage() {
           {lessons.map((lesson) => {
             const badge =
               statusBadgeClass[lesson.status] ??
-              "bg-overlay/10 dark:bg-overlay-dark/10 text-muted dark:text-muted-dark";
+              "bg-overlay/10 text-muted";
             const label = statusLabel[lesson.status] ?? lesson.status;
             const location = locationLabel[lesson.location_type] ?? lesson.location_type;
             const note = noteMap.get(lesson.id);
@@ -308,14 +308,14 @@ function MyLessonsPage() {
                   <div className="flex items-start justify-between gap-4">
                     <div className="min-w-0">
                       <div className="mb-1 flex items-center gap-3">
-                        <span className="font-semibold text-primary dark:text-primary-dark">
+                        <span className="font-semibold text-primary">
                           {formatDateTime(lesson.scheduled_at)}
                         </span>
                         <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${badge}`}>
                           {label}
                         </span>
                       </div>
-                      <p className="text-sm text-muted dark:text-muted-dark">
+                      <p className="text-sm text-muted">
                         {lesson.duration_minutes} min · {location}
                       </p>
                       {lesson.cancellation_reason ? (
@@ -350,7 +350,7 @@ function MyLessonsPage() {
                       >
                         <DisclosureTrigger
                           data-testid="toggle-notes"
-                          className="shrink-0 rounded-lg px-3 py-1.5 text-xs text-violet-400 transition-colors hover:bg-overlay/5 hover:text-violet-300 data-[expanded]:text-violet-300 dark:hover:bg-overlay-dark/5"
+                          className="shrink-0 rounded-lg px-3 py-1.5 text-xs text-violet-400 transition-colors hover:bg-overlay/5 hover:text-violet-300 data-[expanded]:text-violet-300"
                         >
                           {isExpanded ? "Hide Notes" : "View Notes"}
                         </DisclosureTrigger>
@@ -358,8 +358,8 @@ function MyLessonsPage() {
                           {note ? (
                             <NoteSection note={note} />
                           ) : (
-                            <div className="mt-4 border-t border-overlay/5 pt-4 dark:border-overlay-dark/5">
-                              <p className="text-sm text-muted dark:text-muted-dark">
+                            <div className="mt-4 border-t border-overlay/5 pt-4">
+                              <p className="text-sm text-muted">
                                 No notes for this lesson.
                               </p>
                             </div>
@@ -390,7 +390,7 @@ function MyLessonsPage() {
           }}
         >
           {cancelTarget ? (
-            <p className="text-sm text-muted dark:text-muted-dark">
+            <p className="text-sm text-muted">
               Cancel the lesson scheduled for {formatDateTime(cancelTarget.scheduled_at)}?
             </p>
           ) : null}
@@ -398,7 +398,7 @@ function MyLessonsPage() {
           {policyMutation.isPending ? (
             <p
               data-testid="cancellation-policy-loading"
-              className="text-sm text-muted dark:text-muted-dark"
+              className="text-sm text-muted"
             >
               Loading the cancellation policy...
             </p>
@@ -410,7 +410,7 @@ function MyLessonsPage() {
             </p>
           ) : null}
 
-          <label className="flex flex-col gap-1.5 text-sm font-medium text-muted dark:text-muted-dark">
+          <label className="flex flex-col gap-1.5 text-sm font-medium text-muted">
             Reason (optional)
             <textarea
               name="reason"
@@ -419,7 +419,7 @@ function MyLessonsPage() {
               maxLength={1000}
               rows={3}
               onChange={(event) => setCancellationReason(event.target.value)}
-              className="resize-y rounded-lg border border-overlay/10 bg-card px-4 py-3 text-primary outline-hidden transition-colors focus:border-accent focus:ring-1 focus:ring-accent/50 dark:border-overlay-dark/10 dark:bg-card-dark dark:text-primary-dark"
+              className="resize-y rounded-lg border border-overlay/10 bg-card px-4 py-3 text-primary outline-hidden transition-colors focus:border-accent focus:ring-1 focus:ring-accent/50"
             />
           </label>
 
@@ -466,7 +466,7 @@ function MyLessonsPage() {
             });
           }}
         >
-          <label className="flex flex-col gap-1.5 text-sm font-medium text-muted dark:text-muted-dark">
+          <label className="flex flex-col gap-1.5 text-sm font-medium text-muted">
             New date and time
             <input
               type="datetime-local"
@@ -479,7 +479,7 @@ function MyLessonsPage() {
                 setNewScheduledAt(event.target.value);
                 setRescheduleValidationError(null);
               }}
-              className="rounded-lg border border-overlay/10 bg-card px-4 py-3 text-primary outline-hidden transition-colors focus:border-accent focus:ring-1 focus:ring-accent/50 dark:border-overlay-dark/10 dark:bg-card-dark dark:text-primary-dark"
+              className="rounded-lg border border-overlay/10 bg-card px-4 py-3 text-primary outline-hidden transition-colors focus:border-accent focus:ring-1 focus:ring-accent/50"
             />
           </label>
 
@@ -489,7 +489,7 @@ function MyLessonsPage() {
             </p>
           ) : null}
           {policyMutation.isPending ? (
-            <p className="text-sm text-muted dark:text-muted-dark">
+            <p className="text-sm text-muted">
               Loading the cancellation policy...
             </p>
           ) : null}

@@ -121,7 +121,7 @@ function SiteNav() {
 
   return (
     <>
-      <nav className="fixed top-0 z-100 flex w-full items-center justify-between border-b border-overlay/5 bg-surface/90 px-6 py-3 backdrop-blur-md md:px-8 md:py-4 dark:border-overlay-dark/5 dark:bg-surface-dark/90">
+      <nav className="fixed top-0 z-100 flex w-full items-center justify-between border-b border-overlay/5 bg-surface/90 px-6 py-3 backdrop-blur-md md:px-8 md:py-4">
         <div className="text-xl font-bold tracking-tight">
           {logoBefore}
           <span className="text-accent">{site.logoDot}</span>
@@ -132,7 +132,7 @@ function SiteNav() {
           {nav.links.map((link) => (
             <li key={link.href}>
               <a
-                className="text-[0.95rem] text-muted no-underline transition-colors hover:text-primary dark:text-muted-dark dark:hover:text-primary-dark"
+                className="text-[0.95rem] text-muted no-underline transition-colors hover:text-primary"
                 href={link.href}
               >
                 {link.label}
@@ -143,7 +143,7 @@ function SiteNav() {
             <Link
               to="/login"
               search={{ redirect: undefined }}
-              className="rounded-lg border border-overlay/10 bg-overlay/5 px-4 py-1.5 text-sm font-medium text-muted no-underline transition-all hover:border-accent/40 hover:text-accent dark:border-overlay-dark/10 dark:bg-overlay-dark/5 dark:text-muted-dark"
+              className="rounded-lg border border-overlay/10 bg-overlay/5 px-4 py-1.5 text-sm font-medium text-muted no-underline transition-all hover:border-accent/40 hover:text-accent"
             >
               Student Portal
             </Link>
@@ -179,9 +179,9 @@ function SiteNav() {
               key={link.href}
               href={link.href}
               onClick={() => setOpen(false)}
-              className="text-base text-muted no-underline transition-colors hover:text-primary dark:text-muted-dark dark:hover:text-primary-dark"
+              className="text-base text-muted no-underline transition-colors hover:text-primary"
             >
-              <div className="border-b border-overlay/5 py-3 dark:border-overlay-dark/5">
+              <div className="border-b border-overlay/5 py-3">
                 {link.label}
               </div>
             </a>
@@ -209,7 +209,7 @@ function Hero() {
       <h1 className="mb-6 text-[clamp(2.5rem,6vw,4.5rem)] leading-[1.1] font-bold tracking-tight">
         {hero.headline}
       </h1>
-      <p className="mb-10 max-w-135 text-[1.2rem] text-muted dark:text-muted-dark">
+      <p className="mb-10 max-w-135 text-[1.2rem] text-muted">
         {hero.subtitle}
       </p>
       <div className="flex flex-col items-start gap-3 md:flex-row md:items-center md:gap-4">
@@ -220,7 +220,7 @@ function Hero() {
             className={[
               "inline-block rounded-xl no-underline font-semibold text-base transition-all cursor-pointer px-9 py-4 w-full text-center md:w-auto",
               c.outline
-                ? "bg-transparent border-2 border-overlay/15 dark:border-overlay-dark/15 hover:border-overlay/40 dark:hover:border-overlay-dark/40 hover:bg-overlay/5 dark:hover:bg-overlay-dark/5"
+                ? "bg-transparent border-2 border-overlay/15 hover:border-overlay/40 hover:bg-overlay/5"
                 : "bg-accent text-white hover:bg-accent-hover hover:-translate-y-px",
             ].join(" ")}
           >
@@ -245,7 +245,7 @@ function About() {
           </div>
           <h2 className="mb-5 text-4xl leading-[1.15] font-bold tracking-tight">{about.heading}</h2>
           {about.paragraphs.map((p, i) => (
-            <p key={i} className="mb-4 text-muted dark:text-muted-dark">
+            <p key={i} className="mb-4 text-muted">
               {p}
             </p>
           ))}
@@ -266,11 +266,11 @@ function LessonsSection() {
         {lessons.items.map((lesson) => (
           <div
             key={lesson.title}
-            className="rounded-xl border border-overlay/6 bg-card p-8 transition-all duration-200 hover:-translate-y-0.5 hover:border-accent/30 dark:border-overlay-dark/6 dark:bg-card-dark"
+            className="rounded-xl border border-overlay/6 bg-card p-8 transition-all duration-200 hover:-translate-y-0.5 hover:border-accent/30"
           >
             <div className="mb-4 text-[2rem]">{lesson.icon}</div>
             <h3 className="mb-2 text-xl font-semibold">{lesson.title}</h3>
-            <p className="text-[0.95rem] text-muted dark:text-muted-dark">{lesson.description}</p>
+            <p className="text-[0.95rem] text-muted">{lesson.description}</p>
             <div className="mt-4 flex gap-2">
               {lesson.formats.map((f) => (
                 <span
@@ -307,12 +307,12 @@ function TestimonialSection() {
           <div
             key={t.id}
             data-testid="testimonial-card"
-            className="rounded-xl border border-overlay/6 bg-card p-8 dark:border-overlay-dark/6 dark:bg-card-dark"
+            className="rounded-xl border border-overlay/6 bg-card p-8"
           >
-            <p className="mb-6 text-muted italic dark:text-muted-dark">&ldquo;{t.body}&rdquo;</p>
+            <p className="mb-6 text-muted italic">&ldquo;{t.body}&rdquo;</p>
             <div>
               <div className="font-semibold">{t.display_name}</div>
-              <div className="text-sm text-muted dark:text-muted-dark">{t.role_label}</div>
+              <div className="text-sm text-muted">{t.role_label}</div>
             </div>
           </div>
         ))}
@@ -340,10 +340,10 @@ function ContactSection() {
         <div className="mx-auto max-w-2xl text-center">
           <div className="mb-10 rounded-xl border border-green-500/30 bg-green-500/5 p-8 text-center dark:border-green-500/20 dark:bg-green-500/5">
             <div className="mb-3 text-3xl">&#x2714;</div>
-            <h3 className="mb-2 text-xl font-semibold text-primary dark:text-primary-dark">
+            <h3 className="mb-2 text-xl font-semibold text-primary">
               Message Sent!
             </h3>
-            <p className="text-sm text-muted dark:text-muted-dark">
+            <p className="text-sm text-muted">
               Thanks for reaching out. I'll get back to you within 24 hours.
             </p>
           </div>
@@ -369,7 +369,7 @@ function ContactSection() {
             </a>
             <a
               href={`tel:${site.phone}`}
-              className="inline-flex items-center justify-center gap-3 rounded-xl border border-overlay/20 bg-transparent px-9 py-4 text-base font-semibold text-primary no-underline transition-all hover:-translate-y-px hover:border-accent hover:text-accent dark:border-overlay-dark/20 dark:text-primary-dark"
+              className="inline-flex items-center justify-center gap-3 rounded-xl border border-overlay/20 bg-transparent px-9 py-4 text-base font-semibold text-primary no-underline transition-all hover:-translate-y-px hover:border-accent hover:text-accent"
             >
               <svg
                 className="h-5 w-5"
@@ -388,7 +388,7 @@ function ContactSection() {
             </a>
             <a
               href={`mailto:${site.email}`}
-              className="inline-flex items-center justify-center gap-3 rounded-xl border border-overlay/20 bg-transparent px-9 py-4 text-base font-semibold text-primary no-underline transition-all hover:-translate-y-px hover:border-accent hover:text-accent dark:border-overlay-dark/20 dark:text-primary-dark"
+              className="inline-flex items-center justify-center gap-3 rounded-xl border border-overlay/20 bg-transparent px-9 py-4 text-base font-semibold text-primary no-underline transition-all hover:-translate-y-px hover:border-accent hover:text-accent"
             >
               <svg
                 className="h-5 w-5"
@@ -406,13 +406,13 @@ function ContactSection() {
               Email Me
             </a>
           </div>
-          <div className="flex flex-wrap justify-center gap-x-8 gap-y-3 text-sm text-muted dark:text-muted-dark">
+          <div className="flex flex-wrap justify-center gap-x-8 gap-y-3 text-sm text-muted">
             <span>
-              <strong className="text-primary dark:text-primary-dark">Location:</strong> {site.city}
+              <strong className="text-primary">Location:</strong> {site.city}
               , {site.state}
             </span>
             <span>
-              <strong className="text-primary dark:text-primary-dark">Hours:</strong> {site.hours}
+              <strong className="text-primary">Hours:</strong> {site.hours}
             </span>
           </div>
         </div>
@@ -427,7 +427,7 @@ function ContactSection() {
           {contact.sectionLabel}
         </div>
         <h2 className="mb-5 text-4xl leading-[1.15] font-bold tracking-tight">{contact.heading}</h2>
-        <p className="mb-10 text-muted dark:text-muted-dark">{contact.description}</p>
+        <p className="mb-10 text-muted">{contact.description}</p>
 
         <form
           method="post"
@@ -557,7 +557,7 @@ function ContactSection() {
           </a>
           <a
             href={`tel:${site.phone}`}
-            className="inline-flex items-center justify-center gap-3 rounded-xl border border-overlay/20 bg-transparent px-9 py-4 text-base font-semibold text-primary no-underline transition-all hover:-translate-y-px hover:border-accent hover:text-accent dark:border-overlay-dark/20 dark:text-primary-dark"
+            className="inline-flex items-center justify-center gap-3 rounded-xl border border-overlay/20 bg-transparent px-9 py-4 text-base font-semibold text-primary no-underline transition-all hover:-translate-y-px hover:border-accent hover:text-accent"
           >
             <svg
               className="h-5 w-5"
@@ -576,7 +576,7 @@ function ContactSection() {
           </a>
           <a
             href={`mailto:${site.email}`}
-            className="inline-flex items-center justify-center gap-3 rounded-xl border border-overlay/20 bg-transparent px-9 py-4 text-base font-semibold text-primary no-underline transition-all hover:-translate-y-px hover:border-accent hover:text-accent dark:border-overlay-dark/20 dark:text-primary-dark"
+            className="inline-flex items-center justify-center gap-3 rounded-xl border border-overlay/20 bg-transparent px-9 py-4 text-base font-semibold text-primary no-underline transition-all hover:-translate-y-px hover:border-accent hover:text-accent"
           >
             <svg
               className="h-5 w-5"
@@ -595,13 +595,13 @@ function ContactSection() {
           </a>
         </div>
 
-        <div className="flex flex-wrap justify-center gap-x-8 gap-y-3 text-sm text-muted dark:text-muted-dark">
+        <div className="flex flex-wrap justify-center gap-x-8 gap-y-3 text-sm text-muted">
           <span>
-            <strong className="text-primary dark:text-primary-dark">Location:</strong> {site.city},{" "}
+            <strong className="text-primary">Location:</strong> {site.city},{" "}
             {site.state}
           </span>
           <span>
-            <strong className="text-primary dark:text-primary-dark">Hours:</strong> {site.hours}
+            <strong className="text-primary">Hours:</strong> {site.hours}
           </span>
         </div>
       </div>
@@ -611,7 +611,7 @@ function ContactSection() {
 
 function Footer() {
   return (
-    <footer className="border-t border-overlay/5 px-8 py-12 text-center text-[0.85rem] text-muted dark:border-overlay-dark/5 dark:text-muted-dark">
+    <footer className="border-t border-overlay/5 px-8 py-12 text-center text-[0.85rem] text-muted">
       <p>
         &copy; {site.year} {site.business}. All rights reserved.
       </p>

@@ -27,7 +27,7 @@ export function DeleteAccountSection({ onRefresh }: { onRefresh: () => Promise<v
         <Card>
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <p className="text-sm text-muted dark:text-muted-dark">
+              <p className="text-sm text-muted">
                 Permanently delete your account and all associated data. This action cannot be
                 undone.
               </p>
