@@ -53,7 +53,7 @@
     "@tw-classed/react": "^2.0.0",
     "arctic": "^3.7.0",
     "effect": "4.1.4",
-    "gigbag.js": "github:DanielFGray/alphatab-kit#v0.4.3",
+    "gigbag.js": "github:DanielFGray/gigbag#v0.4.3",
     "graphile-migrate": "2.0.0-rc.6",
     "graphile-worker": "^0.18.0",
     "html-to-text": "^10.0.1",
