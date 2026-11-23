@@ -41,3 +41,6 @@ google-auth-*
 # Copied from @coderline/alphatab by the gigbag.js Vite plugin (alphaTabAssets)
 public/font/
 public/soundfont/
+
+# playwright run output
+test-results/
