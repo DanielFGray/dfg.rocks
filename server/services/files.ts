@@ -213,6 +213,31 @@ export class Files extends Context.Service<Files>()("dfg-rocks/files", {
 
       // RLS on app_public.materials is the access check: a material the reader cannot read
       // is absent from this query and answers 404, the same as a material that does not exist.
+      /**
+       * Where a material's file is stored, for a visitor who may read the material: RLS
+       * refuses the others with 404. Run it as the visitor, and read the file after the
+       * transaction, because reading S3 is an HTTP call.
+       */
+      locate: Effect.fn("Files.locate")(function* (materialId: string) {
+        const material = yield* RequestDatabase.use((db) =>
+          db
+            .execute(
+              db
+                .selectFrom("app_public.materials")
+                .select(["storage_backend", "storage_key"])
+                .where("id", "=", materialId),
+            )
+            .pipe(
+              Effect.head,
+              Effect.catchTags({
+                NoSuchElementError: () =>
+                  new HttpError({ status: 404, message: "Material not found" }),
+              }),
+            ),
+        );
+        return toStorageLocation(material);
+      }),
+
       download: Effect.fnUntraced(function* (materialId: string) {
         const material = yield* RequestDatabase.use((db) =>
           db
