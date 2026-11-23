@@ -112,6 +112,7 @@ function SettingsPage() {
       ) : (
         <div className="mb-8">
           <TestimonialEditor
+            key={testimonial?.id ?? "new"}
             testimonial={testimonial}
             onRefresh={() => router.invalidate()}
             mode="settings"

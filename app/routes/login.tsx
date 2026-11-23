@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { useState } from "react";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import type { Key } from "@react-types/shared";
 import { Input } from "../components/ui/Input.js";
 import { Tabs, TabList, Tab, TabPanel } from "../components/ui/Tabs.js";
@@ -135,13 +135,14 @@ function MagicLinkForm({
 function LoginPage() {
   const { redirect, error, magic_sent, login_method } = Route.useSearch();
   const [email, setEmail] = useState("");
-  const [selectedTab, setSelectedTab] = useState<Key>(
-    login_method === "magic" ? "magic" : "password",
-  );
-
-  useEffect(() => {
-    setSelectedTab(login_method === "magic" ? "magic" : "password");
-  }, [login_method]);
+  const navigate = useNavigate({ from: Route.fullPath });
+  // The URL holds the tab, so a redirect after sending a magic link can open the magic tab.
+  const selectTab = (key: Key) =>
+    navigate({
+      search: (prev) => ({ ...prev, login_method: key === "magic" ? "magic" : undefined }),
+      replace: true,
+      resetScroll: false,
+    });
 
   const googleOauthHref = redirect
     ? `/api/oauth/google?redirect=${encodeURIComponent(redirect)}`
@@ -155,7 +156,11 @@ function LoginPage() {
           <p className="mt-2 text-sm text-muted dark:text-muted-dark">Student Portal</p>
         </div>
 
-        <Tabs selectedKey={selectedTab} onSelectionChange={setSelectedTab} className="mb-6">
+        <Tabs
+          selectedKey={login_method === "magic" ? "magic" : "password"}
+          onSelectionChange={selectTab}
+          className="mb-6"
+        >
           <TabList>
             <Tab id="password">Password</Tab>
             <Tab id="magic">Magic Link</Tab>
