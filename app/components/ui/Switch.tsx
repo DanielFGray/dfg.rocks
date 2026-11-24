@@ -1,3 +1,4 @@
+import { cn } from "tailwind-variants";
 import { Switch as AriaSwitch } from "react-aria-components";
 
 type SwitchProps = {
@@ -22,20 +23,16 @@ export const Switch = ({
     onChange={onChange}
     isDisabled={isDisabled}
     data-testid={pwid}
-    className={[
+    className={cn(
       "group inline-flex items-center gap-3 cursor-pointer",
       "data-disabled:cursor-not-allowed data-disabled:opacity-50",
-      "data-focus-visible:outline-hidden data-focus-visible:ring-2 data-focus-visible:ring-accent/60 data-focus-visible:ring-offset-2 data-focus-visible:ring-offset-bg rounded-sm",
+      "data-focus-visible:outline-hidden data-focus-visible:ring-2 data-focus-visible:ring-accent/60 data-focus-visible:ring-offset-2 rounded-sm",
       className,
-    ]
-      .filter(Boolean)
-      .join(" ")}
+    )}
   >
     <div className="h-5 w-9 rounded-full border-2 border-transparent bg-overlay/20 transition-colors group-data-focus-visible:ring-2 group-data-focus-visible:ring-accent/60 group-data-selected:bg-accent">
       <div className="h-4 w-4 translate-x-0.5 rounded-full bg-white transition-transform group-data-selected:translate-x-4" />
     </div>
-    {children ? (
-      <span className="text-sm text-primary">{children}</span>
-    ) : null}
+    {children ? <span className="text-sm text-primary">{children}</span> : null}
   </AriaSwitch>
 );

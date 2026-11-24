@@ -12,9 +12,7 @@ export const Route = createFileRoute("/_authed/family")({
   head: () => ({ meta: [{ title: "Family | DFG Portal" }] }),
   component: FamilyPage,
   pendingComponent: () => (
-    <main className="mx-auto max-w-[1100px] px-5 pt-20 pb-16 text-muted md:px-8">
-      Loading...
-    </main>
+    <main className="mx-auto max-w-[1100px] px-5 pt-20 pb-16 text-muted md:px-8">Loading...</main>
   ),
 });
 
@@ -129,9 +127,7 @@ function FamilyPage() {
   return (
     <main data-testid="family-page" className="mx-auto max-w-[1100px] px-5 pt-20 pb-16 md:px-8">
       <h1 className="mb-1 text-3xl font-bold tracking-tight">Family</h1>
-      <p className="mb-8 text-muted">
-        Manage your family members and invite co-parents.
-      </p>
+      <p className="mb-8 text-muted">Manage your family members and invite co-parents.</p>
 
       {data ? (
         <Card className="mb-8">
@@ -139,9 +135,7 @@ function FamilyPage() {
             {data.name}
           </h2>
           <p className="text-sm text-muted">{data.slug}</p>
-          {data.description ? (
-            <p className="mt-2 text-sm text-muted">{data.description}</p>
-          ) : null}
+          {data.description ? <p className="mt-2 text-sm text-muted">{data.description}</p> : null}
         </Card>
       ) : null}
 
@@ -156,9 +150,7 @@ function FamilyPage() {
                 <div className="flex items-start justify-between">
                   <div className="min-w-0">
                     <p className="truncate font-medium">{member.name}</p>
-                    <p className="truncate text-sm text-muted">
-                      @{member.username}
-                    </p>
+                    <p className="truncate text-sm text-muted">@{member.username}</p>
                   </div>
                   <div className="flex shrink-0 flex-col items-end gap-1">
                     {member.is_owner ? (
@@ -183,9 +175,7 @@ function FamilyPage() {
                 </div>
                 {member.role === "student" && isOwner ? (
                   <div className="mt-4 border-t border-overlay/5 pt-4">
-                    <p className="mb-2 text-sm font-medium text-muted">
-                      Credentials
-                    </p>
+                    <p className="mb-2 text-sm font-medium text-muted">Credentials</p>
 
                     {editingEmailFor === member.id ? (
                       <div className="space-y-2">
@@ -230,7 +220,7 @@ function FamilyPage() {
                     ) : (
                       <Button
                         variant="outline"
-                        className="w-full text-sm"
+                        className="w-full"
                         onClick={() => setEditingEmailFor(member.id)}
                         data-testid={`set-email-${member.id}`}
                       >
@@ -287,7 +277,7 @@ function FamilyPage() {
                     ) : (
                       <Button
                         variant="outline"
-                        className="mt-3 w-full text-sm"
+                        className="mt-3 w-full"
                         onClick={() => {
                           setPasswordTokenFor(member.id);
                           requestPasswordTokenMutation.mutate(member.id);

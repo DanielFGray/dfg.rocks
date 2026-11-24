@@ -94,7 +94,7 @@ export function AdminSection({
             <Button
               variant="ghost"
               onClick={() => disconnectMutation.mutate()}
-              className="text-red-600 hover:text-red-500 dark:text-red-400 dark:hover:text-red-300"
+              tone="danger"
               data-testid="gcal-disconnect"
             >
               Disconnect
@@ -157,12 +157,8 @@ export function AdminSection({
                 <div className="flex flex-col gap-4">
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                     <div>
-                      <p className="font-medium text-primary">
-                        {testimonial.display_name}
-                      </p>
-                      <p className="text-sm text-muted">
-                        {testimonial.role_label}
-                      </p>
+                      <p className="font-medium text-primary">{testimonial.display_name}</p>
+                      <p className="text-sm text-muted">{testimonial.role_label}</p>
                     </div>
                     <span className="text-sm font-medium text-muted">
                       {testimonial.is_approved ? "Approved" : "Pending review"}
@@ -202,9 +198,7 @@ export function AdminSection({
           })
         ) : (
           <Card>
-            <p className="text-sm text-muted">
-              No testimonials have been submitted yet.
-            </p>
+            <p className="text-sm text-muted">No testimonials have been submitted yet.</p>
           </Card>
         )}
       </div>
@@ -264,9 +258,7 @@ function WorkingHoursForm({
         {days.map((day) => (
           <Card key={day.index}>
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <span className="w-24 font-medium text-primary">
-                {day.label}
-              </span>
+              <span className="w-24 font-medium text-primary">{day.label}</span>
               {workingHours[day.index] ? (
                 <div className="flex flex-wrap items-center gap-2">
                   <TimeField
@@ -313,7 +305,8 @@ function WorkingHoursForm({
                   <Button
                     variant="ghost"
                     onClick={() => toggleDay(day.index)}
-                    className="text-xs text-red-600 hover:text-red-500 dark:text-red-400 dark:hover:text-red-300"
+                    tone="danger"
+                    size="sm"
                     data-testid={`hours-off-${day.index}`}
                   >
                     Off
@@ -325,7 +318,8 @@ function WorkingHoursForm({
                   <Button
                     variant="ghost"
                     onClick={() => toggleDay(day.index)}
-                    className="text-xs text-green-400 hover:text-green-300"
+                    tone="success"
+                    size="sm"
                     data-testid={`hours-on-${day.index}`}
                   >
                     Enable

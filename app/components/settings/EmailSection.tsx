@@ -64,9 +64,7 @@ export function EmailSection({
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="font-medium break-all text-primary">
-                      {em.email}
-                    </span>
+                    <span className="font-medium break-all text-primary">{em.email}</span>
                     {em.is_primary ? (
                       <span
                         data-testid="primary-badge"
@@ -92,7 +90,7 @@ export function EmailSection({
                     <Button
                       variant="ghost"
                       onClick={() => makePrimaryMutation.mutate(em.id)}
-                      className="px-3 py-1.5 text-xs"
+                      size="sm"
                       data-testid="make-primary"
                     >
                       Make Primary
@@ -102,7 +100,8 @@ export function EmailSection({
                     <Button
                       variant="ghost"
                       onClick={() => resendVerificationMutation.mutate(em.id)}
-                      className="px-3 py-1.5 text-xs text-amber-400 hover:text-amber-300"
+                      size="sm"
+                      tone="warning"
                       data-testid="resend-verification"
                     >
                       Resend Verification
@@ -112,7 +111,8 @@ export function EmailSection({
                     <Button
                       variant="ghost"
                       onClick={() => setDeleteTarget(em)}
-                      className="px-3 py-1.5 text-xs text-red-600 hover:text-red-500 dark:text-red-400 dark:hover:text-red-300"
+                      size="sm"
+                      tone="danger"
                       data-testid="remove-email"
                     >
                       Remove

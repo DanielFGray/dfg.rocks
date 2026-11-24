@@ -99,9 +99,7 @@ export const Route = createFileRoute("/_authed/assignments/")({
   head: () => ({ meta: [{ title: "Assignments | DFG Portal" }] }),
   component: AssignmentsPage,
   pendingComponent: () => (
-    <main className="mx-auto max-w-[1100px] px-5 pt-20 pb-16 text-muted md:px-8">
-      Loading...
-    </main>
+    <main className="mx-auto max-w-[1100px] px-5 pt-20 pb-16 text-muted md:px-8">Loading...</main>
   ),
 });
 
@@ -223,9 +221,7 @@ function StaffStudentCard({
       <div className="flex flex-col gap-4">
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
-            <h2 className="text-lg font-semibold text-primary">
-              {detail.name}
-            </h2>
+            <h2 className="text-lg font-semibold text-primary">{detail.name}</h2>
             <p className="text-sm text-muted">
               @{detail.username}
               {detail.email ? ` · ${detail.email}` : ""}
@@ -235,7 +231,8 @@ function StaffStudentCard({
             <Button
               variant="outline"
               onClick={() => onAssign(student)}
-              className="shrink-0 px-3 py-1.5 text-xs"
+              size="sm"
+              className="shrink-0"
             >
               + Assign
             </Button>
@@ -277,7 +274,9 @@ function StaffStudentCard({
                       onClick={() =>
                         onUnassign(detail.id, detail.name ?? detail.username, material)
                       }
-                      className="ml-2 text-xs text-red-600 hover:text-red-300 dark:text-red-400"
+                      tone="danger"
+                      size="sm"
+                      className="ml-2"
                     >
                       Unassign
                     </Button>

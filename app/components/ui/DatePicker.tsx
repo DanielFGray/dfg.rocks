@@ -1,3 +1,4 @@
+import { field } from "./field.js";
 import {
   DatePicker as AriaDatePicker,
   DateInput,
@@ -33,6 +34,7 @@ export function DatePicker({
   className,
   "data-testid": pwid,
 }: DatePickerProps) {
+  const f = field({ invalid: !!error });
   return (
     <AriaDatePicker
       value={value}
@@ -40,15 +42,10 @@ export function DatePicker({
       isRequired={isRequired}
       isDisabled={isDisabled}
       isInvalid={!!error}
-      className={["flex flex-col gap-1.5", className].filter(Boolean).join(" ")}
+      className={f.root({ className })}
     >
-      <Label className="text-sm font-medium text-muted">{label}</Label>
-      <Group
-        data-testid={pwid}
-        className={`flex rounded-lg border bg-card px-4 py-3 text-primary outline-hidden transition-colors data-focused:border-accent data-focused:ring-1 data-focused:ring-accent/50 ${
-          error ? "border-red-500/50" : "border-overlay/10"
-        }`}
-      >
+      <Label className={f.label()}>{label}</Label>
+      <Group data-testid={pwid} className={f.control({ className: "flex" })}>
         <DateInput className="flex flex-1 gap-0.5">
           {(segment) => (
             <DateSegment
@@ -89,7 +86,7 @@ export function DatePicker({
           </CalendarGrid>
         </Calendar>
       </Popover>
-      {error ? <p className="mt-0.5 text-sm text-red-600 dark:text-red-400">{error}</p> : null}
+      {error ? <p className={f.error()}>{error}</p> : null}
     </AriaDatePicker>
   );
 }

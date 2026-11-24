@@ -12,6 +12,7 @@ import {
   billStatusBadge,
   statusLabel,
 } from "../../../components/billing/helpers.js";
+import { Table, TableHead, Tr, Th, Td } from "../../../components/ui/Table.js";
 
 export const Route = createFileRoute("/_authed/family/billing/")({
   head: () => ({ meta: [{ title: "Billing | DFG Portal" }] }),
@@ -81,9 +82,7 @@ function FamilyBillingOverviewPage() {
         </Card>
         <Card>
           <div className="p-4">
-            <p className="text-xs font-medium tracking-wide text-muted uppercase">
-              Net Due
-            </p>
+            <p className="text-xs font-medium tracking-wide text-muted uppercase">Net Due</p>
             <p
               className={`mt-1 text-2xl font-bold ${balance.net_due_cents > 0 ? "text-red-600 dark:text-red-400" : "text-green-600 dark:text-green-400"}`}
             >
@@ -96,9 +95,7 @@ function FamilyBillingOverviewPage() {
       <div className="mb-8 grid gap-4 sm:grid-cols-2">
         <Card>
           <div className="p-4">
-            <p className="text-xs font-medium tracking-wide text-muted uppercase">
-              Outstanding
-            </p>
+            <p className="text-xs font-medium tracking-wide text-muted uppercase">Outstanding</p>
             <p className="mt-1 text-lg font-semibold text-primary">
               {formatCents(balance.outstanding_cents)}
             </p>
@@ -118,9 +115,7 @@ function FamilyBillingOverviewPage() {
 
       {/* Open Bills section */}
       <section className="mb-8">
-        <h2 className="mb-4 text-lg font-semibold text-primary">
-          Open Bills
-        </h2>
+        <h2 className="mb-4 text-lg font-semibold text-primary">Open Bills</h2>
         {open_bills.length === 0 ? (
           <EmptyState message="No open bills." />
         ) : (
@@ -140,51 +135,38 @@ function FamilyBillingOverviewPage() {
 
       {/* Recent Payments section */}
       <section className="mb-8">
-        <h2 className="mb-4 text-lg font-semibold text-primary">
-          Recent Payments
-        </h2>
+        <h2 className="mb-4 text-lg font-semibold text-primary">Recent Payments</h2>
         {recent_payments.length === 0 ? (
           <EmptyState message="No payments recorded." />
         ) : (
-          <div className="overflow-x-auto rounded-lg border border-overlay/10">
-            <table className="w-full text-left text-sm">
-              <thead className="bg-overlay/4 text-xs text-muted">
-                <tr>
-                  <th className="px-4 py-3 font-medium">Payment #</th>
-                  <th className="px-4 py-3 font-medium">Amount</th>
-                  <th className="px-4 py-3 font-medium">Method</th>
-                  <th className="px-4 py-3 font-medium">Date</th>
-                  <th className="px-4 py-3 font-medium">Receipt</th>
-                </tr>
-              </thead>
-              <tbody>
-                {recent_payments.map((p) => (
-                  <tr
-                    key={p.id}
-                    className="border-t border-overlay/8 hover:bg-overlay/4"
-                  >
-                    <td className="px-4 py-3 font-medium text-primary">
-                      #{p.payment_number}
-                    </td>
-                    <td className="px-4 py-3">{formatCents(p.amount_cents)}</td>
-                    <td className="px-4 py-3 capitalize">{p.method.replaceAll("_", " ")}</td>
-                    <td className="px-4 py-3 text-muted">
-                      {dateLabel(p.received_at)}
-                    </td>
-                    <td className="px-4 py-3">
-                      <Link
-                        to="/family/billing/payments/$paymentId"
-                        params={{ paymentId: p.id }}
-                        className="text-sm text-accent hover:underline"
-                      >
-                        View receipt
-                      </Link>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <Table>
+            <TableHead>
+              <Th>Payment #</Th>
+              <Th>Amount</Th>
+              <Th>Method</Th>
+              <Th>Date</Th>
+              <Th>Receipt</Th>
+            </TableHead>
+            <tbody>
+              {recent_payments.map((p) => (
+                <Tr key={p.id} hover>
+                  <Td className="font-medium text-primary">#{p.payment_number}</Td>
+                  <Td>{formatCents(p.amount_cents)}</Td>
+                  <Td className="capitalize">{p.method.replaceAll("_", " ")}</Td>
+                  <Td className="text-muted">{dateLabel(p.received_at)}</Td>
+                  <Td>
+                    <Link
+                      to="/family/billing/payments/$paymentId"
+                      params={{ paymentId: p.id }}
+                      className="text-sm text-accent hover:underline"
+                    >
+                      View receipt
+                    </Link>
+                  </Td>
+                </Tr>
+              ))}
+            </tbody>
+          </Table>
         )}
         <div className="mt-4">
           <Link to="/family/billing/bills" className="text-sm text-accent hover:underline">
@@ -196,40 +178,29 @@ function FamilyBillingOverviewPage() {
       {/* Credits section */}
       {credits.length > 0 && (
         <section className="mb-8">
-          <h2 className="mb-4 text-lg font-semibold text-primary">
-            Active Credits
-          </h2>
-          <div className="overflow-x-auto rounded-lg border border-overlay/10">
-            <table className="w-full text-left text-sm">
-              <thead className="bg-overlay/4 text-xs text-muted">
-                <tr>
-                  <th className="px-4 py-3 font-medium">Amount</th>
-                  <th className="px-4 py-3 font-medium">Reason</th>
-                  <th className="px-4 py-3 font-medium">Issued</th>
-                  <th className="px-4 py-3 font-medium">Expires</th>
-                </tr>
-              </thead>
-              <tbody>
-                {credits
-                  .filter((c) => !c.consumed_at)
-                  .map((c) => (
-                    <tr
-                      key={c.id}
-                      className="border-t border-overlay/8 hover:bg-overlay/4"
-                    >
-                      <td className="px-4 py-3 font-medium">{formatCents(c.amount_cents)}</td>
-                      <td className="px-4 py-3 text-muted">{c.reason}</td>
-                      <td className="px-4 py-3 text-muted">
-                        {dateLabel(c.created_at)}
-                      </td>
-                      <td className="px-4 py-3 text-muted">
-                        {c.expires_at ? dateLabel(c.expires_at) : "\u2014"}
-                      </td>
-                    </tr>
-                  ))}
-              </tbody>
-            </table>
-          </div>
+          <h2 className="mb-4 text-lg font-semibold text-primary">Active Credits</h2>
+          <Table>
+            <TableHead>
+              <Th>Amount</Th>
+              <Th>Reason</Th>
+              <Th>Issued</Th>
+              <Th>Expires</Th>
+            </TableHead>
+            <tbody>
+              {credits
+                .filter((c) => !c.consumed_at)
+                .map((c) => (
+                  <Tr key={c.id} hover>
+                    <Td className="font-medium">{formatCents(c.amount_cents)}</Td>
+                    <Td className="text-muted">{c.reason}</Td>
+                    <Td className="text-muted">{dateLabel(c.created_at)}</Td>
+                    <Td className="text-muted">
+                      {c.expires_at ? dateLabel(c.expires_at) : "\u2014"}
+                    </Td>
+                  </Tr>
+                ))}
+            </tbody>
+          </Table>
         </section>
       )}
     </Main>
@@ -238,56 +209,49 @@ function FamilyBillingOverviewPage() {
 
 function BillTable({ bills }: { bills: readonly any[] }) {
   return (
-    <div className="overflow-x-auto rounded-lg border border-overlay/10">
-      <table className="w-full text-left text-sm">
-        <thead className="bg-overlay/4 text-xs text-muted">
-          <tr>
-            <th className="px-4 py-3 font-medium">Bill #</th>
-            <th className="px-4 py-3 font-medium">Status</th>
-            <th className="px-4 py-3 font-medium">Period</th>
-            <th className="px-4 py-3 font-medium">Due</th>
-            <th className="px-4 py-3 font-medium">Total</th>
-            <th className="px-4 py-3 font-medium">Bill</th>
-          </tr>
-        </thead>
-        <tbody>
-          {bills.map((bill) => (
-            <tr
-              key={bill.id}
-              className="border-t border-overlay/8 hover:bg-overlay/4"
-            >
-              <td className="px-4 py-3 font-medium">
-                <Link
-                  to="/family/billing/bills/$billId"
-                  params={{ billId: bill.id }}
-                  className="text-accent hover:underline"
-                >
-                  #{bill.bill_number}
-                </Link>
-              </td>
-              <td className="px-4 py-3">
-                <span className={billStatusBadge(bill.status)}>{statusLabel(bill.status)}</span>
-              </td>
-              <td className="px-4 py-3 text-muted">
-                {dateLabel(bill.billing_period_start)} \u2013 {dateLabel(bill.billing_period_end)}
-              </td>
-              <td className="px-4 py-3">{bill.due_date ? dateLabel(bill.due_date) : "\u2014"}</td>
-              <td className="px-4 py-3 font-medium">{formatCents(bill.total_cents)}</td>
-              <td className="px-4 py-3">
-                <a
-                  href={`/api/family/billing/bills/${bill.id}/pdf`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-sm text-accent hover:underline"
-                  data-testid={`bill-pdf-${bill.id}`}
-                >
-                  Download PDF
-                </a>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+    <Table>
+      <TableHead>
+        <Th>Bill #</Th>
+        <Th>Status</Th>
+        <Th>Period</Th>
+        <Th>Due</Th>
+        <Th>Total</Th>
+        <Th>Bill</Th>
+      </TableHead>
+      <tbody>
+        {bills.map((bill) => (
+          <Tr key={bill.id} hover>
+            <Td className="font-medium">
+              <Link
+                to="/family/billing/bills/$billId"
+                params={{ billId: bill.id }}
+                className="text-accent hover:underline"
+              >
+                #{bill.bill_number}
+              </Link>
+            </Td>
+            <Td>
+              <span className={billStatusBadge(bill.status)}>{statusLabel(bill.status)}</span>
+            </Td>
+            <Td className="text-muted">
+              {dateLabel(bill.billing_period_start)} \u2013 {dateLabel(bill.billing_period_end)}
+            </Td>
+            <Td>{bill.due_date ? dateLabel(bill.due_date) : "\u2014"}</Td>
+            <Td className="font-medium">{formatCents(bill.total_cents)}</Td>
+            <Td>
+              <a
+                href={`/api/family/billing/bills/${bill.id}/pdf`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-sm text-accent hover:underline"
+                data-testid={`bill-pdf-${bill.id}`}
+              >
+                Download PDF
+              </a>
+            </Td>
+          </Tr>
+        ))}
+      </tbody>
+    </Table>
   );
 }

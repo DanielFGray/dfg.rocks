@@ -268,12 +268,8 @@ function PersonPage() {
             {person.families.map((family) => (
               <Card key={family.id}>
                 <div className="flex items-center justify-between">
-                  <span className="font-semibold text-primary">
-                    {family.name}
-                  </span>
-                  <span className="text-sm text-muted">
-                    {familyRoleLabel(family)}
-                  </span>
+                  <span className="font-semibold text-primary">{family.name}</span>
+                  <span className="text-sm text-muted">{familyRoleLabel(family)}</span>
                 </div>
               </Card>
             ))}
@@ -283,9 +279,7 @@ function PersonPage() {
 
       {person.lessons.length > 0 ? (
         <section className="mb-10" data-testid="person-lessons">
-          <h2 className="mb-4 text-xl font-semibold text-primary">
-            Lessons
-          </h2>
+          <h2 className="mb-4 text-xl font-semibold text-primary">Lessons</h2>
           <div className="flex flex-col gap-2">
             {person.lessons.map((lesson) => (
               <div
@@ -307,16 +301,9 @@ function PersonPage() {
       {isLearner ? (
         <section className="mb-10">
           <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-xl font-semibold text-primary">
-              Enrolled Courses
-            </h2>
+            <h2 className="text-xl font-semibold text-primary">Enrolled Courses</h2>
             {isAdmin && availableCourses.length > 0 ? (
-              <Button
-                variant="outline"
-                onClick={openEnroll}
-                data-testid="enroll-student"
-                className="px-3 py-1.5 text-xs"
-              >
+              <Button variant="outline" onClick={openEnroll} data-testid="enroll-student" size="sm">
                 + Enroll
               </Button>
             ) : null}
@@ -343,16 +330,10 @@ function PersonPage() {
                       >
                         {c.title}
                       </Link>
-                      <span className="ml-3 text-sm text-muted">
-                        {c.instrument}
-                      </span>
+                      <span className="ml-3 text-sm text-muted">{c.instrument}</span>
                     </div>
                     {isAdmin ? (
-                      <Button
-                        variant="ghost"
-                        onClick={openUnenroll(c)}
-                        className="px-2 py-1 text-xs text-red-600 hover:text-red-300 dark:text-red-400"
-                      >
+                      <Button variant="ghost" onClick={openUnenroll(c)} size="xs" tone="danger">
                         Unenroll
                       </Button>
                     ) : null}
@@ -367,15 +348,13 @@ function PersonPage() {
       {isLearner ? (
         <section>
           <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-xl font-semibold text-primary">
-              Assigned Materials
-            </h2>
+            <h2 className="text-xl font-semibold text-primary">Assigned Materials</h2>
             {isAdmin && availableMaterials.length > 0 ? (
               <Button
                 variant="outline"
                 onClick={openAssign}
                 data-testid="assign-material"
-                className="px-3 py-1.5 text-xs"
+                size="sm"
               >
                 + Assign
               </Button>
@@ -397,9 +376,7 @@ function PersonPage() {
                   key={m.id}
                   className="flex items-center gap-3 rounded-lg border border-overlay/6 bg-card px-4 py-3 text-sm"
                 >
-                  <span className="flex-1 font-medium text-primary">
-                    {m.title}
-                  </span>
+                  <span className="flex-1 font-medium text-primary">{m.title}</span>
                   <span className="text-xs text-muted/60">
                     {m.original_filename}
                     {(() => {
@@ -411,7 +388,9 @@ function PersonPage() {
                     <Button
                       variant="ghost"
                       onClick={openUnassign(m)}
-                      className="ml-2 text-xs text-red-600 hover:text-red-300 dark:text-red-400"
+                      tone="danger"
+                      size="sm"
+                      className="ml-2"
                     >
                       Unassign
                     </Button>

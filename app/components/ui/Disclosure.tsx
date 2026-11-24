@@ -1,3 +1,4 @@
+import { cn } from "tailwind-variants";
 import type { ReactNode } from "react";
 import {
   Disclosure as AriaDisclosure,
@@ -52,13 +53,11 @@ export function DisclosureTrigger({
       <Button
         slot="trigger"
         data-testid={pwid}
-        className={[
+        className={cn(
           "inline-flex items-center gap-2 text-sm font-semibold cursor-pointer transition-colors",
           "data-focus-visible:outline-hidden data-focus-visible:ring-2 data-focus-visible:ring-accent/60 data-focus-visible:ring-offset-2 rounded-sm",
           className,
-        ]
-          .filter(Boolean)
-          .join(" ")}
+        )}
       >
         {children}
       </Button>
@@ -69,13 +68,11 @@ export function DisclosureTrigger({
 export function DisclosurePanel({ children, className }: DisclosurePanelProps) {
   return (
     <AriaDisclosurePanel
-      className={[
+      className={cn(
         "data-[entering]:animate-in data-[entering]:fade-in data-[entering]:slide-in-from-top-1",
         "data-[exiting]:animate-out data-[exiting]:fade-out data-[exiting]:slide-out-to-top-1",
         className,
-      ]
-        .filter(Boolean)
-        .join(" ")}
+      )}
     >
       {children}
     </AriaDisclosurePanel>

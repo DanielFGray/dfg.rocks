@@ -1,3 +1,4 @@
+import { field } from "./field.js";
 import { SearchField as AriaSearchField, Label, Input, Button } from "react-aria-components";
 
 type SearchFieldProps = {
@@ -9,6 +10,8 @@ type SearchFieldProps = {
   className?: string;
   "data-testid"?: string;
 };
+
+const f = field();
 
 export const SearchField = ({
   value,
@@ -24,11 +27,9 @@ export const SearchField = ({
     onChange={onChange}
     isDisabled={isDisabled}
     aria-label={label ? undefined : placeholder}
-    className={["flex flex-col gap-1.5", className].filter(Boolean).join(" ")}
+    className={f.root({ className })}
   >
-    {label ? (
-      <Label className="text-sm font-medium text-muted">{label}</Label>
-    ) : null}
+    {label ? <Label className={f.label()}>{label}</Label> : null}
     <div className="relative">
       <svg
         className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-muted"
@@ -46,7 +47,7 @@ export const SearchField = ({
         id={pwid}
         placeholder={placeholder}
         data-testid={pwid}
-        className="w-full rounded-lg border border-overlay/10 bg-card py-3 pr-10 pl-10 text-primary outline-hidden transition-colors placeholder:text-muted/50 data-focused:border-accent data-focused:ring-1 data-focused:ring-accent/50"
+        className={f.control({ className: "w-full px-10" })}
       />
       {value ? (
         <Button

@@ -1,3 +1,4 @@
+import { field } from "./field.js";
 import { useEffect, useState } from "react";
 import { TextField, Label, Input as AriaInput, Text } from "react-aria-components";
 
@@ -38,6 +39,7 @@ export const Input = ({
   onBlur,
   "data-testid": pwid,
 }: InputProps) => {
+  const f = field({ invalid: !!error });
   const typed = usePreHydrationValue(id);
   // A controlled caller owns the state, so hand the typed text to it.
   useEffect(() => {
@@ -53,9 +55,9 @@ export const Input = ({
       isDisabled={disabled}
       isInvalid={!!error}
       onChange={onChange}
-      className="flex flex-col gap-1.5"
+      className={f.root()}
     >
-      <Label className="text-sm font-medium text-muted">{label}</Label>
+      <Label className={f.label()}>{label}</Label>
       <AriaInput
         id={id}
         type={type}
@@ -65,10 +67,10 @@ export const Input = ({
         autoComplete={autoComplete}
         onBlur={onBlur}
         data-testid={pwid}
-        className={`rounded-lg border bg-card px-4 py-3 text-primary outline-hidden transition-colors placeholder:text-muted/50 data-focused:border-accent data-focused:ring-1 data-focused:ring-accent/50 ${error ? "border-red-500/50" : "border-overlay/10"}`}
+        className={f.control()}
       />
       {error ? (
-        <Text slot="errorMessage" className="mt-0.5 text-sm text-red-600 dark:text-red-400">
+        <Text slot="errorMessage" className={f.error()}>
           {error}
         </Text>
       ) : null}

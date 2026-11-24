@@ -1,3 +1,4 @@
+import { cn } from "tailwind-variants";
 import type { ReactNode } from "react";
 import { ToggleButton as AriaToggleButton } from "react-aria-components";
 
@@ -26,7 +27,7 @@ export const ToggleButton = ({
     isDisabled={isDisabled}
     aria-label={ariaLabel}
     data-testid={pwid}
-    className={[
+    className={cn(
       "inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition-all cursor-pointer",
       "data-disabled:opacity-50 data-disabled:cursor-not-allowed",
       "data-focus-visible:outline-hidden data-focus-visible:ring-2 data-focus-visible:ring-accent/60 data-focus-visible:ring-offset-2",
@@ -34,9 +35,7 @@ export const ToggleButton = ({
         ? "bg-accent text-white hover:bg-accent-hover"
         : "border border-overlay/10 bg-transparent text-primary hover:bg-overlay/5",
       className,
-    ]
-      .filter(Boolean)
-      .join(" ")}
+    )}
   >
     {children}
   </AriaToggleButton>

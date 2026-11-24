@@ -10,10 +10,8 @@ import { Button } from "./ui/Button.js";
 import { Select } from "./ui/Select.js";
 import { Sidebar } from "./ui/Sidebar.js";
 
-const navLinkClass =
-  "text-muted no-underline text-sm transition-colors hover:text-primary";
-const mobileLinkClass =
-  "text-muted no-underline text-base transition-colors hover:text-primary";
+const navLinkClass = "text-muted no-underline text-sm transition-colors hover:text-primary";
+const mobileLinkClass = "text-muted no-underline text-base transition-colors hover:text-primary";
 
 const navItems: Array<{
   to: string;
@@ -232,7 +230,8 @@ export function PortalNav() {
         <Button
           variant="ghost"
           onClick={toggle}
-          className="p-2 lg:hidden"
+          size="icon"
+          className="lg:hidden"
           data-testid="nav-menu-toggle"
           aria-label="Toggle menu"
         >
@@ -279,9 +278,7 @@ export function PortalNav() {
               className={mobileLinkClass}
               data-testid={it.id}
             >
-              <div className="border-b border-overlay/5 py-3">
-                {it.mobileLabel ?? it.label}
-              </div>
+              <div className="border-b border-overlay/5 py-3">{it.mobileLabel ?? it.label}</div>
             </Link>
           ))}
           {isParent && familyStudents.length > 0 && (

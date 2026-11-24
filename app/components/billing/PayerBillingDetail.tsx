@@ -26,6 +26,7 @@ import {
   statusLabel,
   paymentMethodOptions,
 } from "./helpers.js";
+import { Table, TableHead, TableFoot, Tr, Th, Td } from "../ui/Table.js";
 
 export function PayerBillingDetailView({
   data,
@@ -50,9 +51,7 @@ export function PayerBillingDetailView({
       <div className="mb-6 grid gap-4 sm:grid-cols-3">
         <Card>
           <div className="p-4">
-            <p className="text-xs font-medium tracking-wide text-muted uppercase">
-              Outstanding
-            </p>
+            <p className="text-xs font-medium tracking-wide text-muted uppercase">Outstanding</p>
             <p className="mt-1 text-2xl font-bold text-primary">
               {formatCents(balance.outstanding_cents)}
             </p>
@@ -139,7 +138,8 @@ function BillsSection({
         <h2 className="text-lg font-semibold text-primary">Bills</h2>
         <Button
           variant="outline"
-          className="shrink-0 px-3 py-1.5 text-xs"
+          size="sm"
+          className="shrink-0"
           data-testid="create-bill"
           onClick={() => setCreateOpen(true)}
         >
@@ -153,53 +153,46 @@ function BillsSection({
           action={{ label: "Create bill", onClick: () => setCreateOpen(true) }}
         />
       ) : (
-        <div className="overflow-x-auto rounded-lg border border-overlay/10">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-overlay/4 text-xs text-muted">
-              <tr>
-                <th className="px-4 py-3 font-medium">Bill #</th>
-                <th className="px-4 py-3 font-medium">Status</th>
-                <th className="px-4 py-3 font-medium">Period</th>
-                <th className="px-4 py-3 font-medium">Due</th>
-                <th className="px-4 py-3 font-medium">Total</th>
-                <th className="px-4 py-3 font-medium">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {bills.map((bill) => (
-                <tr
-                  key={bill.id}
-                  className="border-t border-overlay/8 hover:bg-overlay/4"
-                >
-                  <td className="px-4 py-3 font-medium text-primary">
-                    <button
-                      type="button"
-                      className="text-accent hover:underline"
-                      onClick={() => setSelectedBillId(bill.id)}
-                    >
-                      #{bill.bill_number}
-                    </button>
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className={billStatusBadge(bill.status)}>{statusLabel(bill.status)}</span>
-                  </td>
-                  <td className="px-4 py-3 text-muted">
-                    {dateLabel(bill.billing_period_start)} – {dateLabel(bill.billing_period_end)}
-                  </td>
-                  <td className="px-4 py-3">{bill.due_date ? dateLabel(bill.due_date) : "—"}</td>
-                  <td className="px-4 py-3 font-medium">{formatCents(bill.total_cents)}</td>
-                  <td className="px-4 py-3">
-                    <BillActions
-                      bill={bill}
-                      onRefresh={onRefresh}
-                      onView={() => setSelectedBillId(bill.id)}
-                    />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <Table>
+          <TableHead>
+            <Th>Bill #</Th>
+            <Th>Status</Th>
+            <Th>Period</Th>
+            <Th>Due</Th>
+            <Th>Total</Th>
+            <Th>Actions</Th>
+          </TableHead>
+          <tbody>
+            {bills.map((bill) => (
+              <Tr key={bill.id} hover>
+                <Td className="font-medium text-primary">
+                  <button
+                    type="button"
+                    className="text-accent hover:underline"
+                    onClick={() => setSelectedBillId(bill.id)}
+                  >
+                    #{bill.bill_number}
+                  </button>
+                </Td>
+                <Td>
+                  <span className={billStatusBadge(bill.status)}>{statusLabel(bill.status)}</span>
+                </Td>
+                <Td className="text-muted">
+                  {dateLabel(bill.billing_period_start)} – {dateLabel(bill.billing_period_end)}
+                </Td>
+                <Td>{bill.due_date ? dateLabel(bill.due_date) : "—"}</Td>
+                <Td className="font-medium">{formatCents(bill.total_cents)}</Td>
+                <Td>
+                  <BillActions
+                    bill={bill}
+                    onRefresh={onRefresh}
+                    onView={() => setSelectedBillId(bill.id)}
+                  />
+                </Td>
+              </Tr>
+            ))}
+          </tbody>
+        </Table>
       )}
 
       <CreateBillModal
@@ -241,24 +234,20 @@ function BillActions({
 
   return (
     <div className="flex flex-wrap gap-2">
-      <Button variant="ghost" className="px-2 py-0.5 text-xs" onClick={onView}>
+      <Button variant="ghost" size="xs" onClick={onView}>
         View
       </Button>
       {bill.status === "draft" && (
         <>
           <Button
             variant="ghost"
-            className="px-2 py-0.5 text-xs"
+            size="xs"
             disabled={issue.isPending}
             onClick={() => issue.mutate()}
           >
             {issue.isPending ? "..." : "Issue"}
           </Button>
-          <Button
-            variant="ghost"
-            className="px-2 py-0.5 text-xs text-red-600 dark:text-red-400"
-            onClick={() => setVoidOpen(true)}
-          >
+          <Button variant="ghost" size="xs" tone="danger" onClick={() => setVoidOpen(true)}>
             Void
           </Button>
         </>
@@ -464,7 +453,8 @@ function PaymentsSection({
         <h2 className="text-lg font-semibold text-primary">Payments</h2>
         <Button
           variant="outline"
-          className="shrink-0 px-3 py-1.5 text-xs"
+          size="sm"
+          className="shrink-0"
           data-testid="record-payment"
           onClick={() => setRecordOpen(true)}
         >
@@ -478,43 +468,28 @@ function PaymentsSection({
           action={{ label: "Record payment", onClick: () => setRecordOpen(true) }}
         />
       ) : (
-        <div className="overflow-x-auto rounded-lg border border-overlay/10">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-overlay/4 text-xs text-muted">
-              <tr>
-                <th className="px-4 py-3 font-medium">Payment #</th>
-                <th className="px-4 py-3 font-medium">Amount</th>
-                <th className="px-4 py-3 font-medium">Method</th>
-                <th className="px-4 py-3 font-medium">Received</th>
-                <th className="px-4 py-3 font-medium">Reference</th>
-                <th className="px-4 py-3 font-medium">Notes</th>
-              </tr>
-            </thead>
-            <tbody>
-              {payments.map((p) => (
-                <tr
-                  key={p.id}
-                  className="border-t border-overlay/8 hover:bg-overlay/4"
-                >
-                  <td className="px-4 py-3 font-medium text-primary">
-                    #{p.payment_number}
-                  </td>
-                  <td className="px-4 py-3">{formatCents(p.amount_cents)}</td>
-                  <td className="px-4 py-3 capitalize">{p.method.replaceAll("_", " ")}</td>
-                  <td className="px-4 py-3 text-muted">
-                    {dateLabel(p.received_at)}
-                  </td>
-                  <td className="px-4 py-3 text-muted">
-                    {p.reference || "—"}
-                  </td>
-                  <td className="px-4 py-3 text-muted">
-                    {p.reference || "—"}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <Table>
+          <TableHead>
+            <Th>Payment #</Th>
+            <Th>Amount</Th>
+            <Th>Method</Th>
+            <Th>Received</Th>
+            <Th>Reference</Th>
+            <Th>Notes</Th>
+          </TableHead>
+          <tbody>
+            {payments.map((p) => (
+              <Tr key={p.id} hover>
+                <Td className="font-medium text-primary">#{p.payment_number}</Td>
+                <Td>{formatCents(p.amount_cents)}</Td>
+                <Td className="capitalize">{p.method.replaceAll("_", " ")}</Td>
+                <Td className="text-muted">{dateLabel(p.received_at)}</Td>
+                <Td className="text-muted">{p.reference || "—"}</Td>
+                <Td className="text-muted">{p.reference || "—"}</Td>
+              </Tr>
+            ))}
+          </tbody>
+        </Table>
       )}
 
       <RecordPaymentModal
@@ -658,7 +633,8 @@ function CreditsSection({
         <div className="flex gap-2">
           <Button
             variant="outline"
-            className="shrink-0 px-3 py-1.5 text-xs"
+            size="sm"
+            className="shrink-0"
             data-testid="issue-credit"
             onClick={() => setIssueOpen(true)}
           >
@@ -667,7 +643,8 @@ function CreditsSection({
           {availableBills.length > 0 && (
             <Button
               variant="outline"
-              className="shrink-0 px-3 py-1.5 text-xs"
+              size="sm"
+              className="shrink-0"
               data-testid="apply-credit"
               onClick={() => setApplyOpen(true)}
             >
@@ -683,47 +660,36 @@ function CreditsSection({
           action={{ label: "Issue credit", onClick: () => setIssueOpen(true) }}
         />
       ) : (
-        <div className="overflow-x-auto rounded-lg border border-overlay/10">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-overlay/4 text-xs text-muted">
-              <tr>
-                <th className="px-4 py-3 font-medium">Amount</th>
-                <th className="px-4 py-3 font-medium">Reason</th>
-                <th className="px-4 py-3 font-medium">Issued</th>
-                <th className="px-4 py-3 font-medium">Expires</th>
-                <th className="px-4 py-3 font-medium">Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {credits.map((c) => (
-                <tr
-                  key={c.id}
-                  className="border-t border-overlay/8 hover:bg-overlay/4"
-                >
-                  <td className="px-4 py-3 font-medium">{formatCents(c.amount_cents)}</td>
-                  <td className="px-4 py-3 text-muted">{c.reason}</td>
-                  <td className="px-4 py-3 text-muted">
-                    {dateLabel(c.created_at)}
-                  </td>
-                  <td className="px-4 py-3 text-muted">
-                    {c.expires_at ? dateLabel(c.expires_at) : "—"}
-                  </td>
-                  <td className="px-4 py-3">
-                    {c.consumed_at ? (
-                      <span className="inline-flex rounded-full bg-green-500/15 px-2 py-0.5 text-xs font-medium text-green-700 dark:text-green-300">
-                        Consumed
-                      </span>
-                    ) : (
-                      <span className="inline-flex rounded-full bg-blue-500/15 px-2 py-0.5 text-xs font-medium text-blue-700 dark:text-blue-300">
-                        Active
-                      </span>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <Table>
+          <TableHead>
+            <Th>Amount</Th>
+            <Th>Reason</Th>
+            <Th>Issued</Th>
+            <Th>Expires</Th>
+            <Th>Status</Th>
+          </TableHead>
+          <tbody>
+            {credits.map((c) => (
+              <Tr key={c.id} hover>
+                <Td className="font-medium">{formatCents(c.amount_cents)}</Td>
+                <Td className="text-muted">{c.reason}</Td>
+                <Td className="text-muted">{dateLabel(c.created_at)}</Td>
+                <Td className="text-muted">{c.expires_at ? dateLabel(c.expires_at) : "—"}</Td>
+                <Td>
+                  {c.consumed_at ? (
+                    <span className="inline-flex rounded-full bg-green-500/15 px-2 py-0.5 text-xs font-medium text-green-700 dark:text-green-300">
+                      Consumed
+                    </span>
+                  ) : (
+                    <span className="inline-flex rounded-full bg-blue-500/15 px-2 py-0.5 text-xs font-medium text-blue-700 dark:text-blue-300">
+                      Active
+                    </span>
+                  )}
+                </Td>
+              </Tr>
+            ))}
+          </tbody>
+        </Table>
       )}
 
       <IssueCreditModal
@@ -958,13 +924,12 @@ function DiscountsSection({ payerId }: { payerId: string }) {
       <div className="mb-4 flex items-center justify-between gap-4">
         <div>
           <h2 className="text-lg font-semibold text-primary">Discounts</h2>
-          <p className="mt-1 text-sm text-muted">
-            Payer-specific discount configurations.
-          </p>
+          <p className="mt-1 text-sm text-muted">Payer-specific discount configurations.</p>
         </div>
         <Button
           variant="outline"
-          className="shrink-0 px-3 py-1.5 text-xs"
+          size="sm"
+          className="shrink-0"
           data-testid="create-discount"
           onClick={() => setCreateOpen(true)}
         >
@@ -1053,13 +1018,13 @@ function DiscountCard({
         <div className="flex shrink-0 gap-2">
           <Button
             variant="ghost"
-            className="px-2 py-1 text-xs"
+            size="xs"
             onClick={() => toggleActive.mutate()}
             disabled={toggleActive.isPending}
           >
             {discount.is_active ? "Deactivate" : "Activate"}
           </Button>
-          <Button variant="ghost" className="px-2 py-1 text-xs" onClick={() => setEditOpen(true)}>
+          <Button variant="ghost" size="xs" onClick={() => setEditOpen(true)}>
             Edit
           </Button>
         </div>
@@ -1251,17 +1216,14 @@ function TaxSection({ payerId }: { payerId: string }) {
     <section>
       <div className="mb-4 flex items-center justify-between gap-4">
         <div>
-          <h2 className="text-lg font-semibold text-primary">
-            Tax Exemptions
-          </h2>
-          <p className="mt-1 text-sm text-muted">
-            Tax rate exemptions for this payer.
-          </p>
+          <h2 className="text-lg font-semibold text-primary">Tax Exemptions</h2>
+          <p className="mt-1 text-sm text-muted">Tax rate exemptions for this payer.</p>
         </div>
         {rates.length > 0 && (
           <Button
             variant="outline"
-            className="shrink-0 px-3 py-1.5 text-xs"
+            size="sm"
+            className="shrink-0"
             data-testid="create-tax-exemption"
             onClick={() => setCreateOpen(true)}
           >
@@ -1290,42 +1252,31 @@ function TaxSection({ payerId }: { payerId: string }) {
           }
         />
       ) : (
-        <div className="overflow-x-auto rounded-lg border border-overlay/10">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-overlay/4 text-xs text-muted">
-              <tr>
-                <th className="px-4 py-3 font-medium">Tax Rate</th>
-                <th className="px-4 py-3 font-medium">Reason</th>
-                <th className="px-4 py-3 font-medium">Effective</th>
-                <th className="px-4 py-3 font-medium">Expires</th>
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((ex) => {
-                const rate = rates.find((r) => r.id === ex.tax_rate_id);
-                return (
-                  <tr
-                    key={ex.id}
-                    className="border-t border-overlay/8 hover:bg-overlay/4"
-                  >
-                    <td className="px-4 py-3 font-medium text-primary">
-                      {rate?.label ?? ex.tax_rate_id} ({rate ? `${rate.rate_percent}%` : "?"})
-                    </td>
-                    <td className="px-4 py-3 text-muted">
-                      {ex.exemption_reason}
-                    </td>
-                    <td className="px-4 py-3 text-muted">
-                      {dateLabel(ex.effective_from)}
-                    </td>
-                    <td className="px-4 py-3 text-muted">
-                      {ex.effective_until ? dateLabel(ex.effective_until) : "—"}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+        <Table>
+          <TableHead>
+            <Th>Tax Rate</Th>
+            <Th>Reason</Th>
+            <Th>Effective</Th>
+            <Th>Expires</Th>
+          </TableHead>
+          <tbody>
+            {items.map((ex) => {
+              const rate = rates.find((r) => r.id === ex.tax_rate_id);
+              return (
+                <Tr key={ex.id} hover>
+                  <Td className="font-medium text-primary">
+                    {rate?.label ?? ex.tax_rate_id} ({rate ? `${rate.rate_percent}%` : "?"})
+                  </Td>
+                  <Td className="text-muted">{ex.exemption_reason}</Td>
+                  <Td className="text-muted">{dateLabel(ex.effective_from)}</Td>
+                  <Td className="text-muted">
+                    {ex.effective_until ? dateLabel(ex.effective_until) : "—"}
+                  </Td>
+                </Tr>
+              );
+            })}
+          </tbody>
+        </Table>
       )}
 
       <TaxExemptionFormModal
@@ -1515,9 +1466,7 @@ function BillDetailBody({
     <div data-testid="bill-detail">
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <span className={billStatusBadge(bill.status)}>{statusLabel(bill.status)}</span>
-        <span className="text-sm text-muted">
-          Total: {formatCents(bill.total_cents)}
-        </span>
+        <span className="text-sm text-muted">Total: {formatCents(bill.total_cents)}</span>
         <span className="text-sm text-muted">
           Due: {bill.due_date ? dateLabel(bill.due_date) : "—"}
         </span>
@@ -1535,80 +1484,58 @@ function BillDetailBody({
           {bill.line_items.length === 0 ? (
             <p className="text-sm text-muted">No line items.</p>
           ) : (
-            <div className="overflow-x-auto rounded-lg border border-overlay/10">
-              <table className="w-full text-left text-sm">
-                <thead className="bg-overlay/4 text-xs text-muted">
+            <Table>
+              <TableHead>
+                <Th>Description</Th>
+                <Th>Type</Th>
+                <Th>Qty</Th>
+                <Th>Unit Price</Th>
+                <Th>Amount</Th>
+              </TableHead>
+              <tbody>
+                {bill.line_items.map((li) => (
+                  <Tr key={li.id}>
+                    <Td className="font-medium text-primary">{li.description}</Td>
+                    <Td className="text-muted">{statusLabel(li.line_type)}</Td>
+                    <Td>{li.quantity}</Td>
+                    <Td>{formatCents(li.unit_price_cents)}</Td>
+                    <Td className="font-medium">{formatCents(li.amount_cents)}</Td>
+                  </Tr>
+                ))}
+              </tbody>
+              <TableFoot>
+                <tr>
+                  <Td colSpan={4} className="py-2 text-right font-medium">
+                    Subtotal
+                  </Td>
+                  <Td className="py-2 font-medium">{formatCents(bill.subtotal_cents)}</Td>
+                </tr>
+                {bill.discount_cents > 0 && (
                   <tr>
-                    <th className="px-4 py-3 font-medium">Description</th>
-                    <th className="px-4 py-3 font-medium">Type</th>
-                    <th className="px-4 py-3 font-medium">Qty</th>
-                    <th className="px-4 py-3 font-medium">Unit Price</th>
-                    <th className="px-4 py-3 font-medium">Amount</th>
+                    <Td colSpan={4} className="py-2 text-right text-muted">
+                      Discount
+                    </Td>
+                    <Td className="py-2 text-green-600 dark:text-green-400">
+                      -{formatCents(bill.discount_cents)}
+                    </Td>
                   </tr>
-                </thead>
-                <tbody>
-                  {bill.line_items.map((li) => (
-                    <tr
-                      key={li.id}
-                      className="border-t border-overlay/8"
-                    >
-                      <td className="px-4 py-3 font-medium text-primary">
-                        {li.description}
-                      </td>
-                      <td className="px-4 py-3 text-muted">
-                        {statusLabel(li.line_type)}
-                      </td>
-                      <td className="px-4 py-3">{li.quantity}</td>
-                      <td className="px-4 py-3">{formatCents(li.unit_price_cents)}</td>
-                      <td className="px-4 py-3 font-medium">{formatCents(li.amount_cents)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-                <tfoot className="bg-overlay/4 text-xs">
+                )}
+                {bill.tax_cents > 0 && (
                   <tr>
-                    <td colSpan={4} className="px-4 py-2 text-right font-medium">
-                      Subtotal
-                    </td>
-                    <td className="px-4 py-2 font-medium">{formatCents(bill.subtotal_cents)}</td>
+                    <Td colSpan={4} className="py-2 text-right text-muted">
+                      Tax
+                    </Td>
+                    <Td className="py-2">{formatCents(bill.tax_cents)}</Td>
                   </tr>
-                  {bill.discount_cents > 0 && (
-                    <tr>
-                      <td
-                        colSpan={4}
-                        className="px-4 py-2 text-right text-muted"
-                      >
-                        Discount
-                      </td>
-                      <td className="px-4 py-2 text-green-600 dark:text-green-400">
-                        -{formatCents(bill.discount_cents)}
-                      </td>
-                    </tr>
-                  )}
-                  {bill.tax_cents > 0 && (
-                    <tr>
-                      <td
-                        colSpan={4}
-                        className="px-4 py-2 text-right text-muted"
-                      >
-                        Tax
-                      </td>
-                      <td className="px-4 py-2">{formatCents(bill.tax_cents)}</td>
-                    </tr>
-                  )}
-                  <tr>
-                    <td
-                      colSpan={4}
-                      className="px-4 py-2 text-right font-semibold text-primary"
-                    >
-                      Total
-                    </td>
-                    <td className="px-4 py-2 font-bold text-primary">
-                      {formatCents(bill.total_cents)}
-                    </td>
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
+                )}
+                <tr>
+                  <Td colSpan={4} className="py-2 text-right font-semibold text-primary">
+                    Total
+                  </Td>
+                  <Td className="py-2 font-bold text-primary">{formatCents(bill.total_cents)}</Td>
+                </tr>
+              </TableFoot>
+            </Table>
           )}
         </TabPanel>
 
@@ -1619,42 +1546,33 @@ function BillDetailBody({
           {bill.adjustments.length === 0 ? (
             <p className="text-sm text-muted">No adjustments.</p>
           ) : (
-            <div className="overflow-x-auto rounded-lg border border-overlay/10">
-              <table className="w-full text-left text-sm">
-                <thead className="bg-overlay/4 text-xs text-muted">
-                  <tr>
-                    <th className="px-4 py-3 font-medium">Amount</th>
-                    <th className="px-4 py-3 font-medium">Reason</th>
-                    <th className="px-4 py-3 font-medium">Date</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {bill.adjustments.map((adj) => (
-                    <tr
-                      key={adj.id}
-                      className="border-t border-overlay/8"
-                    >
-                      <td className="px-4 py-3 font-medium">
-                        <span
-                          className={
-                            adj.amount_cents < 0
-                              ? "text-red-600 dark:text-red-400"
-                              : "text-green-600 dark:text-green-400"
-                          }
-                        >
-                          {adj.amount_cents < 0 ? "-" : "+"}
-                          {formatCents(Math.abs(adj.amount_cents))}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-muted">{adj.reason}</td>
-                      <td className="px-4 py-3 text-muted">
-                        {dateTimeLabel(adj.created_at)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <Table>
+              <TableHead>
+                <Th>Amount</Th>
+                <Th>Reason</Th>
+                <Th>Date</Th>
+              </TableHead>
+              <tbody>
+                {bill.adjustments.map((adj) => (
+                  <Tr key={adj.id}>
+                    <Td className="font-medium">
+                      <span
+                        className={
+                          adj.amount_cents < 0
+                            ? "text-red-600 dark:text-red-400"
+                            : "text-green-600 dark:text-green-400"
+                        }
+                      >
+                        {adj.amount_cents < 0 ? "-" : "+"}
+                        {formatCents(Math.abs(adj.amount_cents))}
+                      </span>
+                    </Td>
+                    <Td className="text-muted">{adj.reason}</Td>
+                    <Td className="text-muted">{dateTimeLabel(adj.created_at)}</Td>
+                  </Tr>
+                ))}
+              </tbody>
+            </Table>
           )}
         </TabPanel>
 
@@ -1662,31 +1580,22 @@ function BillDetailBody({
           {bill.credit_applications.length === 0 ? (
             <p className="text-sm text-muted">No credit applications.</p>
           ) : (
-            <div className="overflow-x-auto rounded-lg border border-overlay/10">
-              <table className="w-full text-left text-sm">
-                <thead className="bg-overlay/4 text-xs text-muted">
-                  <tr>
-                    <th className="px-4 py-3 font-medium">Amount</th>
-                    <th className="px-4 py-3 font-medium">Date</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {bill.credit_applications.map((ca) => (
-                    <tr
-                      key={ca.id}
-                      className="border-t border-overlay/8"
-                    >
-                      <td className="px-4 py-3 font-medium text-green-600 dark:text-green-400">
-                        -{formatCents(ca.amount_cents)}
-                      </td>
-                      <td className="px-4 py-3 text-muted">
-                        {dateTimeLabel(ca.created_at)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <Table>
+              <TableHead>
+                <Th>Amount</Th>
+                <Th>Date</Th>
+              </TableHead>
+              <tbody>
+                {bill.credit_applications.map((ca) => (
+                  <Tr key={ca.id}>
+                    <Td className="font-medium text-green-600 dark:text-green-400">
+                      -{formatCents(ca.amount_cents)}
+                    </Td>
+                    <Td className="text-muted">{dateTimeLabel(ca.created_at)}</Td>
+                  </Tr>
+                ))}
+              </tbody>
+            </Table>
           )}
         </TabPanel>
 

@@ -17,15 +17,13 @@ export function EnrolledStudents({
   return (
     <section className="mt-10 border-t border-overlay/6 pt-8">
       <div className="mb-4 flex items-center justify-between">
-        <h2 className="text-xl font-semibold text-primary">
-          Enrolled Students
-        </h2>
+        <h2 className="text-xl font-semibold text-primary">Enrolled Students</h2>
         {availableStudents.length > 0 ? (
           <Button
             variant="outline"
             onClick={onEnroll}
             data-testid="enroll-student-course"
-            className="px-3 py-1.5 text-xs"
+            size="sm"
           >
             + Enroll Student
           </Button>
@@ -57,11 +55,7 @@ export function EnrolledStudents({
                 </Link>
                 <span className="ml-3 text-xs text-muted">@{s.username}</span>
               </div>
-              <Button
-                variant="ghost"
-                onClick={() => onUnenroll(s)}
-                className="text-xs text-red-600 hover:text-red-500 dark:text-red-400 dark:hover:text-red-300"
-              >
+              <Button variant="ghost" onClick={() => onUnenroll(s)} tone="danger" size="sm">
                 Unenroll
               </Button>
             </div>

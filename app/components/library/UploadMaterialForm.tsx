@@ -268,10 +268,7 @@ export function UploadMaterialForm({
       className="flex flex-col gap-5"
     >
       <div className="flex flex-col gap-2">
-        <label
-          htmlFor="material-files"
-          className="text-sm font-medium text-muted"
-        >
+        <label htmlFor="material-files" className="text-sm font-medium text-muted">
           Files
         </label>
         <input
@@ -315,9 +312,7 @@ export function UploadMaterialForm({
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="truncate font-medium text-primary">
-                      {item.file.name}
-                    </p>
+                    <p className="truncate font-medium text-primary">{item.file.name}</p>
                     <p className="text-xs text-muted">
                       {fileCategory} • {formatSize(item.file.size)}
                     </p>
@@ -331,7 +326,8 @@ export function UploadMaterialForm({
                       variant="ghost"
                       onClick={() => handleRemove(item.id)}
                       disabled={isSubmitting}
-                      className="shrink-0 px-3 py-2"
+                      size="sm"
+                      className="shrink-0"
                     >
                       Remove
                     </Button>
@@ -359,9 +355,7 @@ export function UploadMaterialForm({
                   <p className="mt-3 text-sm text-red-600 dark:text-red-400">{item.uploadError}</p>
                 ) : null}
                 {item.isInspectingTracks ? (
-                  <p className="mt-3 text-sm text-muted">
-                    Inspecting notation tracks...
-                  </p>
+                  <p className="mt-3 text-sm text-muted">Inspecting notation tracks...</p>
                 ) : null}
                 {item.notationTracks && item.notationTracks.length > 0 ? (
                   <div className="mt-3 rounded-lg border border-overlay/6 bg-surface px-4 py-3 text-sm">
@@ -398,9 +392,7 @@ export function UploadMaterialForm({
       )}
 
       {isInspectingTracks ? (
-        <p className="text-sm text-muted">
-          Finish inspecting notation files before uploading.
-        </p>
+        <p className="text-sm text-muted">Finish inspecting notation files before uploading.</p>
       ) : null}
 
       <div className="mt-2 flex justify-end gap-3">

@@ -321,12 +321,7 @@ function CourseDetailView({
         <div className="flex items-center gap-4">
           <h1 className="text-3xl font-bold tracking-tight">{course.title}</h1>
           {isAdmin ? (
-            <Button
-              variant="ghost"
-              onClick={openEditCourse}
-              data-testid="edit-course"
-              className="px-3 py-1.5 text-xs"
-            >
+            <Button variant="ghost" onClick={openEditCourse} data-testid="edit-course" size="sm">
               Edit Course
             </Button>
           ) : null}

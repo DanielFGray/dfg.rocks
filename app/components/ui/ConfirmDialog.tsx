@@ -33,10 +33,7 @@ export const ConfirmDialog = ({
         role="alertdialog"
         className="relative rounded-xl border border-overlay/6 bg-card p-6 shadow-2xl outline-hidden"
       >
-        <Heading
-          slot="title"
-          className="mb-4 text-lg font-semibold text-primary"
-        >
+        <Heading slot="title" className="mb-4 text-lg font-semibold text-primary">
           {title}
         </Heading>
         <p className="mb-6 text-muted">{message}</p>
