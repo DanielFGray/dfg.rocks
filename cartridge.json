@@ -50,7 +50,9 @@
         { "name": "EMAIL_FROM", "value": "DFG Music Lessons <noreply@dfg.rocks>" },
         { "name": "DATABASE_VISITOR", "database": "dfg_rocks", "role": "visitor" },
         { "name": "DATABASE_OWNER", "database": "dfg_rocks", "role": "owner" },
-        { "name": "VALKEY_KEY_PREFIX", "valkey": "keyPrefix" }
+        { "name": "VALKEY_KEY_PREFIX", "valkey": "keyPrefix" },
+        { "name": "OTEL_EXPORTER_OTLP_ENDPOINT", "value": "http://host.containers.internal:4318" },
+        { "name": "OTEL_LOGS_EXPORTER", "value": "otlp" }
       ],
       "connections": [],
       "secrets": [
