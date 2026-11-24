@@ -243,7 +243,7 @@ function BookLessonPage() {
                 Week of {formatWeekLabel(search.date)}
               </span>
               <DialogTrigger>
-                <Button variant="ghost" className="px-2 py-1" aria-label="Pick a date">
+                <Button variant="ghost" size="icon" aria-label="Pick a date">
                   <svg
                     className="h-4 w-4"
                     viewBox="0 0 24 24"

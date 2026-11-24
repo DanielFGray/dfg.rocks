@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { api } from "../../lib/api.js";
 import type { ContentVisibility, Material } from "../../../shared/schemas.js";
+import { Button as AriaButton } from "react-aria-components";
 import { Button } from "../ui/Button.js";
 import { Modal } from "../ui/Modal.js";
 import { UploadMaterialForm } from "../library/UploadMaterialForm.js";
@@ -79,9 +80,7 @@ export function AttachMaterialModal({
       ) : (
         <>
           {availableMaterials.length === 0 && allMaterialsCount === 0 ? (
-            <p className="py-4 text-center text-sm text-muted">
-              No materials in the library yet.
-            </p>
+            <p className="py-4 text-center text-sm text-muted">No materials in the library yet.</p>
           ) : availableMaterials.length === 0 ? (
             <p className="py-4 text-center text-sm text-muted">
               All materials are already embedded.
@@ -89,19 +88,14 @@ export function AttachMaterialModal({
           ) : (
             <div className="flex max-h-80 flex-col gap-2 overflow-y-auto">
               {availableMaterials.map((mat) => (
-                <Button
+                <AriaButton
                   key={mat.id}
-                  variant="ghost"
-                  onClick={() => handleAttachMaterial(mat.id)}
-                  className="flex items-center gap-3 rounded-lg border border-overlay/6 bg-surface px-4 py-3 text-left text-sm hover:border-accent/40 hover:bg-accent/5"
+                  onPress={() => handleAttachMaterial(mat.id)}
+                  className="flex cursor-pointer items-center gap-3 rounded-lg border border-overlay/6 bg-surface px-4 py-3 text-left text-sm font-semibold text-muted transition-all hover:border-accent/40 hover:bg-accent/5 data-focus-visible:ring-2 data-focus-visible:ring-accent/60 data-focus-visible:outline-hidden"
                 >
-                  <span className="flex-1 font-medium text-primary">
-                    {mat.title}
-                  </span>
-                  <span className="text-xs text-muted/60">
-                    {mat.original_filename}
-                  </span>
-                </Button>
+                  <span className="flex-1 font-medium text-primary">{mat.title}</span>
+                  <span className="text-xs text-muted/60">{mat.original_filename}</span>
+                </AriaButton>
               ))}
             </div>
           )}

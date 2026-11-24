@@ -218,7 +218,7 @@ function SubmissionsPage() {
                 variant="outline"
                 onClick={() => setPage(Math.max(0, page - 1))}
                 disabled={page === 0}
-                className="px-4 py-2 text-xs"
+                size="sm"
               >
                 Previous
               </Button>
@@ -229,7 +229,7 @@ function SubmissionsPage() {
                 variant="outline"
                 onClick={() => setPage(Math.min(totalPages - 1, page + 1))}
                 disabled={page >= totalPages - 1}
-                className="px-4 py-2 text-xs"
+                size="sm"
               >
                 Next
               </Button>

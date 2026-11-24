@@ -84,9 +84,7 @@ export function StudentDashboard({
             {unread.slice(0, 3).map((m) => (
               <Link key={m.id} to="/messages" className="no-underline">
                 <Card>
-                  <p className="line-clamp-2 text-sm text-primary">
-                    {m.body}
-                  </p>
+                  <p className="line-clamp-2 text-sm text-primary">{m.body}</p>
                   <p className="mt-1 text-xs text-muted">
                     {m.created_at.toLocaleDateString("en-US", {
                       month: "short",
@@ -120,12 +118,8 @@ export function StudentDashboard({
                 className="no-underline"
               >
                 <Card>
-                  <p className="text-sm font-medium text-primary">
-                    {a.title}
-                  </p>
-                  <p className="mt-1 text-xs text-muted">
-                    {a.original_filename}
-                  </p>
+                  <p className="text-sm font-medium text-primary">{a.title}</p>
+                  <p className="mt-1 text-xs text-muted">{a.original_filename}</p>
                 </Card>
               </Link>
             ))}
@@ -195,9 +189,7 @@ export function StudentDashboard({
               >
                 <Card>
                   <div className="flex items-center justify-between">
-                    <span className="font-medium text-primary">
-                      {course.title}
-                    </span>
+                    <span className="font-medium text-primary">{course.title}</span>
                     <span className="rounded-full bg-accent/12 px-2.5 py-0.5 text-sm font-semibold text-accent">
                       {course.instrument}
                     </span>
@@ -248,9 +240,7 @@ export function StudentDashboard({
                 search={{ date: getDefaultBookingDate() }}
                 className="no-underline"
               >
-                <Button variant="primary" className="text-sm">
-                  Book a Lesson
-                </Button>
+                <Button variant="primary">Book a Lesson</Button>
               </Link>
             </div>
           </Card>

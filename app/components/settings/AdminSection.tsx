@@ -306,7 +306,7 @@ function WorkingHoursForm({
                     variant="ghost"
                     onClick={() => toggleDay(day.index)}
                     tone="danger"
-                    className="text-xs"
+                    size="sm"
                     data-testid={`hours-off-${day.index}`}
                   >
                     Off
@@ -319,7 +319,7 @@ function WorkingHoursForm({
                     variant="ghost"
                     onClick={() => toggleDay(day.index)}
                     tone="success"
-                    className="text-xs"
+                    size="sm"
                     data-testid={`hours-on-${day.index}`}
                   >
                     Enable

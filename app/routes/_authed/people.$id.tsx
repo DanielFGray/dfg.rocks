@@ -389,7 +389,8 @@ function PersonPage() {
                       variant="ghost"
                       onClick={openUnassign(m)}
                       tone="danger"
-                      className="ml-2 text-xs"
+                      size="sm"
+                      className="ml-2"
                     >
                       Unassign
                     </Button>

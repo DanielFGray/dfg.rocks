@@ -21,6 +21,7 @@ const button = tv({
       danger: "bg-red-600 text-white hover:-translate-y-px hover:bg-red-500",
     },
     size: {
+      lg: "px-8 py-4 text-base",
       md: "px-6 py-3 text-sm",
       sm: "px-3 py-1.5 text-xs",
       xs: "px-2 py-1 text-xs",

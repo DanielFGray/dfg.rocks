@@ -275,7 +275,8 @@ function StaffStudentCard({
                         onUnassign(detail.id, detail.name ?? detail.username, material)
                       }
                       tone="danger"
-                      className="ml-2 text-xs"
+                      size="sm"
+                      className="ml-2"
                     >
                       Unassign
                     </Button>

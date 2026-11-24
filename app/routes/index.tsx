@@ -152,8 +152,9 @@ function SiteNav() {
 
         <Button
           variant="ghost"
+          size="icon"
           onClick={() => setOpen(!open)}
-          className="p-2 md:hidden"
+          className="md:hidden"
           aria-label="Toggle menu"
         >
           <svg
@@ -181,9 +182,7 @@ function SiteNav() {
               onClick={() => setOpen(false)}
               className="text-base text-muted no-underline transition-colors hover:text-primary"
             >
-              <div className="border-b border-overlay/5 py-3">
-                {link.label}
-              </div>
+              <div className="border-b border-overlay/5 py-3">{link.label}</div>
             </a>
           ))}
           <Link
@@ -209,9 +208,7 @@ function Hero() {
       <h1 className="mb-6 text-[clamp(2.5rem,6vw,4.5rem)] leading-[1.1] font-bold tracking-tight">
         {hero.headline}
       </h1>
-      <p className="mb-10 max-w-135 text-[1.2rem] text-muted">
-        {hero.subtitle}
-      </p>
+      <p className="mb-10 max-w-135 text-[1.2rem] text-muted">{hero.subtitle}</p>
       <div className="flex flex-col items-start gap-3 md:flex-row md:items-center md:gap-4">
         {hero.cta.map((c) => (
           <a
@@ -340,9 +337,7 @@ function ContactSection() {
         <div className="mx-auto max-w-2xl text-center">
           <div className="mb-10 rounded-xl border border-green-500/30 bg-green-500/5 p-8 text-center dark:border-green-500/20 dark:bg-green-500/5">
             <div className="mb-3 text-3xl">&#x2714;</div>
-            <h3 className="mb-2 text-xl font-semibold text-primary">
-              Message Sent!
-            </h3>
+            <h3 className="mb-2 text-xl font-semibold text-primary">Message Sent!</h3>
             <p className="text-sm text-muted">
               Thanks for reaching out. I'll get back to you within 24 hours.
             </p>
@@ -408,8 +403,7 @@ function ContactSection() {
           </div>
           <div className="flex flex-wrap justify-center gap-x-8 gap-y-3 text-sm text-muted">
             <span>
-              <strong className="text-primary">Location:</strong> {site.city}
-              , {site.state}
+              <strong className="text-primary">Location:</strong> {site.city}, {site.state}
             </span>
             <span>
               <strong className="text-primary">Hours:</strong> {site.hours}
@@ -524,12 +518,13 @@ function ContactSection() {
               <div
                 data-testid="contact-error"
                 role="alert"
-                className="rounded-lg border border-red-500/30 bg-red-500/5 px-4 py-3 text-sm text-red-600 dark:text-red-400">
+                className="rounded-lg border border-red-500/30 bg-red-500/5 px-4 py-3 text-sm text-red-600 dark:text-red-400"
+              >
                 {shownError}
               </div>
             ) : null}
 
-            <Button type="submit" disabled={pending} className="w-full py-4 text-base">
+            <Button type="submit" disabled={pending} size="lg" className="w-full">
               {pending ? "Sending..." : "Send Message"}
             </Button>
           </div>
@@ -597,8 +592,7 @@ function ContactSection() {
 
         <div className="flex flex-wrap justify-center gap-x-8 gap-y-3 text-sm text-muted">
           <span>
-            <strong className="text-primary">Location:</strong> {site.city},{" "}
-            {site.state}
+            <strong className="text-primary">Location:</strong> {site.city}, {site.state}
           </span>
           <span>
             <strong className="text-primary">Hours:</strong> {site.hours}

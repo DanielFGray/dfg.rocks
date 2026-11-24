@@ -55,12 +55,7 @@ export function EnrolledStudents({
                 </Link>
                 <span className="ml-3 text-xs text-muted">@{s.username}</span>
               </div>
-              <Button
-                variant="ghost"
-                onClick={() => onUnenroll(s)}
-                tone="danger"
-                className="text-xs"
-              >
+              <Button variant="ghost" onClick={() => onUnenroll(s)} tone="danger" size="sm">
                 Unenroll
               </Button>
             </div>
