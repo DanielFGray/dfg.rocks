@@ -75,16 +75,23 @@ function StarIcon({ filled }: { filled: boolean }) {
 /**
  * One radio per star, so the group is a single tab stop with arrow-key selection and one
  * accessible name, instead of five unrelated buttons.
+ *
+ * `onChange` fires for every selection change, including the arrow keys, so it only moves the
+ * highlight. `onConfirm` fires when a star is actually chosen — a click or Space — which is the
+ * point where a caller that saves immediately (the self-assessment) should commit. This lets a
+ * keyboard user arrow to a rating and confirm it, instead of the first arrow press saving it.
  */
 function RatingSelector({
   label,
   value,
   onChange,
+  onConfirm,
   disabled,
 }: {
   label: string;
   value: number | null;
   onChange: (value: number) => void;
+  onConfirm?: (value: number) => void;
   disabled?: boolean;
 }) {
   return (
@@ -105,6 +112,7 @@ function RatingSelector({
             key={stars}
             value={String(stars)}
             aria-label={`Rate ${stars} out of 5`}
+            onPress={onConfirm ? () => onConfirm(stars) : undefined}
             className="cursor-pointer rounded-md p-1 transition-colors data-hovered:bg-overlay/6 data-disabled:cursor-not-allowed data-disabled:opacity-50 data-focus-visible:ring-2 data-focus-visible:ring-accent/60 data-focus-visible:outline-hidden"
           >
             <StarIcon filled={active} />
@@ -349,10 +357,8 @@ export function StudentAssignmentDetail({
               <RatingSelector
                 label="Self-assessment"
                 value={practiceRating}
-                onChange={(stars) => {
-                  setPracticeRating(stars);
-                  rateLogMutation.mutate(stars);
-                }}
+                onChange={setPracticeRating}
+                onConfirm={(stars) => rateLogMutation.mutate(stars)}
                 disabled={rateLogMutation.isPending}
               />
             )}
