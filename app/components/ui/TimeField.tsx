@@ -1,5 +1,11 @@
-import { cn } from "tailwind-variants";
-import { TimeField as AriaTimeField, DateInput, DateSegment, Label } from "react-aria-components";
+import { field } from "./field.js";
+import {
+  TimeField as AriaTimeField,
+  DateInput,
+  DateSegment,
+  Label,
+  Text,
+} from "react-aria-components";
 import type { TimeValue } from "react-aria-components";
 
 type TimeFieldProps = {
@@ -24,6 +30,7 @@ export function TimeField({
   "data-testid": pwid,
   ...rest
 }: TimeFieldProps) {
+  const f = field({ invalid: !!error });
   return (
     <AriaTimeField
       aria-label={label}
@@ -31,14 +38,12 @@ export function TimeField({
       onChange={onChange}
       isDisabled={isDisabled}
       isRequired={isRequired}
-      className={cn("flex flex-col gap-1", className)}
+      isInvalid={!!error}
+      className={f.root({ className })}
       {...rest}
     >
-      <Label className="text-sm font-medium text-muted">{label}</Label>
-      <DateInput
-        data-testid={pwid}
-        className="border-border flex rounded-sm border bg-surface px-2 py-1 text-sm text-primary outline-hidden transition-colors data-focused:border-accent data-focused:ring-1 data-focused:ring-accent/50 data-invalid:border-red-500 data-invalid:ring-red-500/50"
-      >
+      <Label className={f.label()}>{label}</Label>
+      <DateInput data-testid={pwid} className={f.control({ className: "flex" })}>
         {(segment) => (
           <DateSegment
             segment={segment}
@@ -46,7 +51,11 @@ export function TimeField({
           />
         )}
       </DateInput>
-      {error ? <p className="text-sm text-red-600 dark:text-red-400">{error}</p> : null}
+      {error ? (
+        <Text slot="errorMessage" className={f.error()}>
+          {error}
+        </Text>
+      ) : null}
     </AriaTimeField>
   );
 }
