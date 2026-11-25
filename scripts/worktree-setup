@@ -4,3 +4,8 @@
 set -euo pipefail
 
 bun install --frozen-lockfile
+
+# The unit and e2e tests read the app's config and the shared test database.
+# Both scripts preserve existing values, so a re-run only fills what is missing.
+bun run db:up
+bun run env:init

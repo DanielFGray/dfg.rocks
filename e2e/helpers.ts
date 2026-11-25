@@ -119,10 +119,13 @@ export const test = base.extend<{
   browserErrorGuard: void;
   /** A test that visits a page which answers 404 on purpose, such as a missing course. */
   expectMissingPages: boolean;
+  /** A test whose page sends a post the server refuses on purpose, such as the feedback dialog's honeypot. */
+  expectRefusedFeedbackPost: boolean;
 }>({
   expectMissingPages: [false, { option: true }],
+  expectRefusedFeedbackPost: [false, { option: true }],
   browserErrorGuard: [
-    async ({ page, expectMissingPages }, use) => {
+    async ({ page, expectMissingPages, expectRefusedFeedbackPost }, use) => {
       const browserErrors: string[] = [];
       const handleConsole = (message: ConsoleMessage) => {
         const type = message.type();
@@ -141,6 +144,15 @@ export const test = base.extend<{
           // URL. Only a test that asks for a missing page may see that one; a missing script or image
           // still fails.
           if (expectMissingPages && text.includes("status of 404") && url === page.url()) return;
+          // A post the server refuses on purpose (the feedback dialog's honeypot) is logged by the
+          // browser at the endpoint's own URL. Only a test that expects the refusal may see that
+          // one; any other failed response still fails.
+          if (
+            expectRefusedFeedbackPost &&
+            text.includes("status of 400") &&
+            url.endsWith("/api/feedback")
+          )
+            return;
           const source = url ? ` (${url}:${lineNumber}:${columnNumber})` : "";
           browserErrors.push(`console.${type}: ${text}${source}`);
         }

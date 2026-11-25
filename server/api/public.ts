@@ -18,7 +18,9 @@ import { Families } from "../services/families.js";
 import { Account } from "../services/account.js";
 import { Contact } from "../services/contact.js";
 import { OAuth } from "../services/oauth.js";
+import { Sessions } from "../services/sessions.js";
 import { checkRateLimit, clientIdentifierFromHeaders } from "../rateLimit.js";
+import { FEEDBACK_EVENT, stripPageUrl } from "../../shared/feedback.js";
 import { Users } from "../services/users.js";
 import { Stripe } from "../services/stripe.js";
 import { StripeWebhook } from "../services/stripeWebhook.js";
@@ -71,6 +73,43 @@ export const PublicApiGroupLive = HttpApiBuilder.group(Contract, "public", (hand
             payload,
             Option.fromNullishOr(clientIdentifierFromHeaders(request.headers)),
           ),
+        );
+        return { success: true as const };
+      }, adaptPublicHttpApiErrors),
+    )
+
+    .handle(
+      "feedback",
+      Effect.fnUntraced(function* ({ request, payload }) {
+        yield* checkRateLimit("feedback", request.headers);
+        if (payload.website) {
+          // A refusal logs a plain record, not a feedback one: only accepted
+          // submissions reach the feedback stream.
+          yield* Effect.logInfo("Feedback refused: honeypot filled");
+          return yield* new HttpError({ status: 400, message: "Invalid submission" });
+        }
+        // The user's id comes from the session, never from the client, so a signed-out
+        // record has none and a signed-in one cannot name another user.
+        const session = yield* Sessions.use((service) =>
+          service.validateSessionToken(request.cookies.session),
+        );
+        // The client strips the URL too; the server strips again, so the tokens of
+        // reset, verification, deletion and invite links never reach the log.
+        const pageUrl = stripPageUrl(payload.page_url);
+        // One record per accepted submission. `event: "feedback"` is the marker
+        // the OpenObserve stream filters on; the other attributes carry the
+        // fields, with "" for an optional one left out, the same columns in
+        // every app. The message is the record's body and an attribute.
+        yield* Effect.logInfo(payload.message).pipe(
+          Effect.annotateLogs({
+            event: FEEDBACK_EVENT,
+            message: payload.message,
+            category: payload.category,
+            contact: payload.contact ?? "",
+            page_url: pageUrl,
+            app_version: payload.app_version,
+            user_id: session?.user.id ?? "",
+          }),
         );
         return { success: true as const };
       }, adaptPublicHttpApiErrors),

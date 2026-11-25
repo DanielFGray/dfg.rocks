@@ -5,6 +5,7 @@ import { Outlet, createRootRouteWithContext, HeadContent, Scripts } from "@tanst
 import { QueryClientProvider } from "@tanstack/react-query";
 
 import type { RouterContext } from "../router.js";
+import { Feedback } from "../components/Feedback.js";
 
 import "../styles.css";
 
@@ -39,6 +40,7 @@ function RootComponent() {
       <RootDocument>
         <Outlet />
       </RootDocument>
+      <Feedback />
     </QueryClientProvider>
   );
 }
