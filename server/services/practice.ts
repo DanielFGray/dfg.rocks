@@ -1,4 +1,4 @@
-import { Effect, Context, Layer } from "effect";
+import { Effect, Context, Layer, Option } from "effect";
 import { RequestDatabase } from "../requestDatabase.js";
 import { HttpError } from "../pgErrors.js";
 
@@ -70,15 +70,15 @@ export class Practice extends Context.Service<Practice>()("dfg-rocks/practice", 
             .orderBy("logged_at", "desc")
             .limit(1),
         )
-        .pipe(Effect.head);
+        .pipe(Effect.head, Effect.option);
 
-      if (existing) {
+      if (Option.isSome(existing)) {
         return yield* db
           .execute(
             db
               .updateTable("app_public.practice_logs")
               .set({ rating })
-              .where("id", "=", existing.id)
+              .where("id", "=", existing.value.id)
               .returning([
                 "id",
                 "student_id",

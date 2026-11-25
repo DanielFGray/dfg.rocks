@@ -234,7 +234,118 @@ test.describe("assignments management", () => {
     await expect(page.getByRole("button", { name: "Save Review" })).toHaveCount(0);
     // The only rating group left is the Self-Assessment one; the review group (paired with
     // "Save Review") stays hidden until the student has listened through the piece.
-    await expect(page.getByRole("button", { name: "Rate 4 out of 5" })).toHaveCount(1);
+    await expect(page.getByRole("radiogroup", { name: "Self-assessment" })).toBeVisible();
+    await expect(page.getByRole("radio", { name: "Rate 4 out of 5" })).toHaveCount(1);
+  });
+
+  test("star rating is a labelled radio group that the arrow keys drive", async ({
+    page,
+    testing,
+  }) => {
+    await testing.login();
+    await testing.login({
+      username: "test_assignment_student_rating_keys",
+      role: "student",
+      name: "Rating Keys Student",
+    });
+    await testing.seedMaterial({
+      title: "Test: Rating Keys Material",
+      original_filename: "rating-keys.musicxml",
+      mime_type: "application/octet-stream",
+      source_file_path: notationFixturePath,
+      visibility: "course",
+    });
+    await testing.assignMaterial(
+      "test_assignment_student_rating_keys",
+      "Test: Rating Keys Material",
+      0,
+    );
+
+    await loginViaUi(page, "test_assignment_student_rating_keys", "testpassword123");
+    await page.getByTestId("nav-assignments").click();
+    await page
+      .getByTestId("assignment-open-link")
+      .filter({ hasText: "Test: Rating Keys Material" })
+      .click();
+    await expect(page.getByTestId("assignment-detail")).toBeVisible();
+
+    // A notation assignment's review group stays locked until the student has reviewed it.
+    const materialId = page.url().split("/").pop();
+    const review = await page.request.post(`/api/assignments/${materialId}/reviews`, {
+      data: { stars: 2 },
+      headers: { "x-requested-with": "dfg" },
+    });
+    expect(review.status()).toBe(200);
+
+    const group = page.getByRole("radiogroup", { name: "Rate your progress" });
+    await expect(group).toBeVisible({ timeout: 10_000 });
+    const stars = group.getByRole("radio");
+    await expect(stars).toHaveCount(5);
+    await expect(stars.nth(2)).not.toBeChecked();
+
+    await stars.nth(2).focus();
+    await page.keyboard.press("ArrowRight");
+    await expect(stars.nth(3)).toBeChecked();
+    await page.keyboard.press("ArrowLeft");
+    await expect(stars.nth(2)).toBeChecked();
+  });
+
+  test("self-assessment arrow keys move the rating without saving until Space", async ({
+    page,
+    testing,
+  }) => {
+    await testing.login();
+    await testing.login({
+      username: "test_assignment_student_rating_save",
+      role: "student",
+      name: "Rating Save Student",
+    });
+    await testing.seedMaterial({
+      title: "Test: Rating Save Material",
+      original_filename: "rating-save.musicxml",
+      mime_type: "application/octet-stream",
+      source_file_path: notationFixturePath,
+      visibility: "course",
+    });
+    await testing.assignMaterial(
+      "test_assignment_student_rating_save",
+      "Test: Rating Save Material",
+      0,
+    );
+
+    await loginViaUi(page, "test_assignment_student_rating_save", "testpassword123");
+    await page.getByTestId("nav-assignments").click();
+    await page
+      .getByTestId("assignment-open-link")
+      .filter({ hasText: "Test: Rating Save Material" })
+      .click();
+    await expect(page.getByTestId("assignment-detail")).toBeVisible();
+
+    const ratePayloads: number[] = [];
+    page.on("request", (request) => {
+      if (!request.url().includes("/api/practice-logs/rate")) return;
+      const rating = request.postDataJSON()?.rating;
+      if (typeof rating === "number") ratePayloads.push(rating);
+    });
+
+    const group = page.getByRole("radiogroup", { name: "Self-assessment" });
+    await expect(group).toBeVisible();
+    const stars = group.getByRole("radio");
+    await expect(stars).toHaveCount(5);
+
+    await stars.nth(0).focus();
+    await page.keyboard.press("ArrowRight");
+    await page.keyboard.press("ArrowRight");
+    await page.keyboard.press("ArrowRight");
+    await expect(stars.nth(3)).toBeChecked();
+
+    // Arrow keys move the selection, but must not commit it.
+    await page.waitForTimeout(250);
+    expect(ratePayloads).toHaveLength(0);
+
+    await page.keyboard.press(" ");
+    await expect.poll(() => ratePayloads).toEqual([4]);
+    await expect(page.getByText("Saved!")).toBeVisible();
   });
 
   test("notation assignment shows the server-drawn score until the player draws, and in print", async ({

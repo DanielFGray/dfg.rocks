@@ -1,5 +1,6 @@
 import { Effect } from "effect";
 import { useCallback, useRef, useState } from "react";
+import { Radio as AriaRadio, RadioGroup as AriaRadioGroup } from "react-aria-components";
 import { queryOptions, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../../lib/api.js";
 import { getErrorMessage } from "../../lib/errors.js";
@@ -71,35 +72,54 @@ function StarIcon({ filled }: { filled: boolean }) {
   );
 }
 
+/**
+ * One radio per star, so the group is a single tab stop with arrow-key selection and one
+ * accessible name, instead of five unrelated buttons.
+ *
+ * `onChange` fires for every selection change, including the arrow keys, so it only moves the
+ * highlight. `onConfirm` fires when a star is actually chosen — a click or Space — which is the
+ * point where a caller that saves immediately (the self-assessment) should commit. This lets a
+ * keyboard user arrow to a rating and confirm it, instead of the first arrow press saving it.
+ */
 function RatingSelector({
+  label,
   value,
   onChange,
+  onConfirm,
   disabled,
 }: {
+  label: string;
   value: number | null;
   onChange: (value: number) => void;
+  onConfirm?: (value: number) => void;
   disabled?: boolean;
 }) {
   return (
-    <div className="flex items-center gap-1">
+    <AriaRadioGroup
+      aria-label={label}
+      orientation="horizontal"
+      value={value === null ? null : String(value)}
+      onChange={(next) => onChange(Number(next))}
+      isDisabled={disabled}
+      className="flex items-center gap-1"
+    >
       {Array.from({ length: 5 }, (_, index) => {
         const stars = index + 1;
         const active = value !== null && stars <= value;
 
         return (
-          <button
+          <AriaRadio
             key={stars}
-            type="button"
-            onClick={() => onChange(stars)}
-            disabled={disabled}
-            className="cursor-pointer rounded-md p-1 transition-colors hover:bg-overlay/6 disabled:cursor-not-allowed disabled:opacity-50"
+            value={String(stars)}
             aria-label={`Rate ${stars} out of 5`}
+            onPress={onConfirm ? () => onConfirm(stars) : undefined}
+            className="cursor-pointer rounded-md p-1 transition-colors data-hovered:bg-overlay/6 data-disabled:cursor-not-allowed data-disabled:opacity-50 data-focus-visible:ring-2 data-focus-visible:ring-accent/60 data-focus-visible:outline-hidden"
           >
             <StarIcon filled={active} />
-          </button>
+          </AriaRadio>
         );
       })}
-    </div>
+    </AriaRadioGroup>
   );
 }
 
@@ -281,6 +301,7 @@ export function StudentAssignmentDetail({
           category === "notation" && !reviewUnlocked ? null : (
             <>
               <RatingSelector
+                label="Rate your progress"
                 value={selectedStars}
                 onChange={setSelectedStars}
                 disabled={reviewMutation.isPending}
@@ -334,11 +355,10 @@ export function StudentAssignmentDetail({
               <p className="text-sm text-green-600 dark:text-green-400">Saved!</p>
             ) : (
               <RatingSelector
+                label="Self-assessment"
                 value={practiceRating}
-                onChange={(stars) => {
-                  setPracticeRating(stars);
-                  rateLogMutation.mutate(stars);
-                }}
+                onChange={setPracticeRating}
+                onConfirm={(stars) => rateLogMutation.mutate(stars)}
                 disabled={rateLogMutation.isPending}
               />
             )}
