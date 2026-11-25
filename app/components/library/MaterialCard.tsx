@@ -42,9 +42,7 @@ export const MaterialCard = ({
                 {material.original_filename}
               </span>
             </div>
-            <span className="shrink-0 text-xs text-muted/40">
-              {formatSize(material.file_size)}
-            </span>
+            <span className="shrink-0 text-xs text-muted/40">{formatSize(material.file_size)}</span>
             <svg
               width="16"
               height="16"
