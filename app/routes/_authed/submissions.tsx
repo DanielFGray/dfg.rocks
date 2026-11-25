@@ -16,6 +16,7 @@ import { Button } from "../../components/ui/Button.js";
 import { EmptyState } from "../../components/ui/EmptyState.js";
 import { Main } from "../../components/ui/Container.js";
 import { Disclosure, DisclosureTrigger, DisclosurePanel } from "../../components/ui/Disclosure.js";
+import { DisclosureGroup } from "../../components/ui/DisclosureGroup.js";
 
 const PAGE_SIZE = 25;
 
@@ -57,7 +58,6 @@ function SubmissionsPage() {
   const allSubmissions = showSpam ? spam : inbox;
 
   const [page, setPage] = useState(0);
-  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const sorted = [...allSubmissions].sort(
     (a, b) => b.created_at.getTime() - a.created_at.getTime(),
@@ -120,7 +120,7 @@ function SubmissionsPage() {
         <EmptyState message={showSpam ? "No spam." : "No contact submissions yet."} />
       ) : (
         <>
-          <div className="flex flex-col gap-2">
+          <DisclosureGroup className="flex flex-col gap-2">
             {paged.map((s) => (
               <div
                 key={s.id}
@@ -162,19 +162,18 @@ function SubmissionsPage() {
                     {s.message ? (
                       <div className="text-sm text-muted">
                         {s.message.length > 200 ? (
-                          <Disclosure
-                            isExpanded={expandedId === s.id}
-                            onExpandedChange={(isExpanded) =>
-                              setExpandedId(isExpanded ? s.id : null)
-                            }
-                          >
-                            <span>{s.message.slice(0, 200)}...</span>
-                            <DisclosureTrigger className="ml-1 text-accent hover:underline">
-                              {expandedId === s.id ? "Show less" : "Show more"}
-                            </DisclosureTrigger>
-                            <DisclosurePanel>
-                              <span>{s.message}</span>
-                            </DisclosurePanel>
+                          <Disclosure id={s.id}>
+                            {({ isExpanded }) => (
+                              <>
+                                <span>{s.message.slice(0, 200)}...</span>
+                                <DisclosureTrigger className="ml-1 text-accent hover:underline">
+                                  {isExpanded ? "Show less" : "Show more"}
+                                </DisclosureTrigger>
+                                <DisclosurePanel>
+                                  <span>{s.message}</span>
+                                </DisclosurePanel>
+                              </>
+                            )}
                           </Disclosure>
                         ) : (
                           s.message
@@ -210,7 +209,7 @@ function SubmissionsPage() {
                 </div>
               </div>
             ))}
-          </div>
+          </DisclosureGroup>
 
           {totalPages > 1 ? (
             <div className="mt-6 flex items-center justify-center gap-2">
