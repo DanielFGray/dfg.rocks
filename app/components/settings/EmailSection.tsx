@@ -35,7 +35,6 @@ export function EmailSection({
   const resendVerificationMutation = useMutation({
     mutationFn: (id: string) =>
       Effect.runPromise(api.accounts.resendEmailVerification({ params: { id } })),
-    onSuccess: onRefresh,
   });
 
   const deleteEmailMutation = useMutation({
