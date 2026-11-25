@@ -5,6 +5,13 @@
  */
 import { Schema as S } from "effect";
 
+/**
+ * The value of the `event` attribute on the log record, the marker an
+ * OpenObserve stream filters on. The attribute is named `event` and the value
+ * `feedback` in every app, so one stream serves them all.
+ */
+export const FEEDBACK_EVENT = "feedback";
+
 export const FeedbackCategory = S.Literals(["bug", "idea", "other"]);
 export type FeedbackCategory = S.Schema.Type<typeof FeedbackCategory>;
 

@@ -5,6 +5,7 @@ import { CurrentLogAnnotations } from "effect/References";
 import * as HttpRouter from "effect/http/HttpRouter";
 import { sql } from "kysely";
 import { applicationLayer, HttpApiLive, type ApplicationServices } from "../runtime.js";
+import { FEEDBACK_EVENT } from "../../shared/feedback.js";
 import { PgRootDB } from "../db.js";
 import { Sessions } from "../services/sessions.js";
 import { Worker } from "../../worker/worker.js";
@@ -22,13 +23,14 @@ const capturedLogs: Array<CapturedLog> = [];
 // OpenObserve receives as attributes.
 const captureLogger = Logger.make<unknown, void>((options) => {
   capturedLogs.push({
-    message: options.message,
+    message: Array.isArray(options.message) ? options.message.join(" ") : options.message,
     annotations: { ...options.fiber.getRef(CurrentLogAnnotations) },
   });
 });
 
-/** The feedback records: only the logs the endpoint marks as feedback. */
-const feedbackRecords = () => capturedLogs.filter((log) => log.annotations["feedback"] === true);
+/** The feedback records: only the logs the endpoint marks with the feedback event. */
+const feedbackRecords = () =>
+  capturedLogs.filter((log) => log.annotations["event"] === FEEDBACK_EVENT);
 
 const testServices = applicationLayer.pipe(
   Layer.provideMerge(Layer.succeed(Worker, { isRunning: Effect.succeed(true) })),
@@ -70,33 +72,34 @@ const post = (payload: unknown, headers: Record<string, string> = {}) =>
 
 /** The one feedback record whose message names this test; fails when it is missing or duplicated. */
 const recordFor = (message: string) => {
-  const matches = feedbackRecords().filter(
-    (log) => log.annotations["feedback.message"] === message,
-  );
+  const matches = feedbackRecords().filter((log) => log.annotations["message"] === message);
   expect(matches).toHaveLength(1);
   return matches[0].annotations;
 };
 
 const noRecordFor = (message: string) => {
-  expect(
-    feedbackRecords().filter((log) => log.annotations["feedback.message"] === message),
-  ).toHaveLength(0);
+  expect(feedbackRecords().filter((log) => log.annotations["message"] === message)).toHaveLength(0);
 };
 
 describe("feedback endpoint", () => {
   it("logs one feedback record with the submission's fields", async () => {
-    const response = await post(
-      submission({ message: "The calendar is hard to read" }),
-    );
+    const response = await post(submission({ message: "The calendar is hard to read" }));
     expect(response.status).toBe(200);
-    expect(recordFor("The calendar is hard to read")).toMatchObject({
-      "feedback.category": "bug",
-      "feedback.page_url": "https://dfg.rocks/dashboard",
-      "feedback.app_version": "0.2.0",
+    const records = feedbackRecords();
+    expect(records).toHaveLength(1);
+    // The message is the record's body as well as an attribute.
+    expect(records[0].message).toBe("The calendar is hard to read");
+    expect(records[0].annotations).toMatchObject({
+      event: FEEDBACK_EVENT,
+      message: "The calendar is hard to read",
+      category: "bug",
+      page_url: "https://dfg.rocks/dashboard",
+      app_version: "0.2.0",
     });
-    // A signed-out visitor's record names no user, and no contact when they gave none.
-    expect(recordFor("The calendar is hard to read")["feedback.user_id"]).toBeUndefined();
-    expect(recordFor("The calendar is hard to read")["feedback.contact"]).toBeUndefined();
+    // Every record has the same columns: a signed-out visitor's record and one
+    // without a contact carry "" for the optional fields.
+    expect(records[0].annotations["user_id"]).toBe("");
+    expect(records[0].annotations["contact"]).toBe("");
   });
 
   // The client strips the URL too; the server strips again, so a token in the query
@@ -111,7 +114,7 @@ describe("feedback endpoint", () => {
     );
     expect(response.status).toBe(200);
     const annotations = recordFor("The reset link lost its token");
-    expect(annotations["feedback.page_url"]).toBe("https://dfg.rocks/reset-password");
+    expect(annotations["page_url"]).toBe("https://dfg.rocks/reset-password");
     expect(JSON.stringify(annotations)).not.toContain(token);
   });
 
@@ -135,24 +138,26 @@ describe("feedback endpoint", () => {
             .select("id"),
         );
         const sessions = yield* Sessions;
-        return { userId: created[0].id, token: (yield* sessions.createSession(created[0].id)).token };
+        return {
+          userId: created[0].id,
+          token: (yield* sessions.createSession(created[0].id)).token,
+        };
       }),
     );
-    const response = await post(
-      submission({ message: "Signed-in feedback" }),
-      { cookie: `session=${token}` },
-    );
+    const response = await post(submission({ message: "Signed-in feedback" }), {
+      cookie: `session=${token}`,
+    });
     expect(response.status).toBe(200);
     // The id comes from the session cookie, never from the payload.
-    expect(recordFor("Signed-in feedback")["feedback.user_id"]).toBe(userId);
+    expect(recordFor("Signed-in feedback")["user_id"]).toBe(userId);
   });
 
-  it("carries the contact field only when the visitor gave one", async () => {
+  it("carries the visitor's contact when they gave one", async () => {
     const response = await post(
       submission({ message: "Reply to me", contact: "feedback-visitor@example.com" }),
     );
     expect(response.status).toBe(200);
-    expect(recordFor("Reply to me")["feedback.contact"]).toBe("feedback-visitor@example.com");
+    expect(recordFor("Reply to me")["contact"]).toBe("feedback-visitor@example.com");
   });
 
   it("refuses a filled honeypot field without a feedback record", async () => {

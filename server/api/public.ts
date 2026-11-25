@@ -20,7 +20,7 @@ import { Contact } from "../services/contact.js";
 import { OAuth } from "../services/oauth.js";
 import { Sessions } from "../services/sessions.js";
 import { checkRateLimit, clientIdentifierFromHeaders } from "../rateLimit.js";
-import { stripPageUrl } from "../../shared/feedback.js";
+import { FEEDBACK_EVENT, stripPageUrl } from "../../shared/feedback.js";
 import { Users } from "../services/users.js";
 import { Stripe } from "../services/stripe.js";
 import { StripeWebhook } from "../services/stripeWebhook.js";
@@ -96,17 +96,19 @@ export const PublicApiGroupLive = HttpApiBuilder.group(Contract, "public", (hand
         // The client strips the URL too; the server strips again, so the tokens of
         // reset, verification, deletion and invite links never reach the log.
         const pageUrl = stripPageUrl(payload.page_url);
-        // One record per accepted submission. `feedback` is the marker the
-        // OpenObserve stream filters on; the other attributes carry the fields.
-        yield* Effect.logInfo("Feedback submitted").pipe(
+        // One record per accepted submission. `event: "feedback"` is the marker
+        // the OpenObserve stream filters on; the other attributes carry the
+        // fields, with "" for an optional one left out, the same columns in
+        // every app. The message is the record's body and an attribute.
+        yield* Effect.logInfo(payload.message).pipe(
           Effect.annotateLogs({
-            feedback: true,
-            "feedback.message": payload.message,
-            "feedback.category": payload.category,
-            "feedback.page_url": pageUrl,
-            "feedback.app_version": payload.app_version,
-            ...(payload.contact ? { "feedback.contact": payload.contact } : {}),
-            ...(session ? { "feedback.user_id": session.user.id } : {}),
+            event: FEEDBACK_EVENT,
+            message: payload.message,
+            category: payload.category,
+            contact: payload.contact ?? "",
+            page_url: pageUrl,
+            app_version: payload.app_version,
+            user_id: session?.user.id ?? "",
           }),
         );
         return { success: true as const };

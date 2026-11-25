@@ -46,10 +46,13 @@ export const Feedback = () => {
     mutation.reset();
   };
 
-  const submit = () => {
+  const submit = (form: HTMLFormElement) => {
     // The required select leaves no category empty in the UI; the server's schema
     // refuses one all the same.
     if (!category) return;
+    // The honeypot lives in the DOM, not in state: a bot fills the hidden input
+    // directly. Its value rides along so the server can refuse it.
+    const website = new FormData(form).get("website");
     mutation.mutate({
       message: message.trim(),
       category,
@@ -58,6 +61,7 @@ export const Feedback = () => {
       // query never reaches the log even when this client is not trusted.
       page_url: stripPageUrl(window.location.href),
       app_version: packageJson.version,
+      ...(typeof website === "string" && website ? { website } : {}),
     });
   };
 
@@ -83,7 +87,7 @@ export const Feedback = () => {
           <form
             onSubmit={(e) => {
               e.preventDefault();
-              submit();
+              submit(e.currentTarget);
             }}
             data-testid="feedback-form"
             className="flex flex-col gap-4"
