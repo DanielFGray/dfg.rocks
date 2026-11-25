@@ -46,10 +46,10 @@ test.describe("messages", () => {
     await expect(studentOne).toHaveAttribute("aria-selected", "false");
     await expect(page.getByRole("heading", { name: "Student Two" })).toBeVisible();
 
-    // Down moves back.
-    await studentOne.press("ArrowDown");
-    await expect(studentTwo).toHaveAttribute("aria-selected", "true");
-    await expect(studentOne).toHaveAttribute("aria-selected", "false");
-    await expect(page.getByRole("heading", { name: "Student Two" })).toBeVisible();
+    // A click selects the conversation.
+    await studentOne.click();
+    await expect(studentOne).toHaveAttribute("aria-selected", "true");
+    await expect(studentTwo).toHaveAttribute("aria-selected", "false");
+    await expect(page.getByRole("heading", { name: "Student One" })).toBeVisible();
   });
 });

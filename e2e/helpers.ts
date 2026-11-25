@@ -72,7 +72,11 @@ type TestingApi = {
     location_type?: string;
     status?: string;
   }): Promise<void>;
-  seedMessage(data: { sender_username: string; recipient_username: string; body: string }): Promise<void>;
+  seedMessage(data: {
+    sender_username: string;
+    recipient_username: string;
+    body: string;
+  }): Promise<void>;
   setTestimonialReminder(data: {
     username: string;
     prompt_enabled?: boolean;

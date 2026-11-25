@@ -594,9 +594,9 @@ export class Testing extends Context.Service<Testing>()("dfg-rocks/testing", {
         body: string;
       }) {
         const sender = yield* queries.userIdByUsername(values.senderUsername).pipe(Effect.head);
-        const recipient = yield* queries.userIdByUsername(values.recipientUsername).pipe(
-          Effect.head,
-        );
+        const recipient = yield* queries
+          .userIdByUsername(values.recipientUsername)
+          .pipe(Effect.head);
         yield* db.execute(
           db.insertInto("app_public.messages").values({
             sender_id: sender.id,
