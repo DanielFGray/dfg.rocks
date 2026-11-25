@@ -319,8 +319,8 @@ function BookLessonPage() {
             }
             confirmLabel="Book Lesson"
             variant="default"
-            onConfirm={() => {
-              if (bookingSlot) bookMutation.mutate(bookingSlot);
+            onConfirm={async () => {
+              if (bookingSlot) await bookMutation.mutateAsync(bookingSlot);
             }}
             onCancel={() => setBookingSlot(null)}
           />

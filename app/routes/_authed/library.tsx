@@ -190,8 +190,8 @@ function LibraryPage() {
       <ConfirmDialog
         open={deleteTarget !== null}
         onCancel={() => setDeleteTarget(null)}
-        onConfirm={() => {
-          if (deleteTarget) deleteMutation.mutate(deleteTarget.id);
+        onConfirm={async () => {
+          if (deleteTarget) await deleteMutation.mutateAsync(deleteTarget.id);
         }}
         title="Delete Material"
         message={`Are you sure you want to delete "${deleteTarget?.title ?? ""}"? This cannot be undone.`}

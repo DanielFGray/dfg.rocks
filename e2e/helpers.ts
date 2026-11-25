@@ -121,11 +121,17 @@ export const test = base.extend<{
   expectMissingPages: boolean;
   /** A test whose page sends a post the server refuses on purpose, such as the feedback dialog's honeypot. */
   expectRefusedFeedbackPost: boolean;
+  /**
+   * Suffixes of API request URLs whose refused response (4xx) a test expects on purpose, such as
+   * a stale record the browser logs as a failed resource.
+   */
+  expectRefusedApi: string[];
 }>({
   expectMissingPages: [false, { option: true }],
   expectRefusedFeedbackPost: [false, { option: true }],
+  expectRefusedApi: [[], { option: true }],
   browserErrorGuard: [
-    async ({ page, expectMissingPages, expectRefusedFeedbackPost }, use) => {
+    async ({ page, expectMissingPages, expectRefusedFeedbackPost, expectRefusedApi }, use) => {
       const browserErrors: string[] = [];
       const handleConsole = (message: ConsoleMessage) => {
         const type = message.type();
@@ -151,6 +157,14 @@ export const test = base.extend<{
             expectRefusedFeedbackPost &&
             text.includes("status of 400") &&
             url.endsWith("/api/feedback")
+          )
+            return;
+          // An API request a test refuses on purpose (a stale record, a duplicate) is logged the
+          // same way, at the endpoint's URL. Only the suffixes the test names are allowed.
+          if (
+            expectRefusedApi.some(
+              (suffix) => url.includes(suffix) && /the server responded with a status of 4\d\d/.test(text),
+            )
           )
             return;
           const source = url ? ` (${url}:${lineNumber}:${columnNumber})` : "";

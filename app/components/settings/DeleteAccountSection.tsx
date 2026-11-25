@@ -55,8 +55,8 @@ export function DeleteAccountSection({ onRefresh }: { onRefresh: () => Promise<v
         message="Are you sure you want to delete your account? This action cannot be undone. You will receive an email with a confirmation link."
         confirmLabel="Send Deletion Email"
         variant="danger"
-        onConfirm={() => {
-          requestDeleteMutation.mutate();
+        onConfirm={async () => {
+          await requestDeleteMutation.mutateAsync();
           setShowConfirm(false);
         }}
         onCancel={() => setShowConfirm(false)}

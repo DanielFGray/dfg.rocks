@@ -138,11 +138,10 @@ export function AdminCourses({ courses }: { courses: readonly Course[] }) {
         }
         confirmLabel="Delete"
         variant="danger"
-        onConfirm={() => {
+        onConfirm={async () => {
           if (!deleteTarget) return;
-          deleteCourseMutation.mutate(deleteTarget.id, {
-            onSuccess: () => setDeleteTarget(null),
-          });
+          await deleteCourseMutation.mutateAsync(deleteTarget.id);
+          setDeleteTarget(null);
         }}
         onCancel={() => setDeleteTarget(null)}
       />

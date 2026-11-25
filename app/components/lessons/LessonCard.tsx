@@ -11,6 +11,7 @@ export function LessonCard({
   onCancel,
   onEdit,
   onDelete,
+  completePending,
 }: {
   lesson: Lesson;
   studentName: string;
@@ -19,6 +20,8 @@ export function LessonCard({
   onCancel: () => void;
   onEdit: () => void;
   onDelete: () => void;
+  /** Disables the Complete control while the mutation runs, so one lesson cannot be completed twice. */
+  completePending?: boolean;
 }) {
   const badge = statusBadgeClass[lesson.status] ?? "bg-overlay/10 text-muted";
   const label = statusLabel[lesson.status] ?? lesson.status;
@@ -77,9 +80,10 @@ export function LessonCard({
                 onClick={onComplete}
                 size="sm"
                 tone="success"
+                disabled={completePending}
                 data-testid="complete-lesson"
               >
-                Complete
+                {completePending ? "Completing..." : "Complete"}
               </Button>
               <Button
                 variant="ghost"

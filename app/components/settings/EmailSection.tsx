@@ -2,6 +2,7 @@ import { Effect } from "effect";
 import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { api } from "../../lib/api.js";
+import { getErrorMessage } from "../../lib/errors.js";
 import type { UserEmail } from "../../../shared/schemas.js";
 import { Button } from "../ui/Button.js";
 import { Card } from "../ui/Card.js";
@@ -16,6 +17,7 @@ export function EmailSection({
   onRefresh: () => Promise<void>;
 }) {
   const [newEmail, setNewEmail] = useState("");
+  const [addError, setAddError] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<UserEmail | null>(null);
 
   const addEmailMutation = useMutation({
@@ -40,17 +42,18 @@ export function EmailSection({
     onSuccess: onRefresh,
   });
 
-  const handleAddEmail = (e: React.FormEvent) => {
+  const handleAddEmail = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newEmail.trim()) return;
-    addEmailMutation.mutate(newEmail);
-    setNewEmail("");
-  };
-
-  const confirmDelete = () => {
-    if (!deleteTarget) return;
-    deleteEmailMutation.mutate(deleteTarget.id);
-    setDeleteTarget(null);
+    const email = newEmail.trim();
+    if (!email) return;
+    setAddError(null);
+    try {
+      await addEmailMutation.mutateAsync(email);
+      // Clear only on success, so a refusal keeps what the user typed.
+      setNewEmail("");
+    } catch (cause) {
+      setAddError(getErrorMessage(cause, "Could not add the email address"));
+    }
   };
 
   return (
@@ -91,6 +94,7 @@ export function EmailSection({
                       variant="ghost"
                       onClick={() => makePrimaryMutation.mutate(em.id)}
                       size="sm"
+                      disabled={makePrimaryMutation.isPending}
                       data-testid="make-primary"
                     >
                       Make Primary
@@ -102,6 +106,7 @@ export function EmailSection({
                       onClick={() => resendVerificationMutation.mutate(em.id)}
                       size="sm"
                       tone="warning"
+                      disabled={resendVerificationMutation.isPending}
                       data-testid="resend-verification"
                     >
                       Resend Verification
@@ -141,10 +146,16 @@ export function EmailSection({
                 onChange={(v) => setNewEmail(v)}
                 placeholder="you@example.com"
                 data-testid="new-email-input"
+                error={addError ?? undefined}
               />
             </div>
-            <Button type="submit" variant="outline" data-testid="add-email-btn">
-              Add Email
+            <Button
+              type="submit"
+              variant="outline"
+              disabled={addEmailMutation.isPending}
+              data-testid="add-email-btn"
+            >
+              {addEmailMutation.isPending ? "Adding..." : "Add Email"}
             </Button>
           </form>
         </Card>
@@ -157,7 +168,11 @@ export function EmailSection({
         message={deleteTarget ? `Remove ${deleteTarget.email} from your account?` : ""}
         confirmLabel="Remove"
         variant="danger"
-        onConfirm={confirmDelete}
+        onConfirm={async () => {
+          if (!deleteTarget) return;
+          await deleteEmailMutation.mutateAsync(deleteTarget.id);
+          setDeleteTarget(null);
+        }}
         onCancel={() => setDeleteTarget(null)}
       />
     </>

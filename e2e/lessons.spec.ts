@@ -96,6 +96,46 @@ test.describe("lesson management", () => {
     await expect(page.getByText("Cancelled")).toBeVisible();
   });
 
+  test.describe("a delete whose record is already gone", () => {
+    test.use({ expectRefusedApi: ["/api/admin/lessons/"] });
+
+    test("keeps the dialog open with the server's message", async ({ page, context, testing }) => {
+      await testing.login();
+      await testing.login({
+        username: "test_stale_delete",
+        role: "student",
+        name: "Stale Delete Student",
+      });
+      await testing.seedLesson({ username: "test_stale_delete" });
+
+      await loginViaUi(page, "test_admin", "testpassword123");
+      await page.getByTestId("nav-lessons").click();
+      await expect(page.getByText("Stale Delete Student")).toBeVisible();
+
+      // A second tab deletes the same lesson while the first tab's page still shows it.
+      const otherPage = await context.newPage();
+      await otherPage.goto("/lessons");
+      await otherPage.getByTestId("delete-lesson").first().click();
+      const otherDialog = otherPage.getByRole("alertdialog", { name: "Delete Lesson" });
+      await otherDialog.getByRole("button", { name: "Delete Forever" }).click();
+      await expect(otherPage.getByTestId("lessons")).toBeVisible();
+      await expect(
+        otherPage.getByText("Stale Delete Student", { exact: true }),
+      ).not.toBeVisible();
+      await otherPage.close();
+
+      // The first tab's row is now stale: the delete misses, and the refusal
+      // must keep the dialog open with the server's message.
+      await page.getByTestId("delete-lesson").first().click();
+      const dialog = page.getByRole("alertdialog", { name: "Delete Lesson" });
+      await dialog.getByRole("button", { name: "Delete Forever" }).click();
+      await expect(dialog.getByRole("alert")).toContainText("Lesson not found");
+      await expect(dialog).toBeVisible();
+      await dialog.getByRole("button", { name: "Cancel" }).click();
+      await expect(dialog).toHaveCount(0);
+    });
+  });
+
   test("admin can add notes to a lesson and publish", async ({ page, testing }) => {
     await testing.login();
     await testing.login({

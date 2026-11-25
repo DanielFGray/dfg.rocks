@@ -555,17 +555,13 @@ function StaffAssignmentsPage() {
         }
         confirmLabel="Unassign"
         variant="danger"
-        onConfirm={() => {
+        onConfirm={async () => {
           if (!unassignTarget) return;
-          unassignMutation.mutate(
-            {
-              studentId: unassignTarget.studentId,
-              materialId: unassignTarget.materialId,
-            },
-            {
-              onSuccess: () => setUnassignTarget(null),
-            },
-          );
+          await unassignMutation.mutateAsync({
+            studentId: unassignTarget.studentId,
+            materialId: unassignTarget.materialId,
+          });
+          setUnassignTarget(null);
         }}
         onCancel={() => setUnassignTarget(null)}
       />

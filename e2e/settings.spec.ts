@@ -55,6 +55,30 @@ test.describe("settings page", () => {
     await expect(page.getByTestId("resend-verification")).toBeVisible();
   });
 
+  test.describe("a create the server refuses", () => {
+    test.use({ expectRefusedApi: ["/api/me/emails"] });
+
+    test("add-email failure keeps the input and shows the server's message", async ({
+      page,
+      testing,
+    }) => {
+      await testing.login({
+        username: "test_dup_email",
+        email: "dup@test.local",
+      });
+      await loginViaUi(page, "test_dup_email", "testpassword123");
+      await page.getByTestId("nav-settings").click();
+
+      // The account already owns this address, so the server refuses the add.
+      await page.getByTestId("new-email-input").fill("dup@test.local");
+      await page.getByTestId("add-email-btn").click();
+
+      await expect(page.getByTestId("new-email-input")).toHaveValue("dup@test.local");
+      await expect(page.getByTestId("add-email-form").getByText(/already/)).toBeVisible();
+      await expect(page.getByText("dup@test.local")).toHaveCount(1);
+    });
+  });
+
   test("can remove a non-primary email", async ({ page, testing }) => {
     await testing.login({
       username: "test_remove",

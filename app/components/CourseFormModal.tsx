@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useForm } from "@tanstack/react-form";
 import { useMutation } from "@tanstack/react-query";
 import { api } from "../lib/api.js";
+import { getErrorMessage } from "../lib/errors.js";
 import { visibilityOptions } from "../lib/visibility.js";
 import type { ContentVisibility } from "../../shared/schemas.js";
 import { fieldError } from "../lib/form.js";
@@ -38,6 +39,8 @@ type CourseFormModalProps = {
 };
 
 export function CourseFormModal({ open, onClose, course, onSuccess }: CourseFormModalProps) {
+  const [submitError, setSubmitError] = useState<string | null>(null);
+
   const createMutation = useMutation({
     mutationFn: (payload: {
       title: string;
@@ -74,16 +77,19 @@ export function CourseFormModal({ open, onClose, course, onSuccess }: CourseForm
         description: value.description || undefined,
         visibility: value.visibility,
       };
-      const opts = {
-        onSuccess: () => {
-          onClose();
-          onSuccess();
-        },
-      };
-      if (course) {
-        updateMutation.mutate({ id: course.id, ...payload }, opts);
-      } else {
-        createMutation.mutate(payload, opts);
+      setSubmitError(null);
+      try {
+        if (course) {
+          await updateMutation.mutateAsync({ id: course.id, ...payload });
+        } else {
+          await createMutation.mutateAsync(payload);
+        }
+        onClose();
+        onSuccess();
+      } catch (cause) {
+        setSubmitError(
+          getErrorMessage(cause, course ? "Could not save the course" : "Could not create the course"),
+        );
       }
     },
   });
@@ -92,6 +98,7 @@ export function CourseFormModal({ open, onClose, course, onSuccess }: CourseForm
   const [wasOpen, setWasOpen] = useState(false);
   if (open && !wasOpen) {
     setWasOpen(true);
+    setSubmitError(null);
     form.reset({
       title: course?.title ?? "",
       instrument: course?.instrument ?? "",
@@ -104,7 +111,12 @@ export function CourseFormModal({ open, onClose, course, onSuccess }: CourseForm
   }
 
   return (
-    <Modal open={open} onClose={onClose} title={course ? "Edit Course" : "New Course"}>
+    <Modal
+      open={open}
+      onClose={onClose}
+      title={course ? "Edit Course" : "New Course"}
+      isDismissable={!form.state.isSubmitting}
+    >
       <form
         data-testid="course-form"
         onSubmit={(e) => {
@@ -168,19 +180,34 @@ export function CourseFormModal({ open, onClose, course, onSuccess }: CourseForm
             />
           )}
         </form.Field>
+        {submitError ? (
+          <p role="alert" className="text-sm text-red-600 dark:text-red-400">
+            {submitError}
+          </p>
+        ) : null}
         <div className="flex justify-end gap-3 pt-2">
-          <Button variant="ghost" onClick={onClose}>
-            Cancel
-          </Button>
-          <form.Subscribe selector={(s) => s.canSubmit}>
-            {(canSubmit) => (
+          <form.Subscribe selector={(s) => s.isSubmitting}>
+            {(submitting) => (
+              <Button variant="ghost" onClick={onClose} disabled={submitting}>
+                Cancel
+              </Button>
+            )}
+          </form.Subscribe>
+          <form.Subscribe selector={(s) => !s.canSubmit || s.isSubmitting}>
+            {(blocked) => (
               <Button
                 type="submit"
                 variant="primary"
-                disabled={!canSubmit}
+                disabled={blocked}
                 data-testid="course-submit"
               >
-                {course ? "Save Changes" : "Create Course"}
+                {form.state.isSubmitting
+                  ? course
+                    ? "Saving..."
+                    : "Creating..."
+                  : course
+                    ? "Save Changes"
+                    : "Create Course"}
               </Button>
             )}
           </form.Subscribe>

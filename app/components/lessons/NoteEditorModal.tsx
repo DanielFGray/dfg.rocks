@@ -3,6 +3,7 @@ import { useForm } from "@tanstack/react-form";
 import { Modal } from "../ui/Modal.js";
 import { Textarea } from "../ui/Textarea.js";
 import { Button } from "../ui/Button.js";
+import { getErrorMessage } from "../../lib/errors.js";
 import type { Lesson, User } from "../../../shared/schemas.js";
 import { formatDateTime } from "./helpers.js";
 
@@ -26,14 +27,16 @@ export function NoteEditorModal({
   studentMap,
   onClose,
   onSave,
-  saving,
 }: {
   state: NoteEditorState;
   studentMap: Map<string, User>;
   onClose: () => void;
-  onSave: (draft: boolean, values: NoteFormValues) => void;
-  saving: boolean;
+  /** Awaited contract: the modal stays open with its controls disabled until the promise settles. */
+  onSave: (draft: boolean, values: NoteFormValues) => Promise<void>;
 }) {
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
   const noteForm = useForm({
     defaultValues: {
       topics_covered: state?.topics ?? "",
@@ -54,10 +57,19 @@ export function NoteEditorModal({
       progress_observations: state?.progress ?? "",
       notes: state?.notes ?? "",
     });
+    setError(null);
   }
 
-  const handleSave = (draft: boolean) => {
-    onSave(draft, noteForm.state.values);
+  const handleSave = async (draft: boolean) => {
+    setError(null);
+    setSaving(true);
+    try {
+      await onSave(draft, noteForm.state.values);
+    } catch (cause) {
+      setError(getErrorMessage(cause, "Could not save the note"));
+    } finally {
+      setSaving(false);
+    }
   };
 
   const title = state
@@ -65,7 +77,7 @@ export function NoteEditorModal({
     : "Lesson Notes";
 
   return (
-    <Modal open={state !== null} onClose={onClose} title={title}>
+    <Modal open={state !== null} onClose={onClose} title={title} isDismissable={!saving}>
       <div className="flex flex-col gap-4" data-testid="note-editor">
         <noteForm.Field name="topics_covered">
           {(field) => (
@@ -123,8 +135,13 @@ export function NoteEditorModal({
             />
           )}
         </noteForm.Field>
+        {error ? (
+          <p role="alert" className="text-sm text-red-600 dark:text-red-400">
+            {error}
+          </p>
+        ) : null}
         <div className="flex justify-end gap-3 pt-2">
-          <Button variant="ghost" onClick={onClose}>
+          <Button variant="ghost" onClick={onClose} disabled={saving}>
             Cancel
           </Button>
           <Button

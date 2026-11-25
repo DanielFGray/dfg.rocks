@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { useForm } from "@tanstack/react-form";
 import { CalendarDate, Time } from "@internationalized/date";
 import { fieldError } from "../../lib/form.js";
+import { getErrorMessage } from "../../lib/errors.js";
 import { Modal } from "../ui/Modal.js";
 import { DatePicker } from "../ui/DatePicker.js";
 import { TimeField } from "../ui/TimeField.js";
@@ -25,12 +26,14 @@ export function EditLessonModal({
   onClose: () => void;
   lesson: Lesson;
   studentOptions: { value: string; label: string }[];
+  /** Awaited contract: the modal stays open with its controls disabled until the promise settles. */
   onSubmit: (value: {
     scheduled_at?: Date;
     duration_minutes?: number;
     location_type?: LocationType;
-  }) => void;
+  }) => Promise<void>;
 }) {
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const initialDateTime = useMemo(() => {
     const d = lesson.scheduled_at;
     return {
@@ -69,14 +72,26 @@ export function EditLessonModal({
         payload.location_type = newLocation;
       }
 
-      if (Object.keys(payload).length > 0) {
-        onSubmit(payload);
+      if (Object.keys(payload).length === 0) {
+        return;
+      }
+
+      setSubmitError(null);
+      try {
+        await onSubmit(payload);
+      } catch (cause) {
+        setSubmitError(getErrorMessage(cause, "Could not save the lesson"));
       }
     },
   });
 
   return (
-    <Modal open={open} onClose={onClose} title="Edit Lesson">
+    <Modal
+      open={open}
+      onClose={onClose}
+      title="Edit Lesson"
+      isDismissable={!editForm.state.isSubmitting}
+    >
       <form
         data-testid="edit-lesson-form"
         onSubmit={(e) => {
@@ -158,19 +173,28 @@ export function EditLessonModal({
           )}
         </editForm.Field>
 
+        {submitError ? (
+          <p role="alert" className="text-sm text-red-600 dark:text-red-400">
+            {submitError}
+          </p>
+        ) : null}
         <div className="flex justify-end gap-3 pt-2">
-          <Button variant="ghost" onClick={onClose}>
-            Cancel
-          </Button>
-          <editForm.Subscribe selector={(s) => s.canSubmit}>
-            {(canSubmit) => (
+          <editForm.Subscribe selector={(s) => s.isSubmitting}>
+            {(submitting) => (
+              <Button variant="ghost" onClick={onClose} disabled={submitting}>
+                Cancel
+              </Button>
+            )}
+          </editForm.Subscribe>
+          <editForm.Subscribe selector={(s) => !s.canSubmit || s.isSubmitting}>
+            {(blocked) => (
               <Button
                 type="submit"
                 variant="primary"
-                disabled={!canSubmit}
+                disabled={blocked}
                 data-testid="edit-lesson-submit"
               >
-                Save Changes
+                {editForm.state.isSubmitting ? "Saving..." : "Save Changes"}
               </Button>
             )}
           </editForm.Subscribe>
