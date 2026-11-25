@@ -1,3 +1,4 @@
+// @entrypoint: the test bridges vitest callbacks to the runtime and the /api handler.
 import { describe, expect, it } from "@effect/vitest";
 import { Effect, Layer, Logger, ManagedRuntime } from "effect";
 import { CurrentLogAnnotations } from "effect/References";
