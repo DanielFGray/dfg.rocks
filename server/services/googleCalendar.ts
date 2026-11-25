@@ -61,6 +61,9 @@ const GcalChangesSchema = S.Struct({
   nextPageToken: S.optional(S.String),
 });
 
+/** One change Google reported: the event's ID, and why it changed. */
+export type GcalChange = S.Schema.Type<typeof GcalChangeSchema>;
+
 const GcalEventListSchema = S.Struct({
   items: S.optional(S.Array(GcalEventSchema)),
   nextPageToken: S.optional(S.String),
@@ -157,6 +160,11 @@ export class GoogleCalendar extends Context.Service<GoogleCalendar>()("dfg-rocks
 
     const deleteSettingEffect = Effect.fnUntraced(function* (key: string) {
       yield* rootDb.execute(rootDb.deleteFrom("app_private.admin_settings").where("key", "=", key));
+    });
+
+    const readSyncTokenEffect = Effect.fnUntraced(function* () {
+      const v = yield* getSettingEffect("gcal_sync_token");
+      return typeof v === "string" ? v : null;
     });
 
     // === Token management ===
@@ -375,6 +383,54 @@ export class GoogleCalendar extends Context.Service<GoogleCalendar>()("dfg-rocks
       return all;
     });
 
+    /**
+     * One paginated synchronization: walks every page and returns the final sync
+     * token, so no change is dropped to a later page. Callers store
+     * `nextSyncToken` only after applying the returned changes.
+     */
+    const syncAllPages = Effect.fnUntraced(function* (query: URLSearchParams) {
+      const events: GcalChange[] = [];
+      let nextSyncToken: string | undefined;
+      let pageToken: string | undefined;
+      do {
+        const params = new URLSearchParams(query);
+        if (pageToken) params.set("pageToken", pageToken);
+        const res = yield* gcalFetchEffect(
+          `/calendars/${encodeURIComponent(calId)}/events?${params.toString()}`,
+        );
+        const json = yield* res.json.pipe(
+          Effect.catch(
+            () =>
+              new HttpError({
+                status: 502,
+                message: "Google Calendar sync response was invalid",
+              }),
+          ),
+        );
+        const page = yield* S.decodeUnknownEffect(GcalChangesSchema)(json).pipe(
+          Effect.catchTags({
+            SchemaError: () =>
+              new HttpError({
+                status: 502,
+                message: "Google Calendar sync response was invalid",
+              }),
+          }),
+        );
+        events.push(...(page.items ?? []));
+        nextSyncToken = page.nextSyncToken;
+        pageToken = page.nextPageToken;
+      } while (pageToken);
+      // Google ends every complete sync with a token; stopping earlier and
+      // storing nothing is safer than advancing to an empty one.
+      if (!nextSyncToken) {
+        return yield* new HttpError({
+          status: 502,
+          message: "Google Calendar sync ended without a sync token",
+        });
+      }
+      return { events, nextSyncToken } as const;
+    });
+
     return {
       getGoogleCalendarStatus: Effect.fn("getGoogleCalendarStatus")(function* () {
         const rows = yield* rootDb.execute(
@@ -559,104 +615,33 @@ export class GoogleCalendar extends Context.Service<GoogleCalendar>()("dfg-rocks
         yield* setSettingEffect("working_hours", hours);
       }),
 
-      getSyncToken: Effect.fnUntraced(function* () {
-        const v = yield* getSettingEffect("gcal_sync_token");
-        return typeof v === "string" ? v : null;
+      saveSyncToken: Effect.fnUntraced(function* (token: string) {
+        yield* setSettingEffect("gcal_sync_token", token);
       }),
 
-      incrementalSync: Effect.fnUntraced(function* () {
-        while (true) {
-          const syncToken = yield* getSettingEffect("gcal_sync_token");
-          if (typeof syncToken !== "string") {
-            // No sync token — perform a full bootstrap sync
-            const now = new Date();
-            const monthAgo = new Date(now);
-            monthAgo.setMonth(monthAgo.getMonth() - 1);
-            const params = new URLSearchParams({
-              timeMin: monthAgo.toISOString(),
-              singleEvents: "true",
-              maxResults: "2500",
-            });
-            const res = yield* gcalFetchEffect(
-              `/calendars/${encodeURIComponent(calId)}/events?${params.toString()}`,
-            );
-            const json = yield* res.json.pipe(
-              Effect.catch(
-                () =>
-                  new HttpError({
-                    status: 502,
-                    message: "Google Calendar sync response was invalid",
-                  }),
-              ),
-            );
-            const decoded = yield* S.decodeUnknownEffect(GcalChangesSchema)(json).pipe(
-              Effect.catchTags({
-                SchemaError: () =>
-                  new HttpError({
-                    status: 502,
-                    message: "Google Calendar sync response was invalid",
-                  }),
-              }),
-            );
-            const nextToken = decoded.nextSyncToken ?? "";
-            yield* setSettingEffect("gcal_sync_token", nextToken);
-            return {
-              events: decoded.items ?? [],
-              nextSyncToken: nextToken,
-            } as const;
-          }
-          // Incremental sync — must bypass gcalFetchEffect to inspect 410 before throwing
-          const token = yield* getAccessTokenEffect();
-          const params = new URLSearchParams({ syncToken });
-          const res = yield* client
-            .get(
-              `${GCAL_BASE}/calendars/${encodeURIComponent(calId)}/events?${params.toString()}`,
-              {
-                headers: {
-                  Authorization: `Bearer ${token}`,
-                  "Content-Type": "application/json",
-                },
-              },
-            )
-            .pipe(
-              Effect.catch(
-                () => new HttpError({ status: 502, message: "Google Calendar request failed" }),
-              ),
-            );
-          if (res.status === 410) {
-            // Sync token expired — clear it and loop to do a full sync
-            yield* deleteSettingEffect("gcal_sync_token");
-            continue;
-          }
-          if (res.status < 200 || res.status >= 300) {
-            const text = yield* res.text.pipe(Effect.orElseSucceed(() => ""));
-            return yield* new HttpError({ status: res.status, message: text });
-          }
-          const json = yield* res.json.pipe(
-            Effect.catch(
-              () =>
-                new HttpError({
-                  status: 502,
-                  message: "Google Calendar sync response was invalid",
-                }),
+      syncChanges: Effect.fnUntraced(function* () {
+        const syncToken = yield* readSyncTokenEffect();
+        if (syncToken) {
+          const incremental = yield* syncAllPages(new URLSearchParams({ syncToken })).pipe(
+            Effect.catchTag("HttpError", (error) =>
+              error.status === 410 ? Effect.succeed(null) : Effect.fail(error),
             ),
           );
-          const decoded = yield* S.decodeUnknownEffect(GcalChangesSchema)(json).pipe(
-            Effect.catchTags({
-              SchemaError: () =>
-                new HttpError({
-                  status: 502,
-                  message: "Google Calendar sync response was invalid",
-                }),
-            }),
-          );
-          const nextToken = decoded.nextSyncToken ?? "";
-          yield* setSettingEffect("gcal_sync_token", nextToken);
-          return {
-            events: decoded.items ?? [],
-            nextSyncToken: nextToken,
-          } as const;
+          if (incremental) return incremental;
+          // The expired token must go, or every later poll would 410 again.
+          yield* deleteSettingEffect("gcal_sync_token");
         }
+        // A damaged token (an older sync stored "") must not reach Google as a
+        // syncToken parameter, so any falsy token means a full sync.
+        const monthAgo = new Date();
+        monthAgo.setMonth(monthAgo.getMonth() - 1);
+        return yield* syncAllPages(
+          new URLSearchParams({
+            timeMin: monthAgo.toISOString(),
+            singleEvents: "true",
+            maxResults: "2500",
+          }),
+        );
       }),
 
       createAuthorizationRequest: Effect.fn("createAuthorizationRequest")(function* (

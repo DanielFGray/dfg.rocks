@@ -17,7 +17,11 @@ export class CalendarSync extends Context.Service<CalendarSync>()("dfg-rocks/cal
       poll: Effect.fn("CalendarSync.poll")(function* () {
         const poll = Effect.gen(function* () {
           if (!(yield* calendar.isConnected())) return;
-          const changes = yield* calendar.incrementalSync();
+          // The lesson updates and the token store are separate idempotent
+          // writes, and the token is stored only after the changes it describes
+          // are applied. A poll that fails anywhere leaves the old token, so the
+          // next run refetches and reapplies the same changes.
+          const changes = yield* calendar.syncChanges();
           yield* Effect.forEach(
             changes.events,
             (event) =>
@@ -45,16 +49,14 @@ export class CalendarSync extends Context.Service<CalendarSync>()("dfg-rocks/cal
               }),
             { discard: true },
           );
+          yield* calendar.saveSyncToken(changes.nextSyncToken);
         });
-        // One transaction stores Google's next sync token with the lesson updates, so a
-        // failed update leaves the old token and the next poll fetches the same changes.
-        // This one-attempt job queues its own successor whatever the poll's outcome; no
-        // other process restarts polling.
-        yield* db
-          .withTransaction(poll)
-          .pipe(
-            Effect.catchCause((cause) => Effect.logError("Google Calendar poll failed", cause)),
-          );
+        // One-attempt job: whatever the poll's outcome, it queues its own
+        // successor. A crash that loses the successor is repaired by the
+        // crontab's backstop entry for `gcal__sync`.
+        yield* poll.pipe(
+          Effect.catchCause((cause) => Effect.logError("Google Calendar poll failed", cause)),
+        );
         const runAt = new Date((yield* Clock.currentTimeMillis) + 3 * 60_000);
         yield* db.execute(
           db.selectNoFrom(

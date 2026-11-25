@@ -1,7 +1,7 @@
 import { expect, it } from "@effect/vitest";
 import { Effect, Layer, Ref, Schema } from "effect";
 import { sql } from "kysely";
-import { PgAuthDB, PgRootDB } from "../db.js";
+import { Database, PgAuthDB, PgRootDB } from "../db.js";
 import { withAuthContext } from "../requestDatabase.js";
 import { GoogleCalendar } from "../services/googleCalendar.js";
 import { LessonPolicy } from "../services/lessonPolicy.js";
@@ -27,8 +27,8 @@ const forbiddenGoogle: GoogleCalendar["Service"] = {
   getAvailableSlots: forbidden,
   getWorkingHours: forbidden,
   setWorkingHours: forbidden,
-  getSyncToken: forbidden,
-  incrementalSync: forbidden,
+  syncChanges: forbidden,
+  saveSyncToken: forbidden,
   createAuthorizationRequest: forbidden,
 };
 
@@ -284,6 +284,89 @@ it.layer(services)("lesson calendar queue", (test) => {
     }).pipe(Effect.scoped),
   );
 
+  test.effect("the poll applies Google's changes and then stores the token", () =>
+    Effect.gen(function* () {
+      const fixture = yield* makeFixture;
+      const second = yield* fixture.db
+        .execute(
+          fixture.db
+            .insertInto("app_public.lessons")
+            .values({
+              student_id: fixture.studentId,
+              scheduled_at: fixture.nextTime,
+              duration_minutes: 60,
+              location_type: "online",
+              gcal_event_id: "evt-second",
+            })
+            .returning(["id", "gcal_event_id"]),
+        )
+        .pipe(Effect.head);
+      const saved = yield* Ref.make<ReadonlyArray<string>>([]);
+      yield* runPoll(
+        {
+          events: [
+            {
+              id: fixture.lesson.gcal_event_id!,
+              start: { dateTime: fixture.nextTime.toISOString() },
+            },
+            { id: second.gcal_event_id!, status: "cancelled" },
+          ],
+          nextSyncToken: "t-new",
+        },
+        saved,
+        fixture.db,
+      );
+      const rows = new Map(
+        (yield* fixture.db
+          .execute(
+            fixture.db
+              .selectFrom("app_public.lessons")
+              .select(["id", "scheduled_at", "status"])
+              .where("student_id", "=", fixture.studentId),
+          )
+          .pipe(Effect.map((all) => [...all]))).map((row) => [row.id, row]),
+      );
+      expect(rows.get(fixture.lesson.id)).toMatchObject({
+        scheduled_at: fixture.nextTime,
+        status: "scheduled",
+      });
+      expect(rows.get(second.id)).toMatchObject({ status: "cancelled" });
+      expect(yield* Ref.get(saved)).toEqual(["t-new"]);
+      expect(yield* pollSuccessors()).toHaveLength(1);
+    }).pipe(Effect.scoped),
+  );
+
+  test.effect("a poll whose lesson updates fail stores no token and still requeues", () =>
+    Effect.gen(function* () {
+      const fixture = yield* makeFixture;
+      const saved = yield* Ref.make<ReadonlyArray<string>>([]);
+      yield* runPoll(
+        {
+          events: [
+            {
+              id: fixture.lesson.gcal_event_id!,
+              start: { dateTime: fixture.nextTime.toISOString() },
+            },
+          ],
+          nextSyncToken: "t-new",
+        },
+        saved,
+        failingLessonUpdates(fixture.db),
+      );
+      expect(yield* Ref.get(saved)).toEqual([]);
+      const row = yield* fixture.db
+        .execute(
+          fixture.db
+            .selectFrom("app_public.lessons")
+            .select("scheduled_at")
+            .where("id", "=", fixture.lesson.id),
+        )
+        .pipe(Effect.head);
+      expect(row.scheduled_at.getTime()).toBe(fixture.nextTime.getTime() - 86400000);
+      expect(yield* pollSuccessors()).toHaveLength(1);
+    }).pipe(Effect.scoped),
+  );
+
   test.effect(
     "a missing row without a stored event ID still removes a partially created event",
     () =>
@@ -460,3 +543,56 @@ const runCalendarJob = (input: unknown) =>
       catch: (cause) => new JobTestError({ cause }),
     });
   }).pipe(Effect.provide(CalendarSync.layerNoDeps));
+
+/** Builds the poll with a stub calendar and a database the test controls. */
+const runPoll = (
+  changes: {
+    events: ReadonlyArray<{ id: string; status?: string; start?: { dateTime?: string } }>;
+    nextSyncToken: string;
+  },
+  saved: Ref.Ref<ReadonlyArray<string>>,
+  db: Database,
+) =>
+  CalendarSync.make.pipe(
+    Effect.flatMap((calendarSync) => calendarSync.poll()),
+    Effect.provide(
+      Layer.mergeAll(
+        Layer.succeed(
+          GoogleCalendar,
+          {
+            ...forbiddenGoogle,
+            isConnected: () => Effect.succeed(true),
+            syncChanges: () => Effect.succeed(changes),
+            saveSyncToken: (token: string) => Ref.update(saved, (all) => [...all, token]),
+          } as unknown as GoogleCalendar["Service"],
+        ),
+        Layer.succeed(PgRootDB, db as unknown as PgRootDB["Service"]),
+      ),
+    ),
+  );
+
+/** The queued `gcal__sync` successor jobs. */
+const pollSuccessors = Effect.fnUntraced(function* () {
+  const db = yield* PgRootDB;
+  return yield* db.execute(
+    db
+      .selectFrom(
+        sql<{ run_at: Date }>`(select j.run_at from graphile_worker._private_jobs j join graphile_worker._private_tasks t on t.id = j.task_id where t.identifier = 'gcal__sync')`.as(
+          "successors",
+        ),
+      )
+      .select("run_at"),
+  );
+});
+
+/** A database whose lesson writes fail, so the poll's Google changes cannot apply. */
+const failingLessonUpdates = (db: Database): Database => {
+  const failing = new Database(
+    (db as unknown as { client: ConstructorParameters<typeof Database>[0] }).client,
+  );
+  failing.execute = ((query: Parameters<Database["execute"]>[0]) =>
+    query.compile().sql.startsWith('update "app_public"."lessons"')
+      ? Effect.die(new Error("lesson update failed"))
+      : db.execute(query)) as Database["execute"];
+  return failing;
+};
