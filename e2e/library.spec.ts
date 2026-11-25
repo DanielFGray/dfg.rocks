@@ -108,6 +108,42 @@ test.describe("library", () => {
     }
   });
 
+  test("opening one material closes the other", async ({ page, testing }) => {
+    await testing.login();
+    await loginViaUi(page, "test_admin", "testpassword123");
+    await testing.seedMaterial({ title: "Accordion One" });
+    await testing.seedMaterial({ title: "Accordion Two" });
+
+    await page.goto("/library");
+    const firstRow = page.getByTestId("material-row").filter({ hasText: "Accordion One" });
+    const secondRow = page.getByTestId("material-row").filter({ hasText: "Accordion Two" });
+    const firstCard = page.getByTestId("material-card").filter({ hasText: "Accordion One" });
+    const secondCard = page.getByTestId("material-card").filter({ hasText: "Accordion Two" });
+
+    await expect(firstRow).toBeVisible();
+    await expect(secondRow).toBeVisible();
+    await expect(firstRow).toHaveAttribute("aria-expanded", "false");
+    await expect(secondRow).toHaveAttribute("aria-expanded", "false");
+
+    await firstRow.click();
+    await expect(firstRow).toHaveAttribute("aria-expanded", "true");
+    await expect(secondRow).toHaveAttribute("aria-expanded", "false");
+    await expect(firstCard.getByTestId("material-download")).toBeVisible();
+    await expect(secondCard.getByTestId("material-download")).toBeHidden();
+
+    await secondRow.click();
+    await expect(secondRow).toHaveAttribute("aria-expanded", "true");
+    await expect(firstRow).toHaveAttribute("aria-expanded", "false");
+    await expect(secondCard.getByTestId("material-download")).toBeVisible();
+    await expect(firstCard.getByTestId("material-download")).toBeHidden();
+
+    await firstRow.click();
+    await expect(firstRow).toHaveAttribute("aria-expanded", "true");
+    await expect(secondRow).toHaveAttribute("aria-expanded", "false");
+    await expect(firstCard.getByTestId("material-download")).toBeVisible();
+    await expect(secondCard.getByTestId("material-download")).toBeHidden();
+  });
+
   test("admin upload prefills score titles and keeps manual edits", async ({ page, testing }) => {
     await testing.login();
     await loginViaUi(page, "test_admin", "testpassword123");
