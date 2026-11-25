@@ -63,6 +63,18 @@ describe("rateLimit", () => {
         expect(exceeded).toStrictEqual(Exit.fail(RateLimitError.new()));
       }),
     );
+
+    // The feedback endpoint's rule: five submissions a minute per address.
+    it.effect("limits the sixth feedback submission in the window", () =>
+      Effect.gen(function* () {
+        for (let request = 0; request < 5; request++) {
+          yield* checkRateLimit("feedback", headers);
+        }
+
+        const exceeded = yield* Effect.exit(checkRateLimit("feedback", headers));
+        expect(exceeded).toStrictEqual(Exit.fail(RateLimitError.new()));
+      }),
+    );
   });
 
   // Valkey refuses a command, or the client queues commands while it reconnects and never answers.

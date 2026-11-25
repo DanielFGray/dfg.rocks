@@ -15,6 +15,11 @@ import {
   TooManyRequestsErrorSchema,
 } from "../httpApiErrors.js";
 import { ContactFormat, ContactInstrument } from "../contactOptions.js";
+import {
+  FeedbackCategory,
+  feedbackPageUrlMaxLength,
+  feedbackTextMaxLength,
+} from "../feedback.js";
 import { params } from "./fields.js";
 import { PlansResponse } from "./subscriptions.js";
 
@@ -26,6 +31,23 @@ export const ContactPayload = S.Struct({
   instrument: ContactInstrument,
   format: ContactFormat,
   message: S.optional(S.String),
+  website: S.optional(S.String),
+});
+
+/**
+ * The feedback dialog. `page_url` and `app_version` arrive pre-filled by the client;
+ * the server logs the user's id from the session, never from the payload.
+ * `website` is a field people never see; a bot that fills it is refused.
+ */
+export const FeedbackPayload = S.Struct({
+  message: S.String.pipe(S.check(S.isNonEmpty()), S.check(S.isMaxLength(feedbackTextMaxLength))),
+  category: FeedbackCategory,
+  contact: S.optional(S.String.pipe(S.check(S.isMaxLength(feedbackTextMaxLength)))),
+  page_url: S.String.pipe(
+    S.check(S.isNonEmpty()),
+    S.check(S.isMaxLength(feedbackPageUrlMaxLength)),
+  ),
+  app_version: S.String.pipe(S.check(S.isNonEmpty()), S.check(S.isMaxLength(40))),
   website: S.optional(S.String),
 });
 
@@ -86,6 +108,13 @@ export const publicGroup = HttpApiGroup.make("public")
     HttpApiEndpoint.post("contact", "/contact", {
       error: publicErrors,
       payload: ContactPayload,
+      success: SuccessResponse,
+    }).middleware(Csrf),
+  )
+  .add(
+    HttpApiEndpoint.post("feedback", "/feedback", {
+      error: publicErrors,
+      payload: FeedbackPayload,
       success: SuccessResponse,
     }).middleware(Csrf),
   )
