@@ -27,7 +27,6 @@ const forbiddenGoogle: GoogleCalendar["Service"] = {
   getAvailableSlots: forbidden,
   getWorkingHours: forbidden,
   setWorkingHours: forbidden,
-  getSyncToken: forbidden,
   syncChanges: forbidden,
   saveSyncToken: forbidden,
   createAuthorizationRequest: forbidden,

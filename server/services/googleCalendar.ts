@@ -615,8 +615,6 @@ export class GoogleCalendar extends Context.Service<GoogleCalendar>()("dfg-rocks
         yield* setSettingEffect("working_hours", hours);
       }),
 
-      getSyncToken: readSyncTokenEffect,
-
       saveSyncToken: Effect.fnUntraced(function* (token: string) {
         yield* setSettingEffect("gcal_sync_token", token);
       }),
