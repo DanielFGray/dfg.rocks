@@ -19,7 +19,9 @@ export const Modal = ({ open, onClose, title, children, className, isDismissable
   <ModalOverlay
     isOpen={open}
     onOpenChange={(isOpen) => {
-      if (!isOpen) onClose();
+      // Escape fires this too, not just dismissal; while isDismissable is
+      // false (a submission in flight) no close request may get through.
+      if (!isOpen && isDismissable) onClose();
     }}
     isDismissable={isDismissable}
     className="data-[entering]:animate-in data-[entering]:fade-in data-[exiting]:animate-out data-[exiting]:fade-out fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs duration-500"
