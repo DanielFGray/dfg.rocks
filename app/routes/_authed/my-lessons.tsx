@@ -9,6 +9,7 @@ import type { Lesson, LessonCancellationPolicy, LessonNote } from "../../../shar
 import { Card } from "../../components/ui/Card.js";
 import { EmptyState } from "../../components/ui/EmptyState.js";
 import { Disclosure, DisclosureTrigger, DisclosurePanel } from "../../components/ui/Disclosure.js";
+import { DisclosureGroup } from "../../components/ui/DisclosureGroup.js";
 import { Button } from "../../components/ui/Button.js";
 import { Modal } from "../../components/ui/Modal.js";
 import { api } from "../../lib/api.js";
@@ -189,7 +190,6 @@ function NoteSection({ note }: { note: LessonNote }) {
 
 function MyLessonsPage() {
   const router = useRouter();
-  const [expandedLessonId, setExpandedLessonId] = useState<string | null>(null);
   const [cancelTarget, setCancelTarget] = useState<Lesson | null>(null);
   const [rescheduleTarget, setRescheduleTarget] = useState<Lesson | null>(null);
   const [cancellationReason, setCancellationReason] = useState("");
@@ -239,10 +239,6 @@ function MyLessonsPage() {
     noteMap.set(n.lesson_id, n);
   });
 
-  const toggleExpand = (id: string) => {
-    setExpandedLessonId((prev) => (prev === id ? null : id));
-  };
-
   const openCancel = (lesson: Lesson) => {
     cancelMutation.reset();
     policyMutation.reset();
@@ -282,13 +278,12 @@ function MyLessonsPage() {
       {lessons.length === 0 ? (
         <EmptyState message="No lessons scheduled yet." />
       ) : (
-        <div className="flex flex-col gap-3">
+        <DisclosureGroup className="flex flex-col gap-3">
           {lessons.map((lesson) => {
             const badge = statusBadgeClass[lesson.status] ?? "bg-overlay/10 text-muted";
             const label = statusLabel[lesson.status] ?? lesson.status;
             const location = locationLabel[lesson.location_type] ?? lesson.location_type;
             const note = noteMap.get(lesson.id);
-            const isExpanded = expandedLessonId === lesson.id;
 
             return (
               <Card key={lesson.id}>
@@ -332,25 +327,28 @@ function MyLessonsPage() {
                         </Button>
                       </div>
                     ) : lesson.status === "completed" ? (
-                      <Disclosure
-                        isExpanded={isExpanded}
-                        onExpandedChange={() => toggleExpand(lesson.id)}
-                      >
-                        <DisclosureTrigger
-                          data-testid="toggle-notes"
-                          className="shrink-0 rounded-lg px-3 py-1.5 text-xs text-violet-400 transition-colors hover:bg-overlay/5 hover:text-violet-300 data-[expanded]:text-violet-300"
-                        >
-                          {isExpanded ? "Hide Notes" : "View Notes"}
-                        </DisclosureTrigger>
-                        <DisclosurePanel>
-                          {note ? (
-                            <NoteSection note={note} />
-                          ) : (
-                            <div className="mt-4 border-t border-overlay/5 pt-4">
-                              <p className="text-sm text-muted">No notes for this lesson.</p>
-                            </div>
-                          )}
-                        </DisclosurePanel>
+                      <Disclosure id={lesson.id}>
+                        {({ isExpanded }) => (
+                          <>
+                            <DisclosureTrigger
+                              data-testid="toggle-notes"
+                              className={`shrink-0 rounded-lg px-3 py-1.5 text-xs text-violet-400 transition-colors hover:bg-overlay/5 hover:text-violet-300 ${
+                                isExpanded ? "text-violet-300" : ""
+                              }`}
+                            >
+                              {isExpanded ? "Hide Notes" : "View Notes"}
+                            </DisclosureTrigger>
+                            <DisclosurePanel>
+                              {note ? (
+                                <NoteSection note={note} />
+                              ) : (
+                                <div className="mt-4 border-t border-overlay/5 pt-4">
+                                  <p className="text-sm text-muted">No notes for this lesson.</p>
+                                </div>
+                              )}
+                            </DisclosurePanel>
+                          </>
+                        )}
                       </Disclosure>
                     ) : null}
                   </div>
@@ -358,7 +356,7 @@ function MyLessonsPage() {
               </Card>
             );
           })}
-        </div>
+        </DisclosureGroup>
       )}
 
       <Modal open={cancelTarget !== null} onClose={closeCancel} title="Cancel Lesson">

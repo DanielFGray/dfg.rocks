@@ -15,6 +15,7 @@ import { Button } from "../../components/ui/Button.js";
 import { Modal } from "../../components/ui/Modal.js";
 import { ConfirmDialog } from "../../components/ui/ConfirmDialog.js";
 import { EmptyState } from "../../components/ui/EmptyState.js";
+import { DisclosureGroup } from "../../components/ui/DisclosureGroup.js";
 import { MaterialCard } from "../../components/library/MaterialCard.js";
 import { UploadMaterialForm } from "../../components/library/UploadMaterialForm.js";
 import { Main } from "../../components/ui/Container.js";
@@ -57,7 +58,6 @@ function LibraryPage() {
   const loaderMaterials = Route.useLoaderData();
 
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
-  const [expandedId, setExpandedId] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Material | null>(null);
   // Uploads and deletes shown before the loader runs again. The list below prefers the
   // loader's rows, so an entry the loader has caught up with has no effect.
@@ -92,10 +92,6 @@ function LibraryPage() {
       void router.invalidate();
     },
   });
-
-  const toggleExpand = (id: string) => {
-    setExpandedId((prev) => (prev === id ? null : id));
-  };
 
   const handleUpload = (file: File, title: string, visibility: ContentVisibility) => {
     const formData = new FormData();
@@ -159,18 +155,16 @@ function LibraryPage() {
           }
         />
       ) : (
-        <div className="flex flex-col gap-2">
+        <DisclosureGroup className="flex flex-col gap-2">
           {materials.map((m) => (
             <MaterialCard
               key={m.id}
               material={m}
-              expanded={expandedId === m.id}
-              onToggle={() => toggleExpand(m.id)}
               admin={true}
               onDelete={() => setDeleteTarget(m)}
             />
           ))}
-        </div>
+        </DisclosureGroup>
       )}
 
       {/* ---- Upload Modal ---- */}

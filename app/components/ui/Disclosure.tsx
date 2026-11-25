@@ -7,11 +7,15 @@ import {
   Heading,
 } from "react-aria-components";
 
+type DisclosureChildren = ReactNode | ((values: { isExpanded: boolean }) => ReactNode);
+
 type DisclosureProps = {
+  /** Identifies the disclosure inside a DisclosureGroup, which owns expansion. */
+  id?: string;
   isExpanded?: boolean;
   onExpandedChange?: (isExpanded: boolean) => void;
   isDisabled?: boolean;
-  children: ReactNode;
+  children?: DisclosureChildren;
 };
 
 type DisclosureTriggerProps = {
@@ -26,6 +30,7 @@ type DisclosurePanelProps = {
 };
 
 export function Disclosure({
+  id,
   isExpanded,
   onExpandedChange,
   isDisabled,
@@ -33,6 +38,7 @@ export function Disclosure({
 }: DisclosureProps) {
   return (
     <AriaDisclosure
+      id={id}
       isExpanded={isExpanded}
       onExpandedChange={onExpandedChange}
       isDisabled={isDisabled}
