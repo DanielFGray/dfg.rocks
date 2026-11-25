@@ -234,6 +234,7 @@ test.describe("assignments management", () => {
     await expect(page.getByRole("button", { name: "Save Review" })).toHaveCount(0);
     // The only rating group left is the Self-Assessment one; the review group (paired with
     // "Save Review") stays hidden until the student has listened through the piece.
+    await expect(page.getByRole("radiogroup", { name: "Self-assessment" })).toBeVisible();
     await expect(page.getByRole("radio", { name: "Rate 4 out of 5" })).toHaveCount(1);
   });
 
