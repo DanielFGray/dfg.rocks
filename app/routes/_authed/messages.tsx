@@ -158,11 +158,6 @@ function MessagesPage() {
         ? partnerIds[0]!
         : null;
 
-  const selectPartner = (id: string) => () => {
-    setSelectedPartner(id);
-    setComposeText("");
-  };
-
   // ---- Mutations ----
   const sendMessageMutation = useMutation({
     mutationFn: (payload: { recipient_id?: string; body: string }) =>
@@ -258,7 +253,10 @@ function MessagesPage() {
               activePartner={activePartner}
               myId={user.id}
               getName={getName}
-              onSelect={selectPartner}
+              onSelect={(id) => {
+                setSelectedPartner(id);
+                setComposeText("");
+              }}
             />
           </ResizableSidebar>
         )}
