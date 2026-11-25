@@ -120,6 +120,12 @@ const TestingInvitationLinkQuery = S.Struct({
   email: S.String,
 });
 
+const SeedMessagePayload = S.Struct({
+  sender_username: S.String,
+  recipient_username: S.String,
+  body: S.String,
+});
+
 const TestingSeedLessonQuery = S.Struct({
   username: S.String,
   scheduled_at: S.optional(S.String),
@@ -219,6 +225,12 @@ export const testingGroup = HttpApiGroup.make("testing")
     HttpApiEndpoint.get("expireInvitation", "/testing/expire-invitation", {
       error: testingErrors,
       query: TestingInvitationLinkQuery,
+    }),
+  )
+  .add(
+    HttpApiEndpoint.post("seedMessage", "/testing/seed-message", {
+      error: testingErrors,
+      payload: SeedMessagePayload,
     }),
   )
   .add(
@@ -414,6 +426,19 @@ export const TestingApiGroupLive = HttpApiBuilder.group(testingApi, "testing", (
       "expireInvitation",
       Effect.fnUntraced(function* ({ query }) {
         yield* Testing.use((testingService) => testingService.expireInvitation(query.email));
+      }, adaptTestingHandler),
+    )
+    .handle(
+      "seedMessage",
+      Effect.fnUntraced(function* ({ payload }) {
+        yield* Testing.use((testingService) =>
+          testingService.seedMessage({
+            senderUsername: payload.sender_username,
+            recipientUsername: payload.recipient_username,
+            body: payload.body,
+          }),
+        );
+        return HttpServerResponse.jsonUnsafe({ success: true });
       }, adaptTestingHandler),
     )
     .handle(

@@ -72,6 +72,7 @@ type TestingApi = {
     location_type?: string;
     status?: string;
   }): Promise<void>;
+  seedMessage(data: { sender_username: string; recipient_username: string; body: string }): Promise<void>;
   setTestimonialReminder(data: {
     username: string;
     prompt_enabled?: boolean;
@@ -318,6 +319,11 @@ export const test = base.extend<{
           ...data,
           duration_minutes: data.duration_minutes?.toString(),
         });
+      },
+
+      async seedMessage(data) {
+        const res = await page.request.post(`${api_url}/api/testing/seed-message`, { data });
+        expect(res.ok(), `testing/seed-message failed: ${await res.text()}`).toBe(true);
       },
 
       async setTestimonialReminder(data) {

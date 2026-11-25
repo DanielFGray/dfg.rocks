@@ -588,6 +588,24 @@ export class Testing extends Context.Service<Testing>()("dfg-rocks/testing", {
         );
       }),
 
+      seedMessage: Effect.fnUntraced(function* (values: {
+        senderUsername: string;
+        recipientUsername: string;
+        body: string;
+      }) {
+        const sender = yield* queries.userIdByUsername(values.senderUsername).pipe(Effect.head);
+        const recipient = yield* queries.userIdByUsername(values.recipientUsername).pipe(
+          Effect.head,
+        );
+        yield* db.execute(
+          db.insertInto("app_public.messages").values({
+            sender_id: sender.id,
+            recipient_id: recipient.id,
+            body: values.body,
+          }),
+        );
+      }),
+
       seedLesson: Effect.fnUntraced(function* (values: {
         username: string;
         scheduledAt?: string | null;
