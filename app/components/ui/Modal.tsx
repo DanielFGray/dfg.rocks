@@ -8,15 +8,20 @@ type ModalProps = {
   title: string;
   children: ReactNode;
   className?: string;
+  /**
+   * False blocks every way of closing (overlay, escape, close button), for a
+   * modal whose submission is in flight. Defaults to true.
+   */
+  isDismissable?: boolean;
 };
 
-export const Modal = ({ open, onClose, title, children, className }: ModalProps) => (
+export const Modal = ({ open, onClose, title, children, className, isDismissable = true }: ModalProps) => (
   <ModalOverlay
     isOpen={open}
     onOpenChange={(isOpen) => {
       if (!isOpen) onClose();
     }}
-    isDismissable
+    isDismissable={isDismissable}
     className="data-[entering]:animate-in data-[entering]:fade-in data-[exiting]:animate-out data-[exiting]:fade-out fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs duration-500"
   >
     <AriaModal className={className ?? "w-full max-w-lg outline-hidden"}>
@@ -25,7 +30,7 @@ export const Modal = ({ open, onClose, title, children, className }: ModalProps)
           <Heading slot="title" className="text-lg font-semibold text-primary">
             {title}
           </Heading>
-          <Button variant="ghost" onClick={onClose} aria-label="Close" size="icon">
+          <Button variant="ghost" onClick={onClose} aria-label="Close" size="icon" disabled={!isDismissable}>
             <svg
               xmlns="http://www.w3.org/2000/svg"
               width="18"

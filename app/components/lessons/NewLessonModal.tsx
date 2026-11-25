@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { useForm } from "@tanstack/react-form";
 import { CalendarDate, Time } from "@internationalized/date";
 import { fieldError } from "../../lib/form.js";
+import { getErrorMessage } from "../../lib/errors.js";
 import { Modal } from "../ui/Modal.js";
 import { DatePicker } from "../ui/DatePicker.js";
 import { TimeField } from "../ui/TimeField.js";
@@ -23,13 +24,15 @@ export function NewLessonModal({
   open: boolean;
   onClose: () => void;
   studentOptions: { value: string; label: string }[];
+  /** Awaited contract: the modal stays open with its controls disabled until the promise settles. */
   onSubmit: (value: {
     student_id: string;
     scheduled_at: Date;
     duration_minutes: number;
     location_type: LocationType;
-  }) => void;
+  }) => Promise<void>;
 }) {
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const defaultValue = useMemo(() => {
     const now = new Date();
     const nextHour = new Date(now);
@@ -52,19 +55,29 @@ export function NewLessonModal({
         return;
       }
 
-      onSubmit({
-        student_id: value.student_id,
-        scheduled_at: localInstant(dateValue ?? defaultValue.date, value.time),
-        duration_minutes: Number(value.duration_minutes),
-        location_type: value.location_type,
-      });
+      setSubmitError(null);
+      try {
+        await onSubmit({
+          student_id: value.student_id,
+          scheduled_at: localInstant(dateValue ?? defaultValue.date, value.time),
+          duration_minutes: Number(value.duration_minutes),
+          location_type: value.location_type,
+        });
+      } catch (cause) {
+        setSubmitError(getErrorMessage(cause, "Could not schedule the lesson"));
+      }
     },
   });
 
   const [dateValue, setDateValue] = useDateValue(defaultValue.date);
 
   return (
-    <Modal open={open} onClose={onClose} title="New Lesson">
+    <Modal
+      open={open}
+      onClose={onClose}
+      title="New Lesson"
+      isDismissable={!lessonForm.state.isSubmitting}
+    >
       <form
         data-testid="lesson-form"
         onSubmit={(e) => {
@@ -151,19 +164,28 @@ export function NewLessonModal({
             />
           )}
         </lessonForm.Field>
+        {submitError ? (
+          <p role="alert" className="text-sm text-red-600 dark:text-red-400">
+            {submitError}
+          </p>
+        ) : null}
         <div className="flex justify-end gap-3 pt-2">
-          <Button variant="ghost" onClick={onClose}>
-            Cancel
-          </Button>
-          <lessonForm.Subscribe selector={(s) => s.canSubmit}>
-            {(canSubmit) => (
+          <lessonForm.Subscribe selector={(s) => s.isSubmitting}>
+            {(submitting) => (
+              <Button variant="ghost" onClick={onClose} disabled={submitting}>
+                Cancel
+              </Button>
+            )}
+          </lessonForm.Subscribe>
+          <lessonForm.Subscribe selector={(s) => !s.canSubmit || s.isSubmitting}>
+            {(blocked) => (
               <Button
                 type="submit"
                 variant="primary"
-                disabled={!canSubmit}
+                disabled={blocked}
                 data-testid="lesson-submit"
               >
-                Schedule Lesson
+                {lessonForm.state.isSubmitting ? "Scheduling..." : "Schedule Lesson"}
               </Button>
             )}
           </lessonForm.Subscribe>

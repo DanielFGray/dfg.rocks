@@ -281,11 +281,10 @@ function CourseDetailView({
   const openDeleteModule = (mod: Module) => setDeleteModuleTarget(mod);
   const closeDeleteModule = () => setDeleteModuleTarget(null);
 
-  const confirmDeleteModule = () => {
+  const confirmDeleteModule = async () => {
     if (!deleteModuleTarget) return;
-    deleteModuleMutation.mutate(deleteModuleTarget.id, {
-      onSuccess: () => setDeleteModuleTarget(null),
-    });
+    await deleteModuleMutation.mutateAsync(deleteModuleTarget.id);
+    setDeleteModuleTarget(null);
   };
 
   // ---- Enroll/unenroll handlers ----
@@ -297,11 +296,10 @@ function CourseDetailView({
 
   const cancelUnenrollStudent = () => setUnenrollStudentTarget(null);
 
-  const confirmUnenrollStudent = () => {
+  const confirmUnenrollStudent = async () => {
     if (!unenrollStudentTarget) return;
-    unenrollStudentMutation.mutate(unenrollStudentTarget.id, {
-      onSuccess: () => setUnenrollStudentTarget(null),
-    });
+    await unenrollStudentMutation.mutateAsync(unenrollStudentTarget.id);
+    setUnenrollStudentTarget(null);
   };
 
   return (

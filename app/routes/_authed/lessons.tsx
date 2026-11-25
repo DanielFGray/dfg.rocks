@@ -97,7 +97,6 @@ function LessonsPage() {
   const [editTarget, setEditTarget] = useState<Lesson | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Lesson | null>(null);
   const [noteState, setNoteState] = useState<NoteEditorState>(null);
-  const [noteSaving, setNoteSaving] = useState(false);
 
   // Build student lookup by id
   const studentMap = new Map<string, User>();
@@ -120,7 +119,6 @@ function LessonsPage() {
       location_type: LocationType;
     }) => Effect.runPromise(api.lessonsAdmin.createLesson({ payload })),
     onSettled: () => {
-      setFormOpen(false);
       void router.invalidate();
     },
   });
@@ -150,7 +148,6 @@ function LessonsPage() {
         }),
       ),
     onSettled: () => {
-      setEditTarget(null);
       void router.invalidate();
     },
   });
@@ -159,7 +156,6 @@ function LessonsPage() {
     mutationFn: (id: string) =>
       Effect.runPromise(api.lessonsAdmin.deleteLesson({ params: { id } })),
     onSettled: () => {
-      setDeleteTarget(null);
       void router.invalidate();
     },
   });
@@ -193,12 +189,7 @@ function LessonsPage() {
       return data;
     },
     onSuccess: () => {
-      setNoteSaving(false);
-      setNoteState(null);
       void router.invalidate();
-    },
-    onError: () => {
-      setNoteSaving(false);
     },
   });
 
@@ -206,12 +197,6 @@ function LessonsPage() {
 
   const openNewLesson = () => {
     setFormOpen(true);
-  };
-
-  const confirmCancel = () => {
-    if (!cancelTarget) return;
-    cancelLessonMutation.mutate(cancelTarget.id);
-    setCancelTarget(null);
   };
 
   const openNoteEditor = async (lesson: Lesson) => {
@@ -240,21 +225,22 @@ function LessonsPage() {
     }
   };
 
-  const handleSaveNote = (draft: boolean, values: NoteFormValues) => {
-    if (!noteState) return;
-    setNoteSaving(true);
+  const handleSaveNote = (draft: boolean, values: NoteFormValues): Promise<void> => {
+    if (!noteState) return Promise.resolve();
 
-    upsertNoteMutation.mutate({
-      lessonId: noteState.lesson.id,
-      payload: {
-        topics_covered: values.topics_covered || undefined,
-        homework: values.homework || undefined,
-        progress_observations: values.progress_observations || undefined,
-        notes: values.notes || undefined,
-        draft,
-      },
-      publish: !draft,
-    });
+    return upsertNoteMutation
+      .mutateAsync({
+        lessonId: noteState.lesson.id,
+        payload: {
+          topics_covered: values.topics_covered || undefined,
+          homework: values.homework || undefined,
+          progress_observations: values.progress_observations || undefined,
+          notes: values.notes || undefined,
+          draft,
+        },
+        publish: !draft,
+      })
+      .then(() => setNoteState(null));
   };
 
   return (
@@ -282,6 +268,7 @@ function LessonsPage() {
                 key={lesson.id}
                 lesson={lesson}
                 studentName={studentName}
+                completePending={completeLessonMutation.isPending}
                 onNotes={() => openNoteEditor(lesson)}
                 onComplete={() => completeLessonMutation.mutate(lesson.id)}
                 onCancel={() => setCancelTarget(lesson)}
@@ -298,7 +285,10 @@ function LessonsPage() {
         open={formOpen}
         onClose={() => setFormOpen(false)}
         studentOptions={studentOptions}
-        onSubmit={(value) => createLessonMutation.mutate(value)}
+        onSubmit={async (value) => {
+          await createLessonMutation.mutateAsync(value);
+          setFormOpen(false);
+        }}
       />
 
       {/* ---- Cancel Confirm Dialog ---- */}
@@ -312,7 +302,11 @@ function LessonsPage() {
         }
         confirmLabel="Cancel Lesson"
         variant="danger"
-        onConfirm={confirmCancel}
+        onConfirm={async () => {
+          if (!cancelTarget) return;
+          await cancelLessonMutation.mutateAsync(cancelTarget.id);
+          setCancelTarget(null);
+        }}
         onCancel={() => setCancelTarget(null)}
       />
 
@@ -323,12 +317,10 @@ function LessonsPage() {
           onClose={() => setEditTarget(null)}
           lesson={editTarget}
           studentOptions={studentOptions}
-          onSubmit={(value) =>
-            updateLessonMutation.mutate({
-              id: editTarget.id,
-              payload: value as Record<string, unknown>,
-            })
-          }
+          onSubmit={async (value) => {
+            await updateLessonMutation.mutateAsync({ id: editTarget.id, payload: value });
+            setEditTarget(null);
+          }}
         />
       ) : null}
 
@@ -343,8 +335,10 @@ function LessonsPage() {
         }
         confirmLabel="Delete Forever"
         variant="danger"
-        onConfirm={() => {
-          if (deleteTarget) deleteLessonMutation.mutate(deleteTarget.id);
+        onConfirm={async () => {
+          if (!deleteTarget) return;
+          await deleteLessonMutation.mutateAsync(deleteTarget.id);
+          setDeleteTarget(null);
         }}
         onCancel={() => setDeleteTarget(null)}
       />
@@ -355,7 +349,6 @@ function LessonsPage() {
         studentMap={studentMap}
         onClose={() => setNoteState(null)}
         onSave={handleSaveNote}
-        saving={noteSaving}
       />
     </main>
   );

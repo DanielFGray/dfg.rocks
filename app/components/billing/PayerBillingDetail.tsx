@@ -252,17 +252,14 @@ function BillActions({
           </Button>
         </>
       )}
-      <ConfirmDialog
-        open={voidOpen}
-        onConfirm={() => {
-          setVoidOpen(false);
-        }}
-        onCancel={() => setVoidOpen(false)}
-        title="Void bill?"
-        message="Are you sure you want to void this bill?"
-        confirmLabel="Void"
-        variant="danger"
-      />
+      {voidOpen ? (
+        <VoidBillModal
+          billId={bill.id}
+          open={voidOpen}
+          onClose={() => setVoidOpen(false)}
+          onSaved={onRefresh}
+        />
+      ) : null}
     </div>
   );
 }
@@ -292,7 +289,7 @@ function VoidBillModal({
   });
 
   return (
-    <Modal open={open} onClose={onClose} title="Void bill">
+    <Modal open={open} onClose={onClose} title="Void bill" isDismissable={!save.isPending}>
       <form
         data-testid="void-bill-form"
         className="flex flex-col gap-4"
@@ -315,7 +312,7 @@ function VoidBillModal({
           </p>
         ) : null}
         <div className="mt-2 flex justify-end gap-3">
-          <Button variant="ghost" onClick={onClose}>
+          <Button variant="ghost" onClick={onClose} disabled={save.isPending}>
             Cancel
           </Button>
           <Button type="submit" disabled={save.isPending || !reason.trim()}>

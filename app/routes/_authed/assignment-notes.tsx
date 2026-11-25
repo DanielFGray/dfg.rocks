@@ -3,6 +3,7 @@ import { useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "../../lib/api.js";
+import { getErrorMessage } from "../../lib/errors.js";
 import { Button } from "../../components/ui/Button.js";
 import { Textarea } from "../../components/ui/Textarea.js";
 
@@ -19,7 +20,6 @@ export function AssignmentNotesPanel({ materialId }: { materialId: string }) {
   const queryClient = useQueryClient();
   const [editing, setEditing] = useState(false);
   const [noteText, setNoteText] = useState("");
-  const [saving, setSaving] = useState(false);
 
   const { data: note } = useQuery({
     queryKey: ["assignment-note", materialId],
@@ -34,23 +34,28 @@ export function AssignmentNotesPanel({ materialId }: { materialId: string }) {
           payload: { body },
         }),
       ),
-    onMutate: () => setSaving(true),
-    onSettled: () => {
-      setSaving(false);
+    // A failure keeps the editor open with its text; only success closes it.
+    onSuccess: () => {
       setEditing(false);
       setNoteText("");
+    },
+    onSettled: () => {
       queryClient.invalidateQueries({
         queryKey: ["assignment-note", materialId],
       });
     },
   });
 
+  const saving = upsertMutation.isPending;
+
   const startEditing = () => {
     setNoteText(note?.body ?? "");
+    upsertMutation.reset();
     setEditing(true);
   };
 
   const cancelEditing = () => {
+    upsertMutation.reset();
     setEditing(false);
     setNoteText("");
   };
@@ -73,6 +78,11 @@ export function AssignmentNotesPanel({ materialId }: { materialId: string }) {
           placeholder="Add notes about this assignment..."
           rows={4}
         />
+        {upsertMutation.error ? (
+          <p role="alert" className="text-sm text-red-600 dark:text-red-400">
+            {getErrorMessage(upsertMutation.error, "Could not save the notes")}
+          </p>
+        ) : null}
         <div className="flex justify-end gap-2">
           <Button variant="ghost" onClick={cancelEditing} disabled={saving}>
             Cancel

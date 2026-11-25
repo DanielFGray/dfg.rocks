@@ -82,19 +82,13 @@ function PersonPage() {
     void queryClient.invalidateQueries({ queryKey: ["admin", "people"] });
   };
 
-  const [roleError, setRoleError] = useState<string | null>(null);
   const [pendingRole, setPendingRole] = useState<UserRole | null>(null);
   const roleMutation = useMutation({
     mutationFn: (role: UserRole) =>
       Effect.runPromise(api.peopleAdmin.setUserRole({ params: { id }, payload: { role } })),
     onSuccess: () => {
-      setRoleError(null);
       invalidatePerson();
     },
-    onError: (err: unknown) => {
-      setRoleError(err instanceof Error ? err.message : "Failed to change role");
-    },
-    onSettled: () => setPendingRole(null),
   });
   // An admin cannot change their own role; the server refuses it too.
   const canChangeRole = isAdmin && viewer?.id !== id;
@@ -160,11 +154,10 @@ function PersonPage() {
 
   const openUnenroll = (c: { id: string; title: string }) => () => setUnenrollTarget(c);
   const cancelUnenroll = () => setUnenrollTarget(null);
-  const confirmUnenroll = () => {
+  const confirmUnenroll = async () => {
     if (!unenrollTarget) return;
-    unenrollMutation.mutate(unenrollTarget.id, {
-      onSuccess: () => setUnenrollTarget(null),
-    });
+    await unenrollMutation.mutateAsync(unenrollTarget.id);
+    setUnenrollTarget(null);
   };
 
   const openAssign = () => {
@@ -182,11 +175,10 @@ function PersonPage() {
 
   const openUnassign = (m: AssignedMaterial) => () => setUnassignTarget(m);
   const cancelUnassign = () => setUnassignTarget(null);
-  const confirmUnassign = () => {
+  const confirmUnassign = async () => {
     if (!unassignTarget) return;
-    unassignMutation.mutate(unassignTarget.id, {
-      onSuccess: () => setUnassignTarget(null),
-    });
+    await unassignMutation.mutateAsync(unassignTarget.id);
+    setUnassignTarget(null);
   };
 
   const courseOptions = [
@@ -249,7 +241,6 @@ function PersonPage() {
               }}
               options={ROLE_OPTIONS}
               disabled={roleMutation.isPending}
-              error={roleError ?? undefined}
             />
           </div>
         ) : (
@@ -561,8 +552,10 @@ function PersonPage() {
             : ""
         }
         confirmLabel="Confirm"
-        onConfirm={() => {
-          if (pendingRole) roleMutation.mutate(pendingRole);
+        onConfirm={async () => {
+          if (!pendingRole) return;
+          await roleMutation.mutateAsync(pendingRole);
+          setPendingRole(null);
         }}
         onCancel={() => setPendingRole(null)}
       />

@@ -133,8 +133,8 @@ export function LessonBillsSection({ month }: { month: string }) {
             : ""
         }
         confirmLabel="Record cash"
-        onConfirm={() => {
-          if (recording) recordCash.mutate(recording);
+        onConfirm={async () => {
+          if (recording) await recordCash.mutateAsync(recording);
           setRecording(null);
         }}
         onCancel={() => setRecording(null)}
