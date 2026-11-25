@@ -17,15 +17,39 @@ function controlMarkup(error?: string): string {
   return group[0];
 }
 
+/** The control's classes as tokens, so a reordered or merged class list still matches. */
+function controlClasses(error?: string): string[] {
+  const control = controlMarkup(error);
+  const attribute = /class="([^"]*)"/.exec(control);
+  if (!attribute) throw new Error(`no class attribute in ${control}`);
+  return tokens(attribute[1]);
+}
+
+/** The classes a field recipe slot produces, as tokens. */
+function tokens(classes: string): string[] {
+  return classes.split(/\s+/).filter(Boolean);
+}
+
 test("an error marks the control invalid", () => {
-  const control = controlMarkup("Required");
-  expect(control).toContain('data-invalid="true"');
-  // The red border comes from the field recipe's invalid variant, as on the other ui fields.
-  expect(control).toContain(field({ invalid: true }).control({ className: "flex" }));
+  expect(controlMarkup("Required")).toContain('data-invalid="true"');
+});
+
+test("an error gives the control a red border", () => {
+  // Stated literally so the assertion fails if the invalid variant stops producing a border,
+  // even when the recipe and the component change together.
+  expect(controlClasses("Required")).toContain("border-red-500/50");
 });
 
 test("no error leaves the control valid", () => {
-  const control = controlMarkup();
-  expect(control).not.toContain('data-invalid="true"');
-  expect(control).toContain(field().control({ className: "flex" }));
+  expect(controlMarkup()).not.toContain('data-invalid="true"');
+  expect(controlClasses()).not.toContain("border-red-500/50");
+});
+
+test("the control takes its classes from the field recipe", () => {
+  expect(controlClasses("Required")).toEqual(
+    expect.arrayContaining(tokens(field({ invalid: true }).control({ className: "flex" }))),
+  );
+  expect(controlClasses()).toEqual(
+    expect.arrayContaining(tokens(field().control({ className: "flex" }))),
+  );
 });
