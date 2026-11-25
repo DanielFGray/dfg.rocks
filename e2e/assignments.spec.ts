@@ -234,7 +234,59 @@ test.describe("assignments management", () => {
     await expect(page.getByRole("button", { name: "Save Review" })).toHaveCount(0);
     // The only rating group left is the Self-Assessment one; the review group (paired with
     // "Save Review") stays hidden until the student has listened through the piece.
-    await expect(page.getByRole("button", { name: "Rate 4 out of 5" })).toHaveCount(1);
+    await expect(page.getByRole("radio", { name: "Rate 4 out of 5" })).toHaveCount(1);
+  });
+
+  test("star rating is a labelled radio group that the arrow keys drive", async ({
+    page,
+    testing,
+  }) => {
+    await testing.login();
+    await testing.login({
+      username: "test_assignment_student_rating_keys",
+      role: "student",
+      name: "Rating Keys Student",
+    });
+    await testing.seedMaterial({
+      title: "Test: Rating Keys Material",
+      original_filename: "rating-keys.musicxml",
+      mime_type: "application/octet-stream",
+      source_file_path: notationFixturePath,
+      visibility: "course",
+    });
+    await testing.assignMaterial(
+      "test_assignment_student_rating_keys",
+      "Test: Rating Keys Material",
+      0,
+    );
+
+    await loginViaUi(page, "test_assignment_student_rating_keys", "testpassword123");
+    await page.getByTestId("nav-assignments").click();
+    await page
+      .getByTestId("assignment-open-link")
+      .filter({ hasText: "Test: Rating Keys Material" })
+      .click();
+    await expect(page.getByTestId("assignment-detail")).toBeVisible();
+
+    // A notation assignment's review group stays locked until the student has reviewed it.
+    const materialId = page.url().split("/").pop();
+    const review = await page.request.post(`/api/assignments/${materialId}/reviews`, {
+      data: { stars: 2 },
+      headers: { "x-requested-with": "dfg" },
+    });
+    expect(review.status()).toBe(200);
+
+    const group = page.getByRole("radiogroup", { name: "Rate your progress" });
+    await expect(group).toBeVisible({ timeout: 10_000 });
+    const stars = group.getByRole("radio");
+    await expect(stars).toHaveCount(5);
+    await expect(stars.nth(2)).not.toBeChecked();
+
+    await stars.nth(2).focus();
+    await page.keyboard.press("ArrowRight");
+    await expect(stars.nth(3)).toBeChecked();
+    await page.keyboard.press("ArrowLeft");
+    await expect(stars.nth(2)).toBeChecked();
   });
 
   test("notation assignment shows the server-drawn score until the player draws, and in print", async ({
