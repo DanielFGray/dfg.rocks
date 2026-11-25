@@ -3,3 +3,7 @@
 
 # Bill the current America/Chicago month once per day.
 0 0 * * * bills__issue_monthly ?jobKey=bills__issue_monthly
+
+# The calendar poll requeues itself, but a crash can lose the successor job.
+# Re-add the singleton poll every five minutes whatever happened.
+*/5 * * * * gcal__sync ?jobKey=gcal__sync
