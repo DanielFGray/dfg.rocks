@@ -5,5 +5,6 @@
 0 0 * * * bills__issue_monthly ?jobKey=bills__issue_monthly
 
 # The calendar poll requeues itself, but a crash can lose the successor job.
-# Re-add the singleton poll every five minutes whatever happened.
-*/5 * * * * gcal__sync ?jobKey=gcal__sync
+# Re-add the singleton poll every five minutes, in the same serial queue and
+# with the same single attempt as the successor the poll queues.
+*/5 * * * * gcal__sync ?jobKey=gcal__sync&queue=gcal&max=1
