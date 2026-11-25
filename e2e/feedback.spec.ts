@@ -1,4 +1,5 @@
-import { test, expect, type Page, type Route } from "@playwright/test";
+import type { Page, Route } from "@playwright/test";
+import { expect, test } from "./helpers.js";
 
 /** Counts the POSTs the page sends to /api/feedback. */
 const countFeedbackPosts = (page: Page) => {
@@ -23,30 +24,32 @@ test.describe("feedback dialog", () => {
     await expect(page.getByTestId("feedback-success")).toBeVisible();
   });
 
-  test("the dialog sends the hidden honeypot field, and the server refuses it", async ({
-    page,
-  }) => {
-    let body: Record<string, unknown> | undefined;
-    await page.route("**/api/feedback", async (route) => {
-      body = route.request().postDataJSON() as Record<string, unknown>;
-      await route.continue();
+  test.describe("a bot that fills the hidden field", () => {
+    test.use({ expectRefusedFeedbackPost: true });
+
+    test("is put on the wire by the dialog, and the server refuses it", async ({ page }) => {
+      let body: Record<string, unknown> | undefined;
+      await page.route("**/api/feedback", async (route: Route) => {
+        body = route.request().postDataJSON() as Record<string, unknown>;
+        await route.continue();
+      });
+      await page.goto("/");
+      await page.getByTestId("feedback-link").click();
+      await page.getByTestId("feedback-message").fill("A bot wrote this");
+      await page.getByRole("button", { name: /Category/ }).click();
+      await page.getByRole("option", { name: "Bug" }).click();
+      // A bot fills the hidden input directly; fill() would refuse a display:none field.
+      await page
+        .getByTestId("feedback-form")
+        .locator('input[name="website"]')
+        .evaluate((el, value) => {
+          (el as HTMLInputElement).value = value;
+        }, "https://spam.example");
+      await page.getByTestId("feedback-submit").click();
+      // The dialog put the honeypot on the wire, so the server refused the post.
+      await expect(page.getByTestId("feedback-error")).toBeVisible();
+      expect(body?.website).toBe("https://spam.example");
     });
-    await page.goto("/");
-    await page.getByTestId("feedback-link").click();
-    await page.getByTestId("feedback-message").fill("A bot wrote this");
-    await page.getByRole("button", { name: /Category/ }).click();
-    await page.getByRole("option", { name: "Bug" }).click();
-    // A bot fills the hidden input directly; fill() would refuse a display:none field.
-    await page
-      .getByTestId("feedback-form")
-      .locator('input[name="website"]')
-      .evaluate((el, value) => {
-        (el as HTMLInputElement).value = value;
-      }, "https://spam.example");
-    await page.getByTestId("feedback-submit").click();
-    // The dialog put the honeypot on the wire, so the server refused the post.
-    await expect(page.getByTestId("feedback-error")).toBeVisible();
-    expect(body?.website).toBe("https://spam.example");
   });
 
   test("the dialog refuses to send without a category", async ({ page }) => {
