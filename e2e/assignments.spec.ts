@@ -290,6 +290,64 @@ test.describe("assignments management", () => {
     await expect(stars.nth(2)).toBeChecked();
   });
 
+  test("self-assessment arrow keys move the rating without saving until Space", async ({
+    page,
+    testing,
+  }) => {
+    await testing.login();
+    await testing.login({
+      username: "test_assignment_student_rating_save",
+      role: "student",
+      name: "Rating Save Student",
+    });
+    await testing.seedMaterial({
+      title: "Test: Rating Save Material",
+      original_filename: "rating-save.musicxml",
+      mime_type: "application/octet-stream",
+      source_file_path: notationFixturePath,
+      visibility: "course",
+    });
+    await testing.assignMaterial(
+      "test_assignment_student_rating_save",
+      "Test: Rating Save Material",
+      0,
+    );
+
+    await loginViaUi(page, "test_assignment_student_rating_save", "testpassword123");
+    await page.getByTestId("nav-assignments").click();
+    await page
+      .getByTestId("assignment-open-link")
+      .filter({ hasText: "Test: Rating Save Material" })
+      .click();
+    await expect(page.getByTestId("assignment-detail")).toBeVisible();
+
+    const ratePayloads: number[] = [];
+    page.on("request", (request) => {
+      if (!request.url().includes("/api/practice-logs/rate")) return;
+      const rating = request.postDataJSON()?.rating;
+      if (typeof rating === "number") ratePayloads.push(rating);
+    });
+
+    const group = page.getByRole("radiogroup", { name: "Self-assessment" });
+    await expect(group).toBeVisible();
+    const stars = group.getByRole("radio");
+    await expect(stars).toHaveCount(5);
+
+    await stars.nth(0).focus();
+    await page.keyboard.press("ArrowRight");
+    await page.keyboard.press("ArrowRight");
+    await page.keyboard.press("ArrowRight");
+    await expect(stars.nth(3)).toBeChecked();
+
+    // Arrow keys move the selection, but must not commit it.
+    await page.waitForTimeout(250);
+    expect(ratePayloads).toHaveLength(0);
+
+    await page.keyboard.press(" ");
+    await expect.poll(() => ratePayloads).toEqual([4]);
+    await expect(page.getByText("Saved!")).toBeVisible();
+  });
+
   test("notation assignment shows the server-drawn score until the player draws, and in print", async ({
     page,
     testing,
