@@ -76,4 +76,29 @@ test.describe("authentication", () => {
     );
     await expect(page.getByTestId("apple-oauth")).toHaveCount(0);
   });
+
+  test("a signed-in user is sent away from the login page", async ({ page, testing }) => {
+    await testing.login({ username: "test_already_signed_in", role: "student" });
+
+    await page.goto("/login");
+    await expect(page.getByTestId("dashboard")).toBeVisible();
+    await expect(page.getByTestId("login-page")).toHaveCount(0);
+  });
+
+  test("a signed-in user is sent away from the forgot-password page", async ({ page, testing }) => {
+    await testing.login({ username: "test_already_signed_in_2", role: "student" });
+
+    await page.goto("/forgot-password");
+    await expect(page.getByTestId("dashboard")).toBeVisible();
+  });
+
+  test("a signed-in user asking for a page goes there instead of the dashboard", async ({
+    page,
+    testing,
+  }) => {
+    await testing.login({ username: "test_signed_in_redirect", role: "student" });
+
+    await page.goto("/login?redirect=%2Fsettings");
+    await expect(page.getByTestId("settings")).toBeVisible();
+  });
 });

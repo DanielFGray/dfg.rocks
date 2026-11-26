@@ -1,10 +1,11 @@
 import { useState } from "react";
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, redirect, useNavigate } from "@tanstack/react-router";
 import type { Key } from "@react-types/shared";
 import { Input } from "../components/ui/Input.js";
 import { Tabs, TabList, Tab, TabPanel } from "../components/ui/Tabs.js";
 import { normalizeLoginRedirect, rememberLoginRedirect } from "../lib/loginRedirect.js";
 import { loginWithPassword, requestMagicLink } from "../lib/authForms.js";
+import { fetchAuthUser } from "../lib/queries.js";
 
 export const Route = createFileRoute("/login")({
   head: () => ({ meta: [{ title: "Log In | DFG Portal" }] }),
@@ -16,6 +17,14 @@ export const Route = createFileRoute("/login")({
     ...(search.magic_sent === "true" ? { magic_sent: true as const } : {}),
     ...(search.login_method === "magic" ? { login_method: "magic" as const } : {}),
   }),
+  // Someone who is already signed in has no use for the login form, so send them to the page
+  // they were after. A redirect in the query names that page, as it does after a login.
+  beforeLoad: async ({ context, search }) => {
+    const auth = await fetchAuthUser(context.queryClient);
+    if (!auth.user) return;
+    const target = normalizeLoginRedirect(search.redirect);
+    throw redirect({ to: target ?? "/dashboard" });
+  },
   component: LoginPage,
 });
 
@@ -90,9 +99,7 @@ function MagicLinkForm({
   if (magicSent) {
     return (
       <div className="py-8 text-center">
-        <p className="mb-2 text-lg font-semibold text-primary">
-          Check your email
-        </p>
+        <p className="mb-2 text-lg font-semibold text-primary">Check your email</p>
         <p className="text-sm text-muted">
           We sent a magic link to your email address. Click the link to log in.
         </p>

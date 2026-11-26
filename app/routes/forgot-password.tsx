@@ -1,8 +1,9 @@
 import { useState } from "react";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, redirect } from "@tanstack/react-router";
 import { Button } from "../components/ui/Button.js";
 import { Input } from "../components/ui/Input.js";
 import { forgotPassword } from "../lib/authForms.js";
+import { fetchAuthUser } from "../lib/queries.js";
 
 export const Route = createFileRoute("/forgot-password")({
   head: () => ({ meta: [{ title: "Forgot Password | DFG Portal" }] }),
@@ -10,6 +11,11 @@ export const Route = createFileRoute("/forgot-password")({
     ...(search.sent === "true" ? { sent: true as const } : {}),
     ...(typeof search.error === "string" ? { error: search.error } : {}),
   }),
+  // Someone who is already signed in does not need to reset their password.
+  beforeLoad: async ({ context }) => {
+    const auth = await fetchAuthUser(context.queryClient);
+    if (auth.user) throw redirect({ to: "/dashboard" });
+  },
   component: ForgotPasswordPage,
 });
 
@@ -50,9 +56,7 @@ function ForgotPasswordPage() {
       <div className="w-full max-w-sm">
         <div className="mb-8 text-center">
           <h1 className="text-3xl font-bold tracking-tight">Forgot Password</h1>
-          <p className="mt-2 text-sm text-muted">
-            Enter your email and we'll send a reset link
-          </p>
+          <p className="mt-2 text-sm text-muted">Enter your email and we'll send a reset link</p>
         </div>
         <form method="post" action={forgotPassword.url} className="flex flex-col gap-5">
           {error ? (
