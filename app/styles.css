@@ -38,17 +38,6 @@
 }
 
 /*
-  When an image fails to load, the browser draws its alt text as if it were the content. For a
-  photo in a card, that alt text at body size breaks the layout, so the card is given a fixed
-  height and the alt text is clipped to one line.
-*/
-img.gallery-photo {
-  height: 100%;
-  font-size: 0.75rem;
-  color: var(--color-muted);
-}
-
-/*
   The default border color has changed to `currentcolor` in Tailwind CSS v4,
   so we've added these compatibility styles to make sure everything still
   looks the same as it did with Tailwind CSS v3.

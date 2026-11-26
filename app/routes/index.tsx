@@ -2,16 +2,7 @@ import { useState } from "react";
 import { Schema as S } from "effect";
 import { createFileRoute, Link, redirect } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
-import {
-  site,
-  nav,
-  hero,
-  about,
-  lessons,
-  gallery,
-  testimonials as testimonialsSection,
-  contact,
-} from "../config.js";
+import { site, nav, hero, about, lessons, gallery, contact } from "../config.js";
 import { Sidebar } from "../components/ui/Sidebar.js";
 import { Button } from "../components/ui/Button.js";
 import { Input } from "../components/ui/Input.js";
@@ -323,29 +314,38 @@ function CardSection({
 }
 
 function GallerySection() {
+  const [featured, ...rest] = gallery.photos;
   return (
-    <CardSection
-      id="gallery"
-      testId="gallery-section"
-      label={gallery.sectionLabel}
-      heading={gallery.heading}
-      gridClass="grid-cols-1 sm:grid-cols-2 lg:grid-cols-3"
-    >
-      {gallery.photos.map((photo) => (
-        <Card key={photo.src} className="overflow-hidden p-0" data-testid="gallery-item">
-          <figure>
-            <img
-              className="gallery-photo block aspect-4/3 w-full object-cover"
-              src={photo.src}
-              alt={photo.alt}
-              loading="lazy"
-              decoding="async"
-            />
-            <figcaption className="px-5 py-4 text-[0.9rem] text-muted">{photo.caption}</figcaption>
-          </figure>
-        </Card>
-      ))}
-    </CardSection>
+    <Section id="gallery" data-testid="gallery-section">
+      <GalleryPhoto photo={featured} className="mb-4" />
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        {rest.map((photo) => (
+          <GalleryPhoto key={photo.src} photo={photo} />
+        ))}
+      </div>
+    </Section>
+  );
+}
+
+/** One photo in the gallery. It keeps its own shape, so no photo is cropped. */
+function GalleryPhoto({
+  photo,
+  className = "",
+}: {
+  photo: (typeof gallery.photos)[number];
+  className?: string;
+}) {
+  return (
+    <img
+      className={`block w-full rounded-xl border border-overlay/6 bg-card object-cover ${className}`}
+      src={photo.src}
+      alt=""
+      width={photo.width}
+      height={photo.height}
+      loading="lazy"
+      decoding="async"
+      data-testid="gallery-item"
+    />
   );
 }
 
@@ -355,8 +355,8 @@ function TestimonialSection() {
     <CardSection
       id="testimonials"
       testId="testimonial-section"
-      label={testimonialsSection.sectionLabel}
-      heading={testimonialsSection.heading}
+      label="What People Say"
+      heading="Don't take my word for it"
       gridClass="grid-cols-1 md:grid-cols-3"
     >
       {testimonials.map((t) => (

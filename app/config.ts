@@ -83,60 +83,20 @@ export const lessons = {
 /**
  * Photos of students playing. Each entry names a file in `public/gallery/`.
  *
- * The `consent` field records who agreed to the photo being public. A photo with no consent
- * is not published, so keep the field honest rather than optimistic.
+ * The gallery shows no text: no heading, no caption, no alt text. The photos are listed with
+ * their width and height so the browser can reserve the right space before the file arrives,
+ * which keeps the page from jumping as the photos load.
+ *
+ * The first photo leads: on a wide screen it spans the full width, with the rest in a grid
+ * below it. On a narrow screen every photo stacks.
  */
 export const gallery = {
-  sectionLabel: "In the Room",
-  heading: "Lessons in action",
   photos: [
-    {
-      src: "/gallery/lesson-drums.jpg",
-      alt: "A student playing a drum kit during a lesson",
-      caption: "Working through rudiments, one bar at a time.",
-      consent: "parent" as const,
-    },
-    {
-      src: "/gallery/lesson-guitar.jpg",
-      alt: "A student playing acoustic guitar during a lesson",
-      caption: "First chords, first song.",
-      consent: "parent" as const,
-    },
-    {
-      src: "/gallery/ensemble.jpg",
-      alt: "An ensemble performing together",
-      caption: "The ensemble, rehearsing.",
-      consent: "teacher" as const,
-    },
-  ] satisfies ReadonlyArray<{
-    src: string;
-    alt: string;
-    caption: string;
-    consent: "parent" | "teacher";
-  }>,
-};
-
-export const testimonials = {
-  sectionLabel: "What People Say",
-  heading: "Don't take my word for it",
-  items: [
-    {
-      quote: `My son has been taking drum lessons with ${site.name} for six months and his confidence has skyrocketed. He actually practices without being asked.`,
-      name: "Sarah M.",
-      role: "Parent",
-    },
-    {
-      quote: `I picked up guitar at 40 thinking it was too late. ${site.name} made it feel totally doable. I'm playing songs I love after just a few months.`,
-      name: "Chris R.",
-      role: "Adult Student",
-    },
-    {
-      quote: `Best music teacher in ${site.city}. Patient, fun, and actually listens to what you want to learn. Can't recommend enough.`,
-      name: "Jamie L.",
-      role: "Google Review",
-    },
+    { src: "/gallery/teaching-at-board.webp", width: 1600, height: 1200 },
+    { src: "/gallery/ensemble.webp", width: 1205, height: 1600 },
+    { src: "/gallery/teaching-guitar.webp", width: 1200, height: 1600 },
   ],
-};
+} as const;
 
 export const contact = {
   sectionLabel: "Get Started",
