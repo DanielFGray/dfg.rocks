@@ -12,9 +12,17 @@ const countFeedbackPosts = (page: Page) => {
 };
 
 test.describe("feedback dialog", () => {
-  test("the Feedback link opens the dialog and a visitor sends feedback", async ({ page }) => {
+  test("a visitor to the landing page does not see the Feedback link", async ({ page }) => {
     await page.goto("/");
-    await page.getByTestId("feedback-link").click();
+    await expect(page.getByTestId("feedback-link")).toHaveCount(0);
+  });
+
+  test("a signed-in user sees the Feedback link and sends feedback", async ({ page, testing }) => {
+    await testing.login();
+    await page.goto("/");
+    const link = page.getByTestId("feedback-link");
+    await expect(link).toBeVisible();
+    await link.click();
     const dialog = page.getByTestId("feedback-form");
     await expect(dialog).toBeVisible();
     await page.getByTestId("feedback-message").fill("The pricing table wraps on my phone");
@@ -27,7 +35,11 @@ test.describe("feedback dialog", () => {
   test.describe("a bot that fills the hidden field", () => {
     test.use({ expectRefusedFeedbackPost: true });
 
-    test("is put on the wire by the dialog, and the server refuses it", async ({ page }) => {
+    test("is put on the wire by the dialog, and the server refuses it", async ({
+      page,
+      testing,
+    }) => {
+      await testing.login();
       let body: Record<string, unknown> | undefined;
       await page.route("**/api/feedback", async (route: Route) => {
         body = route.request().postDataJSON() as Record<string, unknown>;
@@ -52,7 +64,8 @@ test.describe("feedback dialog", () => {
     });
   });
 
-  test("the dialog refuses to send without a category", async ({ page }) => {
+  test("the dialog refuses to send without a category", async ({ page, testing }) => {
+    await testing.login();
     const postCount = countFeedbackPosts(page);
     await page.goto("/");
     await page.getByTestId("feedback-link").click();
@@ -60,12 +73,10 @@ test.describe("feedback dialog", () => {
     await page.getByTestId("feedback-submit").click();
     await expect(page.getByTestId("feedback-form")).toBeVisible();
     // The claim is "does not send": give any late request three seconds to appear.
-    const sent = page
-      .waitForRequest("**/api/feedback", { timeout: 3000 })
-      .then(
-        () => true,
-        () => false,
-      );
+    const sent = page.waitForRequest("**/api/feedback", { timeout: 3000 }).then(
+      () => true,
+      () => false,
+    );
     expect(await sent).toBe(false);
     expect(postCount()).toBe(0);
     await expect(page.getByTestId("feedback-success")).toHaveCount(0);

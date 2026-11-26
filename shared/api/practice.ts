@@ -25,6 +25,17 @@ const UpdateSubmissionPayload = S.Struct({
   is_read: S.Boolean,
 });
 
+/**
+ * Marks a submission as spam, or takes it out of the spam list.
+ *
+ * `is_spam` decides which list the row sits in. `reason` says why a row looks like spam, and
+ * is kept on the row when the row is marked as spam.
+ */
+const UpdateSubmissionSpamPayload = S.Struct({
+  is_spam: S.Boolean,
+  reason: S.optional(S.String),
+});
+
 export const CreatePracticeLogPayload = S.Struct({
   material_id: S.String,
   rating: S.optional(S.Finite.pipe(S.check(S.isBetween({ minimum: 1, maximum: 5 })))),
@@ -101,6 +112,14 @@ export const practiceAdminGroup = HttpApiGroup.make("practiceAdmin")
       error: adminErrors,
       params: params("id"),
       payload: UpdateSubmissionPayload,
+      success: SuccessResponse,
+    }),
+  )
+  .add(
+    HttpApiEndpoint.patch("updateSubmissionSpam", "/submissions/:id/spam", {
+      error: adminErrors,
+      params: params("id"),
+      payload: UpdateSubmissionSpamPayload,
       success: SuccessResponse,
     }),
   )

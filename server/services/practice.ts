@@ -208,6 +208,35 @@ export class Practice extends Context.Service<Practice>()("dfg-rocks/practice", 
           }),
         );
     }),
+    /**
+     * Moves a submission between the inbox and the spam list.
+     *
+     * The inbox leaves out every row whose `spam_reason` is set, so marking a row as spam
+     * writes a reason and clearing it takes the reason away. A row marked as spam keeps its
+     * reason: the reason says why it looked like spam, not that it is spam.
+     */
+    updateSubmissionSpam: Effect.fn("updateSubmissionSpam")(function* (
+      id: string,
+      isSpam: boolean,
+      reason: string | null,
+    ) {
+      const db = yield* RequestDatabase;
+      return yield* db
+        .execute(
+          db
+            .updateTable("app_public.contact_submissions")
+            .set({ spam_reason: isSpam ? (reason ?? "marked by the teacher") : null })
+            .where("id", "=", id)
+            .returning(["id", "spam_reason"]),
+        )
+        .pipe(
+          Effect.head,
+          Effect.catchTags({
+            NoSuchElementError: () =>
+              new HttpError({ status: 404, message: "Contact submission not found" }),
+          }),
+        );
+    }),
   })),
 }) {
   static readonly layer = Layer.effect(this, this.make);

@@ -3,6 +3,7 @@ import { useMutation } from "@tanstack/react-query";
 import { Effect } from "effect";
 import { api } from "../lib/api.js";
 import { getErrorMessage } from "../lib/errors.js";
+import { useIsSignedIn } from "../lib/hooks/useAuth.js";
 import { stripPageUrl } from "../../shared/feedback.js";
 import packageJson from "../../package.json" with { type: "json" };
 import { Modal } from "./ui/Modal.js";
@@ -29,6 +30,7 @@ const isCategory = (value: string): value is FeedbackCategory =>
  * the user's id from the session.
  */
 export const Feedback = () => {
+  const isSignedIn = useIsSignedIn();
   const [open, setOpen] = useState(false);
   const [message, setMessage] = useState("");
   const [category, setCategory] = useState<FeedbackCategory | "">("");
@@ -64,6 +66,10 @@ export const Feedback = () => {
       ...(typeof website === "string" && website ? { website } : {}),
     });
   };
+
+  // The widget belongs to the portal. A visitor to the marketing site never sees it, and the
+  // dialog stays closed until the sign-in state is known, so the button does not flash in.
+  if (!isSignedIn) return null;
 
   return (
     <>

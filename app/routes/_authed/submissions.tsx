@@ -80,6 +80,20 @@ function SubmissionsPage() {
     },
   });
 
+  // A row in the inbox can be marked as spam; a row in the spam list can be put back.
+  const toggleSpam = useMutation({
+    mutationFn: (s: Submission) =>
+      Effect.runPromise(
+        api.practiceAdmin.updateSubmissionSpam({
+          params: { id: s.id },
+          payload: { is_spam: !s.spam_reason },
+        }),
+      ),
+    onSettled: () => {
+      void router.invalidate();
+    },
+  });
+
   const formatPhone = (phone: string | null | undefined) => {
     if (!phone) return null;
     const cleaned = phone.replace(/\D/g, "");
@@ -137,6 +151,14 @@ function SubmissionsPage() {
                       {!s.is_read ? (
                         <span className="shrink-0 rounded-full bg-accent/15 px-2 py-0.5 text-[0.7rem] font-semibold tracking-wide text-accent uppercase">
                           New
+                        </span>
+                      ) : null}
+                      {s.spam_reason ? (
+                        <span
+                          data-testid="spam-reason"
+                          className="shrink-0 rounded-full border border-overlay/10 px-2 py-0.5 text-[0.7rem] tracking-wide text-muted uppercase"
+                        >
+                          Spam: {s.spam_reason}
                         </span>
                       ) : null}
                     </div>
@@ -204,6 +226,16 @@ function SubmissionsPage() {
                       className="whitespace-nowrap"
                     >
                       {s.is_read ? "Mark unread" : "Mark read"}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      data-testid="toggle-spam"
+                      onClick={() => toggleSpam.mutate(s)}
+                      disabled={toggleSpam.isPending}
+                      size="sm"
+                      className="whitespace-nowrap"
+                    >
+                      {s.spam_reason ? "Not spam" : "Mark spam"}
                     </Button>
                   </div>
                 </div>

@@ -1138,6 +1138,54 @@ describe("DFG Portal API", () => {
   );
 
   it.effect(
+    "admin: a submission can be marked as spam and put back",
+    Effect.fnUntraced(function* () {
+      yield* Effect.tryPromise(() =>
+        testDb.query(
+          `insert into app_public.contact_submissions (name, email, instrument, format)
+           values ('Real Row', 'real-row@example.com', 'drums', 'in-person')`,
+        ),
+      );
+      const list = (path: string) =>
+        reqEffect("GET", path, { cookie: adminCookie }).pipe(
+          Effect.flatMap(resJson),
+          Effect.map((rows) => rows as SubmissionSummary[]),
+        );
+      const findRow = (rows: SubmissionSummary[]) =>
+        rows.find((row) => row.email === "real-row@example.com");
+
+      const inbox = yield* list("/api/admin/submissions");
+      const row = findRow(inbox);
+      expect(row).toBeDefined();
+      expect(row?.spam_reason).toBe(null);
+
+      const marked = yield* reqEffect("PATCH", `/api/admin/submissions/${row!.id}/spam`, {
+        body: { is_spam: true },
+        cookie: adminCookie,
+      });
+      expect(marked.status).toBe(200);
+
+      // The row left the inbox and joined the spam list.
+      const afterMark = yield* list("/api/admin/submissions");
+      expect(findRow(afterMark)).toBeUndefined();
+      const spamList = yield* list("/api/admin/submissions?spam=true");
+      expect(findRow(spamList)?.spam_reason).toBe("marked by the teacher");
+
+      // Putting it back returns it to the inbox.
+      const unmarked = yield* reqEffect("PATCH", `/api/admin/submissions/${row!.id}/spam`, {
+        body: { is_spam: false },
+        cookie: adminCookie,
+      });
+      expect(unmarked.status).toBe(200);
+
+      const afterUnmark = yield* list("/api/admin/submissions");
+      expect(findRow(afterUnmark)?.spam_reason).toBe(null);
+      const spamAfter = yield* list("/api/admin/submissions?spam=true");
+      expect(findRow(spamAfter)).toBeUndefined();
+    }),
+  );
+
+  it.effect(
     "public: the contact form refuses an instrument or format outside the form's options",
     Effect.fnUntraced(function* () {
       const base = { name: "Jane Doe", email: "bad-option@example.com" };

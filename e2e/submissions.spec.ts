@@ -30,4 +30,35 @@ test.describe("submissions spam filter", () => {
     await expect(submissions.getByText("Bot Spammer")).toBeVisible();
     await expect(submissions.getByText("Real Inquiry")).toHaveCount(0);
   });
+
+  test("a submission can be marked as spam and put back", async ({ page, testing }) => {
+    await testing.login();
+    await testing.seedSubmission({ name: "Marked Inquiry", email: "test-marked@example.com" });
+    await loginViaUi(page, "test_admin", "testpassword123");
+    await page.getByTestId("nav-submissions").click();
+
+    const submissions = page.getByTestId("submissions");
+    const row = submissions
+      .getByText("Marked Inquiry")
+      .locator("xpath=ancestor::div[contains(@class,'rounded-xl')]")
+      .first();
+    await expect(row).toBeVisible();
+
+    // Marking it as spam takes it out of the inbox and into the spam list.
+    await row.getByTestId("toggle-spam").click();
+    await expect(submissions.getByText("Marked Inquiry")).toHaveCount(0);
+
+    await page.getByTestId("spam-filter").click();
+    const spamRow = submissions
+      .getByText("Marked Inquiry")
+      .locator("xpath=ancestor::div[contains(@class,'rounded-xl')]")
+      .first();
+    await expect(spamRow).toBeVisible();
+    await expect(spamRow.getByTestId("spam-reason")).toBeVisible();
+
+    // Putting it back returns it to the inbox.
+    await spamRow.getByTestId("toggle-spam").click();
+    await page.getByTestId("spam-filter").click();
+    await expect(submissions.getByText("Marked Inquiry")).toBeVisible();
+  });
 });

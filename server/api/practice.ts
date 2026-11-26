@@ -123,5 +123,20 @@ export const PracticeAdminApiGroupLive = HttpApiBuilder.group(
           }
           return { success: true as const };
         }, adaptAdminErrors),
+      )
+      .handle(
+        "updateSubmissionSpam",
+        Effect.fnUntraced(function* ({ params, payload }) {
+          const auth = yield* CurrentSession;
+          const row = yield* Practice.use((practiceService) =>
+            practiceService
+              .updateSubmissionSpam(params.id, payload.is_spam, payload.reason ?? null)
+              .pipe(withAuthContext(auth.session.id)),
+          );
+          if (!row) {
+            return yield* new HttpError({ status: 404, message: "Submission not found" });
+          }
+          return { success: true as const };
+        }, adaptAdminErrors),
       ),
 );
