@@ -8,6 +8,7 @@ import {
   hero,
   about,
   lessons,
+  gallery,
   testimonials as testimonialsSection,
   contact,
 } from "../config.js";
@@ -16,6 +17,8 @@ import { Button } from "../components/ui/Button.js";
 import { Input } from "../components/ui/Input.js";
 import { Select } from "../components/ui/Select.js";
 import { Textarea } from "../components/ui/Textarea.js";
+import { Section } from "../components/ui/Container.js";
+import { Card } from "../components/ui/Card.js";
 
 import { createServerFn } from "@tanstack/react-start";
 import { runServerEffect } from "../lib/serverEffect.js";
@@ -109,6 +112,7 @@ function HomePage() {
       <Hero />
       <About />
       <LessonsSection />
+      <GallerySection />
       <TestimonialSection />
       <ContactSection />
       <Footer />
@@ -231,16 +235,13 @@ function Hero() {
 
 function About() {
   return (
-    <section id="about" className="mx-auto max-w-275 px-5 py-16 md:px-8 md:py-24">
+    <Section id="about">
       <div className="grid grid-cols-1 items-center gap-10 md:grid-cols-2 md:gap-16">
         <div className="max-h-[50vh] w-full overflow-hidden rounded-xl">
           <img className="block h-full w-full object-cover" src={site.gravatar} alt={site.name} />
         </div>
         <div>
-          <div className="mb-3 text-[0.8rem] font-semibold tracking-[0.15em] text-accent uppercase">
-            {about.sectionLabel}
-          </div>
-          <h2 className="mb-5 text-4xl leading-[1.15] font-bold tracking-tight">{about.heading}</h2>
+          <SectionHeading label={about.sectionLabel} heading={about.heading} />
           {about.paragraphs.map((p, i) => (
             <p key={i} className="mb-4 text-muted">
               {p}
@@ -248,76 +249,128 @@ function About() {
           ))}
         </div>
       </div>
-    </section>
+    </Section>
   );
 }
 
 function LessonsSection() {
   return (
-    <section id="lessons" className="mx-auto max-w-275 px-5 py-16 md:px-8 md:py-24">
-      <div className="mb-3 text-[0.8rem] font-semibold tracking-[0.15em] text-accent uppercase">
-        {lessons.sectionLabel}
-      </div>
-      <h2 className="mb-5 text-4xl leading-[1.15] font-bold tracking-tight">{lessons.heading}</h2>
-      <div className="mt-10 grid grid-cols-[repeat(auto-fit,minmax(280px,1fr))] gap-6">
-        {lessons.items.map((lesson) => (
-          <div
-            key={lesson.title}
-            className="rounded-xl border border-overlay/6 bg-card p-8 transition-all duration-200 hover:-translate-y-0.5 hover:border-accent/30"
-          >
-            <div className="mb-4 text-[2rem]">{lesson.icon}</div>
-            <h3 className="mb-2 text-xl font-semibold">{lesson.title}</h3>
-            <p className="text-[0.95rem] text-muted">{lesson.description}</p>
-            <div className="mt-4 flex gap-2">
-              {lesson.formats.map((f) => (
-                <span
-                  key={f}
-                  className="rounded-full bg-accent/12 px-3 py-1 text-xs font-semibold text-accent"
-                >
-                  {f}
-                </span>
-              ))}
-            </div>
+    <CardSection
+      id="lessons"
+      label={lessons.sectionLabel}
+      heading={lessons.heading}
+      gridClass="grid-cols-[repeat(auto-fit,minmax(280px,1fr))]"
+    >
+      {lessons.items.map((lesson) => (
+        <Card key={lesson.title} className="p-8 hover:-translate-y-0.5 hover:border-accent/30">
+          <div className="mb-4 text-[2rem]">{lesson.icon}</div>
+          <h3 className="mb-2 text-xl font-semibold">{lesson.title}</h3>
+          <p className="text-[0.95rem] text-muted">{lesson.description}</p>
+          <div className="mt-4 flex gap-2">
+            {lesson.formats.map((f) => (
+              <span
+                key={f}
+                className="rounded-full bg-accent/12 px-3 py-1 text-xs font-semibold text-accent"
+              >
+                {f}
+              </span>
+            ))}
           </div>
-        ))}
+        </Card>
+      ))}
+    </CardSection>
+  );
+}
+
+/** The label and heading that open every section on the home page. */
+function SectionHeading({ label, heading }: { label: string; heading: string }) {
+  return (
+    <>
+      <div className="mb-3 text-[0.8rem] font-semibold tracking-[0.15em] text-accent uppercase">
+        {label}
       </div>
-    </section>
+      <h2 className="mb-5 text-4xl leading-[1.15] font-bold tracking-tight">{heading}</h2>
+    </>
+  );
+}
+
+/**
+ * A home page section of cards: the label, the heading, then the cards in a grid.
+ *
+ * The grid layout and the card body differ per section, so both are passed in.
+ */
+function CardSection({
+  id,
+  testId,
+  label,
+  heading,
+  gridClass,
+  children,
+}: {
+  id: string;
+  testId?: string;
+  label: string;
+  heading: string;
+  gridClass: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <Section id={id} data-testid={testId}>
+      <SectionHeading label={label} heading={heading} />
+      <div className={`mt-10 grid gap-6 ${gridClass}`}>{children}</div>
+    </Section>
+  );
+}
+
+function GallerySection() {
+  return (
+    <CardSection
+      id="gallery"
+      testId="gallery-section"
+      label={gallery.sectionLabel}
+      heading={gallery.heading}
+      gridClass="grid-cols-1 sm:grid-cols-2 lg:grid-cols-3"
+    >
+      {gallery.photos.map((photo) => (
+        <Card key={photo.src} className="overflow-hidden p-0" data-testid="gallery-item">
+          <figure>
+            <img
+              className="block aspect-4/3 w-full object-cover"
+              src={photo.src}
+              alt={photo.alt}
+              loading="lazy"
+              decoding="async"
+            />
+            <figcaption className="px-5 py-4 text-[0.9rem] text-muted">{photo.caption}</figcaption>
+          </figure>
+        </Card>
+      ))}
+    </CardSection>
   );
 }
 
 function TestimonialSection() {
   const { testimonials } = Route.useLoaderData();
   return testimonials.length > 0 ? (
-    <section
+    <CardSection
       id="testimonials"
-      data-testid="testimonial-section"
-      className="mx-auto max-w-275 px-5 py-16 md:px-8 md:py-24"
+      testId="testimonial-section"
+      label={testimonialsSection.sectionLabel}
+      heading={testimonialsSection.heading}
+      gridClass="grid-cols-1 md:grid-cols-3"
     >
-      <div className="mb-3 text-[0.8rem] font-semibold tracking-[0.15em] text-accent uppercase">
-        {testimonialsSection.sectionLabel}
-      </div>
-      <h2 className="mb-5 text-4xl leading-[1.15] font-bold tracking-tight">
-        {testimonialsSection.heading}
-      </h2>
-      <div className="mt-10 grid grid-cols-1 gap-6 md:grid-cols-3">
-        {testimonials.map((t) => (
-          <div
-            key={t.id}
-            data-testid="testimonial-card"
-            className="rounded-xl border border-overlay/6 bg-card p-8"
-          >
-            <p className="mb-6 text-muted italic">&ldquo;{t.body}&rdquo;</p>
-            <div>
-              <div className="font-semibold">{t.display_name}</div>
-              <div className="text-sm text-muted">{t.role_label}</div>
-            </div>
+      {testimonials.map((t) => (
+        <Card key={t.id} className="p-8" data-testid="testimonial-card">
+          <p className="mb-6 text-muted italic">&ldquo;{t.body}&rdquo;</p>
+          <div>
+            <div className="font-semibold">{t.display_name}</div>
+            <div className="text-sm text-muted">{t.role_label}</div>
           </div>
-        ))}
-      </div>
-    </section>
+        </Card>
+      ))}
+    </CardSection>
   ) : null;
 }
-
 function ContactSection() {
   const { sent, error: refusal } = Route.useSearch();
   const contactFn = useServerFn(submitContact);
@@ -333,7 +386,7 @@ function ContactSection() {
 
   if (sent) {
     return (
-      <section id="contact" className="mx-auto max-w-275 px-5 py-16 md:px-8 md:py-24">
+      <Section id="contact">
         <div className="mx-auto max-w-2xl text-center">
           <div className="mb-10 rounded-xl border border-green-500/30 bg-green-500/5 p-8 text-center dark:border-green-500/20 dark:bg-green-500/5">
             <div className="mb-3 text-3xl">&#x2714;</div>
@@ -410,17 +463,14 @@ function ContactSection() {
             </span>
           </div>
         </div>
-      </section>
+      </Section>
     );
   }
 
   return (
-    <section id="contact" className="mx-auto max-w-275 px-5 py-16 md:px-8 md:py-24">
+    <Section id="contact">
       <div className="mx-auto max-w-2xl text-center">
-        <div className="mb-3 text-[0.8rem] font-semibold tracking-[0.15em] text-accent uppercase">
-          {contact.sectionLabel}
-        </div>
-        <h2 className="mb-5 text-4xl leading-[1.15] font-bold tracking-tight">{contact.heading}</h2>
+        <SectionHeading label={contact.sectionLabel} heading={contact.heading} />
         <p className="mb-10 text-muted">{contact.description}</p>
 
         <form
@@ -599,7 +649,7 @@ function ContactSection() {
           </span>
         </div>
       </div>
-    </section>
+    </Section>
   );
 }
 

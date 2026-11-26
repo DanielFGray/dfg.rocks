@@ -19,6 +19,7 @@ export const nav = {
   links: [
     { label: "About", href: "#about" },
     { label: "Lessons", href: "#lessons" },
+    { label: "Gallery", href: "#gallery" },
     { label: "Reviews", href: "#testimonials" },
     { label: "Contact", href: "#contact" },
   ],
@@ -77,6 +78,42 @@ export const lessons = {
       formats: ["In-Person", "Online"],
     },
   ],
+};
+
+/**
+ * Photos of students playing. Each entry names a file in `public/gallery/`.
+ *
+ * The `consent` field records who agreed to the photo being public. A photo with no consent
+ * is not published, so keep the field honest rather than optimistic.
+ */
+export const gallery = {
+  sectionLabel: "In the Room",
+  heading: "Lessons in action",
+  photos: [
+    {
+      src: "/gallery/lesson-drums.jpg",
+      alt: "A student playing a drum kit during a lesson",
+      caption: "Working through rudiments, one bar at a time.",
+      consent: "parent" as const,
+    },
+    {
+      src: "/gallery/lesson-guitar.jpg",
+      alt: "A student playing acoustic guitar during a lesson",
+      caption: "First chords, first song.",
+      consent: "parent" as const,
+    },
+    {
+      src: "/gallery/ensemble.jpg",
+      alt: "An ensemble performing together",
+      caption: "The ensemble, rehearsing.",
+      consent: "teacher" as const,
+    },
+  ] satisfies ReadonlyArray<{
+    src: string;
+    alt: string;
+    caption: string;
+    consent: "parent" | "teacher";
+  }>,
 };
 
 export const testimonials = {
