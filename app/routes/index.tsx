@@ -335,7 +335,7 @@ function GallerySection() {
         <Card key={photo.src} className="overflow-hidden p-0" data-testid="gallery-item">
           <figure>
             <img
-              className="block aspect-4/3 w-full object-cover"
+              className="gallery-photo block aspect-4/3 w-full object-cover"
               src={photo.src}
               alt={photo.alt}
               loading="lazy"
